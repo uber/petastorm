@@ -9,6 +9,7 @@ install:
   - pip install -e .
 
 script:
+  # Run unit tests
   - pytest
 
 before_deploy:
