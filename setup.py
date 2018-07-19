@@ -9,7 +9,7 @@ from setuptools import setup
 from dataset_toolkit import __version__
 
 REQUIRED_PACKAGES = [
-    'numpy>=1.14.0',
+    'numpy>=1.13.3',
     'Pillow>=3.0',
     'pyspark>=2.1.2',
     'pyzmq>=14.0.0',
