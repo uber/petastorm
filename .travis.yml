@@ -1,0 +1,27 @@
+dist: trusty
+language: python
+
+python:
+  - '2.7'
+
+install:
+  # This will use requirements from setup.py and install them in the tavis's virtual environment
+  - pip install -e .
+
+script:
+  - pytest
+
+before_deploy:
+  # Build a python wheel before deployment
+  - python setup.py bdist_wheel
+
+deploy:
+  # Push all python wheels created to Github release (TODO: when public to Pypi)
+  provider: releases
+  skip_cleanup: true
+  api_key:
+    secure: I96u6KqgSj0Cqx2NvLLLgw6rx7+gN4/6wdptfBrP1zxppMERu/iaLYLgDwDKRXzgTIrx5LopFIllf9/kPcUJgDFj/AxESo6aukzcYK3tB2OhEYIAxYcZf8Kt3aV+AHp/TIDdZ9sGbVLxypuxSXqiAc5dJw8S0Njja/9Qgxe4jqNXNLjLxEb3qlCrYJFEA9MxxPgH/QsWZ6M43hR5gNrGWrhSaIHSjMXXkzRjQG+bGApFf+XRx7le2M5vIeaw1K/osJ930QEjDTnp0v5hFvkB9F1buC17rZO8Xy0KAAhB1+SaEWtS4N0lFIVYE1b3Ke1ek82kW1d7UDEAcEL6ccICboKtvhFfgb1MXVQkdRq4HlhwHl8n4FJIztbwXaQW1aISR5x+m6RIFwMuI+U/MjcVVt+CEgo8X4HATb2pdgWnFcS649t7lhrx7HCBNZpUNmfoZ/YyNgPdQf+vreCNxWOpqi4UacH890GhLFUFXtijeL7xGXWIg7ugQmlK27CfM1mMN1Vp9NTRAXA0x7HuqckWKY85lCJMT+3IJMgVjz+BdGZDQ5RJI22FmRDNuWrH/Mio77EK+sOsKm/X3Q8/Sb8uwU+Ft1Vb7aikQ2NIl89uQQdVxH4TlQw6/VQSZODacTUwMz5CkB0RJNrlbZpUpPrHiTVa4dRo7/34qe7iGA7XtfY=
+  file_glob: true
+  file: dist/*.whl
+  on:
+    tags: true
