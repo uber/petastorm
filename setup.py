@@ -13,11 +13,16 @@ REQUIRED_PACKAGES = [
     'Pillow>=3.0',
     'pyspark>=2.1.2',
     'pyzmq>=14.0.0',
-    'tensorflow>=1.4',
     'pyarrow>=0.8',
     'pandas>=0.19.0',
     'diskcache>=3.0.0',
 ]
+
+EXTRA_REQUIRE = {
+    'tf': ['tensorflow>=1.4.0'],
+    'tf_gpu': ['tensorflow-gpu>=1.4.0'],
+    'tf_atg': ['atg-tensorflow-gpu>=1.4.0'],
+}
 
 packages = setuptools.find_packages()
 
@@ -28,4 +33,5 @@ setup(
     packages=packages,
     description='Dataset toolkit',
     license='TBD',
+    extras_require=EXTRA_REQUIRE,
 )
