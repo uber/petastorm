@@ -6,7 +6,8 @@ python:
 
 install:
   # This will use requirements from setup.py and install them in the tavis's virtual environment
-  - pip install -e .
+  # [tf] chooses to depend on cpu version of tensorflow (alternatively, could do [tf_gpu])
+  - pip install -e .[tf]
 
 script:
   # Run unit tests
