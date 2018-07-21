@@ -37,11 +37,7 @@ Options:
 
 def make_test_metadata(path):
     """
-    Use test_common to make a dataset for the TestSchema .
-
-    If you are updating the unit test data version, be sure to follow
-    https://code.int.uberatc.com/w/best_practices/testing/#how-to-store-your-test-d
-    and request to copy the data to the build machines.
+    Use test_common to make a dataset for the TestSchema.
 
     :param path: path to store the test dataset
     :return: resulting dataset as a dictionary
