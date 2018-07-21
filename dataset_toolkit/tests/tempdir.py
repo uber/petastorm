@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""A copy of `temporary_directory`. Prevents creating dependency on ATG's av package"""
-
 import contextlib
 import os
 import shutil

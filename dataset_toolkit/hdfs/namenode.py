@@ -55,13 +55,11 @@ class HdfsNamenodeResolver(object):
                         hadoop_configuration)
                     break
             if hadoop_configuration is None:
-                logger.warn('Unable to populate a sensible HadoopConfiguration for namenode '
-                            'resolution!\nPath of last environment var ({}) tried [{}].\nPlease '
-                            'follow https://code.int.uberatc.com/w/software_development/spark/hdfs '
-                            'to set up your\nHadoop and define environment variable HADOOP_HOME '
-                            'to point to your Hadoop installation path.'
-                            .format(self._hadoop_env, self._hadoop_path))
                 # ensures at least an empty dict so no further checks required in member functions
+                logger.warn('Unable to populate a sensible HadoopConfiguration for namenode resolution!\n'
+                            'Path of last environment var ({}) tried [{}]. Please set up your Hadoop and \n'
+                            'define environment variable HADOOP_HOME to point to your Hadoop installation path.'
+                            .format(self._hadoop_env, self._hadoop_path))
                 hadoop_configuration = {}
         self._hadoop_configuration = hadoop_configuration
 

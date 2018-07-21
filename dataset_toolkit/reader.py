@@ -45,7 +45,7 @@ class Reader(object):
 
         :param schema_fields: list of unischema fields to subset, or None to read all fields.
         :param dataset_url: an filepath or a url to a parquet directory,
-                       e.g. 'hdfs://nn-e2d7c3c1.pit-irn-1.uberatc.net/user/yevgeni/parquet8', or '/tmp/mydataset'
+                       e.g. 'hdfs://some_hdfs_cluster/user/yevgeni/parquet8', or '/tmp/mydataset'
         :param predicate: instance of predicate object to filter rows to be returned by reader.
         :param rowgroup_selector: instance of row group selector object to select row groups to be read
         :param reader_pool: parallelization pool. ThreadPool(10) (10 threads) is used by default.

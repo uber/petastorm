@@ -30,8 +30,8 @@ class HC:
     WARP_TURTLE = 'WARP-TURTLE'
     FS_WARP_TURTLE = 'hdfs://{}'.format(WARP_TURTLE)
     DEFAULT_NN = 'default:8020'
-    WARP_TURTLE_NN1 = 'nn-deadbeef.pit-irn-1.uberatc.net:8020'
-    WARP_TURTLE_NN2 = 'nn-abadcafe.pit-irn-1.uberatc.net:8020'
+    WARP_TURTLE_NN1 = 'some.domain.name.net:8020'
+    WARP_TURTLE_NN2 = 'some.domain.name.net:8020'
     WARP_TURTLE_PATH = '{}/x/y/z'.format(FS_WARP_TURTLE)
     HADOOP_CONFIG_PATH = '/etc/hadoop'
 
