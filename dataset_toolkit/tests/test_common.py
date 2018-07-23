@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import glob
-import os
 from decimal import Decimal
 from functools import partial
 
@@ -23,7 +21,7 @@ from pyspark.sql.types import StringType, ShortType, LongType, DecimalType
 
 from dataset_toolkit.codecs import CompressedImageCodec, NdarrayCodec, \
     ScalarCodec
-from dataset_toolkit.etl.dataset_metadata import add_dataset_metadata
+from dataset_toolkit.etl.dataset_metadata import materialize_dataset
 from dataset_toolkit.etl.rowgroup_indexers import SingleFieldIndexer
 from dataset_toolkit.etl.rowgroup_indexing import build_rowgroup_index
 from dataset_toolkit.unischema import Unischema, UnischemaField, dict_to_spark_row
@@ -65,47 +63,45 @@ def _randomize_row(id):
     return row_dict
 
 
-def create_test_dataset(tmp_url, rows, num_files=2):
+def create_test_dataset(tmp_url, rows, num_files=2, spark=None):
     """
     Creates a test dataset under tmp_dir, with rows and num_files that has TestSchema.
     :param tmp_url: The URL of the temp directory to store the test dataset in.
     :param rows: The number of rows for the dataset.
     :param num_files: The number of files to partition the data between.
+    :param spark: An optional spark session to use
     :return: A list of the dataset dictionary.
     """
-    spark_session = SparkSession \
-        .builder \
-        .appName('dataset_toolkit_end_to_end_test') \
-        .master('local[8]')
 
-    spark = spark_session.getOrCreate()
+    if not spark:
+        spark_session = SparkSession \
+            .builder \
+            .appName('dataset_toolkit_end_to_end_test') \
+            .master('local[8]')
+
+        spark = spark_session.getOrCreate()
     spark_context = spark.sparkContext
-    hadoop_config = spark_context._jsc.hadoopConfiguration()
-    # This results in spark not writing _SUCCESS file. pyarrow does not handle this extra file in a parquet
-    # directory correctly
-    hadoop_config.set('mapreduce.fileoutputcommitter.marksuccessfuljobs', 'false')
 
-    id_rdd = spark_context.parallelize(rows, numSlices=40)
+    with materialize_dataset(spark, tmp_url, TestSchema):
+        id_rdd = spark_context.parallelize(rows, numSlices=40)
 
-    # Make up some random data and store it for referencing in the tests
-    random_dicts_rdd = id_rdd.map(_randomize_row).cache()
-    dataset_dicts = random_dicts_rdd.collect()
+        # Make up some random data and store it for referencing in the tests
+        random_dicts_rdd = id_rdd.map(_randomize_row).cache()
+        dataset_dicts = random_dicts_rdd.collect()
 
-    random_rows_rdd = random_dicts_rdd.map(partial(dict_to_spark_row, TestSchema))
+        random_rows_rdd = random_dicts_rdd.map(partial(dict_to_spark_row, TestSchema))
 
-    # Create a spark dataframe with the random rows
-    dataframe = spark. \
-        createDataFrame(random_rows_rdd, TestSchema.as_spark_schema()).sort('id')
+        # Create a spark dataframe with the random rows
+        dataframe = spark. \
+            createDataFrame(random_rows_rdd, TestSchema.as_spark_schema()).sort('id')
 
-    # Save a parquet
-    dataframe. \
-        coalesce(num_files). \
-        write.option('compression', 'none'). \
-        partitionBy('partition_key'). \
-        mode('overwrite'). \
-        parquet(tmp_url)
-
-    add_dataset_metadata(tmp_url, spark_context, TestSchema)
+        # Save a parquet
+        dataframe. \
+            coalesce(num_files). \
+            write.option('compression', 'none'). \
+            partitionBy('partition_key'). \
+            mode('overwrite'). \
+            parquet(tmp_url)
 
     # Create list of objects to build row group indexes
     indexers = [
@@ -114,6 +110,7 @@ def create_test_dataset(tmp_url, rows, num_files=2):
     ]
     build_rowgroup_index(tmp_url, spark_context, indexers)
 
-    spark_context.stop()
+    if not spark:
+        spark_context.stop()
 
     return dataset_dicts
