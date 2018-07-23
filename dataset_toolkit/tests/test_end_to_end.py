@@ -22,12 +22,13 @@ from tempfile import mkdtemp
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from pyarrow import parquet as pq
+from pyspark.sql import SparkSession
 from pyspark.sql.types import LongType, ShortType, StringType
 
 from dataset_toolkit.local_disk_cache import LocalDiskCache
 from dataset_toolkit.codecs import ScalarCodec
 from dataset_toolkit.etl.dataset_metadata import ROW_GROUPS_PER_FILE_KEY, \
-    ROW_GROUPS_PER_FILE_KEY_ABSOLUTE_PATHS
+    ROW_GROUPS_PER_FILE_KEY_ABSOLUTE_PATHS, materialize_dataset
 from dataset_toolkit.reader import Reader
 from dataset_toolkit.tests.tempdir import temporary_directory
 from dataset_toolkit.selectors import SingleIndexSelector
@@ -377,6 +378,31 @@ class EndToEndDatasetToolkitTest(unittest.TestCase):
                    rowgroup_selector=SingleIndexSelector('WrongIndexName', ['some_value']),
                    reader_pool=DummyPool())
 
+    def test_materialize_dataset_hadoop_config(self):
+        """Test that using materialize_dataset does not alter the hadoop_config"""
+        spark = SparkSession.builder.getOrCreate()
+        hadoop_config = spark.sparkContext._jsc.hadoopConfiguration()
+
+        parquet_summary_metadata = False
+        parquet_row_group_check = 100
+
+        # Set the parquet summary giles and row group size check min
+        hadoop_config.setBoolean('parquet.enable.summary-metadata', parquet_summary_metadata)
+        hadoop_config.setInt('parquet.row-group.size.row.check.min', parquet_row_group_check)
+        self.assertEqual(hadoop_config.get('parquet.enable.summary-metadata'), str(parquet_summary_metadata).lower())
+        self.assertEqual(hadoop_config.get('parquet.row-group.size.row.check.min'), str(parquet_row_group_check))
+        destination = self._dataset_dir + '_moved'
+        create_test_dataset('file://{}'.format(destination), range(10), spark=spark)
+
+        # Check that they are back to the original values after writing the dataset
+        hadoop_config = spark.sparkContext._jsc.hadoopConfiguration()
+        self.assertEqual(hadoop_config.get('parquet.enable.summary-metadata'), str(parquet_summary_metadata).lower())
+        self.assertEqual(hadoop_config.get('parquet.row-group.size.row.check.min'), str(parquet_row_group_check))
+        # Other options should return to being unset
+        self.assertIsNone(hadoop_config.get('parquet.block.size'))
+        self.assertIsNone(hadoop_config.get('parquet.block.size.row.check.min'))
+        spark.sparkContext.stop()
+        rmtree(destination)
 
 if __name__ == '__main__':
     # Delegate to the test framework.
