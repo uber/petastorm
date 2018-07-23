@@ -16,7 +16,9 @@ import cPickle as pickle
 import json
 import os
 import sys
+from contextlib import contextmanager
 from operator import attrgetter
+
 from pyarrow import parquet as pq
 
 from dataset_toolkit import utils
@@ -25,6 +27,79 @@ from dataset_toolkit.fs_utils import FilesystemResolver
 ROW_GROUPS_PER_FILE_KEY = 'dataset-toolkit.num_row_groups_per_file.v1'
 ROW_GROUPS_PER_FILE_KEY_ABSOLUTE_PATHS = 'dataset-toolkit.num_row_groups_per_file'
 UNISCHEMA_KEY = 'dataset-toolkit.unischema.v1'
+
+
+@contextmanager
+def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None):
+    """
+    A Context Manager which handles all the initialization and finalization necessary
+    to generate metadata for a dataset toolkit dataset. This should be used around your
+    spark logic to materialize a dataset (specifically the writing of parquet output).
+
+    Note: Any rowgroup indexing should happen outside the materialize_dataset block
+
+    e.g.
+    spark = SparkSession.builder...
+    dataset_url = 'hdfs:///path/to/my/dataset'
+    with materialize_dataset(spark, dataset_url, MyUnischema, 64):
+      spark.sparkContext.parallelize(range(0, 10)).\
+        ...
+        .write.parquet(dataset_url)
+
+    indexers = [SingleFieldIndexer(...)]
+    build_rowgroup_index(dataset_url, spark.sparkContext, indexers)
+
+    :param spark The spark session you are using
+    :param dataset_url The dataset url to output your dataset to (e.g. hdfs:///path/to/dataset)
+    :param schema The unischema definition of your dataset
+    :param row_group_size_mb The parquet row group size to use for your dataset
+    """
+    spark_config = {}
+    _init_spark(spark, spark_config, row_group_size_mb)
+    yield
+    add_dataset_metadata(dataset_url, spark.sparkContext, schema)
+    _cleanup_spark(spark, spark_config, row_group_size_mb)
+
+
+def _init_spark(spark, current_spark_config, row_group_size_mb=None):
+    """
+    Initializes spark and hdfs config with necessary options for dataset toolkit datasets
+    before running the spark job.
+    """
+    hadoop_config = spark.sparkContext._jsc.hadoopConfiguration()
+
+    # Store current values so we can restore them later
+    current_spark_config['parquet.enable.summary-metadata'] = \
+        hadoop_config.get('parquet.enable.summary-metadata')
+    current_spark_config['parquet.block.size.row.check.min'] = \
+        hadoop_config.get('parquet.block.size.row.check.min')
+    current_spark_config['parquet.row-group.size.row.check.min'] = \
+        hadoop_config.get('parquet.row-group.size.row.check.min')
+    current_spark_config['parquet.block.size'] = \
+        hadoop_config.get('parquet.block.size')
+
+    hadoop_config.setBoolean('parquet.enable.summary-metadata', False)
+    # In our atg fork this config is called parquet.block.size.row.check.min however in newer
+    # parquet versions it will be renamed to parquet.row-group.size.row.check.min
+    # We use both for backwards compatibility
+    # Setting 'parquet.block.size.row.check.min' to 1 results in invalid parquet file
+    hadoop_config.setInt('parquet.block.size.row.check.min', 3)
+    hadoop_config.setInt('parquet.row-group.size.row.check.min', 3)
+    if row_group_size_mb:
+        hadoop_config.setInt('parquet.block.size', row_group_size_mb * 1024 * 1024)
+
+
+def _cleanup_spark(spark, current_spark_config, row_group_size_mb=None):
+    """
+    Cleans up config changes performed in _init_spark
+    """
+    hadoop_config = spark.sparkContext._jsc.hadoopConfiguration()
+
+    for key, val in current_spark_config.items():
+        if val is not None:
+            hadoop_config.set(key, val)
+        else:
+            hadoop_config.unset(key)
 
 
 def add_dataset_metadata(dataset_url, spark_context, schema):
