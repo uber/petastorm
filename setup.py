@@ -14,7 +14,7 @@
 
 import setuptools
 from setuptools import setup
-from dataset_toolkit import __version__
+from petastorm import __version__
 
 REQUIRED_PACKAGES = [
     'numpy>=1.13.3',
@@ -38,11 +38,11 @@ EXTRA_REQUIRE = {
 packages = setuptools.find_packages()
 
 setup(
-    name='dataset_toolkit',
+    name='petastorm',
     version=__version__,
     install_requires=REQUIRED_PACKAGES,
     packages=packages,
-    description='Dataset toolkit',
-    license='TBD',
+    description='petastorm library TODO: more info',
+    license='Apache 2.0',
     extras_require=EXTRA_REQUIRE,
 )
