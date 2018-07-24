@@ -22,10 +22,12 @@ install:
   # This will use requirements from setup.py and install them in the tavis's virtual environment
   # [tf] chooses to depend on cpu version of tensorflow (alternatively, could do [tf_gpu])
   - pip install -e .[tf,pyarrow]
+  - pip install pytest-xdist
 
 script:
   # Run unit tests
-  - pytest
+  - pytest ./petastorm/hdfs/tests/test_hdfs_namenode.py
+  - pytest -n 5 --ignore=./petastorm/hdfs/tests/test_hdfs_namenode.py
 
 before_deploy:
   # Build a python wheel before deployment
