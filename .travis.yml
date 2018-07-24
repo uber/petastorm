@@ -26,7 +26,8 @@ install:
 
 script:
   # Run unit tests
-  - pytest -n 10
+  - pytest ./petastorm/hdfs/tests/test_hdfs_namenode.py
+  - pytest -n 5 --ignore=./petastorm/hdfs/tests/test_hdfs_namenode.py
 
 before_deploy:
   # Build a python wheel before deployment
