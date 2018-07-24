@@ -13,16 +13,18 @@
 # limitations under the License.
 
 import cPickle as pickle
-import json
-import os
 import sys
-from contextlib import contextmanager
 from operator import attrgetter
 
-from pyarrow import parquet as pq
-
+import json
+import logging
+import os
+from contextlib import contextmanager
 from petastorm import utils
 from petastorm.fs_utils import FilesystemResolver
+from pyarrow import parquet as pq
+
+logger = logging.getLogger(__name__)
 
 ROW_GROUPS_PER_FILE_KEY = 'dataset-toolkit.num_row_groups_per_file.v1'
 ROW_GROUPS_PER_FILE_KEY_ABSOLUTE_PATHS = 'dataset-toolkit.num_row_groups_per_file'
@@ -233,12 +235,37 @@ def get_schema(dataset):
                          ' properly generate this file in your ETL code.'
                          ' You can generate it on an existing dataset using metadata_index_run.py')
     ser_schema = dataset_metadata_dict[UNISCHEMA_KEY]
-    # Since we have moved the unischema class from av.experimental.deepdrive.dataset_toolkit to dataset_toolkit
-    # unpickling old schemas will not work. In this case we override the old import path to get backwards compatibility
+    # Since we have moved the unischema class around few times, unpickling old schemas will not work. In this case we
+    # override the old import path to get backwards compatibility
     try:
         schema = pickle.loads(ser_schema)
     except ImportError:
         import petastorm
-        sys.modules['av.experimental.deepdrive.dataset_toolkit'] = petastorm
-        schema = pickle.loads(ser_schema)
+        # Try different legacy locations of the dataset toolkit
+        LEGACY_MODULE_NAMES = ['av.experimental.deepdrive.dataset_toolkit', 'av.ml.dataset_toolkit']
+
+        for i, legacy_module_name in enumerate(LEGACY_MODULE_NAMES):
+            try:
+                # Just in case we have some code in the module at the same path - keep it and restore of depickling.
+                save_module = sys.modules[legacy_module_name] if legacy_module_name in sys.modules else None
+                sys.modules[legacy_module_name] = petastorm
+                schema = pickle.loads(ser_schema)
+                logger.warn('Failed loading Unischema instance from metadata["{}"] because of an import error. '
+                            'However, was able to use a legacy module name "{}".'.format(UNISCHEMA_KEY,
+                                                                                         legacy_module_name))
+                break
+            except ImportError:
+                if i == len(LEGACY_MODULE_NAMES) - 1:
+                    raise RuntimeError(
+                        'Failed loading Unischema instance from metadata["{}"] because of an import error. '
+                        'Tried, to use a legacy module names {}, but failed. This is the raw content of the '
+                        'pickle stream: \n"{}..."'.format(UNISCHEMA_KEY, ', '.join(LEGACY_MODULE_NAMES),
+                                                          str(ser_schema[:min(100, len(ser_schema))])))
+            finally:
+                # Undo our override
+                if save_module:
+                    sys.modules[legacy_module_name] = save_module
+                else:
+                    sys.modules.pop(legacy_module_name)
+
     return schema
