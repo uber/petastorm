@@ -25,7 +25,7 @@ install:
 
 script:
   # Run unit tests
-  - pytest
+  - pytest -n 10
 
 before_deploy:
   # Build a python wheel before deployment
