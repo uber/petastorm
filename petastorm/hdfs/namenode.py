@@ -23,7 +23,6 @@ import pyarrow
 from pyarrow.hdfs import HadoopFileSystem
 from pyarrow.lib import ArrowIOError
 
-logging.basicConfig()
 logger = logging.getLogger(__name__)
 
 
