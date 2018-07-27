@@ -16,12 +16,13 @@ import functools
 import inspect
 import logging
 import os
-from urlparse import urlparse
 from xml.etree import ElementTree as ET
 
 import pyarrow
+import six
 from pyarrow.hdfs import HadoopFileSystem
 from pyarrow.lib import ArrowIOError
+from six.moves.urllib.parse import urlparse
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -75,7 +76,7 @@ class HdfsNamenodeResolver(object):
     def _build_error_string(self, msg):
         if self._hadoop_path is not None:
             return msg + '\nHadoop path {} in environment variable {}!\n' \
-                'Please check your hadoop configuration!' \
+                         'Please check your hadoop configuration!' \
                 .format(self._hadoop_path, self._hadoop_env)
         else:
             return msg + ' the supplied Spark HadoopConfiguration'
@@ -137,8 +138,8 @@ class MaxFailoversExceeded(RuntimeError):
         self.max_failover_attempts = max_failover_attempts
         self.func_name = func_name
         message = 'Failover attempts exceeded maximum ({}) for action "{}". ' \
-            'Exceptions:\n{}'.format(self.max_failover_attempts, self.func_name,
-                                     self.failed_exceptions)
+                  'Exceptions:\n{}'.format(self.max_failover_attempts, self.func_name,
+                                           self.failed_exceptions)
         super(MaxFailoversExceeded, self).__init__(message)
 
 
@@ -191,17 +192,19 @@ def failover_all_class_methods(decorator):
 
     Adapted from https://stackoverflow.com/a/6307868
     """
+
     # Convenience function to ensure `decorate` gets wrapper function attributes: name, docs, etc.
     @functools.wraps(decorator)
     def decorate(cls):
         all_methods = inspect.getmembers(cls, inspect.isbuiltin) \
-            + inspect.getmembers(cls, inspect.ismethod) \
-            + inspect.getmembers(cls, inspect.isroutine)
+                      + inspect.getmembers(cls, inspect.ismethod) \
+                      + inspect.getmembers(cls, inspect.isroutine)
         for name, method in all_methods:
             if not name.startswith('_'):
                 # It's safer to exclude all protected/private method from decoration
                 setattr(cls, name, decorator(method))
         return cls
+
     return decorate
 
 
@@ -261,7 +264,7 @@ class HdfsConnector(object):
         """
         assert list_of_namenodes is not None and len(list_of_namenodes) <= cls.MAX_NAMENODES, \
             "Must supply a list of namenodes, but HDFS only supports up to {} namenode URLs" \
-            .format(cls.MAX_NAMENODES)
+                .format(cls.MAX_NAMENODES)
         return HAHdfsClient(cls, list_of_namenodes)
 
     @classmethod
@@ -277,14 +280,14 @@ class HdfsConnector(object):
         """
         nn_len = len(list_of_namenodes)
         if nn_len > 0:
-            for i in xrange(1, cls.MAX_NAMENODES + 1):
+            for i in six.moves.range(1, cls.MAX_NAMENODES + 1):
                 # Use a modulo mechanism to hit the "next" name node, as opposed to always
                 # starting from the first entry in the list
                 idx = (index_of_nn + i) % nn_len
                 host = list_of_namenodes[idx]
                 try:
                     return idx, \
-                        cls.hdfs_connect_namenode(urlparse('hdfs://' + str(host or 'default')))
+                           cls.hdfs_connect_namenode(urlparse('hdfs://' + str(host or 'default')))
                 except ArrowIOError:
                     # This is an expected error if the namenode we are trying to connect to is
                     # not the active one

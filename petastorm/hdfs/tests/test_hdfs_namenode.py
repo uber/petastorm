@@ -126,7 +126,7 @@ class EnvBasedHadoopConfigurationTest(unittest.TestCase):
         """Create hadoop site files once"""
         cls._tmp_dir = mkdtemp('test_hadoop_home')
         os.makedirs('{}{}'.format(cls._tmp_dir, HC.HADOOP_CONFIG_PATH))
-        with open('{}{}/core-site.xml'.format(cls._tmp_dir, HC.HADOOP_CONFIG_PATH), 'wb') as f:
+        with open('{}{}/core-site.xml'.format(cls._tmp_dir, HC.HADOOP_CONFIG_PATH), 'wt') as f:
             f.write(textwrap.dedent("""\
                 <?xml version="1.0"?>
                 <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
@@ -137,7 +137,7 @@ class EnvBasedHadoopConfigurationTest(unittest.TestCase):
                   </property>
                 </configuration>
                 """.format(HC.WARP_TURTLE)))
-        with open('{}{}/hdfs-site.xml'.format(cls._tmp_dir, HC.HADOOP_CONFIG_PATH), 'wb') as f:
+        with open('{}{}/hdfs-site.xml'.format(cls._tmp_dir, HC.HADOOP_CONFIG_PATH), 'wt') as f:
             f.write(textwrap.dedent("""\
                 <?xml version="1.0"?>
                 <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
@@ -228,7 +228,7 @@ class EnvBasedHadoopConfigurationTest(unittest.TestCase):
         with self.assertRaises(IOError):
             HdfsNamenodeResolver()
         # Make an empty file
-        with open(cur_path, 'wb') as f:
+        with open(cur_path, 'wt') as f:
             f.write('')
         # Re-trigger env var evaluation
         suj = HdfsNamenodeResolver()
@@ -394,17 +394,17 @@ class HAHdfsClientTest(unittest.TestCase):
         MockHdfsConnector.set_n_failovers(-1)
         with self.assertRaises(HdfsMockError) as e:
             getattr(HAHdfsClient(MockHdfsConnector, [HC.WARP_TURTLE_NN1]), 'ls')('random')
-        self.assertTrue('random HDFS exception' in e.exception.message)
+        self.assertTrue('random HDFS exception' in str(e.exception))
 
     def test_invalid_namenode_list(self):
         """Make sure robust to invalid namenode list."""
         MockHdfsConnector.set_n_failovers(-1)
         with self.assertRaises(HdfsConnectError) as e:
             getattr(HAHdfsClient(MockHdfsConnector, []), 'ls')('random')
-        self.assertTrue('Unable to connect' in e.exception.message)
+        self.assertTrue('Unable to connect' in str(e.exception))
         with self.assertRaises(HdfsConnectError) as e:
             getattr(HAHdfsClient(MockHdfsConnector, [None]), 'ls')('random')
-        self.assertTrue('Unable to connect' in e.exception.message)
+        self.assertTrue('Unable to connect' in str(e.exception))
 
     def test_client_pickles_correctly(self):
         """
@@ -438,7 +438,7 @@ class HAHdfsClientTest(unittest.TestCase):
                          namenode_failover.MAX_FAILOVER_ATTEMPTS + 1)
         self.assertEqual(e.exception.max_failover_attempts, namenode_failover.MAX_FAILOVER_ATTEMPTS)
         self.assertEqual(e.exception.func_name, func)
-        self.assertTrue('Failover attempts exceeded' in e.exception.message)
+        self.assertTrue('Failover attempts exceeded' in str(e.exception))
 
     def test_cat(self):
         self._try_failover_combos('cat', 'random')
