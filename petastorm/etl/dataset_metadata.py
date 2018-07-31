@@ -245,10 +245,10 @@ def get_schema(dataset):
         LEGACY_MODULE_NAMES = ['av.experimental.deepdrive.dataset_toolkit', 'av.ml.dataset_toolkit']
 
         for i, legacy_module_name in enumerate(LEGACY_MODULE_NAMES):
+            # Just in case we have some code in the module at the same path - keep it and restore of depickling.
+            save_module = sys.modules[legacy_module_name] if legacy_module_name in sys.modules else None
+            sys.modules[legacy_module_name] = petastorm
             try:
-                # Just in case we have some code in the module at the same path - keep it and restore of depickling.
-                save_module = sys.modules[legacy_module_name] if legacy_module_name in sys.modules else None
-                sys.modules[legacy_module_name] = petastorm
                 schema = pickle.loads(ser_schema)
                 logger.warn('Failed loading Unischema instance from metadata["{}"] because of an import error. '
                             'However, was able to use a legacy module name "{}".'.format(UNISCHEMA_KEY,

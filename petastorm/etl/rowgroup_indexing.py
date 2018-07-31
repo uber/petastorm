@@ -14,6 +14,7 @@
 
 import cPickle as pickle
 import logging
+import sys
 import time
 from collections import namedtuple
 
@@ -147,5 +148,39 @@ def get_row_group_indexes(dataset):
                          'You can generate it on an existing dataset using rowgroup_indexing_run.py')
 
     serialized_indexes = dataset_metadata_dict[ROWGROUPS_INDEX_KEY]
-    index_dict = pickle.loads(serialized_indexes)
+
+    try:
+        index_dict = pickle.loads(serialized_indexes)
+    except ImportError:
+        import petastorm
+        # Try different legacy locations of the dataset toolkit
+        LEGACY_MODULE_NAMES = ['av.ml.dataset_toolkit']
+
+        # This is similar code to the one in dataset_metadata.py. We need to move away from pickling to a
+        # serialization format with better backward compatibility: https://github.com/uber/petastorm/issues/8
+        index_dict = None
+        for i, legacy_module_name in enumerate(LEGACY_MODULE_NAMES):
+            # Just in case we have some code in the module at the same path - keep it and restore of depickling.
+            save_module = sys.modules[legacy_module_name] if legacy_module_name in sys.modules else None
+            sys.modules[legacy_module_name] = petastorm
+            try:
+                index_dict = pickle.loads(serialized_indexes)
+                logger.warn('Failed loading index instance from metadata["{}"] because of an import error. '
+                            'However, was able to use a legacy module name "{}".'.format(ROWGROUPS_INDEX_KEY,
+                                                                                         legacy_module_name))
+                break
+            except ImportError:
+                if i == len(LEGACY_MODULE_NAMES) - 1:
+                    raise RuntimeError(
+                        'Failed loading Unischema instance from metadata["{}"] because of an import error. '
+                        'Tried, to use a legacy module names {}, but failed. This is the raw content of the '
+                        'pickle stream: \n"{}..."'.format(ROWGROUPS_INDEX_KEY, ', '.join(LEGACY_MODULE_NAMES),
+                                                          str(serialized_indexes[:min(100, len(serialized_indexes))])))
+            finally:
+                # Undo our override
+                if save_module:
+                    sys.modules[legacy_module_name] = save_module
+                else:
+                    sys.modules.pop(legacy_module_name)
+
     return index_dict
