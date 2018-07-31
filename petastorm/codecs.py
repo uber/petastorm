@@ -42,19 +42,34 @@ class DataframeColumnCodec(object):
 
 
 class CompressedImageCodec(DataframeColumnCodec):
-    def __init__(self, format='png'):
+    def __init__(self, format='png', quality=80):
         """CompressedImageCodec would compress/encompress images.
 
         :param format: any format string supported by opencv. e.g. 'png', 'jpeg'
+        :param quality: used when using jpeg lossy compression
         """
         self._format = '.' + format
+        self._quality = quality
 
-    def encode(self, unischema_field, image_rgb):
-        _, contents = cv2.imencode(self._format, image_rgb)
+    def encode(self, unischema_field, image):
+        """Encode the image using OpenCV"""
+        if unischema_field.numpy_dtype != image.dtype:
+            raise ValueError("Unexpected type of {} feature, expected {}, got {}".format(
+                unischema_field.name, unischema_field.numpy_dtype, image.dtype
+            ))
+
+        if not _is_compliant_shape(image.shape, unischema_field.shape):
+            raise ValueError("Unexpected dimensions of {} feature, expected {}, got {}".format(
+                unischema_field.name, unischema_field.shape, image.shape
+            ))
+
+        _, contents = cv2.imencode(self._format, image, [int(cv2.IMWRITE_JPEG_QUALITY), self._quality])
         return bytearray(contents)
 
     def decode(self, unischema_field, value):
-        return cv2.imdecode(np.asarray(bytearray(value)), cv2.IMREAD_UNCHANGED)
+        """Decode the image using OpenCV"""
+        numpy_image = cv2.imdecode(np.frombuffer(value, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+        return numpy_image
 
     def spark_dtype(self):
         return BinaryType()
