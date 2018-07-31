@@ -1,3 +1,7 @@
 *.pyc
 .idea
 .pytest_cache
+
+petastorm.egg-info
+build
+dist
