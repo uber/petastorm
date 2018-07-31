@@ -45,7 +45,7 @@ class CompressedImageCodec(DataframeColumnCodec):
     def __init__(self, format='png'):
         """CompressedImageCodec would compress/encompress images.
 
-        :param format: any format string supported by PIL. e.g. 'png', 'jpeg'
+        :param format: any format string supported by opencv. e.g. 'png', 'jpeg'
         """
         self._format = '.' + format
 

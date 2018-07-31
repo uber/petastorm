@@ -19,7 +19,7 @@ from petastorm import __version__
 REQUIRED_PACKAGES = [
     'diskcache>=3.0.0',
     'numpy>=1.13.3',
-    'opencv-python>=3.2.0.6'
+    'opencv-python>=3.2.0.6',
     'pandas>=0.19.0',
     'pyspark>=2.1.2',
     'pyzmq>=14.0.0',

@@ -68,23 +68,26 @@ class ScalarCodecsTest(unittest.TestCase):
 class CompressedImageCodecsTest(unittest.TestCase):
 
     def test_png(self):
-        for dtype in [np.uint8, np.uint16]:
-            expected_image = np.random.randint(0, np.iinfo(dtype).max, size=(300, 200), dtype=dtype)
-            codec = CompressedImageCodec('png')
-            field = UnischemaField(name='field_image', numpy_dtype=dtype, shape=(), codec=codec, nullable=False)
+        """Simple noop encode/decode using png codec. Verify that supports uint16 png codec and monochrome and
+        color images."""
+        for size in [(300, 200), (300, 200, 3)]:
+            for dtype in [np.uint8, np.uint16]:
+                expected_image = np.random.randint(0, np.iinfo(dtype).max, size=size, dtype=dtype)
+                codec = CompressedImageCodec('png')
+                field = UnischemaField(name='field_image', numpy_dtype=dtype, shape=(), codec=codec, nullable=False)
 
-            actual_image = codec.decode(field, codec.encode(field, expected_image))
-            np.testing.assert_array_equal(expected_image, actual_image)
-            self.assertEqual(expected_image.dtype, actual_image.dtype)
+                actual_image = codec.decode(field, codec.encode(field, expected_image))
+                np.testing.assert_array_equal(expected_image, actual_image)
+                self.assertEqual(expected_image.dtype, actual_image.dtype)
 
     def test_jpeg(self):
-        dtype = np.uint8
-
-        expected_image = np.random.randint(0, np.iinfo(dtype).max, size=(300, 200), dtype=dtype)
+        """Test lossy image codec"""
+        expected_image = np.random.randint(0, 255, size=(300, 200), dtype=np.uint8)
         codec = CompressedImageCodec('jpeg')
-        field = UnischemaField(name='field_image', numpy_dtype=dtype, shape=(), codec=codec, nullable=False)
+        field = UnischemaField(name='field_image', numpy_dtype=np.uint8, shape=(), codec=codec, nullable=False)
 
         actual_image = codec.decode(field, codec.encode(field, expected_image))
+        # Check a non exact match between the images. Verifying reasonable mean absolute error (up to 10)
         mean_abs_error = np.mean(np.abs(expected_image.astype(np.float) - actual_image.astype(np.float)))
         self.assertLess(mean_abs_error, 10)
         self.assertTrue(np.any(expected_image != actual_image, axis=None))
