@@ -19,7 +19,6 @@ import os
 from xml.etree import ElementTree as ET
 
 import pyarrow
-import six
 from pyarrow.hdfs import HadoopFileSystem
 from pyarrow.lib import ArrowIOError
 from six.moves.urllib.parse import urlparse
@@ -280,7 +279,7 @@ class HdfsConnector(object):
         """
         nn_len = len(list_of_namenodes)
         if nn_len > 0:
-            for i in six.moves.range(1, cls.MAX_NAMENODES + 1):
+            for i in range(1, cls.MAX_NAMENODES + 1):
                 # Use a modulo mechanism to hit the "next" name node, as opposed to always
                 # starting from the first entry in the list
                 idx = (index_of_nn + i) % nn_len
