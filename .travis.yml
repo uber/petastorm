@@ -19,7 +19,6 @@ python:
   - '2.7'
   - '3.5'
   - '3.6'
-  - '3.7'
 
 install:
   # This will use requirements from setup.py and install them in the tavis's virtual environment
