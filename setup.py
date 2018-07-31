@@ -17,14 +17,14 @@ from setuptools import setup
 from petastorm import __version__
 
 REQUIRED_PACKAGES = [
+    'diskcache>=3.0.0',
     'numpy>=1.13.3',
-    'Pillow>=3.0',
+    'opencv-python>=3.2.0.6'
+    'pandas>=0.19.0',
     'pyspark>=2.1.2',
     'pyzmq>=14.0.0',
     # 'pyarrow>=0.8',  # Temporarary removing dependency on pyarrow - we'll pick up whatever we have in ATG repo
                        # Once there is 0.10, we'll be able to use stock, non-atg version.
-    'pandas>=0.19.0',
-    'diskcache>=3.0.0',
 ]
 
 EXTRA_REQUIRE = {

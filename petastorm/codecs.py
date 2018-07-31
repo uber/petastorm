@@ -18,12 +18,11 @@ storing numpy multidimensional arrays as well as compressed images into spark da
 NOTE: Due to the way unischema is stored alongside dataset (with pickling), changing any of these codecs class names
 and fields can result in reader breakages.
 """
-
+import cv2
 import cStringIO as StringIO
 from abc import abstractmethod
 
 import numpy as np
-from PIL import Image
 from pyspark.sql.types import BinaryType, LongType, IntegerType, ShortType, ByteType, StringType
 
 
@@ -48,21 +47,14 @@ class CompressedImageCodec(DataframeColumnCodec):
 
         :param format: any format string supported by PIL. e.g. 'png', 'jpeg'
         """
-        self._format = format
+        self._format = '.' + format
 
     def encode(self, unischema_field, image_rgb):
-        image = Image.fromarray(image_rgb)
-        output = StringIO.StringIO()
-        image.save(output, format=self._format)
-        contents = output.getvalue()
-        output.close()
+        _, contents = cv2.imencode(self._format, image_rgb)
         return bytearray(contents)
 
     def decode(self, unischema_field, value):
-        image_data = StringIO.StringIO(value)
-        image = Image.open(image_data)
-        numpy_image = np.asarray(image)
-        return numpy_image
+        return cv2.imdecode(np.asarray(bytearray(value)), cv2.IMREAD_UNCHANGED)
 
     def spark_dtype(self):
         return BinaryType()

@@ -18,7 +18,7 @@ from decimal import Decimal
 import numpy as np
 from pyspark.sql.types import StringType, ByteType, ShortType, IntegerType, LongType, DecimalType
 
-from petastorm.codecs import NdarrayCodec, ScalarCodec
+from petastorm.codecs import NdarrayCodec, ScalarCodec, CompressedImageCodec
 from petastorm.unischema import UnischemaField
 
 
@@ -63,6 +63,31 @@ class ScalarCodecsTest(unittest.TestCase):
 
         value = Decimal('123.4567')
         self.assertEqual(codec.decode(field, codec.encode(field, value)), value)
+
+
+class CompressedImageCodecsTest(unittest.TestCase):
+
+    def test_png(self):
+        for dtype in [np.uint8, np.uint16]:
+            expected_image = np.random.randint(0, np.iinfo(dtype).max, size=(300, 200), dtype=dtype)
+            codec = CompressedImageCodec('png')
+            field = UnischemaField(name='field_image', numpy_dtype=dtype, shape=(), codec=codec, nullable=False)
+
+            actual_image = codec.decode(field, codec.encode(field, expected_image))
+            np.testing.assert_array_equal(expected_image, actual_image)
+            self.assertEqual(expected_image.dtype, actual_image.dtype)
+
+    def test_jpeg(self):
+        dtype = np.uint8
+
+        expected_image = np.random.randint(0, np.iinfo(dtype).max, size=(300, 200), dtype=dtype)
+        codec = CompressedImageCodec('jpeg')
+        field = UnischemaField(name='field_image', numpy_dtype=dtype, shape=(), codec=codec, nullable=False)
+
+        actual_image = codec.decode(field, codec.encode(field, expected_image))
+        mean_abs_error = np.mean(np.abs(expected_image.astype(np.float) - actual_image.astype(np.float)))
+        self.assertLess(mean_abs_error, 10)
+        self.assertTrue(np.any(expected_image != actual_image, axis=None))
 
 
 if __name__ == '__main__':
