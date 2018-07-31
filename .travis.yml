@@ -14,9 +14,10 @@
 
 dist: trusty
 language: python
-
 python:
   - '2.7'
+  - '3.5'
+  - '3.6'
 
 install:
   # This will use requirements from setup.py and install them in the tavis's virtual environment
@@ -25,7 +26,8 @@ install:
 
 script:
   # Run unit tests
-  - pytest
+  - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then pytest; fi
+  - if [[ $TRAVIS_PYTHON_VERSION == '3.5' ]] || [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then pytest petastorm/hdfs/; fi
 
 before_deploy:
   # Build a python wheel before deployment
