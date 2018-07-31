@@ -18,7 +18,7 @@ from decimal import Decimal
 import numpy as np
 from pyspark.sql.types import StringType, ByteType, ShortType, IntegerType, LongType, DecimalType
 
-from petastorm.codecs import NdarrayCodec, ScalarCodec
+from petastorm.codecs import NdarrayCodec, ScalarCodec, CompressedImageCodec
 from petastorm.unischema import UnischemaField
 
 
@@ -64,6 +64,66 @@ class ScalarCodecsTest(unittest.TestCase):
         value = Decimal('123.4567')
         self.assertEqual(codec.decode(field, codec.encode(field, value)), value)
 
+
+class CompressedImageCodecsTest(unittest.TestCase):
+
+    def test_png(self):
+        """Simple noop encode/decode using png codec. Verify that supports uint16 png codec and monochrome and
+        color images."""
+        for size in [(300, 200), (300, 200, 3)]:
+            for dtype in [np.uint8, np.uint16]:
+                expected_image = np.random.randint(0, np.iinfo(dtype).max, size=size, dtype=dtype)
+                codec = CompressedImageCodec('png')
+                field = UnischemaField(name='field_image', numpy_dtype=dtype, shape=size, codec=codec,
+                                       nullable=False)
+
+                actual_image = codec.decode(field, codec.encode(field, expected_image))
+                np.testing.assert_array_equal(expected_image, actual_image)
+                self.assertEqual(expected_image.dtype, actual_image.dtype)
+
+    def test_jpeg(self):
+        """Test lossy image codec"""
+        for size in [(300, 200), (300, 200, 3)]:
+            expected_image = np.random.randint(0, 255, size=size, dtype=np.uint8)
+            codec = CompressedImageCodec('jpeg', quality=100)
+            field = UnischemaField(name='field_image', numpy_dtype=np.uint8, shape=size, codec=codec, nullable=False)
+
+            actual_image = codec.decode(field, codec.encode(field, expected_image))
+            # Check a non exact match between the images. Verifying reasonable mean absolute error (up to 10)
+            mean_abs_error = np.mean(np.abs(expected_image.astype(np.float) - actual_image.astype(np.float)))
+            # The threshold is relatively high as compressing random images with jpeg results in a significant
+            # quality loss
+            self.assertLess(mean_abs_error, 50)
+            self.assertTrue(np.any(expected_image != actual_image, axis=None))
+
+    def test_jpeg_quality(self):
+        """Compare mean abs error between different encoding quality settings. Higher quality value should result
+        in a smaller error"""
+        size = (300, 200, 3)
+        expected_image = np.random.randint(0, 255, size=size, dtype=np.uint8)
+
+        errors = dict()
+        for quality in [10, 99]:
+            codec = CompressedImageCodec('jpeg', quality=quality)
+            field = UnischemaField(name='field_image', numpy_dtype=np.uint8, shape=size, codec=codec, nullable=False)
+            actual_image = codec.decode(field, codec.encode(field, expected_image))
+            errors[quality] = np.mean(np.abs(expected_image.astype(np.float) - actual_image.astype(np.float)))
+
+        self.assertGreater(errors[10], errors[99])
+
+    def test_bad_shape(self):
+        codec = CompressedImageCodec('png')
+        field = UnischemaField(name='field_image', numpy_dtype=np.uint8, shape=(10, 20), codec=codec, nullable=False)
+        with self.assertRaises(ValueError) as e:
+            codec.encode(field, np.zeros((100, 200), dtype=np.uint8))
+        self.assertTrue('Unexpected dimensions' in str(e.exception))
+
+    def test_bad_dtype(self):
+        codec = CompressedImageCodec('png')
+        field = UnischemaField(name='field_image', numpy_dtype=np.uint8, shape=(10, 20), codec=codec, nullable=False)
+        with self.assertRaises(ValueError) as e:
+            codec.encode(field, np.zeros((100, 200), dtype=np.uint16))
+        self.assertTrue('Unexpected type' in str(e.exception))
 
 if __name__ == '__main__':
     # Delegate to the test framework.

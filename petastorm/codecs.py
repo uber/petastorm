@@ -18,12 +18,11 @@ storing numpy multidimensional arrays as well as compressed images into spark da
 NOTE: Due to the way unischema is stored alongside dataset (with pickling), changing any of these codecs class names
 and fields can result in reader breakages.
 """
-
+import cv2
 import cStringIO as StringIO
 from abc import abstractmethod
 
 import numpy as np
-from PIL import Image
 from pyspark.sql.types import BinaryType, LongType, IntegerType, ShortType, ByteType, StringType
 
 
@@ -43,25 +42,33 @@ class DataframeColumnCodec(object):
 
 
 class CompressedImageCodec(DataframeColumnCodec):
-    def __init__(self, format='png'):
+    def __init__(self, format='png', quality=80):
         """CompressedImageCodec would compress/encompress images.
 
-        :param format: any format string supported by PIL. e.g. 'png', 'jpeg'
+        :param format: any format string supported by opencv. e.g. 'png', 'jpeg'
+        :param quality: used when using jpeg lossy compression
         """
-        self._format = format
+        self._format = '.' + format
+        self._quality = quality
 
-    def encode(self, unischema_field, image_rgb):
-        image = Image.fromarray(image_rgb)
-        output = StringIO.StringIO()
-        image.save(output, format=self._format)
-        contents = output.getvalue()
-        output.close()
+    def encode(self, unischema_field, image):
+        """Encode the image using OpenCV"""
+        if unischema_field.numpy_dtype != image.dtype:
+            raise ValueError("Unexpected type of {} feature, expected {}, got {}".format(
+                unischema_field.name, unischema_field.numpy_dtype, image.dtype
+            ))
+
+        if not _is_compliant_shape(image.shape, unischema_field.shape):
+            raise ValueError("Unexpected dimensions of {} feature, expected {}, got {}".format(
+                unischema_field.name, unischema_field.shape, image.shape
+            ))
+
+        _, contents = cv2.imencode(self._format, image, [int(cv2.IMWRITE_JPEG_QUALITY), self._quality])
         return bytearray(contents)
 
     def decode(self, unischema_field, value):
-        image_data = StringIO.StringIO(value)
-        image = Image.open(image_data)
-        numpy_image = np.asarray(image)
+        """Decode the image using OpenCV"""
+        numpy_image = cv2.imdecode(np.frombuffer(value, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
         return numpy_image
 
     def spark_dtype(self):
