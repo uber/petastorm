@@ -70,10 +70,15 @@ def add_to_dataset_metadata(dataset, key, value):
         raise ValueError('Expected dataset.paths to be a single path, not a list of paths')
 
     metadata_file_path = dataset.paths.rstrip('/') + '/_metadata'
+    common_metadata_file_path = dataset.paths.rstrip('/') + '/_common_metadata'
 
     # If the metadata file already exists, add to it.
     # Otherwise fetch the schema from one of the existing parquet files in the dataset
-    if dataset.fs.exists(metadata_file_path):
+    if dataset.fs.exists(common_metadata_file_path):
+        arrow_metadata = pyarrow.parquet.read_metadata(dataset.fs.open(common_metadata_file_path))
+    elif dataset.fs.exists(metadata_file_path):
+        # If just the metadata file exists and not the common metadata file, copy the contents of
+        # the metadata file to the common_metadata file for backwards compatibility
         arrow_metadata = pyarrow.parquet.read_metadata(dataset.fs.open(metadata_file_path))
     else:
         arrow_metadata = dataset.pieces[0].get_metadata(lambda path: dataset.fs.open(path))
@@ -82,5 +87,5 @@ def add_to_dataset_metadata(dataset, key, value):
     metadata_dict[key] = value
     schema = base_schema.add_metadata(metadata_dict)
 
-    with dataset.fs.open(metadata_file_path, 'wb') as metadata_file:
+    with dataset.fs.open(common_metadata_file_path, 'wb') as metadata_file:
         pyarrow.parquet.write_metadata(schema, metadata_file)
