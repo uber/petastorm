@@ -28,8 +28,8 @@ from petastorm.workers_pool.dummy_pool import DummyPool
 # Tiny count of rows in a fake dataset
 ROWS_COUNT = 10
 
-ORIGINAL_NAME = '_metadata'
-NEW_NAME = '_metadata_gone'
+ORIGINAL_NAME = '_common_metadata'
+NEW_NAME = '_common_metadata_gone'
 
 
 def get_test_data_path(subpath, version=0):
