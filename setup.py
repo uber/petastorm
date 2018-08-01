@@ -19,7 +19,6 @@ from petastorm import __version__
 REQUIRED_PACKAGES = [
     'diskcache>=3.0.0',
     'numpy>=1.13.3',
-    'opencv-python>=3.2.0.6',
     'pandas>=0.19.0',
     'pyspark>=2.1.2',
     'pyzmq>=14.0.0',
@@ -28,11 +27,12 @@ REQUIRED_PACKAGES = [
 ]
 
 EXTRA_REQUIRE = {
-    'tf': ['tensorflow>=1.4.0'],
-    'tf_gpu': ['tensorflow-gpu>=1.4.0'],
-    'tf_atg': ['atg-tensorflow-gpu>=1.4.0'],
+    'opencv': ['opencv-python>=3.2.0.6'],
     'pyarrow': ['pyarrow>=0.8'],  # TODO(yevgeni): once ATG goes to stock 0.10 (instead of atg-pyarrow=0.9.0.1), we
                                   # make the require mandatory.
+    'tf': ['tensorflow>=1.4.0'],
+    'tf_atg': ['atg-tensorflow-gpu>=1.4.0'],
+    'tf_gpu': ['tensorflow-gpu>=1.4.0'],
 }
 
 packages = setuptools.find_packages()
