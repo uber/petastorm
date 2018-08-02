@@ -25,7 +25,7 @@ from petastorm.workers_pool.worker_base import WorkerBase
 
 
 def _merge_two_dicts(a, b):
-    """Merges two dictionaries together. If the same key is present in both input dictionaries, the value from 'y'
+    """Merges two dictionaries together. If the same key is present in both input dictionaries, the value from 'b'
     dominates."""
     result = a.copy()
     result.update(b)
