@@ -164,7 +164,7 @@ def _generate_unischema_metadata(dataset, schema):
     utils.add_to_dataset_metadata(dataset, UNISCHEMA_KEY, serialized_schema)
 
 
-def load_rowgroup_split(dataset):
+def load_row_groups(dataset):
     """
     Load dataset row group pieces from metadata
     :param dataset: parquet dataset object.
@@ -196,7 +196,7 @@ def load_rowgroup_split(dataset):
         metadata_dict_key = ROW_GROUPS_PER_FILE_KEY
     row_groups_per_file = json.loads(dataset_metadata_dict[metadata_dict_key])
 
-    split_pieces = []
+    rowgroups = []
     # Force order of pieces. The order is not deterministic since it depends on multithreaded directory
     # listing implementation inside pyarrow. We stabilize order here, this way we get reproducable order
     # when pieces shuffling is off. This also enables implementing piece shuffling given a seed
@@ -206,8 +206,8 @@ def load_rowgroup_split(dataset):
         # looking up the number of row groups.
         row_groups_key = piece.path if use_absolute_paths else os.path.relpath(piece.path, dataset.paths)
         for row_group in range(row_groups_per_file[row_groups_key]):
-            split_pieces.append(pq.ParquetDatasetPiece(piece.path, row_group, piece.partition_keys))
-    return split_pieces
+            rowgroups.append(pq.ParquetDatasetPiece(piece.path, row_group, piece.partition_keys))
+    return rowgroups
 
 
 def get_schema(dataset):
