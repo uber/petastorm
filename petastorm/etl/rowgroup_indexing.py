@@ -51,7 +51,7 @@ def build_rowgroup_index(dataset_url, spark_context, indexers):
     dataset = pq.ParquetDataset(resolver.parsed_dataset_url().path, filesystem=resolver.filesystem(),
                                 validate_schema=False)
 
-    split_pieces = dataset_metadata.load_rowgroup_split(dataset)
+    split_pieces = dataset_metadata.load_row_groups(dataset)
     schema = dataset_metadata.get_schema(dataset)
 
     # We need direct reference on partitions object
