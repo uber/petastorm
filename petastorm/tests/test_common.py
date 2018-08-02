@@ -22,7 +22,7 @@ from pyspark.sql.types import StringType, ShortType, LongType, DecimalType
 from petastorm.codecs import CompressedImageCodec, NdarrayCodec, \
     ScalarCodec
 from petastorm.etl.dataset_metadata import materialize_dataset
-from petastorm.etl.rowgroup_indexers import SingleFieldIndexer
+from petastorm.etl.rowgroup_indexers import SingleFieldIndexer, MultipleFieldsIndexer
 from petastorm.etl.rowgroup_indexing import build_rowgroup_index
 from petastorm.unischema import Unischema, UnischemaField, dict_to_spark_row
 
@@ -106,7 +106,9 @@ def create_test_dataset(tmp_url, rows, num_files=2, spark=None):
     # Create list of objects to build row group indexes
     indexers = [
         SingleFieldIndexer(TestSchema.id.name, TestSchema.id.name),
-        SingleFieldIndexer(TestSchema.sensor_name.name, TestSchema.sensor_name.name)
+        SingleFieldIndexer(TestSchema.sensor_name.name, TestSchema.sensor_name.name),
+        MultipleFieldsIndexer('MultipleFieldsIndexTest', [TestSchema.id.name, TestSchema.sensor_name.name],
+                              _multiple_fields_index_func)
     ]
     build_rowgroup_index(tmp_url, spark_context, indexers)
 
@@ -114,3 +116,7 @@ def create_test_dataset(tmp_url, rows, num_files=2, spark=None):
         spark_context.stop()
 
     return dataset_dicts
+
+
+def _multiple_fields_index_func(id, sensor_name):
+    return id == 1 and sensor_name != 'NA'

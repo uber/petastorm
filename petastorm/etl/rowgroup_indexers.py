@@ -127,3 +127,76 @@ class FieldNotNullIndexer(RowGroupIndexerBase):
                 break
 
         return self._index_data
+
+
+class MultipleFieldsIndexer(RowGroupIndexerBase):
+    """
+    Class to build multiple fields index according to function predicate
+    """
+
+    def __init__(self, index_name, index_fields, indexing_func):
+        self._index_name = index_name
+        self._column_names = list(index_fields)
+        self._indexing_func = indexing_func
+        self._index_data = set()
+
+    def __add__(self, other):
+        if not isinstance(other, MultipleFieldsIndexer):
+            raise TypeError("Make sure Spark map function return the same indexer type")
+        if self._column_names != other._column_names:
+            raise ValueError("Make sure indexers in Spark map function index the same fields")
+
+        self._index_data.update(other._index_data)
+
+        return self
+
+    @property
+    def index_name(self):
+        return self._index_name
+
+    @property
+    def column_names(self):
+        return self._column_names
+
+    @property
+    def indexed_values(self):
+        return ['Included']
+
+    def get_row_group_indexes(self, value_key=None):
+        return self._index_data
+
+    def build_index(self, decoded_rows, piece_index):
+        fields_to_index = [[row[column_name] for column_name in self._column_names] for row in decoded_rows]
+        if len(fields_to_index) == 0:
+            raise ValueError("Cannot build index for empty rows, columns '{}'"
+                             .format(str(self._column_names)))
+
+        def _zip_with_broadcast(fields):
+            is_array = [isinstance(field, np.ndarray) for field in fields]
+            if not any(is_array):
+                # all scalars
+                yield fields
+            elif all(is_array):
+                # all arrays, zip
+                for args in zip(*fields):
+                    yield args
+            else:
+                # mix of scalars and arrays
+                # zip arrays, broarcast scalars
+                fields_copy = list(fields)
+                array_idx = is_array.index(True)
+                array_len = len(fields_copy[array_idx].tolist())
+                for v, i in enumerate(is_array):
+                    if not v:
+                        fields_copy[i] = np.asarray([fields_copy[i]] * array_len)
+                for args in zip(*fields_copy):
+                    yield args
+
+        for fields in fields_to_index:
+
+            for args in _zip_with_broadcast(fields):
+                if self._indexing_func(*args):
+                    self._index_data.add(piece_index)
+                    break
+
+        return self._index_data
