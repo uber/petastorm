@@ -367,6 +367,21 @@ class EndToEndDatasetToolkitTest(unittest.TestCase):
             # so all row groups should be selected and all 1000 generated rows should be returned
             self.assertEqual(1000, count)
 
+    def test_rowgroup_selector_multiple_fields(self):
+        """ Select row groups to read based on dataset index for multiple fields"""
+        with Reader(dataset_url=self._dataset_url,
+                    rowgroup_selector=SingleIndexSelector('MultipleFieldsIndexTest', ['Included']),
+                    reader_pool=DummyPool()) as reader:
+            count = 0
+            for row in reader:
+                count += 1
+            # MultipleFieldsIndexTest implements logic below
+            #      id == 1 and sensor_name != 'NA'
+            # Since we use artificial dataset all sensors have the same name (which is not 'NA')
+            # and sequential id, only one row group will be selected
+            # so 100 generated rows should be returned
+            self.assertEqual(100, count)
+
     def test_rowgroup_selector_wrong_index_name(self):
         """ Attempt to select row groups to based on wrong dataset index,
             Reader should raise exception
