@@ -20,7 +20,7 @@ from petastorm.utils import run_in_subprocess
 
 
 def builtin_func():
-    return range(10)
+    return list(range(10))
 
 
 def multiply(a, b):

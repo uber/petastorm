@@ -29,7 +29,7 @@ from petastorm.unischema import Unischema, UnischemaField, dict_to_spark_row
 _DEFAULT_IMAGE_SIZE = (32, 16, 3)
 
 TestSchema = Unischema('TestSchema', [
-    UnischemaField('partition_key', np.string_, (), ScalarCodec(StringType()), False),
+    UnischemaField('partition_key', np.unicode_, (), ScalarCodec(StringType()), False),
     UnischemaField('id', np.int64, (), ScalarCodec(LongType()), False),
     UnischemaField('id2', np.int32, (), ScalarCodec(ShortType()), False),
     UnischemaField('python_primitive_uint8', np.uint8, (), ScalarCodec(ShortType()), False),
@@ -40,7 +40,7 @@ TestSchema = Unischema('TestSchema', [
     UnischemaField('matrix_string', np.string_, (None,), NdarrayCodec(), False),
     UnischemaField('empty_matrix_string', np.string_, (None,), NdarrayCodec(), False),
     UnischemaField('matrix_nullable', np.uint16, _DEFAULT_IMAGE_SIZE, NdarrayCodec(), True),
-    UnischemaField('sensor_name', np.string_, (1,), NdarrayCodec(), False),
+    UnischemaField('sensor_name', np.unicode_, (1,), NdarrayCodec(), False),
 ])
 
 
@@ -58,7 +58,7 @@ def _randomize_row(id):
         TestSchema.matrix_string.name: np.random.randint(0, 100, (4,)).astype(np.string_),
         TestSchema.empty_matrix_string.name: np.asarray([], dtype=np.string_),
         TestSchema.matrix_nullable.name: None,
-        TestSchema.sensor_name.name: np.asarray(['test_sensor'], dtype=np.string_),
+        TestSchema.sensor_name.name: np.asarray(['test_sensor'], dtype=np.unicode_),
     }
     return row_dict
 
@@ -73,6 +73,7 @@ def create_test_dataset(tmp_url, rows, num_files=2, spark=None):
     :return: A list of the dataset dictionary.
     """
 
+    shutdown = False
     if not spark:
         spark_session = SparkSession \
             .builder \
@@ -80,6 +81,7 @@ def create_test_dataset(tmp_url, rows, num_files=2, spark=None):
             .master('local[8]')
 
         spark = spark_session.getOrCreate()
+        shutdown = True
     spark_context = spark.sparkContext
 
     with materialize_dataset(spark, tmp_url, TestSchema):
@@ -110,7 +112,7 @@ def create_test_dataset(tmp_url, rows, num_files=2, spark=None):
     ]
     build_rowgroup_index(tmp_url, spark_context, indexers)
 
-    if not spark:
+    if shutdown:
         spark_context.stop()
 
     return dataset_dicts

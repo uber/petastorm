@@ -13,12 +13,12 @@
 # limitations under the License.
 
 """A set of Spark specific helper functions for the petastorm dataset"""
-from urlparse import urlparse
+from pyarrow import parquet as pq
+from six.moves.urllib.parse import urlparse
 
 from petastorm import utils
 from petastorm.etl import dataset_metadata
 from petastorm.fs_utils import FilesystemResolver
-from pyarrow import parquet as pq
 
 
 def dataset_as_rdd(dataset_url, spark_session, schema_fields=None):

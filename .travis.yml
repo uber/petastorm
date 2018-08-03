@@ -16,7 +16,6 @@ dist: trusty
 language: python
 python:
   - '2.7'
-  - '3.5'
   - '3.6'
 
 install:
@@ -29,8 +28,7 @@ install:
 
 script:
   # Run unit tests
-  - if [[ $TRAVIS_PYTHON_VERSION == '2.7' ]]; then pytest; fi
-  - if [[ $TRAVIS_PYTHON_VERSION == '3.5' ]] || [[ $TRAVIS_PYTHON_VERSION == '3.6' ]]; then pytest petastorm/hdfs/; fi
+  - pytest
 
 before_deploy:
   # Build a python wheel before deployment

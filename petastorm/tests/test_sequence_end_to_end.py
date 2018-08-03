@@ -19,7 +19,6 @@ from tempfile import mkdtemp
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.python.framework.errors import UnknownError
 from tensorflow.python.framework.errors_impl import OutOfRangeError
 
 from petastorm.reader import Reader
@@ -37,7 +36,7 @@ def _assert_equal_sequence(actual_sequence, expected_sequence, skip_fields):
         actual_dict = actual_sequence[timestep]._asdict()
         expected_dict = expected_sequence[timestep]._asdict()
         expected_filtered_keys = [key for key in expected_dict.keys() if key not in skip_fields]
-        np.testing.assert_equal(actual_dict.keys(), expected_filtered_keys)
+        np.testing.assert_equal(list(actual_dict.keys()), expected_filtered_keys)
         for field_name in actual_dict:
             if skip_fields is not None and field_name in skip_fields:
                 continue
@@ -45,11 +44,15 @@ def _assert_equal_sequence(actual_sequence, expected_sequence, skip_fields):
             actual_field = actual_dict[field_name]
             expected_field = expected_dict[field_name]
 
+            if isinstance(expected_field, Decimal) or isinstance(expected_field, str):
+                # Tensorflow returns all strings as bytes in python3. So we will need to decode it
+                actual_field = actual_field.decode()
+            elif isinstance(expected_field, np.ndarray) and expected_field.dtype.type == np.unicode_:
+                actual_field = np.array([item.decode() for item in actual_field])
+
             if isinstance(expected_field, Decimal):
-                np.testing.assert_equal(
-                    expected_field,
-                    Decimal(actual_field),
-                    '{0} field is different'.format(field_name)
+                np.testing.assert_equal(expected_field, Decimal(actual_field),
+                                        '{0} field is different'.format(field_name)
                 )
             else:
                 np.testing.assert_equal(expected_field, actual_field, '{0} field is different'.format(field_name))

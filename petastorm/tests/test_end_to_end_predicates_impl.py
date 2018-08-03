@@ -33,7 +33,7 @@ class EqualPredicate(PredicateBase):
         self._values = values
 
     def get_fields(self):
-        return self._values.keys()
+        return list(self._values.keys())
 
     def do_include(self, values):
         return self._values == values
