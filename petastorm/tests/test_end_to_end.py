@@ -96,32 +96,6 @@ def test_simple_read_moved_dataset(synthetic_dataset, tmpdir):
         _check_simple_reader(reader, synthetic_dataset.data)
 
 
-def test_simple_read_absolute_paths_metadata(synthetic_dataset, tmpdir):
-    """Tests that a dataset using absolute paths in the petastorm metadata may still be opened"""
-
-    # Create a copied version of the dataset and change the metadata to use absolute paths
-    destination = tmpdir.join('copy').strpath
-    copytree(synthetic_dataset.path, destination)
-
-    dataset = pq.ParquetDataset(destination, validate_schema=False)
-    old_row_group_nums = json.loads(dataset.common_metadata.metadata[ROW_GROUPS_PER_FILE_KEY].decode())
-    row_group_nums = {}
-    for rel_path, num_row_groups in old_row_group_nums.items():
-        row_group_nums[os.path.join(dataset.paths, rel_path)] = num_row_groups
-    base_schema = dataset.common_metadata.schema.to_arrow_schema()
-    metadata_dict = base_schema.metadata
-    del metadata_dict[ROW_GROUPS_PER_FILE_KEY]
-    metadata_dict[ROW_GROUPS_PER_FILE_KEY_ABSOLUTE_PATHS] = json.dumps(row_group_nums)
-    schema = base_schema.add_metadata(metadata_dict)
-    with dataset.fs.open(os.path.join(destination, '_metadata'), 'wb') as metadata_file:
-        pq.write_metadata(schema, metadata_file)
-
-    with Reader('file://{}'.format(destination), reader_pool=DummyPool()) as reader:
-        _check_simple_reader(reader, synthetic_dataset.data)
-
-    rmtree(destination)
-
-
 def test_reading_subset_of_columns(synthetic_dataset):
     """Just a bunch of read and compares of all values to the expected values"""
     with Reader(synthetic_dataset.url, schema_fields=[TestSchema.id2, TestSchema.id],
