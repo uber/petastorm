@@ -16,31 +16,12 @@ import unittest
 from shutil import move, rmtree
 from tempfile import mkdtemp
 
-from pyarrow import parquet as pq
-from pyspark.sql import SparkSession
-
-from petastorm.etl.dataset_metadata import _generate_num_row_groups_per_file_metadata
-from petastorm.fs_utils import FilesystemResolver
 from petastorm.reader import Reader
-from petastorm.tests.test_common import TestSchema, create_test_dataset
+from petastorm.tests.test_common import create_test_dataset
 from petastorm.workers_pool.dummy_pool import DummyPool
 
 # Tiny count of rows in a fake dataset
 ROWS_COUNT = 10
-
-ORIGINAL_NAME = '_common_metadata'
-NEW_NAME = '_common_metadata_gone'
-
-
-def get_test_data_path(subpath, version=0):
-    try:
-        from av.testutil1 import get_test_data_file
-    except ImportError:
-        raise unittest.SkipTest('Skipping this test because failed \'from av.testutil1 import get_test_data_file\''
-                                'We are probably running from outside of the rAV repo.')
-
-    """ Returns the unit test data path for this unit test. """
-    return get_test_data_file('test_metadata_read', version, subpath)
 
 
 class MetadataUnischemaReadTest(unittest.TestCase):
@@ -57,13 +38,13 @@ class MetadataUnischemaReadTest(unittest.TestCase):
         """ Remove everything created in setUpClass. """
         rmtree(cls._dataset_dir)
 
-    def vanish_metadata(self):
+    def vanish_metadata(self, filename='_metadata'):
         """ Move the already generated _metadata to a different name, leveraging tempdir uniqueness. """
-        move('{}/{}'.format(self._dataset_dir, ORIGINAL_NAME), '{}{}'.format(self._dataset_dir, NEW_NAME))
+        move('{}/{}'.format(self._dataset_dir, filename), '{}{}'.format(self._dataset_dir, filename + '_gone'))
 
-    def restore_metadata(self):
+    def restore_metadata(self, filename='_metadata'):
         """ Restore _metadata file for other tests. """
-        move('{}{}'.format(self._dataset_dir, NEW_NAME), '{}/{}'.format(self._dataset_dir, ORIGINAL_NAME))
+        move('{}{}'.format(self._dataset_dir, filename + '_gone'), '{}/{}'.format(self._dataset_dir, filename))
 
     def test_no_metadata(self):
         self.vanish_metadata()
@@ -74,32 +55,15 @@ class MetadataUnischemaReadTest(unittest.TestCase):
 
     def test_metadata_missing_unischema(self):
         """ Produce a BAD _metadata that is missing the unischema pickling first, then load dataset. """
-        self.vanish_metadata()
-        # We should be able to obtain an existing session
-        spark_context = SparkSession.builder.getOrCreate().sparkContext
-        # Do all but the last step of petastorm.etl.dataset_metadata.add_dataset_metadata()
-        resolver = FilesystemResolver(self._dataset_url)
-        dataset = pq.ParquetDataset(
-            resolver.parsed_dataset_url().path,
-            filesystem=resolver.filesystem(),
-            validate_schema=False)
-        _generate_num_row_groups_per_file_metadata(dataset, spark_context)
-        spark_context.stop()
 
+        # Remove the common metadata file with unischema information
+        self.vanish_metadata('_common_metadata')
+
+        # Reader will now just get the metadata file which will not have the unischema information
         with self.assertRaises(ValueError) as e:
             Reader(self._dataset_url, reader_pool=DummyPool())
         self.assertTrue('Could not find the unischema'in str(e.exception))
-        self.restore_metadata()
-
-    def test_unischema_loads_from_metadata(self):
-
-        with Reader('file://{}'.format(get_test_data_path('unischema_loads_from_metadata')),
-                    reader_pool=DummyPool()) as reader:
-            # Check that schema fields are equivalent
-            for field in reader.schema.fields:
-                self.assertTrue(field in TestSchema.fields)
-            for field in TestSchema.fields:
-                self.assertTrue(field in reader.schema.fields)
+        self.restore_metadata('_common_metadata')
 
 
 if __name__ == '__main__':

@@ -16,9 +16,12 @@
 
 import argparse
 from pydoc import locate
+
+from pyarrow import parquet as pq
 from pyspark.sql import SparkSession
 
-from petastorm.etl.dataset_metadata import add_dataset_metadata
+from petastorm.etl.dataset_metadata import materialize_dataset, get_schema
+from petastorm.fs_utils import FilesystemResolver
 
 example_text = '''This is meant to be run as a spark job. Example (some replacement required):
 
@@ -42,20 +45,15 @@ if __name__ == "__main__":
     parser.add_argument('--dataset_url',
                         help='the url to the dataset base directory', required=True)
     parser.add_argument('--unischema_class',
-                        help='the fully qualified class of the dataset unischema '
-                             '(e.g. av.perception.datasets.msds.schema.MsdsSchema)', required=True)
+                        help='the fully qualified class of the dataset unischema. If not specified will attempt'
+                             ' to reuse schema already in dataset. '
+                             '(e.g. examples.hello_world.hello_world_dataset.HelloWorldSchema)', required=False)
     parser.add_argument('--master', type=str,
                         help='Spark master. Default if not specified. To run on a local machine, specify '
                              '"local[W]" (where W is the number of local spark workers, e.g. local[10])')
-    parser.add_argument('--cores', type=int,
-                        help='Number of cores that would be used to run this job (fed into spark.cores.max)')
     args = parser.parse_args()
 
     dataset_url = args.dataset_url
-    schema = locate(args.unischema_class)
-
-    if not schema:
-        raise ValueError('Schema {} could not be located'.format(args.unischema_class))
 
     # Open Spark Session
     spark_session = SparkSession \
@@ -63,14 +61,35 @@ if __name__ == "__main__":
         .appName("Petastorm Metadata Index")
     if args.master:
         spark_session.master(args.master)
-    if args.cores:
-        spark_session.config("spark.cores.max", str(args.cores))
 
     spark = spark_session.getOrCreate()
     # Spark Context is available from the SparkSession
     sc = spark.sparkContext
 
-    add_dataset_metadata(dataset_url, sc, schema)
+    if args.unischema_class:
+        schema = locate(args.unischema_class)
+    else:
+        resolver = FilesystemResolver(dataset_url, sc._jsc.hadoopConfiguration())
+        dataset = pq.ParquetDataset(
+            resolver.parsed_dataset_url().path,
+            filesystem=resolver.filesystem(),
+            validate_schema=False)
+
+        try:
+            schema = get_schema(dataset)
+        except ValueError:
+            raise ValueError('Schema could not be located in existing dataset.'
+                             ' Please pass it into the job as --unischema_class')
+
+    with materialize_dataset(spark, dataset_url, schema):
+        # Inside the materialize dataset context we just need to write the metadata file as the schema will
+        # be written by the context manager.
+        # We use the java ParquetOutputCommitter to write the metadata file for the existing dataset
+        # which will read all the footers of the dataset in parallel and merge them.
+        hadoop_config = sc._jsc.hadoopConfiguration()
+        Path = sc._gateway.jvm.org.apache.hadoop.fs.Path
+        parquet_output_committer = sc._gateway.jvm.org.apache.parquet.hadoop.ParquetOutputCommitter
+        parquet_output_committer.writeMetaDataFile(hadoop_config, Path(args.dataset_url))
 
     # Shut down the spark sessions and context
     sc.stop()
