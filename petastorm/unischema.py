@@ -89,12 +89,6 @@ class Unischema(object):
 
         self._namedtuple = None
 
-    def __str__(self):
-        repr_str = str(self._name) + ':\n'
-        for field in self._fields:
-            repr_str += '  ' + str(self._fields[field]) + '\n'
-        return repr_str
-
     def create_schema_view(self, fields):
         """
         Creates a new instance of the schema using a subset of fields.
@@ -127,7 +121,7 @@ class Unischema(object):
 
     def __getstate__(self):
         # Exclude self._namedtuple from the serialized data. Loading this namedtuple from a pickle would fail otherwise.
-        state = {k: v for k, v in self.__dict__.iteritems()}
+        state = {k: v for k, v in self.__dict__.items()}
         state['_namedtuple'] = None
         return state
 
@@ -207,7 +201,7 @@ def dict_to_spark_row(unischema, row_dict):
             '\n'.join(sorted(copy_row_dict.keys())), '\n'.join(unischema.fields.keys())))
 
     encoded_dict = {}
-    for field_name, value in copy_row_dict.iteritems():
+    for field_name, value in copy_row_dict.items():
         schema_field = unischema.fields[field_name]
         if value is None:
             if not schema_field.nullable:
@@ -226,7 +220,7 @@ def insert_explicit_nulls(unischema, row_dict):
     :param row_dict: dictionary that would be checked for missing nullable fields. The dictionary is modified inplace.
     :return: None
     """
-    for field_name, value in unischema.fields.iteritems():
+    for field_name, value in unischema.fields.items():
         if field_name not in row_dict:
             if value.nullable:
                 row_dict[field_name] = None

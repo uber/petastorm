@@ -40,8 +40,8 @@ class LocalDiskCache(CacheBase):
                              'otherwise, newly added cached values might end up being immediately evicted.')
 
         default_settings = {
-            u'size_limit': size_limit_bytes,
-            u'eviction_policy': u'least-recently-stored',
+            'size_limit': size_limit_bytes,
+            'eviction_policy': 'least-recently-stored',
         }
         default_settings.update(settings)
 

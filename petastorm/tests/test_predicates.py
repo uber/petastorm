@@ -23,7 +23,7 @@ class PredicatesTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.all_values = set()
-        for i in xrange(10000):
+        for i in range(10000):
             cls.all_values.add('guid_' + str(i))
 
     @classmethod
@@ -98,7 +98,7 @@ class PredicatesTest(unittest.TestCase):
     def test_pseudorandom_split(self):
         split_list = [0.3, 0.4, 0.1, 0.0, 0.2]
         values_num = len(PredicatesTest.all_values)
-        for idx in xrange(len(split_list)):
+        for idx in range(len(split_list)):
             test_predicate = in_pseudorandom_split(split_list, idx, 'volume_guid')
             included_values = set()
             for val in PredicatesTest.all_values:

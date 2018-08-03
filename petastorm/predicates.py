@@ -24,7 +24,7 @@ from petastorm import PredicateBase
 
 
 def _string_to_bucket(string, bucket_num):
-    hash_str = hashlib.md5(string).hexdigest()
+    hash_str = hashlib.md5(string.encode('utf-8')).hexdigest()
     return int(hash_str, 16) % bucket_num
 
 
@@ -150,7 +150,7 @@ class in_pseudorandom_split(PredicateBase):
             raise ValueError('subset_index is out of range')
         self._predicate_field = predicate_field
         # build CDF
-        subsets_high_borders = [sum(fraction_list[:i + 1]) for i in xrange(len(fraction_list))]
+        subsets_high_borders = [sum(fraction_list[:i + 1]) for i in range(len(fraction_list))]
         if subset_index:
             fraction_low = subsets_high_borders[subset_index - 1]
         else:

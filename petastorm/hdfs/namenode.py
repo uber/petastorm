@@ -134,9 +134,9 @@ class MaxFailoversExceeded(RuntimeError):
     def __init__(self, failed_exceptions, max_failover_attempts, func_name):
         self.failed_exceptions = failed_exceptions
         self.max_failover_attempts = max_failover_attempts
-        self.func_name = func_name
+        self.__name__ = func_name
         message = 'Failover attempts exceeded maximum ({}) for action "{}". ' \
-                  'Exceptions:\n{}'.format(self.max_failover_attempts, self.func_name,
+                  'Exceptions:\n{}'.format(self.max_failover_attempts, self.__name__,
                                            self.failed_exceptions)
         super(MaxFailoversExceeded, self).__init__(message)
 

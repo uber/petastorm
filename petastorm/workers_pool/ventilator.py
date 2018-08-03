@@ -12,18 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from time import sleep
-
 import random
 import threading
 from abc import ABCMeta, abstractmethod
+from time import sleep
+
+import six
 
 _VENTILATION_INTERVAL = 0.01
 
 
+@six.add_metaclass(ABCMeta)
 class Ventilator(object):
     """Manages items to be ventilated to a worker pool"""
-    __metaclass__ = ABCMeta
 
     def __init__(self, ventilate_fn):
         self._ventilate_fn = ventilate_fn

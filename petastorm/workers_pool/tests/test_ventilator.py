@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function
+
 
 import time
 
@@ -94,7 +94,7 @@ class TestWorkersPool(unittest.TestCase):
         pool.start(IdentityWorker, ventilator=ventilator)
 
         results = [pool.get_results() for _ in range(size * iterations)]
-        self.assertEqual(sorted(results), sorted(range(size) * iterations))
+        self.assertEqual(sorted(results), sorted(list(range(size)) * iterations))
         with self.assertRaises(EmptyResultError):
             pool.get_results()
 

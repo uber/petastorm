@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import cPickle as pickle
 import logging
 import sys
 import time
 from collections import namedtuple
 
 from pyarrow import parquet as pq
+from six.moves import cPickle as pickle
+from six.moves import range
 
 from petastorm import utils
 from petastorm.etl import dataset_metadata
@@ -29,7 +30,7 @@ logger.setLevel(logging.INFO)
 
 PARALLEL_SLICE_NUM = 2000
 
-ROWGROUPS_INDEX_KEY = 'dataset-toolkit.rowgroups_index.v1'
+ROWGROUPS_INDEX_KEY = b'dataset-toolkit.rowgroups_index.v1'
 
 PieceInfo = namedtuple('PieceInfo', ['piece_index', 'path', 'row_group', 'partition_keys'])
 
@@ -58,7 +59,7 @@ def build_rowgroup_index(dataset_url, spark_context, indexers):
     partitions = dataset.partitions
     pieces_num = len(split_pieces)
     piece_info_list = []
-    for piece_index in xrange(pieces_num):
+    for piece_index in range(pieces_num):
         #  indexes relies on the ordering of the split dataset pieces.
         # This relies on how the dataset pieces are split and sorted which although should not change,
         # still might and we should make sure not to forget that could break this.
