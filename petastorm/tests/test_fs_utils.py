@@ -13,14 +13,14 @@
 # limitations under the License.
 
 import unittest
-from urlparse import urlparse
 
 from pyarrow.filesystem import LocalFileSystem
 from pyarrow.lib import ArrowIOError
+from six.moves.urllib.parse import urlparse
 
+from petastorm.fs_utils import FilesystemResolver
 from petastorm.hdfs.tests.test_hdfs_namenode import HC, MockHadoopConfiguration, \
     MockHdfs, MockHdfsConnector
-from petastorm.fs_utils import FilesystemResolver
 
 ABS_PATH = '/abs/path'
 

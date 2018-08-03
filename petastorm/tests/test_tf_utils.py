@@ -20,7 +20,6 @@ from tempfile import mkdtemp
 
 import numpy as np
 import tensorflow as tf
-from concurrent.futures import ThreadPoolExecutor
 
 from petastorm.reader import Reader
 from petastorm.sequence import Sequence
@@ -48,7 +47,7 @@ class SanitizeTfTypesTest(unittest.TestCase):
 
         np.testing.assert_equal(sanitized_tuple.int32.dtype, np.int32)
         np.testing.assert_equal(sanitized_tuple.uint16.dtype, np.int32)
-        self.assertTrue(isinstance(sanitized_tuple.Decimal, basestring))
+        self.assertTrue(isinstance(sanitized_tuple.Decimal, str))
 
         np.testing.assert_equal(sanitized_tuple.int32, sample_input_dict['int32'])
         np.testing.assert_equal(sanitized_tuple.uint16, sample_input_dict['uint16'])
@@ -151,11 +150,19 @@ class TestTfTensors(unittest.TestCase):
             expected = next(d for d in self.__class__._dataset_dicts if d['id'] == row['id'])
 
             # Check equivalence of all values between a checked row and a row from reference data
-            for column_name, value in row.iteritems():
-                if isinstance(expected[column_name], Decimal):
-                    np.testing.assert_equal(expected[column_name], Decimal(row[column_name]))
+            for column_name, value in row.items():
+                expected_val = expected[column_name]
+                actual = row[column_name]
+                if isinstance(expected_val, Decimal) or isinstance(expected_val, str):
+                    # Tensorflow returns all strings as bytes in python3. So we will need to decode it
+                    actual = actual.decode()
+                elif isinstance(expected_val, np.ndarray) and expected_val.dtype.type == np.unicode_:
+                    actual = np.array([item.decode() for item in actual])
+
+                if isinstance(expected_val, Decimal):
+                    np.testing.assert_equal(expected_val, Decimal(actual))
                 else:
-                    np.testing.assert_equal(expected[column_name], row[column_name])
+                    np.testing.assert_equal(expected_val, actual)
 
     def test_simple_read_tensorflow(self):
         """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference

@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import Queue
 import cProfile
 import pstats
 import random
 import sys
+from six.moves import queue
 from threading import Thread, Event
 from traceback import format_exc
 
@@ -59,7 +59,7 @@ class WorkerThread(Thread):
                 (args, kargs) = self._ventilator_queue.get(block=True, timeout=IO_TIMEOUT_INTERVAL_S)
                 self._worker_impl.process(*args, **kargs)
                 self._worker_impl.publish_func(VentilatedItemProcessedMessage())
-            except Queue.Empty:
+            except queue.Empty:
                 pass
             except WorkerTerminationRequested:
                 pass
@@ -113,10 +113,10 @@ class ThreadPool(object):
                                .format(len(self._workers), self._stop_event.is_set()))
 
         # Set up a channel to send work
-        self._ventilator_queue = Queue.Queue()
-        self._results_queue = Queue.Queue(self._results_queue_size)
+        self._ventilator_queue = queue.Queue()
+        self._results_queue = queue.Queue(self._results_queue_size)
         self._workers = []
-        for worker_id in xrange(self._workers_count):
+        for worker_id in range(self._workers_count):
             worker_impl = worker_class(worker_id, lambda x: self._stop_aware_put(x), worker_args)
             new_thread = WorkerThread(worker_impl, self._stop_event, self._ventilator_queue,
                                       self._results_queue, self._profiling_enabled)
@@ -167,7 +167,7 @@ class ThreadPool(object):
                     raise result
                 else:
                     return result
-            except Queue.Empty:
+            except queue.Empty:
                 raise TimeoutWaitingForResultError()
 
     def stop(self):
@@ -202,7 +202,7 @@ class ThreadPool(object):
             try:
                 self._results_queue.put(data, block=True, timeout=IO_TIMEOUT_INTERVAL_S)
                 return
-            except Queue.Full:
+            except queue.Full:
                 pass
 
             if self._stop_event.is_set():

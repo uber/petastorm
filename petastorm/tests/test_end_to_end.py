@@ -63,7 +63,7 @@ class EndToEndDatasetToolkitTest(unittest.TestCase):
         for row in reader:
             actual = dict(row._asdict())
             expected = next(d for d in self._dataset_dicts if d['id'] == actual['id'])
-            np.testing.assert_equal(expected, actual)
+            np.testing.assert_equal(actual, expected)
 
     def test_simple_read(self):
         """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
@@ -106,9 +106,9 @@ class EndToEndDatasetToolkitTest(unittest.TestCase):
         copytree(self._dataset_dir, destination)
 
         dataset = pq.ParquetDataset(destination, validate_schema=False)
-        old_row_group_nums = json.loads(dataset.common_metadata.metadata[ROW_GROUPS_PER_FILE_KEY])
+        old_row_group_nums = json.loads(dataset.common_metadata.metadata[ROW_GROUPS_PER_FILE_KEY].decode())
         row_group_nums = {}
-        for rel_path, num_row_groups in old_row_group_nums.iteritems():
+        for rel_path, num_row_groups in old_row_group_nums.items():
             row_group_nums[os.path.join(dataset.paths, rel_path)] = num_row_groups
         base_schema = dataset.common_metadata.schema.to_arrow_schema()
         metadata_dict = base_schema.metadata
@@ -277,7 +277,7 @@ class EndToEndDatasetToolkitTest(unittest.TestCase):
                    reader_pool=ThreadPool(1),
                    predicate=EqualPredicate(expected_values))
 
-        self.assertTrue('bogus_key' in e.exception.message)
+        self.assertTrue('bogus_key' in str(e.exception))
 
     def test_single_column_predicate(self):
         """Test quering a single column with a predicate on the same column """
@@ -317,7 +317,7 @@ class EndToEndDatasetToolkitTest(unittest.TestCase):
                     reader_pool=DummyPool(),
                     num_epochs=None) as reader:
             # Read many expected entries from the dataset and compare the data to reference
-            for _ in xrange(len(self._dataset_dicts) * random.randint(10, 30) + random.randint(25, 50)):
+            for _ in range(len(self._dataset_dicts) * random.randint(10, 30) + random.randint(25, 50)):
                 actual = dict(next(reader)._asdict())
                 expected = next(d for d in self._dataset_dicts if d['id'] == actual['id'])
                 np.testing.assert_equal(expected, actual)

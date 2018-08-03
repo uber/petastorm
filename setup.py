@@ -22,14 +22,12 @@ REQUIRED_PACKAGES = [
     'pandas>=0.19.0',
     'pyspark>=2.1.2',
     'pyzmq>=14.0.0',
-    # 'pyarrow>=0.8',  # Temporarary removing dependency on pyarrow - we'll pick up whatever we have in ATG repo
-                       # Once there is 0.10, we'll be able to use stock, non-atg version.
+    # 'pyarrow>=0.10'
 ]
 
 EXTRA_REQUIRE = {
     'opencv': ['opencv-python>=3.2.0.6'],
-    'pyarrow': ['pyarrow>=0.8'],  # TODO(yevgeni): once ATG goes to stock 0.10 (instead of atg-pyarrow=0.9.0.1), we
-                                  # make the require mandatory.
+    'pyarrow': ['pyarrow>=0.10.0'],
     'tf': ['tensorflow>=1.4.0'],
     'tf_atg': ['atg-tensorflow-gpu>=1.4.0'],
     'tf_gpu': ['tensorflow-gpu>=1.4.0'],

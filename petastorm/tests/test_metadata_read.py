@@ -69,7 +69,7 @@ class MetadataUnischemaReadTest(unittest.TestCase):
         self.vanish_metadata()
         with self.assertRaises(ValueError) as e:
             Reader(dataset_url=self._dataset_url, reader_pool=DummyPool())
-        self.assertTrue('Could not find _metadata file'in e.exception.message)
+        self.assertTrue('Could not find _metadata file'in str(e.exception))
         self.restore_metadata()
 
     def test_metadata_missing_unischema(self):
@@ -88,7 +88,7 @@ class MetadataUnischemaReadTest(unittest.TestCase):
 
         with self.assertRaises(ValueError) as e:
             Reader(dataset_url=self._dataset_url, reader_pool=DummyPool())
-        self.assertTrue('Could not find the unischema'in e.exception.message)
+        self.assertTrue('Could not find the unischema'in str(e.exception))
         self.restore_metadata()
 
     def test_unischema_loads_from_metadata(self):

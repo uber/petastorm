@@ -39,6 +39,13 @@ class ScalarCodecsTest(unittest.TestCase):
         codec = ScalarCodec(StringType())
         field = UnischemaField(name='field_string', numpy_dtype=np.string_, shape=(), codec=codec, nullable=False)
 
+        self.assertEqual(codec.decode(field, codec.encode(field, 'abc')), b'abc')
+        self.assertEqual(codec.decode(field, codec.encode(field, '')), b'')
+
+    def test_scalar_codec_unicode(self):
+        codec = ScalarCodec(StringType())
+        field = UnischemaField(name='field_string', numpy_dtype=np.unicode_, shape=(), codec=codec, nullable=False)
+
         self.assertEqual(codec.decode(field, codec.encode(field, 'abc')), 'abc')
         self.assertEqual(codec.decode(field, codec.encode(field, '')), '')
 
