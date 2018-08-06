@@ -91,7 +91,7 @@ def imagenet_directory_to_petastorm_dataset(imagenet_path, output_url, spark_mas
         .builder \
         .appName('Imagenet Dataset Creation') \
         .config('spark.executor.memory', '10g') \
-        .config('spark.driver.memory', '10g')
+        .config('spark.driver.memory', '10g')  # Increase the memory if running locally with high number of executors
     if spark_master:
         session_builder.master(spark_master)
 
