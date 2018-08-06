@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import sys
 
 import setuptools
 from setuptools import setup
@@ -26,19 +27,29 @@ REQUIRED_PACKAGES = [
                        # Once there is 0.10, we'll be able to use stock, non-atg version.
 ]
 
+PACKAGE_NAME = 'petastorm'
+
+if '--minimal-deps' not in sys.argv:
+    PACKAGE_NAME += '_min_deps'
+    REQUIRED_PACKAGES += [
+        'opencv-python>=3.2.0.6',
+        'pyarrow>=0.8'  # TODO(yevgeni): once ATG goes to stock 0.10 (instead of atg-pyarrow=0.9.0.1), we
+                        # make the require mandatory.
+    ]
+else:
+    sys.argv.remove('--minimal-deps')
+
+
+
 EXTRA_REQUIRE = {
-    'opencv': ['opencv-python>=3.2.0.6'],
-    'pyarrow': ['pyarrow>=0.8'],  # TODO(yevgeni): once ATG goes to stock 0.10 (instead of atg-pyarrow=0.9.0.1), we
-                                  # make the require mandatory.
     'tf': ['tensorflow>=1.4.0'],
-    'tf_atg': ['atg-tensorflow-gpu>=1.4.0'],
     'tf_gpu': ['tensorflow-gpu>=1.4.0'],
 }
 
 packages = setuptools.find_packages()
 
 setup(
-    name='petastorm',
+    name=PACKAGE_NAME,
     version=__version__,
     install_requires=REQUIRED_PACKAGES,
     packages=packages,
