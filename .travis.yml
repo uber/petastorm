@@ -33,6 +33,7 @@ script:
 before_deploy:
   # Build a python wheel before deployment
   - python setup.py bdist_wheel
+  - python setup.py bdist_wheel --minimal-deps
 
 deploy:
   # Push all python wheels created to Github release (TODO: when public to Pypi)
