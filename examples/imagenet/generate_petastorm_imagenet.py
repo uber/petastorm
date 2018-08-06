@@ -41,7 +41,9 @@ def _arg_parser():
     parser = argparse.ArgumentParser(description=__doc__, add_help=False,
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('-i', '--input-path', type=str, required=True, help='Path to the imagenet directory')
+    parser.add_argument('-i', '--input-path', type=str, required=True,
+                        help='Path to the imagenet directory. If you are running this script on a Spark cluster, '
+                             'you should have this file be mounted and accessible to executors.')
     parser.add_argument('-o', '--output-url', type=str, required=True,
                         help='hdfs://... or file:/// url where the parquet dataset will be written to.')
     parser.add_argument('-m', '--master', type=str, required=False, default=None,
@@ -76,13 +78,13 @@ def imagenet_directory_to_petastorm_dataset(imagenet_path, output_url, spark_mas
      nZZZZZZZZ/
         *.JPEG
 
-    :param imagenet_path: a path to the directory containing n*/ subdirectories
+    :param imagenet_path: a path to the directory containing n*/ subdirectories. If you are running this script on a
+    Spark cluster, you should have this file be mounted and accessible to executors.
     :param output_url: the location where your dataset will be written to. Should be a url: either
     file://... or hdfs://...
     :param spark_master: A master parameter used by spark session builder. Use default value (None) to use system
     :param noun_id_to_text: A dictionary: {noun_id : text}. If None, this function will download the dictionary
-    from the Internet
-    environment configured spark cluster. Use 'local[*]' to run on a local box.
+    from the Internet environment configured spark cluster. Use 'local[*]' to run on a local box.
     :return: None
     """
     session_builder = SparkSession \
