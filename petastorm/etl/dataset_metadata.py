@@ -15,7 +15,7 @@
 import json
 import logging
 import os
-import sys
+import pickle
 from contextlib import contextmanager
 from operator import attrgetter
 
@@ -23,6 +23,7 @@ from pyarrow import parquet as pq
 from six.moves import cPickle as pickle
 
 from petastorm import utils
+from petastorm.etl.legacy import depickle_legacy_package_name_compatible
 from petastorm.fs_utils import FilesystemResolver
 
 logger = logging.getLogger(__name__)
@@ -238,35 +239,7 @@ def get_schema(dataset):
     ser_schema = dataset_metadata_dict[UNISCHEMA_KEY]
     # Since we have moved the unischema class around few times, unpickling old schemas will not work. In this case we
     # override the old import path to get backwards compatibility
-    try:
-        schema = pickle.loads(ser_schema)
-    except ImportError:
-        import petastorm
-        # Try different legacy locations of the dataset toolkit
-        LEGACY_MODULE_NAMES = ['av.experimental.deepdrive.dataset_toolkit', 'av.ml.dataset_toolkit']
 
-        for i, legacy_module_name in enumerate(LEGACY_MODULE_NAMES):
-            # Just in case we have some code in the module at the same path - keep it and restore of depickling.
-            save_module = sys.modules[legacy_module_name] if legacy_module_name in sys.modules else None
-            sys.modules[legacy_module_name] = petastorm
-            try:
-                schema = pickle.loads(ser_schema)
-                logger.warn('Failed loading Unischema instance from metadata["{}"] because of an import error. '
-                            'However, was able to use a legacy module name "{}".'.format(UNISCHEMA_KEY,
-                                                                                         legacy_module_name))
-                break
-            except ImportError:
-                if i == len(LEGACY_MODULE_NAMES) - 1:
-                    raise RuntimeError(
-                        'Failed loading Unischema instance from metadata["{}"] because of an import error. '
-                        'Tried, to use a legacy module names {}, but failed. This is the raw content of the '
-                        'pickle stream: \n"{}..."'.format(UNISCHEMA_KEY, ', '.join(LEGACY_MODULE_NAMES),
-                                                          str(ser_schema[:min(100, len(ser_schema))])))
-            finally:
-                # Undo our override
-                if save_module:
-                    sys.modules[legacy_module_name] = save_module
-                else:
-                    sys.modules.pop(legacy_module_name)
+    schema = depickle_legacy_package_name_compatible(ser_schema)
 
     return schema
