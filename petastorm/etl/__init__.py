@@ -14,10 +14,12 @@
 
 import abc
 
+import six
 
+
+@six.add_metaclass(abc.ABCMeta)
 class RowGroupIndexerBase(object):
     """ Base class for row group indexers."""
-    __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod
     def __add__(self, other):

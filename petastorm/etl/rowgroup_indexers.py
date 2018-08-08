@@ -51,7 +51,7 @@ class SingleFieldIndexer(RowGroupIndexerBase):
 
     @property
     def indexed_values(self):
-        return self._index_data.keys()
+        return list(self._index_data.keys())
 
     def get_row_group_indexes(self, value_key):
         return self._index_data[value_key]
@@ -62,10 +62,13 @@ class SingleFieldIndexer(RowGroupIndexerBase):
             raise ValueError("Cannot build index for empty rows, column '{}'"
                              .format(self._column_name))
 
-        index_single_val = isinstance(field_column[0], np.string_) or isinstance(field_column[0], np.integer)
+        index_single_val = isinstance(field_column[0], np.string_) or \
+                           isinstance(field_column[0], np.unicode_) or \
+                           isinstance(field_column[0], np.integer)
         index_list_of_vals = (isinstance(field_column[0], np.ndarray) and
                               (len(field_column[0]) == 0 or
-                               isinstance(field_column[0][0], np.string_)))
+                               isinstance(field_column[0][0], np.string_) or
+                               isinstance(field_column[0][0], np.unicode_)))
         if index_single_val == index_list_of_vals:
             raise ValueError("Cannot build index for '{}' column".format(self._column_name))
 

@@ -437,7 +437,7 @@ class HAHdfsClientTest(unittest.TestCase):
         self.assertEqual(len(e.exception.failed_exceptions),
                          namenode_failover.MAX_FAILOVER_ATTEMPTS + 1)
         self.assertEqual(e.exception.max_failover_attempts, namenode_failover.MAX_FAILOVER_ATTEMPTS)
-        self.assertEqual(e.exception.func_name, func)
+        self.assertEqual(e.exception.__name__, func)
         self.assertTrue('Failover attempts exceeded' in str(e.exception))
 
     def test_cat(self):

@@ -12,9 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from urlparse import urlparse
-
 import pyarrow
+from six.moves.urllib.parse import urlparse
 
 from petastorm.hdfs.namenode import HdfsNamenodeResolver, HdfsConnector
 
@@ -47,7 +46,7 @@ class FilesystemResolver(object):
         # Cache the instantiated filesystem object
         self._filesystem = None
 
-        if isinstance(self._dataset_url, basestring):
+        if isinstance(self._dataset_url, str):
             self._parsed_dataset_url = urlparse(self._dataset_url)
         else:
             self._parsed_dataset_url = self._dataset_url

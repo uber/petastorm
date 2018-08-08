@@ -32,7 +32,7 @@ _CONTROL_FINISHED = "FINISHED"
 # on time
 _WORKERS_STARTED_TIMEOUT_S = 20
 _SOCKET_LINGER_MS = 1000
-_KEEP_TRYING_WHILE_ZMQ_AGAIN_IS_RAIZED_TIMEOUT_S = 5
+_KEEP_TRYING_WHILE_ZMQ_AGAIN_IS_RAIZED_TIMEOUT_S = 10
 
 
 def _keep_retrying_while_zmq_again(timeout, func):
@@ -112,14 +112,14 @@ class ProcessPool(object):
         :return: None
         """
         # Initialize a zeromq context
-        context = zmq.Context()
+        self._context = zmq.Context()
 
         # Ventilator socket used to send out tasks to workers
-        self._ventilator_send, worker_receiver_socket = self._create_local_socket_on_random_port(context, zmq.PUSH)
+        self._ventilator_send, worker_receiver_socket = self._create_local_socket_on_random_port(self._context, zmq.PUSH)
 
         # Control socket is used to signal termination of the pool
-        self._control_sender, control_socket = self._create_local_socket_on_random_port(context, zmq.PUB)
-        self._results_receiver, results_sender_socket = self._create_local_socket_on_random_port(context, zmq.PULL)
+        self._control_sender, control_socket = self._create_local_socket_on_random_port(self._context, zmq.PUB)
+        self._results_receiver, results_sender_socket = self._create_local_socket_on_random_port(self._context, zmq.PULL)
 
         # We need poller to be able to read results from workers in a non-blocking manner
         self._results_receiver_poller = zmq.Poller()
@@ -137,7 +137,7 @@ class ProcessPool(object):
         self._workers = [
             exec_in_new_process(_worker_bootstrap, worker_class, worker_id, control_socket, worker_receiver_socket,
                                 results_sender_socket, worker_setup_args)
-            for worker_id in xrange(self._workers_count)]
+            for worker_id in range(self._workers_count)]
 
         # Block until we have all workers up. Will raise an error if fails to start in a timely fashion
         self._wait_for_workers_to_start(monitor_sockets)
@@ -210,7 +210,7 @@ class ProcessPool(object):
         """Stops all workers (non-blocking)"""
         if self._ventilator:
             self._ventilator.stop()
-        self._control_sender.send(_CONTROL_FINISHED)
+        self._control_sender.send_string(_CONTROL_FINISHED)
 
     def join(self):
         """Block until all workers are terminated"""
@@ -227,6 +227,7 @@ class ProcessPool(object):
         self._ventilator_send.close()
         self._control_sender.close()
         self._results_receiver.close()
+        self._context.destroy()
 
 
 def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_socket, results_sender_socket,
@@ -245,19 +246,19 @@ def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_s
 
     # Set up a channel to receive work from the ventilator
     work_receiver = context.socket(zmq.PULL)
-    work_receiver.linger = _SOCKET_LINGER_MS
+    work_receiver.linger = 0
     work_receiver.connect(worker_receiver_socket)
 
     # Set up a channel to send result of work to the results reporter
     results_sender = context.socket(zmq.PUSH)
-    results_sender.linger = _SOCKET_LINGER_MS
+    results_sender.linger = 0
     results_sender.connect(results_sender_socket)
 
     # Set up a channel to receive control messages over
     control_receiver = context.socket(zmq.SUB)
-    control_receiver.linger = _SOCKET_LINGER_MS
+    control_receiver.linger = 0
     control_receiver.connect(control_socket)
-    control_receiver.setsockopt(zmq.SUBSCRIBE, "")
+    _setsockopt(control_receiver, zmq.SUBSCRIBE, b"")
 
     # Set up a poller to multiplex the work receiver and control receiver channels
     poller = zmq.Poller()
@@ -286,7 +287,18 @@ def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_s
 
         # If the message came over the control channel, shut down the worker.
         if socks.get(control_receiver) == zmq.POLLIN:
-            control_message = control_receiver.recv()
+            control_message = control_receiver.recv_string()
             if control_message == _CONTROL_FINISHED:
                 worker.shutdown()
                 break
+
+
+def _setsockopt(sock, option, value):
+    """
+    This wraps setting socket options since python2 vs python3 handles strings differently
+    and pyzmq requires a different call. See http://pyzmq.readthedocs.io/en/latest/unicode.html
+    """
+    try:
+        sock.setsockopt(option, value)
+    except TypeError:
+        sock.setsockopt_string(option, value)

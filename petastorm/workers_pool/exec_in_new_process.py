@@ -31,7 +31,7 @@ def exec_in_new_process(func, *args, **kargs):
 
     # Store function handle and arguments into a pickle
     new_process_runnable_handle, new_process_runnable_file = mkstemp(suffix='runnable')
-    with os.fdopen(new_process_runnable_handle, 'w') as f:
+    with os.fdopen(new_process_runnable_handle, 'wb') as f:
         pickle.dump((func, args, kargs), f)
 
     bootstrap_package_name = '{}.{}'.format(__package__, os.path.splitext(os.path.basename(__file__))[0])

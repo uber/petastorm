@@ -12,23 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import cPickle as pickle
-import sys
-from operator import attrgetter
-
 import json
 import logging
 import os
+import sys
 from contextlib import contextmanager
+from operator import attrgetter
+
+from pyarrow import parquet as pq
+from six.moves import cPickle as pickle
+
 from petastorm import utils
 from petastorm.fs_utils import FilesystemResolver
-from pyarrow import parquet as pq
 
 logger = logging.getLogger(__name__)
 
-ROW_GROUPS_PER_FILE_KEY = 'dataset-toolkit.num_row_groups_per_file.v1'
-ROW_GROUPS_PER_FILE_KEY_ABSOLUTE_PATHS = 'dataset-toolkit.num_row_groups_per_file'
-UNISCHEMA_KEY = 'dataset-toolkit.unischema.v1'
+ROW_GROUPS_PER_FILE_KEY = b'dataset-toolkit.num_row_groups_per_file.v1'
+ROW_GROUPS_PER_FILE_KEY_ABSOLUTE_PATHS = b'dataset-toolkit.num_row_groups_per_file'
+UNISCHEMA_KEY = b'dataset-toolkit.unischema.v1'
 
 
 @contextmanager
@@ -194,7 +195,7 @@ def load_row_groups(dataset):
         metadata_dict_key = ROW_GROUPS_PER_FILE_KEY_ABSOLUTE_PATHS
     else:
         metadata_dict_key = ROW_GROUPS_PER_FILE_KEY
-    row_groups_per_file = json.loads(dataset_metadata_dict[metadata_dict_key])
+    row_groups_per_file = json.loads(dataset_metadata_dict[metadata_dict_key].decode())
 
     rowgroups = []
     # Force order of pieces. The order is not deterministic since it depends on multithreaded directory

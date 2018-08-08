@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function
+
 
 import time
 import unittest
@@ -207,7 +207,7 @@ class TestWorkersPool(unittest.TestCase):
         """ Test exception handler in worker. Pool should be terminated """
         # exception should be propagated to calling thread
         pool.start(ExceptionGeneratingWorker_5)
-        for i in xrange(num_to_ventilate):
+        for i in range(num_to_ventilate):
             pool.ventilate("Datanum_%d" % i)
         with self.assertRaises(ValueError):
             pool.get_results()
@@ -251,7 +251,7 @@ class TestWorkersPool(unittest.TestCase):
         with self.assertRaises(RuntimeError) as e:
             pool.start(WorkerIdGeneratingWorker)
         self.assertTrue('ThreadPool({}) cannot be reused! stop_event set? {}'
-                        .format(WORKERS_COUNT, True) in e.exception.message)
+                        .format(WORKERS_COUNT, True) in str(e.exception))
 
     def test_worker_produces_no_results(self):
         """Check edge case, when workers consistently does not produce results"""

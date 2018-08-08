@@ -13,10 +13,10 @@
 # limitations under the License.
 
 import hashlib
-from urlparse import urlparse, urlunparse
 
 from pyarrow import parquet as pq
 from pyarrow.parquet import ParquetFile
+from six.moves.urllib.parse import urlparse, urlunparse
 
 from petastorm import utils
 from petastorm.cache import NullCache
@@ -35,7 +35,7 @@ def _merge_two_dicts(a, b):
 def _select_cols(a_dict, keys):
     """Filteres out entries in a dictionary that have a key which is not part of 'keys' argument. `a_dict` is not
     modified and a new dictionary is returned."""
-    if keys == a_dict.keys():
+    if keys == list(a_dict.keys()):
         return a_dict
     else:
         return {field_name: a_dict[field_name] for field_name in keys}
@@ -89,7 +89,7 @@ class ReaderWorker(WorkerBase):
             #  2. Dataset url is hashed, to make sure we don't create too long keys, which maybe incompatible with
             #     some cache implementations
             #  3. Still leave relative path and the piece_index in plain text to make it easier to debug
-            cache_key = '{}:{}:{}'.format(hashlib.md5(urlunparse(self._dataset_url_parsed)).hexdigest(),
+            cache_key = '{}:{}:{}'.format(hashlib.md5(urlunparse(self._dataset_url_parsed).encode('utf-8')).hexdigest(),
                                           piece.path, piece_index)
             all_cols = self._local_cache.get(cache_key, lambda: self._load_rows(parquet_file, piece))
 
