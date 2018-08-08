@@ -20,7 +20,7 @@ REQUIRED_PACKAGES = [
     'diskcache>=3.0.0',
     'numpy>=1.13.3',
     'pandas>=0.19.0',
-    'pyspark>=2.1.2',
+    'pyspark>=2.1.0',
     'pyzmq>=14.0.0',
     # 'pyarrow>=0.8',  # Temporarary removing dependency on pyarrow - we'll pick up whatever we have in ATG repo
                        # Once there is 0.10, we'll be able to use stock, non-atg version.
