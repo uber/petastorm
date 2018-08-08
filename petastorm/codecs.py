@@ -19,7 +19,7 @@ NOTE: Due to the way unischema is stored alongside dataset (with pickling), chan
 and fields can result in reader breakages.
 """
 import cv2
-import cStringIO as StringIO
+from io import BytesIO
 from abc import abstractmethod
 
 import numpy as np
@@ -93,12 +93,12 @@ class NdarrayCodec(DataframeColumnCodec):
             raise ValueError('Unexpected type of {} feature. '
                              'Expected ndarray of {}. Got {}'.format(unischema_field.name, expected_dtype, type(array)))
 
-        memfile = StringIO.StringIO()
+        memfile = BytesIO()
         np.save(memfile, array)
         return bytearray(memfile.getvalue())
 
     def decode(self, unischema_field, value):
-        memfile = StringIO.StringIO(value)
+        memfile = BytesIO(value)
         return np.load(memfile)
 
     def spark_dtype(self):
@@ -118,7 +118,7 @@ class ScalarCodec(DataframeColumnCodec):
         if isinstance(self._spark_type, (ByteType, ShortType, IntegerType, LongType)):
             return int(value)
         if isinstance(self._spark_type, StringType):
-            if not isinstance(value, basestring):
+            if not isinstance(value, str):
                 raise ValueError(
                     'Expected a string value for field {}. Got type {}'.format(unischema_field.name, type(value)))
         return value
@@ -144,7 +144,7 @@ def _is_compliant_shape(a, b):
     """
     if len(a) != len(b):
         return False
-    for i in xrange(len(a)):
+    for i in range(len(a)):
         if a[i] and b[i]:
             if a[i] != b[i]:
                 return False

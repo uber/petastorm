@@ -156,10 +156,9 @@ class Reader(object):
 
         # We hash on the relative path of each parquet file to guarantee consistency between different reader
         # constructions even after moving the dataset
-        filtered_row_group_indexes = filter(
-            lambda index: hash(os.path.relpath(row_groups[index].path, dataset.paths)) %
-                          num_training_partitions == training_partition,
-            filtered_row_group_indexes)
+        filtered_row_group_indexes = [index for index in filtered_row_group_indexes
+                                      if hash(os.path.relpath(row_groups[index].path, dataset.paths)) %
+                                      num_training_partitions == training_partition]
         return filtered_row_group_indexes
 
     def _apply_row_group_selector(self, dataset, rowgroup_selector, filtered_row_group_indexes):
@@ -175,7 +174,7 @@ class Reader(object):
         required_indexes = rowgroup_selector.get_index_names()
         if not set(required_indexes).issubset(set(available_row_group_indexes.keys())):
             raise ValueError('Some of required indexes {} are not available in {}'.format(
-                required_indexes, available_row_group_indexes.keys()))
+                required_indexes, list(available_row_group_indexes.keys())))
 
         selected_indexes = rowgroup_selector.select_row_groups(available_row_group_indexes)
 
@@ -206,11 +205,11 @@ class Reader(object):
 
                 worker_predicate = None
             else:
-                filtered_row_group_indexes = range(len(row_groups))
+                filtered_row_group_indexes = list(range(len(row_groups)))
                 worker_predicate = predicate
 
         else:
-            filtered_row_group_indexes = range(len(row_groups))
+            filtered_row_group_indexes = list(range(len(row_groups)))
             worker_predicate = None
         return filtered_row_group_indexes, worker_predicate
 
@@ -232,11 +231,14 @@ class Reader(object):
     def __iter__(self):
         return self
 
-    def next(self):
+    def __next__(self):
         try:
             return self._workers_pool.get_results(timeout=self._read_timeout_s)
         except EmptyResultError:
             raise StopIteration
+
+    def next(self):
+        return self.__next__()
 
     # Functions needed to treat reader as a context manager
     def __enter__(self):

@@ -148,7 +148,7 @@ class UnischemaTest(unittest.TestCase):
         ])
         with self.assertRaises(ValueError) as ex:
             TestSchema.create_schema_view([UnischemaField('id', np.int64, (), ScalarCodec(LongType()), False)])
-        self.assertTrue('does not belong to the schema' in ex.exception.message)
+        self.assertTrue('does not belong to the schema' in str(ex.exception))
 
     def test_name_property(self):
         TestSchema = Unischema('TestSchema', [

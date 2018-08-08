@@ -48,7 +48,7 @@ def decode_row(row, schema):
     :return:
     """
     decoded_row = dict()
-    for field_name_unicode, encoded in row.iteritems():
+    for field_name_unicode, encoded in row.items():
         field_name = str(field_name_unicode)
         if field_name in schema.fields:
             if row[field_name] is not None:

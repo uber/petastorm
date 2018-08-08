@@ -13,25 +13,27 @@
 # limitations under the License.
 
 import abc
+import six
 
 __version__ = '0.2.2'
 
+
+@six.add_metaclass(abc.ABCMeta)
 class PredicateBase(object):
     """ Base class for row predicates """
-    __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod
     def get_fields(self):
         pass
 
     @abc.abstractmethod
-    def do_include(self):
+    def do_include(self, values):
         pass
 
 
+@six.add_metaclass(abc.ABCMeta)
 class RowGroupSelectorBase(object):
     """ Base class for row group selectors."""
-    __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod
     def get_index_names(self):

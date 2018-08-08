@@ -25,13 +25,13 @@ ROWS_COUNT = 10
 def usage_exit(msg=None):
     if msg:
         print(msg)
-    print("""\
+    print(("""\
 Usage: {} [options]
 
 Options:
   -h, --help           Show this message
   --output-dir <dir>   Path of directory where to write test data
-""".format(sys.argv[0]))
+""".format(sys.argv[0])))
     sys.exit(1)
 
 

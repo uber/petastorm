@@ -13,10 +13,12 @@
 # limitations under the License.
 
 """A set of Tensorflow specific helper functions for the unischema"""
+import warnings
 from collections import OrderedDict, namedtuple
 from decimal import Decimal
 
 import numpy as np
+import sys
 import tensorflow as tf
 
 # Mapping of identical datatypes in numpy-ish and tensorflow-ish
@@ -31,6 +33,8 @@ _NUMPY_TO_TF_DTYPES_MAPPING = {
     np.float32: tf.float32,
     np.float64: tf.float64,
     np.string_: tf.string,
+    np.unicode_: tf.string,
+    np.str_: tf.string,
     np.bool_: tf.bool,
     Decimal: tf.string,
 }
@@ -58,7 +62,7 @@ def _sanitize_field_tf_types(sample):
     """
     next_sample_dict = sample._asdict()
 
-    for k, v in next_sample_dict.iteritems():
+    for k, v in next_sample_dict.items():
         if v is None:
             raise RuntimeError('Encountered "{}"=None. Tensorflow does not support None values as a tensor.'
                                'Consider filtering out these rows using a predicate.'.format(k))
@@ -108,6 +112,9 @@ def _numpy_to_tf_dtypes(numpy_dtype):
     :return: tensorflow dtype object
     """
     if numpy_dtype in _NUMPY_TO_TF_DTYPES_MAPPING:
+        if numpy_dtype == np.unicode_ and sys.version_info >= (3, 0):
+            warnings.warn("Tensorflow will convert all unicode strings back to bytes type. "
+                          "You may need to decode values.", UnicodeWarning)
         return _NUMPY_TO_TF_DTYPES_MAPPING[numpy_dtype]
     else:
         raise ValueError('Unknown mapping of numpy {} to tensorflow dtype'.format(numpy_dtype))
@@ -131,7 +138,7 @@ def _flatten(data):
             encoded_key = subkey + '_' + str(key)
             flattened[encoded_key] = data_dict[subkey]
 
-    FlattenedTuple = namedtuple('flattened', flattened.keys())
+    FlattenedTuple = namedtuple('flattened', list(flattened.keys()))
     return FlattenedTuple(**flattened)
 
 
@@ -276,6 +283,10 @@ def tf_tensors(reader, shuffling_queue_capacity=0, min_after_dequeue=0):
     >>>  2: TestSchema_view(field_1=<tf.Tensor 'PyFunc_4:22' shape=() dtype=string>, field_2=...)}
 
     An optional shuffling queue is created if shuffling_queue_capacity is greater than 0
+
+    Note that if reading a unischema field that is unicode (np.unicode_ or np.str_) tensorflow will
+    represent it as a tf.string which will be an array of bytes. If using python3 you may need to decode
+    it to convert it back to a python str type.
 
     :param reader: An instance of petastorm.Reader object used as the data source
     :param shuffling_queue_capacity: Queue capacity is passed to the underlying tf.RandomShuffleQueue instance. If set
