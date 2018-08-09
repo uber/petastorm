@@ -29,12 +29,12 @@ REQUIRED_PACKAGES = [
 ]
 
 if '--minimal-deps' not in sys.argv:
-    PACKAGE_NAME += '_min_deps'
     REQUIRED_PACKAGES += [
         'opencv-python>=3.2.0.6',
         'pyarrow>=0.10',
     ]
 else:
+    PACKAGE_NAME += '_min_deps'
     sys.argv.remove('--minimal-deps')
 
 
