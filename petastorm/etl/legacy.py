@@ -17,7 +17,6 @@ import logging
 from six.moves import cPickle as pickle
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 def depickle_legacy_package_name_compatible(pickled_string):
