@@ -16,15 +16,15 @@ import shutil
 import tempfile
 import unittest
 
-from examples.dummy.dummy_dataset import generate_dummy_dataset
+from examples.hello_world.hello_world_dataset import generate_hello_world_dataset
 
 
-class TestGenerateDummyDataset(unittest.TestCase):
+class TestGenerateHelloWorldDataset(unittest.TestCase):
 
     def test_generate(self):
         temp_dir = tempfile.mkdtemp()
         try:
-            generate_dummy_dataset('file://' + temp_dir)
+            generate_hello_world_dataset('file://' + temp_dir)
             self.assertTrue('_SUCCESS' in os.listdir(temp_dir))
         finally:
             if os.path.exists(temp_dir):
