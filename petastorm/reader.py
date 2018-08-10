@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 class Reader(object):
     """Reads a unischema based dataset from a parquet file."""
 
-    def __init__(self, schema_fields=None, dataset_url=None, shuffle=True, predicate=None, rowgroup_selector=None,
+    def __init__(self, dataset_url, schema_fields=None, shuffle=True, predicate=None, rowgroup_selector=None,
                  reader_pool=None, num_epochs=1, sequence=None, training_partition=None, num_training_partitions=None,
                  read_timeout_s=None, cache=None):
         """Initializes a reader object.
