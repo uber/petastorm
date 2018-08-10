@@ -70,16 +70,17 @@ def generate_hello_world_dataset(output_url='file:///tmp/hello_world_dataset'):
 Reading a dataset is simple using `petastorm.Reader` class:
 
 ```python
-with Reader(dataset_url=dataset_url) as reader:
+with Reader('hdfs://myhadoop/some_dataset') as reader:
    for row in reader:
        print(row)
 ```
+`Reader` supports taking either a `hdfs://...` or `file://...` protocols.
 
 Once a Reader is instantiated, you can use it as an iterator.
 To hookup the reader into a tensorflow graph, you can use `tf_tensors` function:
 
 ```python
-with Reader(dataset_url=dataset_url) as reader:
+with Reader('file:///some/localpath/a_dataset') as reader:
    row_tensors = tf_tensors(reader)
    with tf.Session() as session:
        for _ in range(3):
