@@ -69,7 +69,7 @@ class EndToEndDatasetToolkitTest(unittest.TestCase):
         """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
         pool_impls = [DummyPool, ThreadPool, ProcessPool]
         for pool_impl in pool_impls:
-            with Reader(dataset_url=self._dataset_url, reader_pool=pool_impl(10)) as reader:
+            with Reader(self._dataset_url, reader_pool=pool_impl(10)) as reader:
                 self._check_simple_reader(reader)
 
     def test_simple_read_with_disk_cache(self):
@@ -79,13 +79,13 @@ class EndToEndDatasetToolkitTest(unittest.TestCase):
             with temporary_directory() as cache_dir:
                 CACHE_SIZE = 10 * 2 ** 30  # 20GB
                 ROW_SIZE_BYTES = 100  # not really important for this test
-                with Reader(dataset_url=self._dataset_url, reader_pool=pool_impl(10), num_epochs=2,
+                with Reader(self._dataset_url, reader_pool=pool_impl(10), num_epochs=2,
                             cache=LocalDiskCache(cache_dir, CACHE_SIZE, ROW_SIZE_BYTES)) as reader:
                     self._check_simple_reader(reader)
 
     def test_simple_read_with_added_slashes(self):
         """Tests that using relative paths for the dataset metadata works as expected"""
-        with Reader(dataset_url=self._dataset_url + '///', reader_pool=DummyPool()) as reader:
+        with Reader(self._dataset_url + '///', reader_pool=DummyPool()) as reader:
             self._check_simple_reader(reader)
 
     def test_simple_read_moved_dataset(self):
@@ -93,7 +93,7 @@ class EndToEndDatasetToolkitTest(unittest.TestCase):
         destination = self._dataset_dir + '_moved'
         copytree(self._dataset_dir, destination)
 
-        with Reader(dataset_url='file://{}'.format(destination), reader_pool=DummyPool()) as reader:
+        with Reader('file://{}'.format(destination), reader_pool=DummyPool()) as reader:
             self._check_simple_reader(reader)
 
         rmtree(destination)
@@ -118,15 +118,14 @@ class EndToEndDatasetToolkitTest(unittest.TestCase):
         with dataset.fs.open(os.path.join(destination, '_metadata'), 'wb') as metadata_file:
             pq.write_metadata(schema, metadata_file)
 
-        with Reader(dataset_url='file://{}'.format(destination), reader_pool=DummyPool()) as reader:
+        with Reader('file://{}'.format(destination), reader_pool=DummyPool()) as reader:
             self._check_simple_reader(reader)
 
         rmtree(destination)
 
     def test_reading_subset_of_columns(self):
         """Just a bunch of read and compares of all values to the expected values"""
-        with Reader(schema_fields=[TestSchema.id2, TestSchema.id],
-                    dataset_url=self._dataset_url,
+        with Reader(self._dataset_url, schema_fields=[TestSchema.id2, TestSchema.id],
                     reader_pool=DummyPool()) as reader:
             # Read a bunch of entries from the dataset and compare the data to reference
             for row in reader:
@@ -138,7 +137,7 @@ class EndToEndDatasetToolkitTest(unittest.TestCase):
         rows_count = len(self._dataset_dicts)
 
         def readout_all_ids(shuffle):
-            with Reader(dataset_url=self._dataset_url, reader_pool=ThreadPool(1), shuffle=shuffle) as reader:
+            with Reader(self._dataset_url, shuffle=shuffle, reader_pool=ThreadPool(1)) as reader:
                 ids = [row.id for row in reader]
             return ids
 
@@ -155,19 +154,16 @@ class EndToEndDatasetToolkitTest(unittest.TestCase):
     def test_predicate_on_partition(self):
         for expected_partition_keys in [{'p_0', 'p_2'}, {'p_0'}, {'p_1', 'p_2'}]:
             for pool in [ProcessPool, ThreadPool, DummyPool]:
-                with Reader(dataset_url=self._dataset_url,
-                            shuffle=True,
-                            reader_pool=pool(10),
-                            predicate=PartitionKeyInSetPredicate(expected_partition_keys)) as reader:
+                with Reader(self._dataset_url, shuffle=True,
+                            predicate=PartitionKeyInSetPredicate(expected_partition_keys), reader_pool=pool(10)) as reader:
                     partition_keys = set(row.partition_key for row in reader)
                     self.assertEqual(partition_keys, expected_partition_keys)
 
     def test_predicate_on_multiple_fields(self):
         for pool in [ProcessPool, ThreadPool, DummyPool]:
             expected_values = {'id': 11, 'id2': 1}
-            with Reader(dataset_url=self._dataset_url, shuffle=False,
-                        reader_pool=pool(10),
-                        predicate=EqualPredicate(expected_values)) as reader:
+            with Reader(self._dataset_url, shuffle=False, predicate=EqualPredicate(expected_values),
+                        reader_pool=pool(10)) as reader:
                 actual = next(reader)
                 self.assertEqual(actual.id, expected_values['id'])
                 self.assertEqual(actual.id2, expected_values['id2'])
@@ -181,18 +177,17 @@ class EndToEndDatasetToolkitTest(unittest.TestCase):
             {'invalid_field_name': 1, 'invalid_field_name_2': 11}]
 
         for predicate_spec in TEST_CASES:
-            with Reader(dataset_url=self._dataset_url, shuffle=False,
-                        reader_pool=ThreadPool(1),
-                        predicate=EqualPredicate(predicate_spec)) as reader:
+            with Reader(self._dataset_url, shuffle=False, predicate=EqualPredicate(predicate_spec),
+                        reader_pool=ThreadPool(1)) as reader:
                 with self.assertRaises(ValueError):
                     next(reader)
 
     def test_partition_multi_node(self):
         """Tests that the reader only returns half of the expected data consistently"""
-        reader = Reader(dataset_url=self._dataset_url, reader_pool=DummyPool(),
-                        training_partition=0, num_training_partitions=5)
-        reader_2 = Reader(dataset_url=self._dataset_url, reader_pool=DummyPool(),
-                          training_partition=0, num_training_partitions=5)
+        reader = Reader(self._dataset_url, reader_pool=DummyPool(), training_partition=0,
+                        num_training_partitions=5)
+        reader_2 = Reader(self._dataset_url, reader_pool=DummyPool(), training_partition=0,
+                          num_training_partitions=5)
 
         results_1 = []
         expected = []
@@ -216,8 +211,8 @@ class EndToEndDatasetToolkitTest(unittest.TestCase):
         # Test that separate partitions also have no overlap by checking ids
         id_set = set([item['id'] for item in results_1])
         for partition in range(1, 5):
-            with Reader(dataset_url=self._dataset_url, reader_pool=DummyPool(),
-                        training_partition=partition, num_training_partitions=5) as reader_other:
+            with Reader(self._dataset_url, reader_pool=DummyPool(), training_partition=partition,
+                        num_training_partitions=5) as reader_other:
 
                 for row in reader_other:
                     self.assertTrue(dict(row._asdict())['id'] not in id_set)
@@ -231,20 +226,18 @@ class EndToEndDatasetToolkitTest(unittest.TestCase):
         """Tests that the reader raises value errors when appropriate"""
 
         with self.assertRaises(ValueError):
-            Reader(dataset_url=self._dataset_url, reader_pool=DummyPool(),
-                   training_partition=0)
+            Reader(self._dataset_url, reader_pool=DummyPool(), training_partition=0)
 
         with self.assertRaises(ValueError):
-            Reader(dataset_url=self._dataset_url, reader_pool=DummyPool(),
+            Reader(self._dataset_url, reader_pool=DummyPool(), num_training_partitions=5)
+
+        with self.assertRaises(ValueError):
+            Reader(self._dataset_url, reader_pool=DummyPool(), training_partition='0',
                    num_training_partitions=5)
 
         with self.assertRaises(ValueError):
-            Reader(dataset_url=self._dataset_url, reader_pool=DummyPool(),
-                   training_partition='0', num_training_partitions=5)
-
-        with self.assertRaises(ValueError):
-            Reader(dataset_url=self._dataset_url, reader_pool=DummyPool(),
-                   training_partition=0, num_training_partitions='5')
+            Reader(self._dataset_url, reader_pool=DummyPool(), training_partition=0,
+                   num_training_partitions='5')
 
     def test_stable_pieces_order(self):
         """Tests that the reader raises value errors when appropriate"""
@@ -252,10 +245,8 @@ class EndToEndDatasetToolkitTest(unittest.TestCase):
         RERUN_THE_TEST_COUNT = 20
         baseline_run = None
         for _ in range(RERUN_THE_TEST_COUNT):
-            with Reader(schema_fields=[TestSchema.id],
-                        dataset_url=self._dataset_url,
-                        reader_pool=DummyPool(),
-                        shuffle=False) as reader:
+            with Reader(self._dataset_url, schema_fields=[TestSchema.id], shuffle=False,
+                        reader_pool=DummyPool()) as reader:
                 this_run = [row.id for row in reader]
             if baseline_run:
                 self.assertEqual(this_run, baseline_run)
@@ -272,19 +263,15 @@ class EndToEndDatasetToolkitTest(unittest.TestCase):
 
         expected_values = {'bogus_key': 11, 'id': 1}
         with self.assertRaises(ValueError) as e:
-            Reader(schema_fields=BogusSchema.fields.values(),
-                   dataset_url=self._dataset_url, shuffle=False,
-                   reader_pool=ThreadPool(1),
-                   predicate=EqualPredicate(expected_values))
+            Reader(self._dataset_url, schema_fields=BogusSchema.fields.values(), shuffle=False,
+                   predicate=EqualPredicate(expected_values), reader_pool=ThreadPool(1))
 
         self.assertTrue('bogus_key' in str(e.exception))
 
     def test_single_column_predicate(self):
         """Test quering a single column with a predicate on the same column """
-        with Reader(schema_fields=[TestSchema.id],
-                    dataset_url=self._dataset_url,
-                    reader_pool=ThreadPool(1),
-                    predicate=EqualPredicate({'id': 1})) as reader:
+        with Reader(self._dataset_url, schema_fields=[TestSchema.id], predicate=EqualPredicate({'id': 1}),
+                    reader_pool=ThreadPool(1)) as reader:
             # Read a bunch of entries from the dataset and compare the data to reference
             for row in reader:
                 actual = dict(row._asdict())
@@ -294,10 +281,7 @@ class EndToEndDatasetToolkitTest(unittest.TestCase):
     def test_multiple_epochs(self):
         """Tests that multiple epochs works as expected"""
         num_epochs = 5
-        with Reader(
-                dataset_url=self._dataset_url,
-                reader_pool=DummyPool(),
-                num_epochs=num_epochs) as reader:
+        with Reader(self._dataset_url, reader_pool=DummyPool(), num_epochs=num_epochs) as reader:
 
             # Read all expected entries from the dataset and compare the data to reference
             id_set = set([d['id'] for d in self._dataset_dicts])
@@ -313,9 +297,7 @@ class EndToEndDatasetToolkitTest(unittest.TestCase):
 
     def test_unlimited_epochs(self):
         """Tests that unlimited epochs works as expected"""
-        with Reader(dataset_url=self._dataset_url,
-                    reader_pool=DummyPool(),
-                    num_epochs=None) as reader:
+        with Reader(self._dataset_url, reader_pool=DummyPool(), num_epochs=None) as reader:
             # Read many expected entries from the dataset and compare the data to reference
             for _ in range(len(self._dataset_dicts) * random.randint(10, 30) + random.randint(25, 50)):
                 actual = dict(next(reader)._asdict())
@@ -326,21 +308,17 @@ class EndToEndDatasetToolkitTest(unittest.TestCase):
         """Tests that the reader raises value errors when appropriate"""
 
         with self.assertRaises(ValueError):
-            Reader(dataset_url=self._dataset_dir, reader_pool=DummyPool(),
-                   num_epochs=0)
+            Reader(self._dataset_dir, reader_pool=DummyPool(), num_epochs=0)
 
         with self.assertRaises(ValueError):
-            Reader(dataset_url=self._dataset_dir, reader_pool=DummyPool(),
-                   num_epochs=-10)
+            Reader(self._dataset_dir, reader_pool=DummyPool(), num_epochs=-10)
 
         with self.assertRaises(ValueError):
-            Reader(dataset_url=self._dataset_dir, reader_pool=DummyPool(),
-                   num_epochs='abc')
+            Reader(self._dataset_dir, reader_pool=DummyPool(), num_epochs='abc')
 
     def test_rowgroup_selector_integer_field(self):
         """ Select row groups to read based on dataset index for integer field"""
-        with Reader(dataset_url=self._dataset_url,
-                    rowgroup_selector=SingleIndexSelector(TestSchema.id.name, [2, 200]),
+        with Reader(self._dataset_url, rowgroup_selector=SingleIndexSelector(TestSchema.id.name, [2, 200]),
                     reader_pool=DummyPool()) as reader:
             status = [False, False]
             count = 0
@@ -357,7 +335,7 @@ class EndToEndDatasetToolkitTest(unittest.TestCase):
 
     def test_rowgroup_selector_string_field(self):
         """ Select row groups to read based on dataset index for string field"""
-        with Reader(dataset_url=self._dataset_url,
+        with Reader(self._dataset_url,
                     rowgroup_selector=SingleIndexSelector(TestSchema.sensor_name.name, ['test_sensor']),
                     reader_pool=DummyPool()) as reader:
             count = 0
@@ -372,9 +350,8 @@ class EndToEndDatasetToolkitTest(unittest.TestCase):
             Reader should raise exception
         """
         with self.assertRaises(ValueError):
-            Reader(dataset_url=self._dataset_url,
-                   rowgroup_selector=SingleIndexSelector('WrongIndexName', ['some_value']),
-                   reader_pool=DummyPool())
+            Reader(self._dataset_url,
+                   rowgroup_selector=SingleIndexSelector('WrongIndexName', ['some_value']), reader_pool=DummyPool())
 
     def test_materialize_dataset_hadoop_config(self):
         """Test that using materialize_dataset does not alter the hadoop_config"""
