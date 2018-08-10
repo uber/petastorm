@@ -27,7 +27,7 @@ from petastorm.codecs import ScalarCodec
 from petastorm.etl.dataset_metadata import ROW_GROUPS_PER_FILE_KEY, \
     ROW_GROUPS_PER_FILE_KEY_ABSOLUTE_PATHS
 from petastorm.local_disk_cache import LocalDiskCache
-from petastorm.reader import Reader
+from petastorm.reader import Reader, ShuffleOptions
 from petastorm.selectors import SingleIndexSelector
 from petastorm.tests.tempdir import temporary_directory
 from petastorm.tests.test_common import create_test_dataset, TestSchema
@@ -137,7 +137,9 @@ def test_shuffle(synthetic_dataset):
     rows_count = len(synthetic_dataset.data)
 
     def readout_all_ids(shuffle):
-        with Reader(synthetic_dataset.url, shuffle=shuffle, reader_pool=ThreadPool(1)) as reader:
+        with Reader(synthetic_dataset.url,
+                    shuffle_options=ShuffleOptions(shuffle),
+                    reader_pool=ThreadPool(1)) as reader:
             ids = [row.id for row in reader]
         return ids
 
@@ -152,11 +154,34 @@ def test_shuffle(synthetic_dataset):
     assert np.any(np.not_equal(first_readout, shuffled_readout))
 
 
+def test_shuffle_drop_ratio(synthetic_dataset):
+    def readout_all_ids(shuffle, drop_ratio):
+        with Reader(dataset_url=synthetic_dataset.url,
+                    reader_pool=DummyPool(),
+                    shuffle_options=ShuffleOptions(shuffle, drop_ratio)) as reader:
+            ids = [row.id for row in reader]
+        return ids
+
+    # Read ids twice without shuffle: assert we have the same array and all expected ids are in the array
+    first_readout = readout_all_ids(False, 1)
+    np.testing.assert_array_equal([r['id'] for r in synthetic_dataset.data], sorted(first_readout))
+
+    # Test that the ids are increasingly not consecutive numbers as we increase the shuffle dropout
+    prev_jumps_not_1 = 0
+    for shuffle_dropout in [2, 6, 11, 111]:
+        readout = readout_all_ids(True, shuffle_dropout)
+        assert len(first_readout) == len(readout)
+        jumps_not_1 = np.sum(np.diff(readout) != 1)
+        assert jumps_not_1 > prev_jumps_not_1
+        prev_jumps_not_1 = jumps_not_1
+
+
+
 def test_predicate_on_partition(synthetic_dataset):
     for expected_partition_keys in [{'p_0', 'p_2'}, {'p_0'}, {'p_1', 'p_2'}]:
         for pool in [ProcessPool, ThreadPool, DummyPool]:
-            with Reader(synthetic_dataset.url, shuffle=True,
-                        predicate=PartitionKeyInSetPredicate(expected_partition_keys), reader_pool=pool(10)) as reader:
+            with Reader(synthetic_dataset.url, predicate=PartitionKeyInSetPredicate(expected_partition_keys),
+                        reader_pool=pool(10)) as reader:
                 partition_keys = set(row.partition_key for row in reader)
                 assert partition_keys == expected_partition_keys
 
@@ -164,8 +189,8 @@ def test_predicate_on_partition(synthetic_dataset):
 def test_predicate_on_multiple_fields(synthetic_dataset):
     for pool in [ProcessPool, ThreadPool, DummyPool]:
         expected_values = {'id': 11, 'id2': 1}
-        with Reader(synthetic_dataset.url, shuffle=False, predicate=EqualPredicate(expected_values),
-                    reader_pool=pool(10)) as reader:
+        with Reader(synthetic_dataset.url, shuffle_options=ShuffleOptions(False),
+                    predicate=EqualPredicate(expected_values), reader_pool=pool(10)) as reader:
             actual = next(reader)
             assert actual.id == expected_values['id']
             assert actual.id2 == expected_values['id2']
@@ -180,7 +205,7 @@ def test_predicate_with_invalid_fields(synthetic_dataset):
         {'invalid_field_name': 1, 'invalid_field_name_2': 11}]
 
     for predicate_spec in TEST_CASES:
-        with Reader(synthetic_dataset.url, shuffle=False, predicate=EqualPredicate(predicate_spec),
+        with Reader(synthetic_dataset.url, shuffle_options=ShuffleOptions(False), predicate=EqualPredicate(predicate_spec),
                     reader_pool=ThreadPool(1)) as reader:
             with pytest.raises(ValueError):
                 next(reader)
@@ -251,7 +276,7 @@ def test_stable_pieces_order(synthetic_dataset):
     RERUN_THE_TEST_COUNT = 20
     baseline_run = None
     for _ in range(RERUN_THE_TEST_COUNT):
-        with Reader(synthetic_dataset.url, schema_fields=[TestSchema.id], shuffle=False,
+        with Reader(synthetic_dataset.url, schema_fields=[TestSchema.id], shuffle_options=ShuffleOptions(False),
                     reader_pool=DummyPool()) as reader:
             this_run = [row.id for row in reader]
         if baseline_run:
@@ -270,7 +295,7 @@ def test_invalid_schema_field(synthetic_dataset):
 
     expected_values = {'bogus_key': 11, 'id': 1}
     with pytest.raises(ValueError) as e:
-        Reader(synthetic_dataset.url, schema_fields=BogusSchema.fields.values(), shuffle=False,
+        Reader(synthetic_dataset.url, schema_fields=BogusSchema.fields.values(), shuffle_options=ShuffleOptions(False),
                predicate=EqualPredicate(expected_values), reader_pool=ThreadPool(1))
 
     assert 'bogus_key' in str(e)
