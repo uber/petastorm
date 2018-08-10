@@ -79,12 +79,13 @@ def imagenet_directory_to_petastorm_dataset(imagenet_path, output_url, spark_mas
         *.JPEG
 
     :param imagenet_path: a path to the directory containing n*/ subdirectories. If you are running this script on a
-    Spark cluster, you should have this file be mounted and accessible to executors.
+      Spark cluster, you should have this file be mounted and accessible to executors.
     :param output_url: the location where your dataset will be written to. Should be a url: either
-    file://... or hdfs://...
+      file://... or hdfs://...
     :param spark_master: A master parameter used by spark session builder. Use default value (None) to use system
+      environment configured spark cluster. Use 'local[*]' to run on a local box.
     :param noun_id_to_text: A dictionary: {noun_id : text}. If None, this function will download the dictionary
-    from the Internet environment configured spark cluster. Use 'local[*]' to run on a local box.
+      from the Internet.
     :return: None
     """
     session_builder = SparkSession \
