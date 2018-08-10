@@ -67,7 +67,7 @@ def build_rowgroup_index(dataset_url, spark_context, indexers):
         piece_info_list.append(PieceInfo(piece_index, piece.path, piece.row_group, piece.partition_keys))
 
     start_time = time.time()
-    piece_info_rdd = spark_context.parallelize(piece_info_list, PARALLEL_SLICE_NUM)
+    piece_info_rdd = spark_context.parallelize(piece_info_list, min(len(piece_info_list), PARALLEL_SLICE_NUM))
     indexer_rdd = piece_info_rdd.map(lambda piece_info: _index_columns(piece_info, dataset_url, partitions,
                                                                        indexers, schema))
     indexer_list = indexer_rdd.reduce(lambda indexers1, indexers2: _combine_indexers(indexers1, indexers2))
