@@ -85,12 +85,8 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
             fields = set(TestSchema.fields.values()) - {TestSchema.matrix_nullable}
             dataset_dicts = create_test_dataset(tmp_url, ids, num_files=1)
             sequence = Sequence(length=length, delta_threshold=10, timestamp_field='id')
-            reader = Reader(
-                schema_fields=fields,
-                dataset_url=tmp_url,
-                reader_pool=ThreadPool(1),
-                sequence=sequence,
-                shuffle=False)
+            reader = Reader(tmp_url, schema_fields=fields, shuffle=False, reader_pool=ThreadPool(1),
+                            sequence=sequence)
 
             readout_examples = tf_tensors(reader)
 
@@ -126,11 +122,7 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
             dataset_dicts = create_test_dataset(tmp_url, ids, num_files=1)
 
             sequence = Sequence(length=length, delta_threshold=10, timestamp_field='id')
-            with Reader(
-                    dataset_url=tmp_url,
-                    reader_pool=ThreadPool(1),
-                    sequence=sequence,
-                    shuffle=False) as reader:
+            with Reader(tmp_url, shuffle=False, reader_pool=ThreadPool(1), sequence=sequence) as reader:
                 expected_id = 0
 
                 for _ in range(10):
@@ -149,13 +141,8 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
         dataset_dicts = self._dataset_dicts
         fields = set(TestSchema.fields.values()) - {TestSchema.matrix_nullable}
         sequence = Sequence(length=length, delta_threshold=10, timestamp_field='id')
-        reader = Reader(
-            schema_fields=fields,
-            dataset_url=self._dataset_url,
-            reader_pool=ThreadPool(1),
-            sequence=sequence,
-            shuffle=True,
-        )
+        reader = Reader(self._dataset_url, schema_fields=fields, shuffle=True, reader_pool=ThreadPool(1),
+                        sequence=sequence)
 
         readout_examples = tf_tensors(reader)
 
@@ -183,11 +170,7 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
         than one and false is true."""
 
         sequence = Sequence(length=length, delta_threshold=10, timestamp_field='id')
-        with Reader(
-                dataset_url=self._dataset_url,
-                reader_pool=DummyPool(),
-                sequence=sequence,
-                shuffle=True) as reader:
+        with Reader(self._dataset_url, shuffle=True, reader_pool=DummyPool(), sequence=sequence) as reader:
 
             for _ in range(10):
                 actual = next(reader)
@@ -241,12 +224,8 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
             fields = set(TestSchema.fields.values()) - {TestSchema.matrix_nullable}
             dataset_dicts = create_test_dataset(tmp_url, ids, num_files=1)
             sequence = Sequence(length=2, delta_threshold=4, timestamp_field='id')
-            reader = Reader(
-                schema_fields=fields,
-                dataset_url=tmp_url,
-                reader_pool=DummyPool(),
-                sequence=sequence,
-                shuffle=False)
+            reader = Reader(tmp_url, schema_fields=fields, shuffle=False, reader_pool=DummyPool(),
+                            sequence=sequence)
 
             # Sequences expected: (0, 3), (8, 10), (10, 11)
 
@@ -301,11 +280,7 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
             ids = [0, 3, 8, 10, 11, 20, 30]
             dataset_dicts = create_test_dataset(tmp_url, ids, 1)
             sequence = Sequence(length=2, delta_threshold=4, timestamp_field='id')
-            with Reader(
-                    dataset_url=tmp_url,
-                    reader_pool=ThreadPool(1),
-                    sequence=sequence,
-                    shuffle=False) as reader:
+            with Reader(tmp_url, shuffle=False, reader_pool=ThreadPool(1), sequence=sequence) as reader:
 
                 # Sequences expected: (0, 3), (8, 10), (10, 11)
 
@@ -340,12 +315,7 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
 
             sequence = Sequence(length=2, delta_threshold=1, timestamp_field='id')
             fields = set(TestSchema.fields.values()) - {TestSchema.matrix_nullable}
-            reader = Reader(
-                schema_fields=fields,
-                dataset_url=tmp_url,
-                reader_pool=DummyPool(),
-                sequence=sequence
-            )
+            reader = Reader(tmp_url, schema_fields=fields, reader_pool=DummyPool(), sequence=sequence)
 
             with tf.Session() as sess:
                 with self.assertRaises(OutOfRangeError):
@@ -363,7 +333,7 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
             create_test_dataset(tmp_url, ids)
 
             sequence = Sequence(length=2, delta_threshold=1, timestamp_field='id')
-            with Reader(dataset_url=tmp_url, reader_pool=ThreadPool(10), sequence=sequence) as reader:
+            with Reader(tmp_url, reader_pool=ThreadPool(10), sequence=sequence) as reader:
                 with self.assertRaises(StopIteration):
                     next(reader)
 
@@ -392,13 +362,8 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
         dataset_dicts = self._dataset_dicts
         sequence = Sequence(length=1, delta_threshold=0.012, timestamp_field='timestamp')
         fields = set(TestSchema.fields.values()) - {TestSchema.matrix_nullable}
-        reader = Reader(
-            schema_fields=fields,
-            dataset_url=self._dataset_url,
-            reader_pool=DummyPool(),
-            sequence=sequence,
-            shuffle=True,
-        )
+        reader = Reader(self._dataset_url, schema_fields=fields, shuffle=True, reader_pool=DummyPool(),
+                        sequence=sequence)
 
         with tf.Session() as sess:
             for _ in range(10):
@@ -418,11 +383,7 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
         """Test to verify that sequence generalize to support length 1"""
 
         sequence = Sequence(length=1, delta_threshold=0.012, timestamp_field='timestamp')
-        with Reader(dataset_url=self._dataset_url,
-                    reader_pool=DummyPool(),
-                    sequence=sequence,
-                    shuffle=True,
-                    ) as reader:
+        with Reader(self._dataset_url, shuffle=True, reader_pool=DummyPool(), sequence=sequence) as reader:
             for _ in range(10):
                 actual = next(reader)
                 expected = next(d for d in self._dataset_dicts if d['id'] == actual[0].id)

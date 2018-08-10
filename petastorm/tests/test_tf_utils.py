@@ -110,7 +110,7 @@ class TestTfTensors(unittest.TestCase):
         # Nullable fields can not be read by tensorflow (what would be the dimension of a tensor for null data?)
         fields = set(TestSchema.fields.values()) - {TestSchema.matrix_nullable}
 
-        reader = Reader(schema_fields=fields, dataset_url=self._dataset_url, reader_pool=DummyPool(), shuffle=False,
+        reader = Reader(self._dataset_url, schema_fields=fields, shuffle=False, reader_pool=DummyPool(),
                         sequence=sequence)
 
         row_tensors = tf_tensors(reader, shuffling_queue_capacity=shuffling_queue_capacity,

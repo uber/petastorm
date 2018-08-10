@@ -68,7 +68,7 @@ class MetadataUnischemaReadTest(unittest.TestCase):
     def test_no_metadata(self):
         self.vanish_metadata()
         with self.assertRaises(ValueError) as e:
-            Reader(dataset_url=self._dataset_url, reader_pool=DummyPool())
+            Reader(self._dataset_url, reader_pool=DummyPool())
         self.assertTrue('Could not find _metadata file'in str(e.exception))
         self.restore_metadata()
 
@@ -87,13 +87,13 @@ class MetadataUnischemaReadTest(unittest.TestCase):
         spark_context.stop()
 
         with self.assertRaises(ValueError) as e:
-            Reader(dataset_url=self._dataset_url, reader_pool=DummyPool())
+            Reader(self._dataset_url, reader_pool=DummyPool())
         self.assertTrue('Could not find the unischema'in str(e.exception))
         self.restore_metadata()
 
     def test_unischema_loads_from_metadata(self):
 
-        with Reader(dataset_url='file://{}'.format(get_test_data_path('unischema_loads_from_metadata')),
+        with Reader('file://{}'.format(get_test_data_path('unischema_loads_from_metadata')),
                     reader_pool=DummyPool()) as reader:
             # Check that schema fields are equivalent
             for field in reader.schema.fields:
