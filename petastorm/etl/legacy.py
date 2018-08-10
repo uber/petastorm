@@ -33,9 +33,11 @@ def depickle_legacy_package_name_compatible(pickled_string):
 
     for legacy_package_name in LEGACY_PACKAGE_NAMES:
         for legacy_module in LEGACY_MODULES:
-            # Substitute module names directly in the pickled stream
-            modified_pickled_string = pickled_string.replace('\n(c{}.{}\n'.format(legacy_package_name, legacy_module),
-                                                             '\n(cpetastorm.{}\n'.format(legacy_module))
+            # Substitute module names directly in the pickled stream. Encode as 'ascii' to make sure no non-ascii
+            # character made its way into package/module name
+            legacy_package_entry = '\n(c{}.{}\n'.format(legacy_package_name, legacy_module).encode('ascii')
+            new_module_name = '\n(cpetastorm.{}\n'.format(legacy_module).encode('ascii')
+            modified_pickled_string = pickled_string.replace(legacy_package_entry, new_module_name)
             if modified_pickled_string != pickled_string:
                 logger.warn('Depickling "{}.{}" which has moved to "petastorm.{}". '
                             'Regenerate metadata.'.format(legacy_package_name, legacy_module, legacy_module))
