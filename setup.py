@@ -11,10 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import sys
 
 import setuptools
 from setuptools import setup
 from petastorm import __version__
+
+PACKAGE_NAME = 'petastorm'
 
 REQUIRED_PACKAGES = [
     'diskcache>=3.0.0',
@@ -25,18 +28,25 @@ REQUIRED_PACKAGES = [
     # 'pyarrow>=0.10'
 ]
 
+if '--minimal-deps' not in sys.argv:
+    REQUIRED_PACKAGES += [
+        'opencv-python>=3.2.0.6',
+        'pyarrow>=0.10',
+    ]
+else:
+    PACKAGE_NAME += '_min_deps'
+    sys.argv.remove('--minimal-deps')
+
+
 EXTRA_REQUIRE = {
-    'opencv': ['opencv-python>=3.2.0.6'],
-    'pyarrow': ['pyarrow>=0.10.0'],
     'tf': ['tensorflow>=1.4.0'],
-    'tf_atg': ['atg-tensorflow-gpu>=1.4.0'],
     'tf_gpu': ['tensorflow-gpu>=1.4.0'],
 }
 
 packages = setuptools.find_packages()
 
 setup(
-    name='petastorm',
+    name=PACKAGE_NAME,
     version=__version__,
     install_requires=REQUIRED_PACKAGES,
     packages=packages,
