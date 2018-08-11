@@ -11,48 +11,39 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import logging
 import os
-import warnings
+import threading
+from collections import Counter
 
+from concurrent.futures import ThreadPoolExecutor
 from pyarrow import parquet as pq
+from six.moves.queue import Queue
 
 from petastorm import PredicateBase, RowGroupSelectorBase
+from petastorm import utils
 from petastorm.cache import NullCache
 from petastorm.etl import dataset_metadata, rowgroup_indexing
 from petastorm.fs_utils import FilesystemResolver
-from petastorm.reader_worker import ReaderWorker
 from petastorm.shuffle_options import ShuffleOptions
-from petastorm.workers_pool import EmptyResultError
-from petastorm.workers_pool.thread_pool import ThreadPool
-from petastorm.workers_pool.ventilator import ConcurrentVentilator
-from petastorm.reader_impl.reader_v2 import ReaderV2
+from petastorm.reader_impl.epochs import epoch_generator
+from petastorm.reader_impl.row_group_decoder import RowDecoder
+from petastorm.reader_impl.row_group_loader import RowGroupLoader
+from petastorm.reader_impl.shuffling_queue import NoopQueue, ShufflingQueue
+from petastorm.reader_impl.worker_loop import worker_loop, EOFSentinel
 
 logger = logging.getLogger(__name__)
 
-
-def Reader(*args, **kwargs):
-    reader_impl = ReaderV1
-    if 'reader_impl' in kwargs:
-        reader_impl_name = kwargs['reader_impl']
-        if reader_impl_name == 'v1':
-            reader_impl = ReaderV1
-        elif reader_impl_name == 'v2':
-            reader_impl = ReaderV2
-        else:
-            raise ValueError('Unexpected value of "reader_impl": {}. Expected "v1" or "v2"'.format(reader_impl_name))
-        del kwargs['reader_impl']
-
-    return reader_impl(*args, **kwargs)
+_OUTPUT_QUEUE_SIZE = 30
 
 
-class ReaderV1(object):
+class ReaderV2(object):
     """Reads a unischema based dataset from a parquet file."""
 
     def __init__(self, dataset_url, schema_fields=None, shuffle=None, predicate=None, rowgroup_selector=None,
                  reader_pool=None, num_epochs=1, sequence=None, training_partition=None, num_training_partitions=None,
-                 read_timeout_s=None, cache=None, shuffle_options=None):
+                 read_timeout_s=None, cache=None, loader_pool=None, decoder_pool=None, shuffling_queue=None,
+                 shuffle_options=None):
         """Initializes a reader object.
 
         :param schema_fields: list of unischema fields to subset, or None to read all fields.
@@ -98,7 +89,13 @@ class ReaderV1(object):
         self.sequence = sequence
         cache = cache or NullCache()
         dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
-        self._workers_pool = reader_pool or ThreadPool(10)
+
+        if shuffle_options is None:
+            if shuffle is None:
+                shuffle = True
+            else:
+                logger.warning('shuffle option is deprecated. Please use shuffle_options instead')
+            shuffle_options = ShuffleOptions(shuffle)
 
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
         logger.debug('dataset_url: {}'.format(dataset_url))
@@ -117,24 +114,48 @@ class ReaderV1(object):
         row_groups = dataset_metadata.load_row_groups(dataset)
 
         # 3. Filter rowgroups
-        filtered_row_group_indexes, worker_predicate = self._filter_row_groups(dataset, row_groups, predicate,
-                                                                               rowgroup_selector, training_partition,
-                                                                               num_training_partitions)
+        filtered_row_groups, worker_predicate = self._filter_row_groups(dataset, row_groups, predicate,
+                                                                        rowgroup_selector, training_partition,
+                                                                        num_training_partitions)
 
+        epoch_items = self._apply_row_drop_partition(filtered_row_groups, shuffle_options)
         # 4. Create a rowgroup ventilator object
-        if shuffle_options is None:
-            if shuffle is None:
-                shuffle = True
-            else:
-                logger.warning('shuffle option is deprecated. Please use shuffle_options instead')
-            shuffle_options = ShuffleOptions(shuffle)
-        ventilator = self._create_ventilator(filtered_row_group_indexes, shuffle_options, num_epochs, worker_predicate)
+        epochs_iterator = lambda: epoch_generator(epoch_items, num_epochs, shuffle_options.shuffle_row_groups)
 
-        # 5. Start workers pool
-        self._workers_pool.start(ReaderWorker,
-                                 (dataset_url, self.schema, sequence, row_groups, cache, worker_predicate),
-                                 ventilator=ventilator)
+        self._results_queue = Queue(_OUTPUT_QUEUE_SIZE)
+
+        loader = RowGroupLoader(dataset_url, self.schema, sequence, row_groups, cache, worker_predicate)
+        decoder = RowDecoder(self.schema)
+        self._loader_pool = loader_pool or ThreadPoolExecutor(2)
+        self._decoder_pool = decoder_pool or ThreadPoolExecutor(2)
+        self._stop_flow_manager_event = threading.Event()
+        stats = Counter()
+
+        if not shuffling_queue:
+            shuffling_queue = NoopQueue()
+
+        self._flow_manager_thread = threading.Thread(target=worker_loop,
+                                                     args=(epochs_iterator, self._loader_pool, loader,
+                                                           self._decoder_pool,
+                                                           decoder,
+                                                           shuffling_queue, self._results_queue,
+                                                           self._stop_flow_manager_event, stats))
+        self._flow_manager_thread.daemon = True
+        self._flow_manager_thread.start()
+
         self._read_timeout_s = read_timeout_s
+
+    def _apply_row_drop_partition(self, row_groups, shuffle_options):
+         items_to_ventilate = []
+         for row_group in row_groups:
+             for shuffle_row_drop_partition in range(shuffle_options.shuffle_row_drop_partitions):
+                 items_to_ventilate.append(
+                     {'row_group': row_group,
+                      'shuffle_row_drop_partition': (shuffle_row_drop_partition,
+                                                     shuffle_options.shuffle_row_drop_partitions)})
+
+         return items_to_ventilate
+
 
     def _filter_row_groups(self, dataset, row_groups, predicate, rowgroup_selector, training_partition,
                            num_training_partitions):
@@ -167,7 +188,7 @@ class ReaderV1(object):
             filtered_row_group_indexes = self._partition_row_groups(dataset, row_groups, num_training_partitions,
                                                                     training_partition,
                                                                     filtered_row_group_indexes)
-        return filtered_row_group_indexes, worker_predicate
+        return [row_groups[i] for i in filtered_row_group_indexes], worker_predicate
 
     def _partition_row_groups(self, dataset, row_groups, num_training_partitions, training_partition,
                               filtered_row_group_indexes):
@@ -238,44 +259,25 @@ class ReaderV1(object):
             worker_predicate = None
         return filtered_row_group_indexes, worker_predicate
 
-    def _create_ventilator(self, row_group_indexes, shuffle_options, num_epochs, worker_predicate):
-        items_to_ventilate = []
-        for piece_index in row_group_indexes:
-            for shuffle_row_drop_partition in range(shuffle_options.shuffle_row_drop_partitions):
-                items_to_ventilate.append(
-                    {'piece_index': piece_index,
-                     'worker_predicate': worker_predicate,
-                     'shuffle_row_drop_partition': (shuffle_row_drop_partition,
-                                                    shuffle_options.shuffle_row_drop_partitions)})
-
-        return ConcurrentVentilator(self._workers_pool.ventilate,
-                                    items_to_ventilate,
-                                    iterations=num_epochs,
-                                    randomize_item_order=shuffle_options.shuffle_row_groups)
-
     def stop(self):
         """Stops all worker threads/processes"""
-        self._workers_pool.stop()
+        self._stop_flow_manager_event.set()
 
     def join(self):
-        """Joins all worker threads/processes. Will block until all worker workers have been fully terminated"""
-        self._workers_pool.join()
-
-    def fetch(self, timeout=None):
-        warning_message = 'fetch is deprecated. Please use iterator api to fetch data instead.'
-        warnings.warn(warning_message, DeprecationWarning)
-        # Since warnings are generally ignored in av, print out a logging warning as well
-        logger.warn(warning_message)
-        return self._workers_pool.get_results(timeout=timeout)
+        self._flow_manager_thread.join()
+        self._loader_pool.shutdown()
+        self._decoder_pool.shutdown(wait=False)
 
     def __iter__(self):
         return self
 
     def __next__(self):
-        try:
-            return self._workers_pool.get_results(timeout=self._read_timeout_s)
-        except EmptyResultError:
+        result = self._results_queue.get(timeout=self._read_timeout_s)
+        if isinstance(result, EOFSentinel):
             raise StopIteration
+        elif isinstance(result, Exception):
+            raise result
+        return result
 
     def next(self):
         return self.__next__()
