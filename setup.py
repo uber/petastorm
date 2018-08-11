@@ -25,13 +25,14 @@ REQUIRED_PACKAGES = [
     'pandas>=0.19.0',
     'pyspark>=2.1.0',
     'pyzmq>=14.0.0',
+    'six>=1.5.0'
     # 'pyarrow>=0.10'
 ]
 
 if '--minimal-deps' not in sys.argv:
     REQUIRED_PACKAGES += [
-        'opencv-python>=3.2.0.6',
-        'pyarrow>=0.10',
+        # 'opencv-python>=3.2.0.6',
+        # 'pyarrow>=0.10',
     ]
 else:
     PACKAGE_NAME += '_min_deps'

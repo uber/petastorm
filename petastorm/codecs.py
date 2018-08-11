@@ -98,8 +98,13 @@ class NdarrayCodec(DataframeColumnCodec):
         return bytearray(memfile.getvalue())
 
     def decode(self, unischema_field, value):
-        memfile = BytesIO(value)
-        return np.load(memfile)
+        # if not isinstance(value, basestring):
+        #     raise RuntimeError('{}: "value" expected to have a bytearray type. Got {}.'.format(str(unischema_field), type(value)))
+        try:
+            memfile = BytesIO(value)
+            return np.load(memfile)
+        except IOError as e:
+            pass
 
     def spark_dtype(self):
         return BinaryType()

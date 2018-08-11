@@ -48,6 +48,8 @@ def decode_row(row, schema):
     :return:
     """
     decoded_row = dict()
+    if isinstance(row, list):
+        a=0
     for field_name_unicode, encoded in row.items():
         field_name = str(field_name_unicode)
         if field_name in schema.fields:
@@ -75,11 +77,13 @@ def add_to_dataset_metadata(dataset, key, value):
     # If the metadata file already exists, add to it.
     # Otherwise fetch the schema from one of the existing parquet files in the dataset
     if dataset.fs.exists(common_metadata_file_path):
-        arrow_metadata = pyarrow.parquet.read_metadata(dataset.fs.open(common_metadata_file_path))
+        with dataset.fs.open(common_metadata_file_path) as f:
+            arrow_metadata = pyarrow.parquet.read_metadata(f)
     elif dataset.fs.exists(metadata_file_path):
         # If just the metadata file exists and not the common metadata file, copy the contents of
         # the metadata file to the common_metadata file for backwards compatibility
-        arrow_metadata = pyarrow.parquet.read_metadata(dataset.fs.open(metadata_file_path))
+        with dataset.fs.open(metadata_file_path) as f:
+            arrow_metadata = pyarrow.parquet.read_metadata(f)
     else:
         arrow_metadata = dataset.pieces[0].get_metadata(lambda path: dataset.fs.open(path))
     base_schema = arrow_metadata.schema.to_arrow_schema()
