@@ -26,11 +26,25 @@ from petastorm.reader_worker import ReaderWorker
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.thread_pool import ThreadPool
 from petastorm.workers_pool.ventilator import ConcurrentVentilator
+from petastorm.reader2 import ReaderV2
 
 logger = logging.getLogger(__name__)
 
 
-class Reader(object):
+def Reader(*args, **kwargs):
+    reader_impl = ReaderV1
+    if 'reader_impl' in kwargs:
+        reader_impl_name = kwargs['reader_impl']
+        if reader_impl_name == 'v1':
+            reader_impl = ReaderV1
+        elif reader_impl_name == 'v2':
+            reader_impl = ReaderV2
+        else:
+            raise ValueError('Unexpected value of "reader_impl": {}. Expected "v1" or "v2"'.format(reader_impl_name))
+
+    return reader_impl(*args, **kwargs)
+
+class ReaderV1(object):
     """Reads a unischema based dataset from a parquet file."""
 
     def __init__(self, dataset_url, schema_fields=None, shuffle=True, predicate=None, rowgroup_selector=None,

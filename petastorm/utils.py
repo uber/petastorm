@@ -48,8 +48,6 @@ def decode_row(row, schema):
     :return:
     """
     decoded_row = dict()
-    if isinstance(row, list):
-        a=0
     for field_name_unicode, encoded in row.items():
         field_name = str(field_name_unicode)
         if field_name in schema.fields:

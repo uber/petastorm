@@ -1,42 +1,5 @@
-from time import sleep
-
-import numpy as np
 import six
-from concurrent.futures import ThreadPoolExecutor, TimeoutError, as_completed
-from six.moves.queue import Queue
-
-
-def ventilator():
-    return iter(range(100))
-
-
-def load(rowgroup_spec):
-    s = np.random.random() * 0.3
-    print('Loading:' + str(rowgroup_spec))
-    sleep(s)
-    return rowgroup_spec
-
-
-def decode(rowgroup_spec):
-    s = np.random.random() * 0.3
-    print('Decoding:' + str(rowgroup_spec))
-    sleep(s)
-    return rowgroup_spec
-
-
-class ShufflingQueue(object):
-    def __init__(self):
-        self.store = []
-
-    def extend(self, data):
-        # print('shuffling in : ' + str(data))
-        self.store.extend(data)
-
-    def pull(self):
-        return self.store.pop(0)
-
-    def has_more_to_offer(self):
-        return len(self.store) > 0
+from concurrent.futures import TimeoutError, as_completed
 
 
 class EOFSentinel(object):
@@ -123,18 +86,9 @@ def flow_manager_loop(epochs_generator, loading_pool, loader, decoding_pool, dec
 
             # print('6')
 
-            print(len(in_loading), len(in_decoding), output_queue.qsize())
+            # print(len(in_loading), len(in_decoding), output_queue.qsize())
 
         output_queue.put(EOFSentinel())
 
     except Exception as e:
         output_queue.put(e)
-
-
-if __name__ == '__main__':
-    output_queue = Queue()
-    flow_manager_loop(ventilator(), ThreadPoolExecutor(2), ThreadPoolExecutor(2), ShufflingQueue(), output_queue)
-
-    print('Done:')
-    while output_queue.qsize() > 0:
-        print(output_queue.get_nowait())

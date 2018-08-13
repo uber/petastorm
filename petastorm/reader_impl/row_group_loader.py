@@ -18,10 +18,8 @@ from pyarrow import parquet as pq
 from pyarrow.parquet import ParquetFile
 from six.moves.urllib.parse import urlparse, urlunparse
 
-from petastorm import utils
 from petastorm.cache import NullCache
 from petastorm.fs_utils import FilesystemResolver
-from petastorm.workers_pool.worker_base import WorkerBase
 
 
 def _merge_two_dicts(a, b):
@@ -41,11 +39,7 @@ def _select_cols(a_dict, keys):
         return {field_name: a_dict[field_name] for field_name in keys}
 
 
-def _filter_keys(dictionary, keys_to_include):
-    return {key: dictionary[key] for key in keys_to_include}
-
-
-class Loader(object):
+class RowGroupLoader(object):
     def __init__(self, worker_id, dataset_url, schema, sequence, split_pieces, local_cache, worker_predicate):
         self._dataset_url_parsed = urlparse(dataset_url)
         self._schema = schema
@@ -62,16 +56,16 @@ class Loader(object):
             filesystem=resolver.filesystem(),
             validate_schema=False)
 
-    def load(self, row_group):
+    def load(self, piece):
 
         # Create pyarrow file system
-        parquet_file = ParquetFile(self._dataset.fs.open(row_group.path))
+        parquet_file = ParquetFile(self._dataset.fs.open(piece.path))
 
         if self._worker_predicate:
             if not isinstance(self._local_cache, NullCache):
                 raise RuntimeError('Local cache is not supported together with predicates, '
                                    'unless the dataset is partitioned by the column the predicate operates on.')
-            all_cols = self._load_rows_with_predicate(parquet_file, row_group, self._worker_predicate)
+            all_cols = self._load_rows_with_predicate(parquet_file, piece, self._worker_predicate)
         else:
             # Using hash of the dataset url with the relative path in order to:
             #  1. Make sure if a common cache serves multiple processes (e.g. redis), we don't have conflicts
@@ -79,8 +73,8 @@ class Loader(object):
             #     some cache implementations
             #  3. Still leave relative path and the piece_index in plain text to make it easier to debug
             cache_key = '{}:{}:{}'.format(hashlib.md5(urlunparse(self._dataset_url_parsed).encode('utf-8')).hexdigest(),
-                                          row_group.path, row_group)
-            all_cols = self._local_cache.get(cache_key, lambda: self._load_rows(parquet_file, row_group))
+                                          piece.path, piece)
+            all_cols = self._local_cache.get(cache_key, lambda: self._load_rows(parquet_file, piece))
 
         all_cols_as_tuples = all_cols
 
@@ -135,10 +129,10 @@ class Loader(object):
             partitions=self._dataset.partitions).to_pandas().to_dict('records')
 
         # Decode values
-        decoded_predicate_rows = predicate_rows
+        decoded_predicate_rows = [_select_cols(row, predicate_column_names) for row in predicate_rows]
 
         # Use the predicate to filter
-        match_predicate_mask = [worker_predicate.do_include(_filter_keys(row, predicate_column_names)) for row in decoded_predicate_rows]
+        match_predicate_mask = [worker_predicate.do_include(row) for row in decoded_predicate_rows]
 
         # Don't have anything left after filtering? Exit early.
         if not any(match_predicate_mask):
@@ -166,4 +160,3 @@ class Loader(object):
             return all_cols
         else:
             return filtered_decoded_predicate_rows
-

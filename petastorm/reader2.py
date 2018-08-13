@@ -16,7 +16,6 @@ from six.moves.queue import Queue
 
 import logging
 import os
-import random
 import threading
 import warnings
 
@@ -28,66 +27,16 @@ from petastorm import utils
 from petastorm.cache import NullCache
 from petastorm.etl import dataset_metadata, rowgroup_indexing
 from petastorm.fs_utils import FilesystemResolver
-from petastorm.new_flow_skeleton import flow_manager_loop, ShufflingQueue, EOFSentinel
-from petastorm.reader_worker2 import Loader
+from petastorm.reader_impl.worker_loop import flow_manager_loop, EOFSentinel
+from petastorm.reader_impl.shuffling_queue import ShufflingQueue
+
+from petastorm.reader_impl.epochs import epoch_generator
+from petastorm.reader_impl.row_group_loader import RowGroupLoader
 
 logger = logging.getLogger(__name__)
 
 
-def epoch_generator(items, num_epochs, shuffle):
-    current_index = 0
-    epochs_left = num_epochs
-
-    while (epochs_left is None or epochs_left > 0) and items:
-
-        if current_index == 0 and shuffle:
-            random.shuffle(items)
-
-        yield items[current_index]
-
-        current_index += 1
-
-        if current_index >= len(items):
-            current_index = 0
-            # If iterations was set to None, that means we will iterate until stop is called
-            if epochs_left is not None:
-                epochs_left -= 1
-
-
-class EpochsIterator(object):
-    def __init__(self, epoch_elements, iterations, randomize_item_order):
-        self._epoch_elements = epoch_elements
-        self._iterations_remaining = iterations
-        self._randomize_item_order = randomize_item_order
-        self._current_item_to_ventilate = 0
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        if self._iterations_remaining == 0 or not self._epoch_elements:
-            raise StopIteration
-
-        if self._current_item_to_ventilate == 0 and self._randomize_item_order:
-            random.shuffle(self._epoch_elements)
-
-        item_to_return = self._epoch_elements[self._current_item_to_ventilate]
-
-        self._current_item_to_ventilate += 1
-
-        if self._current_item_to_ventilate >= len(self._epoch_elements):
-            self._current_item_to_ventilate = 0
-            # If iterations was set to None, that means we will iterate until stop is called
-            if self._iterations_remaining is not None:
-                self._iterations_remaining -= 1
-
-        return item_to_return
-
-    def next(self):
-        return self.__next__()
-
-
-class Reader(object):
+class ReaderV2(object):
     """Reads a unischema based dataset from a parquet file."""
 
     def __init__(self, dataset_url, schema_fields=None, shuffle=True, predicate=None, rowgroup_selector=None,
@@ -161,7 +110,7 @@ class Reader(object):
 
         self._results_queue = Queue(1000)
 
-        loader = Loader(0, dataset_url, self.schema, sequence, row_groups, cache, worker_predicate)
+        loader = RowGroupLoader(0, dataset_url, self.schema, sequence, row_groups, cache, worker_predicate)
         loader_pool = loader_pool or ThreadPoolExecutor(10)
         decoder_pool = decoder_pool or ThreadPoolExecutor(5)
         self._stop_flow_manager_event = threading.Event()
@@ -288,19 +237,6 @@ class Reader(object):
         self._flow_manager_thread.join()
         """Joins all worker threads/processes. Will block until all worker workers have been fully terminated"""
         pass
-
-    def fetch(self, timeout=None):
-        warning_message = 'fetch is deprecated. Please use iterator api to fetch data instead.'
-        warnings.warn(warning_message, DeprecationWarning)
-        # Since warnings are generally ignored in av, print out a logging warning as well
-        logger.warn(warning_message)
-
-        result = self._results_queue.get(timeout=self._read_timeout_s)
-        if isinstance(result, EOFSentinel):
-            raise StopIteration
-        elif isinstance(result, Exception):
-            raise result
-        return result
 
     def __iter__(self):
         return self

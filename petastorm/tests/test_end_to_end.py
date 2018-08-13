@@ -30,7 +30,7 @@ from petastorm.codecs import ScalarCodec
 from petastorm.etl.dataset_metadata import ROW_GROUPS_PER_FILE_KEY, \
     ROW_GROUPS_PER_FILE_KEY_ABSOLUTE_PATHS
 from petastorm.local_disk_cache import LocalDiskCache
-from petastorm.reader2 import Reader
+from petastorm.reader2 import ReaderV2 as Reader
 from petastorm.selectors import SingleIndexSelector
 from petastorm.tests.no_pool_executor import NoPoolFuture, NoPoolExecutor
 from petastorm.tests.tempdir import temporary_directory
