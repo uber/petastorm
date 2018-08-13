@@ -24,7 +24,6 @@ from petastorm.codecs import ScalarCodec
 from petastorm.local_disk_cache import LocalDiskCache
 from petastorm.reader import Reader, ShuffleOptions
 from petastorm.selectors import SingleIndexSelector
-from petastorm.tests.tempdir import temporary_directory
 from petastorm.tests.test_common import create_test_dataset, TestSchema
 from petastorm.tests.test_end_to_end_predicates_impl import \
     PartitionKeyInSetPredicate, EqualPredicate
@@ -36,6 +35,10 @@ from petastorm.workers_pool.thread_pool import ThreadPool
 # Number of rows in a fake dataset
 
 ROWS_COUNT = 100
+
+ALL_READER_FLAVOR_FACTORIES = [lambda url, **kwargs: Reader(url, reader_pool=DummyPool(), **kwargs),
+                               lambda url, **kwargs: Reader(url, reader_pool=ThreadPool(10), **kwargs),
+                               lambda url, **kwargs: Reader(url, reader_pool=ProcessPool(10), **kwargs)]
 
 SyntheticDataset = namedtuple('synthetic_dataset', ['url', 'data', 'path'])
 
@@ -56,24 +59,21 @@ def _check_simple_reader(reader, expected_data):
         np.testing.assert_equal(actual, expected)
 
 
-def test_simple_read(synthetic_dataset):
+@pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
+def test_simple_read(synthetic_dataset, reader_factory):
     """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
-    pool_impls = [DummyPool, ThreadPool, ProcessPool]
-    for pool_impl in pool_impls:
-        with Reader(synthetic_dataset.url, reader_pool=pool_impl(10)) as reader:
-            _check_simple_reader(reader, synthetic_dataset.data)
+    with reader_factory(synthetic_dataset.url) as reader:
+        _check_simple_reader(reader, synthetic_dataset.data)
 
 
-def test_simple_read_with_disk_cache(synthetic_dataset):
+@pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
+def test_simple_read_with_disk_cache(synthetic_dataset, reader_factory, tmpdir):
     """Try using the Reader with LocalDiskCache using different flavors of pools"""
-    pool_impls = [DummyPool, ThreadPool, ProcessPool]
-    for pool_impl in pool_impls:
-        with temporary_directory() as cache_dir:
-            CACHE_SIZE = 10 * 2 ** 30  # 20GB
-            ROW_SIZE_BYTES = 100  # not really important for this test
-            with Reader(synthetic_dataset.url, reader_pool=pool_impl(10), num_epochs=2,
-                        cache=LocalDiskCache(cache_dir, CACHE_SIZE, ROW_SIZE_BYTES)) as reader:
-                _check_simple_reader(reader, synthetic_dataset.data)
+    CACHE_SIZE = 10 * 2 ** 30  # 20GB
+    ROW_SIZE_BYTES = 100  # not really important for this test
+    with reader_factory(synthetic_dataset.url, num_epochs=2,
+                        cache=LocalDiskCache(tmpdir.strpath, CACHE_SIZE, ROW_SIZE_BYTES)) as reader:
+        _check_simple_reader(reader, synthetic_dataset.data)
 
 
 def test_simple_read_with_added_slashes(synthetic_dataset):
@@ -145,24 +145,23 @@ def test_shuffle_drop_ratio(synthetic_dataset):
         prev_jumps_not_1 = jumps_not_1
 
 
-
-def test_predicate_on_partition(synthetic_dataset):
+@pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
+def test_predicate_on_partition(synthetic_dataset, reader_factory):
     for expected_partition_keys in [{'p_0', 'p_2'}, {'p_0'}, {'p_1', 'p_2'}]:
-        for pool in [ProcessPool, ThreadPool, DummyPool]:
-            with Reader(synthetic_dataset.url, predicate=PartitionKeyInSetPredicate(expected_partition_keys),
-                        reader_pool=pool(10)) as reader:
-                partition_keys = set(row.partition_key for row in reader)
-                assert partition_keys == expected_partition_keys
+        with reader_factory(synthetic_dataset.url,
+                            predicate=PartitionKeyInSetPredicate(expected_partition_keys)) as reader:
+            partition_keys = set(row.partition_key for row in reader)
+            assert partition_keys == expected_partition_keys
 
 
-def test_predicate_on_multiple_fields(synthetic_dataset):
-    for pool in [ProcessPool, ThreadPool, DummyPool]:
-        expected_values = {'id': 11, 'id2': 1}
-        with Reader(synthetic_dataset.url, shuffle_options=ShuffleOptions(False),
-                    predicate=EqualPredicate(expected_values), reader_pool=pool(10)) as reader:
-            actual = next(reader)
-            assert actual.id == expected_values['id']
-            assert actual.id2 == expected_values['id2']
+@pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
+def test_predicate_on_multiple_fields(synthetic_dataset, reader_factory):
+    expected_values = {'id': 11, 'id2': 1}
+    with reader_factory(synthetic_dataset.url, shuffle_options=ShuffleOptions(False),
+                        predicate=EqualPredicate(expected_values)) as reader:
+        actual = next(reader)
+        assert actual.id == expected_values['id']
+        assert actual.id2 == expected_values['id2']
 
 
 def test_predicate_with_invalid_fields(synthetic_dataset):
@@ -174,7 +173,8 @@ def test_predicate_with_invalid_fields(synthetic_dataset):
         {'invalid_field_name': 1, 'invalid_field_name_2': 11}]
 
     for predicate_spec in TEST_CASES:
-        with Reader(synthetic_dataset.url, shuffle_options=ShuffleOptions(False), predicate=EqualPredicate(predicate_spec),
+        with Reader(synthetic_dataset.url, shuffle_options=ShuffleOptions(False),
+                    predicate=EqualPredicate(predicate_spec),
                     reader_pool=ThreadPool(1)) as reader:
             with pytest.raises(ValueError):
                 next(reader)
