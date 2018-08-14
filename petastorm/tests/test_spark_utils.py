@@ -11,15 +11,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import glob
+import os
 import unittest
 from shutil import rmtree
 from tempfile import mkdtemp
 
 import numpy as np
+from pyspark.sql import SparkSession
+
 from petastorm.spark_utils import dataset_as_rdd
 from petastorm.tests.test_common import create_test_dataset, TestSchema
-from pyspark.sql import SparkSession
 
 
 class TestSparkUtils(unittest.TestCase):
@@ -32,6 +34,10 @@ class TestSparkUtils(unittest.TestCase):
         cls._dataset_url = 'file://{}'.format(cls._dataset_dir)
         ROWS_COUNT = 1000
         cls._dataset_dicts = create_test_dataset(cls._dataset_url, range(ROWS_COUNT))
+
+        # Remove crc files due to https://issues.apache.org/jira/browse/HADOOP-7199
+        for crc_file in glob.glob(cls._dataset_dir + '/.*.crc'):
+            os.remove(crc_file)
 
     @classmethod
     def tearDownClass(cls):
