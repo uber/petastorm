@@ -400,7 +400,7 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
             unshuffled = [row[0].id for row in reader]
 
         with Reader(self._dataset_url,
-                    shuffle_options=ShuffleOptions(True, 3),
+                    shuffle_options=ShuffleOptions(True, 6),
                     reader_pool=DummyPool(),
                     sequence=sequence) as reader:
             shuffled = [row[0].id for row in reader]
