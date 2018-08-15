@@ -30,7 +30,6 @@ import os
 import sys
 
 from pyspark.sql import SparkSession
-from torchvision import datasets
 
 from examples.mnist.schema import MnistSchema
 from petastorm.etl.dataset_metadata import materialize_dataset
@@ -60,6 +59,9 @@ def download_mnist_data(download_dir, train=True):
     Each image is a PIL.Image of black-and-white 28x28 pixels.
     Each label is a long integer representing the digit 0..9.
     """
+    # Import here so that testing does not require torchvision, and continuous build doesn't require torch!
+    from torchvision import datasets
+
     return datasets.MNIST('{}/{}'.format(download_dir, 'data'), train=train, download=True)
 
 
