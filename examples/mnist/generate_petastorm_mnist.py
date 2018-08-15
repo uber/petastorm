@@ -111,10 +111,10 @@ def mnist_data_to_petastorm_dataset(download_dir, output_url, spark_master=None,
         with materialize_dataset(spark, dset_output_url, MnistSchema, ROWGROUP_SIZE_MB):
             # List of [(idx, image, digit), ...]
             # where image is shaped as a 28x28 numpy matrix
-            idx_image_digit_list = map(lambda (idx, image_digit): {
-                    MnistSchema.idx.name: idx,
-                    MnistSchema.digit.name: image_digit[1],
-                    MnistSchema.image.name: np.array(list(image_digit[0].getdata()), dtype=np.uint8).reshape(28, 28, 1)
+            idx_image_digit_list = map(lambda idx_image_digit: {
+                    MnistSchema.idx.name: idx_image_digit[0],
+                    MnistSchema.digit.name: idx_image_digit[1][1],
+                    MnistSchema.image.name: np.array(list(idx_image_digit[1][0].getdata()), dtype=np.uint8).reshape(28, 28, 1)
                 }, enumerate(data))
 
             # Convert to pyspark.sql.Row
