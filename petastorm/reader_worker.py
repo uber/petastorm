@@ -199,7 +199,7 @@ class ReaderWorker(WorkerBase):
 
         if self._sequence:
             # If we have a sequence we need to take elements from the next partition to build the sequence
-            next_partition_indexes = np.where(partition_indexes == this_partition + 1)
+            next_partition_indexes = np.where(partition_indexes >= this_partition + 1)
             if len(next_partition_indexes[0]) > 0:
                 next_partition_to_add = next_partition_indexes[0][0:self._sequence.length - 1]
                 partition_indexes[next_partition_to_add] = this_partition
