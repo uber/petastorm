@@ -28,6 +28,7 @@ MOCK_IMAGE_COUNT = 5
 
 
 class MockDataObj(object):
+    """ Wraps a mock image array and provide a needed getdata() interface function. """
     def __init__(self, a):
         self.a = a
 

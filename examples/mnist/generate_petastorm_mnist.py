@@ -93,7 +93,6 @@ def mnist_data_to_petastorm_dataset(download_dir, output_url, spark_master=None,
         session_builder.master(spark_master)
 
     spark = session_builder.getOrCreate()
-    sc = spark.sparkContext
 
     # Get training and test data
     if mnist_data is None:
@@ -113,7 +112,7 @@ def mnist_data_to_petastorm_dataset(download_dir, output_url, spark_master=None,
             idx_image_digit_list = map(lambda (idx, image_digit): {
                     MnistSchema.idx.name: idx,
                     MnistSchema.digit.name: image_digit[1],
-                    MnistSchema.image.name: np.array(list(image_digit[0].getdata()), dtype=np.uint8).reshape(28, 28)
+                    MnistSchema.image.name: np.array(list(image_digit[0].getdata()), dtype=np.uint8).reshape(28, 28, 1)
                 }, enumerate(data))
 
             # Convert to pyspark.sql.Row
