@@ -244,9 +244,7 @@ def _split_row_groups(dataset):
             continue
 
         for row_group in range(row_groups_per_file[relative_path]):
-            split_piece = pq.ParquetDatasetPiece(piece.path,
-                                              row_group,
-                                              piece.partition_keys)
+            split_piece = pq.ParquetDatasetPiece(piece.path, row_group, piece.partition_keys)
             split_pieces.append(split_piece)
 
     return split_pieces

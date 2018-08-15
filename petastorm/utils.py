@@ -48,7 +48,7 @@ def decode_row(row, schema):
     :return:
     """
     decoded_row = dict()
-    for field_name_unicode, encoded in row.items():
+    for field_name_unicode, _ in row.items():
         field_name = str(field_name_unicode)
         if field_name in schema.fields:
             if row[field_name] is not None:
@@ -81,7 +81,7 @@ def add_to_dataset_metadata(dataset, key, value):
         # the metadata file to the common_metadata file for backwards compatibility
         arrow_metadata = pyarrow.parquet.read_metadata(dataset.fs.open(metadata_file_path))
     else:
-        arrow_metadata = dataset.pieces[0].get_metadata(lambda path: dataset.fs.open(path))
+        arrow_metadata = dataset.pieces[0].get_metadata(dataset.fs.open)
     base_schema = arrow_metadata.schema.to_arrow_schema()
     metadata_dict = base_schema.metadata
     metadata_dict[key] = value

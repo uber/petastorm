@@ -11,10 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import division
 
 import hashlib
-import math
-from decimal import Decimal
 
 import numpy as np
 from pyarrow import parquet as pq
@@ -58,6 +57,7 @@ class ReaderWorker(WorkerBase):
         # all Worker constructors are serialized
         self._dataset = None
 
+    # pylint: disable=arguments-differ
     def process(self, piece_index, worker_predicate, shuffle_row_drop_partition):
         """Main worker function. Loads and returns all rows matching the predicate from a rowgroup
 
@@ -111,7 +111,7 @@ class ReaderWorker(WorkerBase):
         for item in all_cols_as_tuples:
             self.publish_func(item)
 
-    def _load_rows(self, file, piece, shuffle_row_drop_range):
+    def _load_rows(self, pq_file, piece, shuffle_row_drop_range):
         """Loads all rows from a piece"""
 
         # pyarrow would fail if we request a column names that the dataset is partitioned by, so we strip them from
@@ -119,11 +119,11 @@ class ReaderWorker(WorkerBase):
         partitions = self._dataset.partitions
         column_names = set(field.name for field in self._schema.fields.values()) - partitions.partition_names
 
-        all_rows = self._read_with_shuffle_row_drop(piece, file, column_names, shuffle_row_drop_range)
+        all_rows = self._read_with_shuffle_row_drop(piece, pq_file, column_names, shuffle_row_drop_range)
 
         return [utils.decode_row(row, self._schema) for row in all_rows]
 
-    def _load_rows_with_predicate(self, file, piece, worker_predicate, shuffle_row_drop_partition):
+    def _load_rows_with_predicate(self, pq_file, piece, worker_predicate, shuffle_row_drop_partition):
         """Loads all rows that match a predicate from a piece"""
 
         # 1. Read all columns needed by predicate and decode
@@ -149,7 +149,7 @@ class ReaderWorker(WorkerBase):
                              self._dataset.partitions.partition_names
 
         # Read columns needed for the predicate
-        predicate_rows = self._read_with_shuffle_row_drop(piece, file, predicate_column_names,
+        predicate_rows = self._read_with_shuffle_row_drop(piece, pq_file, predicate_column_names,
                                                           shuffle_row_drop_partition)
 
         # Decode values
@@ -169,7 +169,7 @@ class ReaderWorker(WorkerBase):
 
         if other_column_names:
             # Read remaining columns
-            other_rows = self._read_with_shuffle_row_drop(piece, file, other_column_names,
+            other_rows = self._read_with_shuffle_row_drop(piece, pq_file, other_column_names,
                                                           shuffle_row_drop_partition)
 
             # Remove rows that were filtered out by the predicate
@@ -184,9 +184,9 @@ class ReaderWorker(WorkerBase):
         else:
             return filtered_decoded_predicate_rows
 
-    def _read_with_shuffle_row_drop(self, piece, file, column_names, shuffle_row_drop_partition):
+    def _read_with_shuffle_row_drop(self, piece, pq_file, column_names, shuffle_row_drop_partition):
         data_frame = piece.read(
-            open_file_func=lambda _: file,
+            open_file_func=lambda _: pq_file,
             columns=column_names,
             partitions=self._dataset.partitions
         ).to_pandas()
@@ -200,7 +200,7 @@ class ReaderWorker(WorkerBase):
         if self._sequence:
             # If we have a sequence we need to take elements from the next partition to build the sequence
             next_partition_indexes = np.where(partition_indexes >= this_partition + 1)
-            if len(next_partition_indexes[0]) > 0:
+            if next_partition_indexes[0].size:
                 next_partition_to_add = next_partition_indexes[0][0:self._sequence.length - 1]
                 partition_indexes[next_partition_to_add] = this_partition
 

@@ -16,9 +16,10 @@ import cProfile
 import pstats
 import random
 import sys
-from six.moves import queue
 from threading import Thread, Event
 from traceback import format_exc
+
+from six.moves import queue
 
 from petastorm.workers_pool import EmptyResultError, VentilatedItemProcessedMessage, \
     TimeoutWaitingForResultError
@@ -63,7 +64,7 @@ class WorkerThread(Thread):
                 pass
             except WorkerTerminationRequested:
                 pass
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-except
                 stderr_message = 'Worker %d terminated: unexpected exception:\n' % self._worker_impl.worker_id
                 stderr_message += format_exc()
                 sys.stderr.write(stderr_message)
@@ -117,7 +118,7 @@ class ThreadPool(object):
         self._results_queue = queue.Queue(self._results_queue_size)
         self._workers = []
         for worker_id in range(self._workers_count):
-            worker_impl = worker_class(worker_id, lambda x: self._stop_aware_put(x), worker_args)
+            worker_impl = worker_class(worker_id, self._stop_aware_put, worker_args)
             new_thread = WorkerThread(worker_impl, self._stop_event, self._ventilator_queue,
                                       self._results_queue, self._profiling_enabled)
             # Make the thread daemonic. Since it only reads it's ok to abort while running - no resource corruption

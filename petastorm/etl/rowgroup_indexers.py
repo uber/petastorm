@@ -58,7 +58,7 @@ class SingleFieldIndexer(RowGroupIndexerBase):
 
     def build_index(self, decoded_rows, piece_index):
         field_column = [row[self._column_name] for row in decoded_rows]
-        if len(field_column) == 0:
+        if not field_column:
             raise ValueError("Cannot build index for empty rows, column '{}'"
                              .format(self._column_name))
 
@@ -120,7 +120,7 @@ class FieldNotNullIndexer(RowGroupIndexerBase):
 
     def build_index(self, decoded_rows, piece_index):
         field_column = [row[self._column_name] for row in decoded_rows]
-        if len(field_column) == 0:
+        if not field_column:
             raise ValueError("Cannot build index for empty rows, column '{}'"
                              .format(self._column_name))
 
