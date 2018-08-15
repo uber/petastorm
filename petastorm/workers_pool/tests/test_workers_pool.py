@@ -53,7 +53,7 @@ class TestWorkersPool(unittest.TestCase):
         self._passing_args_impl(lambda: ThreadPool(10))
 
     def test_passing_args_dummy(self):
-        self._passing_args_impl(lambda: DummyPool())
+        self._passing_args_impl(DummyPool)
 
     def test_all_workers_are_active_processes(self):
         """Check that the work is distributed among all workers"""
@@ -64,7 +64,7 @@ class TestWorkersPool(unittest.TestCase):
         pool = ProcessPool(WORKERS_COUNT)
 
         pool.start(WorkerIdGeneratingWorker)
-        for i in range(100):
+        for _ in range(100):
             pool.ventilate()
 
         active_worker_ids = [pool.get_results() for _ in range(100)]
@@ -164,7 +164,7 @@ class TestWorkersPool(unittest.TestCase):
         pool = ThreadPool(10, results_queue_size=QUEUE_SIZE)
         pool.start(WorkerIdGeneratingWorker)
 
-        for i in range(100):
+        for _ in range(100):
             pool.ventilate()
 
         cumulative_wait = 0
@@ -259,7 +259,7 @@ class TestWorkersPool(unittest.TestCase):
         for ventilate_count in [10, 10000]:
             for pool in [DummyPool(), ThreadPool(2), ProcessPool(2)]:
                 pool.start(PreprogrammedReturnValueWorker, ventilate_count * [[]])
-                for i in range(ventilate_count):
+                for _ in range(ventilate_count):
                     pool.ventilate('not_important')
 
                 with self.assertRaises(EmptyResultError):
@@ -274,7 +274,7 @@ class TestWorkersPool(unittest.TestCase):
         VENTILATE_COUNT = 4
         for pool in [DummyPool(), ThreadPool(1), ProcessPool(1)]:
             pool.start(PreprogrammedReturnValueWorker, [[], [], [42], []])
-            for i in range(VENTILATE_COUNT):
+            for _ in range(VENTILATE_COUNT):
                 pool.ventilate('not_important')
 
             self.assertEqual(42, pool.get_results())

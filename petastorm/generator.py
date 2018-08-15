@@ -34,14 +34,14 @@ def generate_datapoint(schema):
         shape = tuple(d if d is not None else LIST_SIZE for d in f.shape)
 
         # Extract range information from data type
-        min, max = 0, 1
+        min_val, max_val = 0, 1
 
         if issubclass(dtype, np.integer):
-            min, max = np.iinfo(dtype).min, np.iinfo(dtype).max
+            min_val, max_val = np.iinfo(dtype).min, np.iinfo(dtype).max
 
-        spread = max - min
+        spread = max_val - min_val
 
-        value = rand(*shape) * spread + min
+        value = rand(*shape) * spread + min_val
         d[key] = np.array(value, dtype=dtype)
 
     return d

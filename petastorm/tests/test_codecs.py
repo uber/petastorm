@@ -145,10 +145,10 @@ class CompressedImageCodecsTest(unittest.TestCase):
                                    nullable=False)
 
             encoded = Image.fromarray(expected_image)
-            bytes = io.BytesIO()
-            encoded.save(bytes, format='PNG')
+            encoded_bytes = io.BytesIO()
+            encoded.save(encoded_bytes, format='PNG')
 
-            actual_image = codec.decode(field, bytes.getvalue())
+            actual_image = codec.decode(field, encoded_bytes.getvalue())
             np.testing.assert_array_equal(expected_image, actual_image)
             self.assertEqual(expected_image.dtype, actual_image.dtype)
 

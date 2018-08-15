@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import division
 
 import unittest
 from collections import namedtuple
@@ -150,9 +151,8 @@ class TestTfTensors(unittest.TestCase):
             expected = next(d for d in self.__class__._dataset_dicts if d['id'] == row['id'])
 
             # Check equivalence of all values between a checked row and a row from reference data
-            for column_name, value in row.items():
+            for column_name, actual in row.items():
                 expected_val = expected[column_name]
-                actual = row[column_name]
                 if isinstance(expected_val, Decimal) or isinstance(expected_val, str):
                     # Tensorflow returns all strings as bytes in python3. So we will need to decode it
                     actual = actual.decode()
