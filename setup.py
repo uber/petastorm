@@ -25,7 +25,8 @@ REQUIRED_PACKAGES = [
     'pandas>=0.19.0',
     'pyspark>=2.1.0',
     'pyzmq>=14.0.0',
-    'pyarrow>=0.10'
+    'pyarrow>=0.10',
+    'six>=1.5.0',
 ]
 
 if '--minimal-deps' not in sys.argv:
