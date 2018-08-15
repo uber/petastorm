@@ -47,7 +47,7 @@ class TestWorkersPool(unittest.TestCase):
         self._test_simple_ventilation(lambda: ThreadPool(10))
 
     def test_ventilator_dummy(self):
-        self._test_simple_ventilation(lambda: DummyPool())
+        self._test_simple_ventilation(DummyPool)
 
     def test_max_ventilation_size(self):
         """Tests that we dont surpass a max ventilation size in each pool type

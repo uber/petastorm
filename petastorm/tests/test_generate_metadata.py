@@ -27,7 +27,7 @@ def synthetic_dataset(tmpdir_factory):
 def _check_reader(path):
     # Just check that you can open and read from a reader successfully
     with Reader('file://{}'.format(path), reader_pool=DummyPool()) as reader:
-        [next(reader) for i in range(10)]
+        [next(reader) for _ in range(10)]
 
 
 def test_regenerate_row_group_metadata(synthetic_dataset, tmpdir):

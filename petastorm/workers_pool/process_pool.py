@@ -115,11 +115,13 @@ class ProcessPool(object):
         self._context = zmq.Context()
 
         # Ventilator socket used to send out tasks to workers
-        self._ventilator_send, worker_receiver_socket = self._create_local_socket_on_random_port(self._context, zmq.PUSH)
+        self._ventilator_send, worker_receiver_socket = self._create_local_socket_on_random_port(self._context,
+                                                                                                 zmq.PUSH)
 
         # Control socket is used to signal termination of the pool
         self._control_sender, control_socket = self._create_local_socket_on_random_port(self._context, zmq.PUB)
-        self._results_receiver, results_sender_socket = self._create_local_socket_on_random_port(self._context, zmq.PULL)
+        self._results_receiver, results_sender_socket = self._create_local_socket_on_random_port(self._context,
+                                                                                                 zmq.PULL)
 
         # We need poller to be able to read results from workers in a non-blocking manner
         self._results_receiver_poller = zmq.Poller()
@@ -153,8 +155,8 @@ class ProcessPool(object):
             started_count = 0
             while started_count < self._workers_count and time() < now + _WORKERS_STARTED_TIMEOUT_S:
                 _keep_retrying_while_zmq_again(_KEEP_TRYING_WHILE_ZMQ_AGAIN_IS_RAIZED_TIMEOUT_S,
-                                               lambda: monitor.recv_monitor_message(monitor_socket,
-                                                                                    flags=zmq.constants.NOBLOCK))
+                                               lambda sock=monitor_socket: monitor.recv_monitor_message(
+                                                   sock, flags=zmq.constants.NOBLOCK))
                 started_count += 1
 
             if started_count < self._workers_count:
@@ -191,7 +193,7 @@ class ProcessPool(object):
                     raise EmptyResultError()
 
             socks = self._results_receiver_poller.poll(timeout * 1e3 if timeout else None)
-            if len(socks) == 0:
+            if not socks:
                 raise TimeoutWaitingForResultError()
             result = self._results_receiver.recv_pyobj(0)
             if isinstance(result, VentilatedItemProcessedMessage):
@@ -266,7 +268,7 @@ def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_s
     poller.register(control_receiver, zmq.POLLIN)
 
     # Instantiate a worker
-    worker = worker_class(worker_id, lambda x: results_sender.send_pyobj(x), worker_args)
+    worker = worker_class(worker_id, results_sender.send_pyobj, worker_args)
 
     # Loop and accept messages from both channels, acting accordingly
     while True:
@@ -278,7 +280,7 @@ def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_s
                 args, kargs = work_receiver.recv_pyobj()
                 worker.process(*args, **kargs)
                 results_sender.send_pyobj(VentilatedItemProcessedMessage())
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-except
                 stderr_message = 'Worker %d terminated: unexpected exception:\n' % worker_id
                 stderr_message += format_exc()
                 sys.stderr.write(stderr_message)

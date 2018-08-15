@@ -47,7 +47,7 @@ class PredicatesTest(unittest.TestCase):
 
     def test_custom_function(self):
         for value in ['guid_2', 'guid_1', 'guid_5', 'guid_XXX', 'guid_XX']:
-            test_predicate = in_lambda(['volume_guids'], lambda volume_guids: value in volume_guids)
+            test_predicate = in_lambda(['volume_guids'], lambda volume_guids, val=value: val in volume_guids)
             included = test_predicate.do_include({'volume_guids': PredicatesTest.all_values})
             self.assertEqual(included, value in PredicatesTest.all_values)
 

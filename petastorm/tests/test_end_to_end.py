@@ -36,6 +36,7 @@ from petastorm.workers_pool.thread_pool import ThreadPool
 
 ROWS_COUNT = 100
 
+# pylint: disable=unnecessary-lambda
 ALL_READER_FLAVOR_FACTORIES = [lambda url, **kwargs: Reader(url, reader_pool=DummyPool(), **kwargs),
                                lambda url, **kwargs: Reader(url, reader_pool=ThreadPool(10), **kwargs),
                                lambda url, **kwargs: Reader(url, reader_pool=ProcessPool(10), **kwargs)]
@@ -345,7 +346,7 @@ def test_rowgroup_selector_string_field(synthetic_dataset):
                 rowgroup_selector=SingleIndexSelector(TestSchema.sensor_name.name, ['test_sensor']),
                 reader_pool=DummyPool()) as reader:
         count = 0
-        for row in reader:
+        for _ in reader:
             count += 1
         # Since we use artificial dataset all sensors have the same name,
         # so all row groups should be selected and all 1000 generated rows should be returned

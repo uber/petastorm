@@ -13,6 +13,7 @@
 # limitations under the License.
 
 """ Script display parquet dataset metadata """
+from __future__ import print_function
 
 import argparse
 from pyarrow import parquet as pq
@@ -46,21 +47,21 @@ if __name__ == "__main__":
     dataset = pq.ParquetDataset(resolver.parsed_dataset_url().path, filesystem=resolver.filesystem(),
                                 validate_schema=False)
 
-    all = not args.schema and not args.index
-    if args.schema or all:
+    print_all = not args.schema and not args.index
+    if args.schema or print_all:
         print('*** Schema from dataset metadata ***')
         print((dataset_metadata.get_schema(dataset)))
 
-    if args.index or all:
+    if args.index or print_all:
         index_dict = rowgroup_indexing.get_row_group_indexes(dataset)
         print('*** Row group indexes from dataset metadata ***')
         for index_name in index_dict:
             print(('Index: {}'.format(index_name)))
             if args.skip_index is None or index_name not in args.skip_index:
                 for field_value in index_dict[index_name].indexed_values:
-                    print(('  -- {}({})'.format(field_value,
-                                               len(index_dict[index_name].get_row_group_indexes(field_value)))))
+                    print('  -- {}({})'.format(field_value,
+                                               len(index_dict[index_name].get_row_group_indexes(field_value))))
                     if args.print_values:
-                        print((index_dict[index_name].get_row_group_indexes(field_value)))
+                        print(index_dict[index_name].get_row_group_indexes(field_value))
             else:
                 print('  (skipped)')
