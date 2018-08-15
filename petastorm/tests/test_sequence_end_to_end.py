@@ -126,7 +126,7 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
                         sequence=sequence) as reader:
                 expected_id = 0
 
-                for _ in range(10):
+                for i in range(10 - length):
                     actual = next(reader)
                     expected_sequence = {}
                     for key in range(sequence.length):
@@ -221,7 +221,7 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
 
         with temporary_directory() as tmp_dir:
             tmp_url = 'file://{}'.format(tmp_dir)
-            ids = [0, 3, 8, 10, 11, 20, 30]
+            ids = [0, 3, 8, 10, 11, 20, 23]
             fields = set(TestSchema.fields.values()) - {TestSchema.matrix_nullable}
             dataset_dicts = create_test_dataset(tmp_url, ids, num_files=1)
             sequence = Sequence(length=2, delta_threshold=4, timestamp_field='id')
@@ -251,8 +251,8 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
                         self.assertIsNotNone(field.get_shape().dims)
                 second_item = sess.run(readout)
                 _assert_equal_sequence(second_item, {
-                    0: TestSchema.make_namedtuple(**dataset_dicts[2]),
-                    1: TestSchema.make_namedtuple(**dataset_dicts[3]),
+                    0: TestSchema.make_namedtuple(**dataset_dicts[3]),
+                    1: TestSchema.make_namedtuple(**dataset_dicts[4]),
                 }, skip_fields=['matrix_nullable'])
 
                 readout = tf_tensors(reader)
@@ -261,8 +261,8 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
                         self.assertIsNotNone(field.get_shape().dims)
                 third_item = sess.run(readout)
                 _assert_equal_sequence(third_item, {
-                    0: TestSchema.make_namedtuple(**dataset_dicts[3]),
-                    1: TestSchema.make_namedtuple(**dataset_dicts[4]),
+                    0: TestSchema.make_namedtuple(**dataset_dicts[5]),
+                    1: TestSchema.make_namedtuple(**dataset_dicts[6]),
                 }, skip_fields=['matrix_nullable'])
 
                 with self.assertRaises(OutOfRangeError):
@@ -278,7 +278,7 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
 
         with temporary_directory() as tmp_dir:
             tmp_url = 'file://{}'.format(tmp_dir)
-            ids = [0, 3, 8, 10, 11, 20, 30]
+            ids = [0, 3, 8, 10, 11, 20, 23]
             dataset_dicts = create_test_dataset(tmp_url, ids, 1)
             sequence = Sequence(length=2, delta_threshold=4, timestamp_field='id')
             with Reader(tmp_url, shuffle_options=ShuffleOptions(False),
@@ -294,14 +294,14 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
 
                 second_item = next(reader)
                 np.testing.assert_equal(second_item, {
-                    0: TestSchema.make_namedtuple(**dataset_dicts[2]),
-                    1: TestSchema.make_namedtuple(**dataset_dicts[3]),
+                    0: TestSchema.make_namedtuple(**dataset_dicts[3]),
+                    1: TestSchema.make_namedtuple(**dataset_dicts[4]),
                 })
 
                 third_item = next(reader)
                 np.testing.assert_equal(third_item, {
-                    0: TestSchema.make_namedtuple(**dataset_dicts[3]),
-                    1: TestSchema.make_namedtuple(**dataset_dicts[4]),
+                    0: TestSchema.make_namedtuple(**dataset_dicts[5]),
+                    1: TestSchema.make_namedtuple(**dataset_dicts[6]),
                 })
 
                 with self.assertRaises(StopIteration):
