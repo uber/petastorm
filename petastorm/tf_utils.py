@@ -268,7 +268,7 @@ def _tf_tensors_sequence(reader, shuffling_queue_capacity, min_after_dequeue):
 def tf_tensors(reader, shuffling_queue_capacity=0, min_after_dequeue=0):
     """Bridges between python-only interface of the Reader (next(Reader)) and tensorflow world.
 
-    This function returns a named tuple of tensors form the dataset, e.g.
+    This function returns a named tuple of tensors from the dataset, e.g.
     >>> row_tensors
     >>> Out[2]: TestSchema_view(field_1=<tf.Tensor 'PyFunc:0' shape=() dtype=string>,
     >>>         field_2=<tf.Tensor 'StringSplit:1' shape=(?,) dtype=string>,

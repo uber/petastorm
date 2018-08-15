@@ -70,7 +70,7 @@ class Reader(object):
                        Any object from workers_pool package can be used (e.g. ProcessPool)
         :param num_epochs: An epoch is a single pass over all samples in the dataset. Setting num_epochs to 'None' will
                        result in an infinite number of epochs.
-        :param sequence: If it is set to a Sequence object, then will fetch will return a sequence, otherwise fetch
+        :param sequence: If it is set to a Sequence object, then fetch will return a sequence, otherwise fetch
                        will return an item.
         :param training_partition: An int denoting the partition number used for multi node training. Each node should
                        pass in a unique partition number in the range [0, num_training_partitions).
