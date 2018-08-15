@@ -21,7 +21,7 @@ python:
 install:
   # This will use requirements from setup.py and install them in the tavis's virtual environment
   # [tf] chooses to depend on cpu version of tensorflow (alternatively, could do [tf_gpu])
-  - pip install -e .[tf,pyarrow,opencv]
+  - pip install -e .[tf]
   # pyarrow was compiled against a newer version of numpy than we require so we need to upgrade it
   # (or optionally install pyarrow from source instead of through binaries)
   - pip install --upgrade numpy

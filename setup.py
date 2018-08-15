@@ -41,6 +41,7 @@ else:
 EXTRA_REQUIRE = {
     'tf': ['tensorflow>=1.4.0'],
     'tf_gpu': ['tensorflow-gpu>=1.4.0'],
+    'tv': ['torchvision>=0.2.1'],
 }
 
 packages = setuptools.find_packages()
