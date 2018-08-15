@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import decimal
 import logging
 import os
 import warnings
@@ -30,12 +31,33 @@ from petastorm.workers_pool.ventilator import ConcurrentVentilator
 logger = logging.getLogger(__name__)
 
 
+class ShuffleOptions(object):
+    shuffle_row_groups = None
+    shuffle_row_drop_partitions = None
+
+    def __init__(self, shuffle_row_groups=True, shuffle_row_drop_partitions=1):
+        """
+        Constructor.
+
+        :param shuffle_row_groups: Whether to shuffle row groups (the order in which full row groups are read)
+        :param shuffle_row_drop_partitions: This is is a positive integer which determines how many partitions to
+            break up a row group into for increased shuffling in exchange for worse performance (extra reads).
+            For example if you specify 2 each row group read will drop half of the rows within every row group and
+            read the remaining rows in separate reads. It is recommended to keep this number below the regular row
+            group size in order to not waste reads which drop all rows.
+        """
+        if not isinstance(shuffle_row_drop_partitions, int) or not shuffle_row_drop_partitions >= 1:
+            raise ValueError('shuffle_row_drop_ratio must be positive integer')
+        self.shuffle_row_groups = shuffle_row_groups
+        self.shuffle_row_drop_partitions = shuffle_row_drop_partitions
+
+
 class Reader(object):
     """Reads a unischema based dataset from a parquet file."""
 
-    def __init__(self, dataset_url, schema_fields=None, shuffle=True, predicate=None, rowgroup_selector=None,
+    def __init__(self, dataset_url, schema_fields=None, shuffle=None, predicate=None, rowgroup_selector=None,
                  reader_pool=None, num_epochs=1, sequence=None, training_partition=None, num_training_partitions=None,
-                 read_timeout_s=None, cache=None):
+                 read_timeout_s=None, cache=None, shuffle_options=None):
         """Initializes a reader object.
 
         :param schema_fields: list of unischema fields to subset, or None to read all fields.
@@ -61,6 +83,10 @@ class Reader(object):
                        the Reader will attempt to load these values from cache. Caching is useful when communication
                        to the main data store is either slow or expensive and the local machine has large enough storage
                        to store entire dataset (or a partition of a dataset if num_training_partitions is used).
+        :param shuffle_options : ShuffleOptions object to describe how to shuffle dataset (supercedes shuffle parameter)
+                       defaults to shuffling row groups but not to drop rows based on partitions.
+        :param shuffle: DEPRECATED boolean whether to shuffle the row group order. Use shuffle_row_groups in
+                       ShuffleOptions instead.
 
         By default, `NullCache` implementation
         """
@@ -77,6 +103,7 @@ class Reader(object):
         self.sequence = sequence
         cache = cache or NullCache()
         dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
+        self._workers_pool = reader_pool or ThreadPool(10)
 
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
         logger.debug('dataset_url: {}'.format(dataset_url))
@@ -98,13 +125,15 @@ class Reader(object):
         filtered_row_group_indexes, worker_predicate = self._filter_row_groups(dataset, row_groups, predicate,
                                                                                rowgroup_selector, training_partition,
                                                                                num_training_partitions)
-
         # 4. Create a rowgroup ventilator object
-        self._workers_pool = reader_pool or ThreadPool(10)
-        items_to_ventilate = [{'piece_index': piece_index, 'worker_predicate': worker_predicate}
-                              for piece_index in filtered_row_group_indexes]
-        ventilator = ConcurrentVentilator(self._workers_pool.ventilate, items_to_ventilate,
-                                          iterations=num_epochs, randomize_item_order=shuffle)
+        if shuffle_options is None:
+            if shuffle is None:
+                shuffle = True
+            else:
+                logger.warning('shuffle option is deprecated. Please use shuffle_options instead')
+            shuffle_options = ShuffleOptions(shuffle)
+        ventilator = self._create_ventilator(filtered_row_group_indexes, shuffle_options, num_epochs, worker_predicate)
+
         # 5. Start workers pool
         self._workers_pool.start(ReaderWorker,
                                  (dataset_url, self.schema, sequence, row_groups, cache, worker_predicate),
@@ -212,6 +241,21 @@ class Reader(object):
             filtered_row_group_indexes = list(range(len(row_groups)))
             worker_predicate = None
         return filtered_row_group_indexes, worker_predicate
+
+    def _create_ventilator(self, row_group_indexes, shuffle_options, num_epochs, worker_predicate):
+        items_to_ventilate = []
+        for piece_index in row_group_indexes:
+            for shuffle_row_drop_partition in range(shuffle_options.shuffle_row_drop_partitions):
+                items_to_ventilate.append(
+                    {'piece_index': piece_index,
+                     'worker_predicate': worker_predicate,
+                     'shuffle_row_drop_partition': (shuffle_row_drop_partition,
+                                                    shuffle_options.shuffle_row_drop_partitions)})
+
+        return ConcurrentVentilator(self._workers_pool.ventilate,
+                                    items_to_ventilate,
+                                    iterations=num_epochs,
+                                    randomize_item_order=shuffle_options.shuffle_row_groups)
 
     def stop(self):
         """Stops all worker threads/processes"""
