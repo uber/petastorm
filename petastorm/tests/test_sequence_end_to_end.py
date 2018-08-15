@@ -21,7 +21,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python.framework.errors_impl import OutOfRangeError
 
-from petastorm.reader import Reader
+from petastorm.reader import Reader, ShuffleOptions
 from petastorm.sequence import Sequence
 from petastorm.tests.tempdir import temporary_directory
 from petastorm.tests.test_common import create_test_dataset, TestSchema
@@ -85,8 +85,8 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
             fields = set(TestSchema.fields.values()) - {TestSchema.matrix_nullable}
             dataset_dicts = create_test_dataset(tmp_url, ids, num_files=1)
             sequence = Sequence(length=length, delta_threshold=10, timestamp_field='id')
-            reader = Reader(tmp_url, schema_fields=fields, shuffle=False, reader_pool=ThreadPool(1),
-                            sequence=sequence)
+            reader = Reader(tmp_url, schema_fields=fields, shuffle_options=ShuffleOptions(False),
+                            reader_pool=ThreadPool(1), sequence=sequence)
 
             readout_examples = tf_tensors(reader)
 
@@ -122,7 +122,8 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
             dataset_dicts = create_test_dataset(tmp_url, ids, num_files=1)
 
             sequence = Sequence(length=length, delta_threshold=10, timestamp_field='id')
-            with Reader(tmp_url, shuffle=False, reader_pool=ThreadPool(1), sequence=sequence) as reader:
+            with Reader(tmp_url, shuffle_options=ShuffleOptions(False), reader_pool=ThreadPool(1),
+                        sequence=sequence) as reader:
                 expected_id = 0
 
                 for _ in range(10):
@@ -141,7 +142,7 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
         dataset_dicts = self._dataset_dicts
         fields = set(TestSchema.fields.values()) - {TestSchema.matrix_nullable}
         sequence = Sequence(length=length, delta_threshold=10, timestamp_field='id')
-        reader = Reader(self._dataset_url, schema_fields=fields, shuffle=True, reader_pool=ThreadPool(1),
+        reader = Reader(self._dataset_url, schema_fields=fields, reader_pool=ThreadPool(1),
                         sequence=sequence)
 
         readout_examples = tf_tensors(reader)
@@ -170,7 +171,7 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
         than one and false is true."""
 
         sequence = Sequence(length=length, delta_threshold=10, timestamp_field='id')
-        with Reader(self._dataset_url, shuffle=True, reader_pool=DummyPool(), sequence=sequence) as reader:
+        with Reader(self._dataset_url, reader_pool=DummyPool(), sequence=sequence) as reader:
 
             for _ in range(10):
                 actual = next(reader)
@@ -224,8 +225,8 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
             fields = set(TestSchema.fields.values()) - {TestSchema.matrix_nullable}
             dataset_dicts = create_test_dataset(tmp_url, ids, num_files=1)
             sequence = Sequence(length=2, delta_threshold=4, timestamp_field='id')
-            reader = Reader(tmp_url, schema_fields=fields, shuffle=False, reader_pool=DummyPool(),
-                            sequence=sequence)
+            reader = Reader(tmp_url, schema_fields=fields, shuffle_options=ShuffleOptions(False),
+                            reader_pool=DummyPool(), sequence=sequence)
 
             # Sequences expected: (0, 3), (8, 10), (10, 11)
 
@@ -280,7 +281,8 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
             ids = [0, 3, 8, 10, 11, 20, 30]
             dataset_dicts = create_test_dataset(tmp_url, ids, 1)
             sequence = Sequence(length=2, delta_threshold=4, timestamp_field='id')
-            with Reader(tmp_url, shuffle=False, reader_pool=ThreadPool(1), sequence=sequence) as reader:
+            with Reader(tmp_url, shuffle_options=ShuffleOptions(False),
+                        reader_pool=ThreadPool(1), sequence=sequence) as reader:
 
                 # Sequences expected: (0, 3), (8, 10), (10, 11)
 
@@ -362,7 +364,7 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
         dataset_dicts = self._dataset_dicts
         sequence = Sequence(length=1, delta_threshold=0.012, timestamp_field='timestamp')
         fields = set(TestSchema.fields.values()) - {TestSchema.matrix_nullable}
-        reader = Reader(self._dataset_url, schema_fields=fields, shuffle=True, reader_pool=DummyPool(),
+        reader = Reader(self._dataset_url, schema_fields=fields, reader_pool=DummyPool(),
                         sequence=sequence)
 
         with tf.Session() as sess:
@@ -382,12 +384,29 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
     def test_sequence_length_1(self):
         """Test to verify that sequence generalize to support length 1"""
 
-        sequence = Sequence(length=1, delta_threshold=0.012, timestamp_field='timestamp')
-        with Reader(self._dataset_url, shuffle=True, reader_pool=DummyPool(), sequence=sequence) as reader:
+        sequence = Sequence(length=1, delta_threshold=0.012, timestamp_field='id')
+        with Reader(self._dataset_url, reader_pool=DummyPool(), sequence=sequence) as reader:
             for _ in range(10):
                 actual = next(reader)
                 expected = next(d for d in self._dataset_dicts if d['id'] == actual[0].id)
                 np.testing.assert_equal(TestSchema.make_namedtuple(**expected), actual[0])
+
+    def test_sequence_shuffle_drop_ratio(self):
+        sequence = Sequence(length=5, delta_threshold=10, timestamp_field='id')
+        with Reader(self._dataset_url,
+                    shuffle_options=ShuffleOptions(False),
+                    reader_pool=DummyPool(),
+                    sequence=sequence) as reader:
+            unshuffled = [row[0].id for row in reader]
+
+        with Reader(self._dataset_url,
+                    shuffle_options=ShuffleOptions(True, 3),
+                    reader_pool=DummyPool(),
+                    sequence=sequence) as reader:
+            shuffled = [row[0].id for row in reader]
+
+        self.assertEqual(len(unshuffled), len(shuffled))
+        self.assertNotEqual(unshuffled, shuffled)
 
 
 if __name__ == '__main__':
