@@ -25,11 +25,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data.dataloader import default_collate
-from torch.utils.data.sampler import RandomSampler, BatchSampler
 from torchvision import transforms
 
-from petastorm.reader import Reader
-from petastorm.tf_utils import tf_tensors
+from petastorm.reader import Reader, BatchReader
 from petastorm.workers_pool.thread_pool import ThreadPool
 
 
@@ -51,33 +49,10 @@ class Net(nn.Module):
         x = self.fc2(x)
         return F.log_softmax(x, dim=1)
 
-_image_transform = transforms.Compose([
-   transforms.ToTensor(),
-   transforms.Normalize((0.1307,), (0.3081,))
-])
-
-class BatchMaker(object):
-    def __init__(self, reader, batch_size, total_size):
-        self.reader = reader
-        self.batch_size = batch_size
-        self.total_size = total_size
-
-    def __len__(self):
-        return (self.total_size + self.batch_size - 1) // self.batch_size
-
-    def __iter__(self):
-        batch = []
-        for mnist in self.reader:
-            batch.append((_image_transform(mnist.image), mnist.digit))
-            if len(batch) == self.batch_size:
-                yield default_collate(batch)
-                batch = []
-        if len(batch) > 0:
-            yield default_collate(batch)
-
 def train(args, model, device, train_loader, optimizer, epoch):
     model.train()
-    for batch_idx, (data, target) in enumerate(train_loader):
+    for batch_idx, batch in enumerate(train_loader):
+        (data, target) = default_collate(batch)
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
         output = model(data)
@@ -86,25 +61,26 @@ def train(args, model, device, train_loader, optimizer, epoch):
         optimizer.step()
         if batch_idx % args.log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(data), train_loader.total_size,
+                epoch, batch_idx * len(data), len(train_loader.reader),
                 100. * batch_idx / len(train_loader), loss.item()))
 
-def test(args, model, device, test_loader):
+def test(args, model, device, test_loader, epoch):
     model.eval()
     test_loss = 0
     correct = 0
     with torch.no_grad():
-        for data, target in test_loader:
+        for batch in test_loader:
+            (data, target) = default_collate(batch)
             data, target = data.to(device), target.to(device)
             output = model(data)
             test_loss += F.nll_loss(output, target, reduction='sum').item() # sum up batch loss
             pred = output.max(1, keepdim=True)[1] # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
 
-    test_loss /= test_loader.total_size
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-        test_loss, correct, test_loader.total_size,
-        100. * correct / test_loader.total_size))
+    test_loss /= len(test_loader.reader)
+    print('\nTest Set Epoch {}: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+        epoch, test_loss, correct, len(test_loader.reader),
+        100. * correct / len(test_loader.reader)))
 
 def main():
     # Training settings
@@ -140,13 +116,20 @@ def main():
     model = Net().to(device)
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
 
+    def transform_row(mnist_row):
+        transform = transforms.Compose([
+           transforms.ToTensor(),
+           transforms.Normalize((0.1307,), (0.3081,))
+        ])
+        return (transform(mnist_row.image), mnist_row.digit)
+
     for epoch in range(1, args.epochs + 1):
         # Handle multiple epochs by reinstantiating reader per epoch
         with Reader('{}/train'.format(args.dataset_url), shuffle=True, reader_pool=ThreadPool(1), num_epochs=1) as reader:
-            train(args, model, device, BatchMaker(reader, args.batch_size, 60000), optimizer, epoch)
+            train(args, model, device, BatchReader(reader, args.batch_size, transform=transform_row), optimizer, epoch)
 
         with Reader('{}/test'.format(args.dataset_url), shuffle=True, reader_pool=ThreadPool(1), num_epochs=1) as reader:
-            test(args, model, device, BatchMaker(reader, args.batch_size, 10000))
+            test(args, model, device, BatchReader(reader, args.batch_size, transform=transform_row), epoch)
 
 
 if __name__ == '__main__':
