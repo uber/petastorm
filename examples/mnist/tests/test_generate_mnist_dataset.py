@@ -76,6 +76,7 @@ class TestGenerate(unittest.TestCase):
         np.set_printoptions(linewidth=200)
         print(np.array(list(im[0].getdata()), dtype=np.uint8).reshape(28, 28))
 
+    @unittest.skip('Checks that MNIST download via torch works')
     def test_mnist_download(self):
         """ Demonstrates that MNIST download works, using only the 'test' data. """
         o = download_mnist_data(self.mock_mnist_dir, train=False)
