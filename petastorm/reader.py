@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import decimal
 import logging
 import os
 import warnings
@@ -106,7 +105,7 @@ class Reader(object):
         self._workers_pool = reader_pool or ThreadPool(10)
 
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
-        logger.debug('dataset_url: {}'.format(dataset_url))
+        logger.debug('dataset_url: %s', dataset_url)
         resolver = FilesystemResolver(dataset_url)
         dataset = pq.ParquetDataset(resolver.parsed_dataset_url().path, filesystem=resolver.filesystem(),
                                     validate_schema=False)

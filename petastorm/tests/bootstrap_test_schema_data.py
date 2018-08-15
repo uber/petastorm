@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import print_function
 
 import getopt
 import sys
@@ -25,13 +26,13 @@ ROWS_COUNT = 10
 def usage_exit(msg=None):
     if msg:
         print(msg)
-    print(("""\
+    print("""\
 Usage: {} [options]
 
 Options:
   -h, --help           Show this message
   --output-dir <dir>   Path of directory where to write test data
-""".format(sys.argv[0])))
+""".format(sys.argv[0]))
     sys.exit(1)
 
 
@@ -42,7 +43,7 @@ def make_test_metadata(path):
     :param path: path to store the test dataset
     :return: resulting dataset as a dictionary
     """
-    assert len(path) > 0, 'Please supply a nonempty path to store test dataset.'
+    assert path, 'Please supply a nonempty path to store test dataset.'
     return create_test_dataset('file://{}'.format(path), range(ROWS_COUNT))
 
 
@@ -54,11 +55,11 @@ if __name__ == '__main__':
             if opt in ('-h', '--help'):
                 usage_exit()
             if opt in ('-o', '--output-dir'):
-                if len(value) > 0:
+                if value:
                     path = value
-        if path is None or len(path) == 0:
+        if path is None or not path == 0:
             usage_exit('Please supply an output directory.')
         else:
-            make_test_metadata(value)
+            make_test_metadata(path)
     except getopt.GetoptError as msg:
         usage_exit(msg)

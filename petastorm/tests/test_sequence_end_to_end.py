@@ -52,8 +52,7 @@ def _assert_equal_sequence(actual_sequence, expected_sequence, skip_fields):
 
             if isinstance(expected_field, Decimal):
                 np.testing.assert_equal(expected_field, Decimal(actual_field),
-                                        '{0} field is different'.format(field_name)
-                )
+                                        '{0} field is different'.format(field_name))
             else:
                 np.testing.assert_equal(expected_field, actual_field, '{0} field is different'.format(field_name))
 
@@ -126,7 +125,7 @@ class SequenceEndToEndDatasetToolkitTest(unittest.TestCase):
                         sequence=sequence) as reader:
                 expected_id = 0
 
-                for i in range(10 - length):
+                for _ in range(10 - length):
                     actual = next(reader)
                     expected_sequence = {}
                     for key in range(sequence.length):

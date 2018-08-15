@@ -96,7 +96,7 @@ def _schema_to_tf_dtypes_sequence(schema, sequence):
     """
     result = []
     # Iterate over each timestep
-    for key in range(sequence.length):
+    for _ in range(sequence.length):
         # Iterate over each field
         for field in schema.fields.values():
             result.append(_numpy_to_tf_dtypes(field.numpy_dtype))
@@ -237,7 +237,7 @@ def _tf_tensors_sequence(reader, shuffling_queue_capacity, min_after_dequeue):
     # TODO(yevgeni): implement a mechanism for signaling that we have no more data
     def dequeue_sample_impl(x):
         next_sample = next(reader)
-        assert (isinstance(next_sample, dict))
+        assert isinstance(next_sample, dict)
 
         # Create a dictionary, where each key is a timestep, and value is named tuple or dictionary.
         sequence = {}

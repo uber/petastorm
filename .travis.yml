@@ -27,7 +27,7 @@ install:
   - pip install --upgrade numpy
 
 script:
-  # Run unit tests
+  - pylint --rcfile=.pylintrc petastorm examples -f parseable -r n
   - pytest
 
 before_deploy:

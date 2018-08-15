@@ -26,9 +26,9 @@ KB = 2 ** 10
 
 def _recursive_folder_size(folder):
     folder_size = 0
-    for (path, dirs, files) in os.walk(folder):
-        for file in files:
-            filename = os.path.join(path, file)
+    for (path, _, files) in os.walk(folder):
+        for flename in files:
+            filename = os.path.join(path, flename)
             folder_size += os.path.getsize(filename)
     return folder_size
 

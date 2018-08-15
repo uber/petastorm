@@ -22,6 +22,7 @@ Schema defined in examples.imagenet.schema.ImagenetSchema will be used. The sche
 
 NOTE: Imagenet dataset needs to be requested and downloaded separately by the user.
 """
+from __future__ import division
 
 import argparse
 import glob
@@ -30,7 +31,7 @@ import os
 
 import cv2
 from pyspark.sql import SparkSession
-from six.moves.urllib.request import urlopen
+from six.moves.urllib.request import urlopen  # pylint: disable=import-error
 
 from examples.imagenet.schema import ImagenetSchema
 from petastorm.etl.dataset_metadata import materialize_dataset

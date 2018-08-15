@@ -42,38 +42,40 @@ class DataframeColumnCodec(object):
 
 
 class CompressedImageCodec(DataframeColumnCodec):
-    def __init__(self, format='png', quality=80):
+    def __init__(self, image_codec='png', quality=80):
         """CompressedImageCodec would compress/encompress images.
 
-        :param format: any format string supported by opencv. e.g. 'png', 'jpeg'
+        :param image_codec: any format string supported by opencv. e.g. 'png', 'jpeg'
         :param quality: used when using jpeg lossy compression
         """
-        self._format = '.' + format
+        self._image_codec = '.' + image_codec
         self._quality = quality
 
-    def encode(self, unischema_field, image):
+    def encode(self, unischema_field, array):
         """Encode the image using OpenCV"""
-        if unischema_field.numpy_dtype != image.dtype:
+        if unischema_field.numpy_dtype != array.dtype:
             raise ValueError("Unexpected type of {} feature, expected {}, got {}".format(
-                unischema_field.name, unischema_field.numpy_dtype, image.dtype
+                unischema_field.name, unischema_field.numpy_dtype, array.dtype
             ))
 
-        if not _is_compliant_shape(image.shape, unischema_field.shape):
+        if not _is_compliant_shape(array.shape, unischema_field.shape):
             raise ValueError("Unexpected dimensions of {} feature, expected {}, got {}".format(
-                unischema_field.name, unischema_field.shape, image.shape
+                unischema_field.name, unischema_field.shape, array.shape
             ))
 
-        if len(image.shape) == 2:
+        if len(array.shape) == 2:
             # Greyscale image
-            image_bgr_or_gray = image
-        elif len(image.shape) == 3 and image.shape[2] == 3:
+            image_bgr_or_gray = array
+        elif len(array.shape) == 3 and array.shape[2] == 3:
             # Convert RGB to BGR
-            image_bgr_or_gray = image[:, :, (2, 1, 0)]
+            image_bgr_or_gray = array[:, :, (2, 1, 0)]
         else:
             raise ValueError('Unexpected image dimensions. Supported dimensions are (H, W) or (H, W, 3). '
-                               'Got {}'.format(image.shape))
+                             'Got {}'.format(array.shape))
 
-        _, contents = cv2.imencode(self._format, image_bgr_or_gray, [int(cv2.IMWRITE_JPEG_QUALITY), self._quality])
+        _, contents = cv2.imencode(self._image_codec,
+                                   image_bgr_or_gray,
+                                   [int(cv2.IMWRITE_JPEG_QUALITY), self._quality])
         return bytearray(contents)
 
     def decode(self, unischema_field, value):
@@ -90,7 +92,7 @@ class CompressedImageCodec(DataframeColumnCodec):
             return image_rgb
         else:
             raise ValueError('Unexpected image dimensions. Supported dimensions are (H, W) or (H, W, 3). '
-                               'Got {}'.format(image_bgr_or_gray.shape))
+                             'Got {}'.format(image_bgr_or_gray.shape))
 
     def spark_dtype(self):
         return BinaryType()
@@ -135,17 +137,17 @@ class ScalarCodec(DataframeColumnCodec):
         """
         self._spark_type = spark_type
 
-    def encode(self, unischema_field, value):
+    def encode(self, unischema_field, array):
         if isinstance(self._spark_type, (ByteType, ShortType, IntegerType, LongType)):
-            return int(value)
+            return int(array)
         if isinstance(self._spark_type, StringType):
-            if not isinstance(value, str):
+            if not isinstance(array, str):
                 raise ValueError(
-                    'Expected a string value for field {}. Got type {}'.format(unischema_field.name, type(value)))
-        return value
+                    'Expected a string value for field {}. Got type {}'.format(unischema_field.name, type(array)))
+        return array
 
-    def decode(self, unischema_field, encoded):
-        return unischema_field.numpy_dtype(encoded)
+    def decode(self, unischema_field, value):
+        return unischema_field.numpy_dtype(value)
 
     def spark_dtype(self):
         return self._spark_type
