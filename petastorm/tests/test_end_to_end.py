@@ -35,7 +35,7 @@ from petastorm.workers_pool.thread_pool import ThreadPool
 
 # Number of rows in a fake dataset
 
-ROWS_COUNT = 1000
+ROWS_COUNT = 100
 
 SyntheticDataset = namedtuple('synthetic_dataset', ['url', 'data', 'path'])
 
@@ -131,13 +131,13 @@ def test_shuffle_drop_ratio(synthetic_dataset):
             ids = [row.id for row in reader]
         return ids
 
-    # Read ids twice without shuffle: assert we have the same array and all expected ids are in the array
+    # Read ids twice without shuffle: assert we have the same arra  y and all expected ids are in the array
     first_readout = readout_all_ids(False, 1)
     np.testing.assert_array_equal([r['id'] for r in synthetic_dataset.data], sorted(first_readout))
 
     # Test that the ids are increasingly not consecutive numbers as we increase the shuffle dropout
     prev_jumps_not_1 = 0
-    for shuffle_dropout in [2, 6, 11, 111]:
+    for shuffle_dropout in [2, 5, 8, 111]:
         readout = readout_all_ids(True, shuffle_dropout)
         assert len(first_readout) == len(readout)
         jumps_not_1 = np.sum(np.diff(readout) != 1)
@@ -323,20 +323,20 @@ def test_num_epochs_value_error(synthetic_dataset):
 
 def test_rowgroup_selector_integer_field(synthetic_dataset):
     """ Select row groups to read based on dataset index for integer field"""
-    with Reader(synthetic_dataset.url, rowgroup_selector=SingleIndexSelector(TestSchema.id.name, [2, 200]),
+    with Reader(synthetic_dataset.url, rowgroup_selector=SingleIndexSelector(TestSchema.id.name, [2, 18]),
                 reader_pool=DummyPool()) as reader:
         status = [False, False]
         count = 0
         for row in reader:
             if row.id == 2:
                 status[0] = True
-            if row.id == 200:
+            if row.id == 18:
                 status[1] = True
             count += 1
         # both id values in reader result
         assert all(status)
-        # read only 2 row groups, 100 rows per row group
-        assert 200 == count
+        # read only 2 row groups, 10 rows per row group
+        assert 20 == count
 
 
 def test_rowgroup_selector_string_field(synthetic_dataset):
@@ -349,7 +349,7 @@ def test_rowgroup_selector_string_field(synthetic_dataset):
             count += 1
         # Since we use artificial dataset all sensors have the same name,
         # so all row groups should be selected and all 1000 generated rows should be returned
-        assert 1000 == count
+        assert 100 == count
 
 
 def test_rowgroup_selector_wrong_index_name(synthetic_dataset):
