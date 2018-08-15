@@ -58,7 +58,7 @@ class ConcurrentVentilator(Ventilator):
     A ConcurrentVentilator handles ventilation of a pre-determined list of items to a worker pool and performs
     the ventilation concurrently in a separate thread. It will keep track of how many items are currently in the
     ventilation queue and prevent it from monotonically increasing in order to prevent boundless memory requirements.
-    It allows for multiple (or infinite) iterations of the ventilating the items, optionally randomizing the order of
+    It allows for multiple (or infinite) iterations of ventilating the items, optionally randomizing the order of
     items being ventilated at the start of each iteration.
     """
 
