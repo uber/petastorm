@@ -2,7 +2,10 @@
 
 [![Build Status](https://travis-ci.com/uber/petastorm.svg?branch=master)](https://travis-ci.com/uber/petastorm) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-Petastorm is a library enabling the use of Parquet storage from Tensorflow, Pytorch and other Python based ML training frameworks. Using datasets stored in Parquet from a deep-learning training/evaluation procedures bridges between a common big-data storage format and deep-learning frameworks making it simpler to combine them.
+Petastorm is a library enabling the use of Parquet storage from Tensorflow, Pytorch, and other Python-based ML training frameworks.
+From the perspective of deep-learning training and evaluation procedures, using datasets stored in Parquet bridges a common, big-data storage format with deep-learning frameworks, making it simpler to combine them.
+
+
 ## Install
 Petastorm defines tensorflow or tensorflow-gpu as an “extra” package. That way you can choose to depend on either a CPU or a GPU version of tensorflow, or not to install it at all.
 
@@ -19,13 +22,18 @@ Install with tensorflow GPU dependency:
 ```bash
 pip install petastorm[opencv, tf_gpu]
 ```
+
 ## Usage
 ### Generating a dataset
-A dataset created using petastorm is stored in Parquet format. On top of Parquet schema, petastorm also stores higher level schema information that makes multidimensional arrays into a native part of a petastorm dataset. 
+A dataset created using petastorm is stored in Parquet format.
+On top of a Parquet schema, petastorm also stores higher-level schema information that makes multidimensional arrays into a native part of a petastorm dataset. 
 
-Petastorm also supports extensible data codecs. These enables a user to use one of the standard data compressions (jpeg, png) or implement her own.
+Petastorm also supports extensible data codecs. These enable a user to use one of the standard data compressions (jpeg, png) or implement her own.
 
-Generating a dataset is done using pyspark. Pyspark natively supports Parquet format; easy to run on a single machine or on a Spark compute cluster. Here is a minimalistic example writing out a table with some random data.
+Generating a dataset is done using pyspark.
+Pyspark natively supports Parquet format, making it easy to run on a single machine or on a Spark compute cluster.
+Here is a minimalistic example writing out a table with some random data.
+
 
 ```python
 HelloWorldSchema = Unischema('HelloWorldSchema', [
@@ -94,8 +102,6 @@ with Reader('file:///some/localpath/a_dataset') as reader:
            print(session.run(row_tensors))
 ```
 
-TODO: Reading a dataset from pytorch
-
 `petastorm.Reader` is the main entry point for a user code that accesses the data from an ML framework such as Tensorflow or Pytorch. The reader has multiple features such as:
 - Selective column readout
 - Multiple parallelism strategies: thread, process, single-threaded (for debug)
@@ -104,6 +110,43 @@ TODO: Reading a dataset from pytorch
 - Shuffling
 - Partitioning for multi-GPU training
 - Local caching
+
+### Reading a dataset from pytorch
+As illustrated in examples/mnist/main.py, reading a petastorm dataset from pytorch can be done via the adapter class `petastorm.pytorch.DataLoader`,
+which allows custom pytorch collating function and transforms to be supplied.
+
+Be sure you have torch and torchvision installed:
+
+```bash
+pip install torchvision
+```
+
+The minimalist example below assumes the definition of a `Net` class and `train` and `test` functions, shown in the mnist example:
+
+```python
+import torch
+from petastorm.pytorch import DataLoader
+
+torch.manual_seed(1)
+device = torch.device('cpu')
+model = Net().to(device)
+optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.5)
+
+def _transform_row(mnist_row):
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+    ])
+    return (transform(mnist_row.image), mnist_row.digit)
+
+with DataLoader('file:///localpath/mnist/train', transform=_transform_row,
+                batch_size=64, shuffle_options=True, num_epochs=10) as train_loader:
+    train(model, device, train_loader, 10, optimizer, 0)
+with DataLoader('file:///localpath/mnist/test', transform=_transform_row,
+                batch_size=1000, shuffle_options=True, num_epochs=10) as test_loader:
+    test(model, device, test_loader)
+```
+
 
 # Troubleshooting
 See the [Troubleshooting](docs/troubleshooting.md) page and please submit the [ticket](https://github.com/uber/petastorm/issues/new)

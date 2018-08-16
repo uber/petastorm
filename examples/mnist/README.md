@@ -1,19 +1,19 @@
-== Setup ==
+# Petastorm Pytorch Example
+
+## Setup
 ```bash
-pip install -r requirements.txt
-PETASTORM_PATH=~/dev/petastorm  # replace with your path
-PYTHONPATH=${PETASTORM_PATH}
+PYTHONPATH=~/dev/petastorm  # replace with your petastorm install path
 ```
 
-== Generating a Petastorm Dataset from MNIST Data ==
+## Generating a Petastorm Dataset from MNIST Data
 
 This creates both a `train` and `test` petastorm datasets in `/home/${USER}/dev/datasets/mnist`:
 
 ```bash
-python generate_petastorm_mnist.py -d ~/dev/data/mnist -o file:///home/${USER}/dev/datasets/mnist
+python generate_petastorm_mnist.py -o file:///home/${USER}/dev/datasets/mnist
 ```
 
-== Pytorch training using the Petastormed MNIST Dataset ==
+## Pytorch training using the Petastormed MNIST Dataset
 
 This will invoke a training run using MNIST data in petastorm form,
 for 10 epochs, and show accuracy against the test set:
