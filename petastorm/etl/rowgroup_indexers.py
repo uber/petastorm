@@ -24,10 +24,6 @@ class SingleFieldIndexer(RowGroupIndexerBase):
 
     This indexer only indexes numpty strings, numpty integers, or numpy arrays of strings.
     """
-    class FieldType(Enum):
-        single_value = 1
-        list_of_values = 2
-
     def __init__(self, index_name, index_field):
         self._index_name = index_name
         self._column_name = index_field
@@ -65,28 +61,15 @@ class SingleFieldIndexer(RowGroupIndexerBase):
             raise ValueError("Cannot build index for empty rows, column '{}'"
                              .format(self._column_name))
 
-        def infer_field_type(field_val):
-            if isinstance(field_val, np.ndarray) and (np.issubdtype(field_val.dtype, np.string_) or
-                                                      np.issubdtype(field_val.dtype, np.unicode_)):
-                return self.FieldType.list_of_values
-            elif isinstance(field_column[0], np.string_) or \
-                 isinstance(field_column[0], np.unicode_) or \
-                 isinstance(field_column[0], np.integer):
-                return self.FieldType.single_value
-            else:
-                raise ValueError("Column '{}' has type '{}' not supported by SingleFieldIndexer".
-                                                                    format(self._column_name, str(field_val.dtype)))
-
-        field_type = None
         for field_val in field_column:
             if field_val is not None:
-                if field_type is None:
-                    field_type = infer_field_type(field_val)
-                if field_type == self.FieldType.single_value:
-                    self._index_data[field_val].add(piece_index)
-                if  field_type == self.FieldType.list_of_values:
+                # check type of field, if it is array index each array value,
+                # otherwise index field value directly
+                if isinstance(field_val, np.ndarray):
                     for val in field_val:
                         self._index_data[val].add(piece_index)
+                else:
+                    self._index_data[field_val].add(piece_index)
 
         return self._index_data
 

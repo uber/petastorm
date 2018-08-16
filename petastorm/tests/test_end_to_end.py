@@ -359,15 +359,15 @@ def test_rowgroup_selector_string_field(synthetic_dataset):
 def test_rowgroup_selector_nullable_array_field(synthetic_dataset):
     """ Select row groups to read based on dataset index for array field"""
     with Reader(synthetic_dataset.url,
-                rowgroup_selector=SingleIndexSelector(TestSchema.string_array_nullable.name, ['101']),
+                rowgroup_selector=SingleIndexSelector(TestSchema.string_array_nullable.name, ['100']),
                 reader_pool=DummyPool()) as reader:
         count = 0
         for row in reader:
             count += 1
         # This field contain id string, generated like this
-        #   None if id % 5 == 0 else np.asarray([], dtype=np.string_) if id % 3 == 0 else
+        #   None if id % 5 == 0 else np.asarray([], dtype=np.string_) if id % 4 == 0 else
         #   np.asarray([str(i+id) for i in xrange(2)], dtype=np.string_)
-        # hence '101' could be present in row id 99 as 99+1 and row id 100 as 100+0
+        # hence '100' could be present in row id 99 as 99+1 and row id 100 as 100+0
         # but row 100 will be skipped by ' None if id % 5 == 0' condition, so only one row group should be selected
         assert 100 == count
 
