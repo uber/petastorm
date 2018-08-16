@@ -60,9 +60,9 @@ def _randomize_row(id):
         TestSchema.empty_matrix_string.name: np.asarray([], dtype=np.string_),
         TestSchema.matrix_nullable.name: None,
         TestSchema.sensor_name.name: np.asarray(['test_sensor'], dtype=np.unicode_),
-        TestSchema.string_array_nullable: None if id % 5 == 0 else
-                                          np.asarray([], dtype=np.string_) if id % 10 == 0 else
-                                          np.asarray([str(i+id) for i in xrange(10)], dtype=np.string_),
+        TestSchema.string_array_nullable.name: None if id % 5 == 0 else
+                                               np.asarray([], dtype=np.string_) if id % 3 == 0 else
+                                               np.asarray([str(i+id) for i in xrange(2)], dtype=np.string_),
     }
     return row_dict
 
@@ -112,7 +112,8 @@ def create_test_dataset(tmp_url, rows, num_files=2, spark=None):
     # Create list of objects to build row group indexes
     indexers = [
         SingleFieldIndexer(TestSchema.id.name, TestSchema.id.name),
-        SingleFieldIndexer(TestSchema.sensor_name.name, TestSchema.sensor_name.name)
+        SingleFieldIndexer(TestSchema.sensor_name.name, TestSchema.sensor_name.name),
+        SingleFieldIndexer(TestSchema.string_array_nullable.name, TestSchema.string_array_nullable.name),
     ]
     build_rowgroup_index(tmp_url, spark_context, indexers)
 
