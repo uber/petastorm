@@ -11,11 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import io
 import unittest
 from decimal import Decimal
 
 import numpy as np
+import pytest
+from PIL import Image
 from pyspark.sql.types import StringType, ByteType, ShortType, IntegerType, LongType, DecimalType
 
 from petastorm.codecs import NdarrayCodec, ScalarCodec, CompressedImageCodec
@@ -131,6 +133,41 @@ class CompressedImageCodecsTest(unittest.TestCase):
         with self.assertRaises(ValueError) as e:
             codec.encode(field, np.zeros((100, 200), dtype=np.uint16))
         self.assertTrue('Unexpected type' in str(e.exception))
+
+    def test_cross_coding(self):
+        """Encode using PIL and decode using opencv. Previously had an error with channel ordering. This test
+        covers this issue for the future """
+        for size in [(300, 200), (300, 200, 3)]:
+            dtype = np.uint8
+            expected_image = np.random.randint(0, np.iinfo(dtype).max, size=size, dtype=np.uint8)
+            codec = CompressedImageCodec('png')
+            field = UnischemaField(name='field_image', numpy_dtype=dtype, shape=size, codec=codec,
+                                   nullable=False)
+
+            encoded = Image.fromarray(expected_image)
+            bytes = io.BytesIO()
+            encoded.save(bytes, format='PNG')
+
+            actual_image = codec.decode(field, bytes.getvalue())
+            np.testing.assert_array_equal(expected_image, actual_image)
+            self.assertEqual(expected_image.dtype, actual_image.dtype)
+
+    def test_invalid_image_size(self):
+        """Codec can encode only (H, W) and (H, W, 3) images"""
+        codec = CompressedImageCodec('png')
+
+        field = UnischemaField(name='field_image', numpy_dtype=np.uint8, shape=(10, 10, 3), codec=codec,
+                               nullable=False)
+
+        with pytest.raises(ValueError):
+            codec.encode(field, np.zeros((10,), dtype=np.uint8))
+
+        with pytest.raises(ValueError):
+            codec.encode(field, np.zeros((10, 10, 2), dtype=np.uint8))
+
+        with pytest.raises(ValueError):
+            codec.encode(field, np.zeros((10, 10, 10, 10), dtype=np.uint8))
+
 
 if __name__ == '__main__':
     # Delegate to the test framework.

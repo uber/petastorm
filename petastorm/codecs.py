@@ -63,13 +63,34 @@ class CompressedImageCodec(DataframeColumnCodec):
                 unischema_field.name, unischema_field.shape, image.shape
             ))
 
-        _, contents = cv2.imencode(self._format, image, [int(cv2.IMWRITE_JPEG_QUALITY), self._quality])
+        if len(image.shape) == 2:
+            # Greyscale image
+            image_bgr_or_gray = image
+        elif len(image.shape) == 3 and image.shape[2] == 3:
+            # Convert RGB to BGR
+            image_bgr_or_gray = image[:, :, (2, 1, 0)]
+        else:
+            raise ValueError('Unexpected image dimensions. Supported dimensions are (H, W) or (H, W, 3). '
+                               'Got {}'.format(image.shape))
+
+        _, contents = cv2.imencode(self._format, image_bgr_or_gray, [int(cv2.IMWRITE_JPEG_QUALITY), self._quality])
         return bytearray(contents)
 
     def decode(self, unischema_field, value):
         """Decode the image using OpenCV"""
-        numpy_image = cv2.imdecode(np.frombuffer(value, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
-        return numpy_image
+
+        # cv returns a BGR or grayscale image. Convert to RGB (unless a grayscale image).
+        image_bgr_or_gray = cv2.imdecode(np.frombuffer(value, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+        if len(image_bgr_or_gray.shape) == 2:
+            # Greyscale image
+            return image_bgr_or_gray
+        elif len(image_bgr_or_gray.shape) == 3 and image_bgr_or_gray.shape[2] == 3:
+            # Convert BGR to RGB (opencv assumes BGR)
+            image_rgb = image_bgr_or_gray[:, :, (2, 1, 0)]
+            return image_rgb
+        else:
+            raise ValueError('Unexpected image dimensions. Supported dimensions are (H, W) or (H, W, 3). '
+                               'Got {}'.format(image_bgr_or_gray.shape))
 
     def spark_dtype(self):
         return BinaryType()
