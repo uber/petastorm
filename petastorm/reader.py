@@ -127,11 +127,11 @@ class Reader(object):
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
         logger.debug('dataset_url: %s', dataset_url)
         resolver = FilesystemResolver(dataset_url)
-        dataset = pq.ParquetDataset(resolver.parsed_dataset_url().path, filesystem=resolver.filesystem(),
-                                    validate_schema=False)
+        self.dataset = pq.ParquetDataset(resolver.parsed_dataset_url().path, filesystem=resolver.filesystem(),
+                                         validate_schema=False)
 
         # Get a unischema stored in the dataset metadata.
-        stored_schema = dataset_metadata.get_schema(dataset)
+        stored_schema = dataset_metadata.get_schema(self.dataset)
 
         # Make a schema view (a view is a Unischema containing only a subset of fields
         # Will raise an exception if invalid schema fields are in schema_fields
@@ -139,10 +139,10 @@ class Reader(object):
         self.schema = stored_schema.create_schema_view(fields) if fields else stored_schema
 
         # 2. Get a list of all groups
-        row_groups = dataset_metadata.load_row_groups(dataset)
+        row_groups = dataset_metadata.load_row_groups(self.dataset)
 
         # 3. Filter rowgroups
-        filtered_row_group_indexes, worker_predicate = self._filter_row_groups(dataset, row_groups, predicate,
+        filtered_row_group_indexes, worker_predicate = self._filter_row_groups(self.dataset, row_groups, predicate,
                                                                                rowgroup_selector, training_partition,
                                                                                num_training_partitions)
         # 4. Create a rowgroup ventilator object
@@ -304,6 +304,13 @@ class Reader(object):
         # Since warnings are generally ignored in av, print out a logging warning as well
         logger.warn(warning_message)
         return self._workers_pool.get_results(timeout=timeout)
+
+    def __len__(self):
+        if not self.dataset.metadata or self.dataset.metadata.num_row_groups == 0:
+            raise NotImplementedError("__len__ is only implemented "
+                                      "if dataset has parquet summary files "
+                                      "with row group information")
+        return self.dataset.metadata.num_rows
 
     def __iter__(self):
         return self

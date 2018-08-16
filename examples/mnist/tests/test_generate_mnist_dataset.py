@@ -12,18 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-import shutil
-import tempfile
-import unittest
-
 import numpy as np
+import pytest
 
 from examples.mnist.generate_petastorm_mnist import download_mnist_data, \
     mnist_data_to_petastorm_dataset
 
 # Set test image sizes and number of mock nouns/variants
-MOCK_IMAGE_SIZE = (28, 28, 1)
+MOCK_IMAGE_SIZE = (28, 28)
+MOCK_IMAGE_3DIM_SIZE = (28, 28, 1)
 MOCK_IMAGE_COUNT = 5
 
 
@@ -36,8 +33,13 @@ class MockDataObj(object):
         return self.a
 
 
-def _mock_mnist_data(temp_dir):
-    """Creates a mock directory with 5 noun-id directores and 3 variants of the noun images. Random images are used."""
+@pytest.fixture(scope="session")
+def mock_mnist_data():
+    """
+    Creates a mock data dictionary with train and test sets, each containing 5 mock pairs:
+
+        ``(random images, random digit)``.
+    """
     bogus_data = {
         'train': [],
         'test': []
@@ -45,52 +47,40 @@ def _mock_mnist_data(temp_dir):
 
     for dset, data in bogus_data.items():
         for i in range(MOCK_IMAGE_COUNT):
-            pair = (MockDataObj(np.random.randint(0, 255, size=MOCK_IMAGE_SIZE, dtype=np.uint8)), np.random.randint(0, 255))
+            pair = (MockDataObj(np.random.randint(0, 255, size=MOCK_IMAGE_SIZE, dtype=np.uint8)), np.random.randint(0, 9))
             data.append(pair)
 
     return bogus_data
 
 
-class TestGenerate(unittest.TestCase):
+def test_image_to_numpy(mock_mnist_data):
+    """ Show output of image object reshaped as numpy array """
+    im = mock_mnist_data['train'][0]
+    print(im)
+    print(im[1])
+    assert im[1] >= 0 and im[1] <= 9
 
-    @classmethod
-    def setUpClass(cls):
-        cls.mock_mnist_dir = tempfile.mkdtemp()
-        cls.mock_output_dir = tempfile.mkdtemp()
-        cls.mnist_data = _mock_mnist_data(cls.mock_mnist_dir)
+    print(im[0].getdata())
+    assert im[0].getdata().shape == MOCK_IMAGE_SIZE
 
-    @classmethod
-    def tearDownClass(cls):
-        if os.path.exists(cls.mock_mnist_dir):
-            shutil.rmtree(cls.mock_mnist_dir)
-        if os.path.exists(cls.mock_output_dir):
-            shutil.rmtree(cls.mock_output_dir)
-
-    @unittest.skip('Demonstrates image conversion to numpty array')
-    def test_image_to_numpy(self):
-        """ Show output of image object reshaped as numpy array """
-        im = self.mnist_data['train'][0]
-        print(im)
-        print(im[1])
-        print(list(im[0].getdata()))
-        np.set_printoptions(linewidth=200)
-        print(np.array(list(im[0].getdata()), dtype=np.uint8).reshape(28, 28))
-
-    @unittest.skip('Checks that MNIST download via torch works')
-    def test_mnist_download(self):
-        """ Demonstrates that MNIST download works, using only the 'test' data. """
-        o = download_mnist_data(self.mock_mnist_dir, train=False)
-        self.assertEqual(10000, len(o))
-        self.assertEqual(o[0][1], 7)
-        self.assertEqual(o[len(o)-1][1], 6)
-
-    def test_generate(self):
-        # Use parquet_files_count to speed up the test
-        mnist_data_to_petastorm_dataset(self.mock_mnist_dir,
-                                        'file://' + self.mock_output_dir,
-                                        spark_master='local[3]', parquet_files_count=1,
-                                        mnist_data=self.mnist_data)
+    np.set_printoptions(linewidth=200)
+    reshaped = np.array(list(im[0].getdata()), dtype=np.uint8).reshape(MOCK_IMAGE_3DIM_SIZE)
+    print(reshaped)
+    assert reshaped.shape == MOCK_IMAGE_3DIM_SIZE
 
 
-if __name__ == '__main__':
-    unittest.main()
+# This test requires torch import, but that's causing dlopen to fail in Travis run. :(
+# So skipping it for now
+def _dont_test_mnist_download(tmpdir):
+    """ Demonstrates that MNIST download works, using only the 'test' data. Assumes data does not change often. """
+    o = download_mnist_data(tmpdir, train=False)
+    assert 10000 == len(o)
+    assert o[0][1] == 7
+    assert o[len(o)-1][1] == 6
+
+
+def test_generate(mock_mnist_data, tmpdir):
+    # Using parquet_files_count to speed up the test
+    mnist_data_to_petastorm_dataset(tmpdir, 'file://{}'.format(tmpdir),
+                                    spark_master='local[3]', parquet_files_count=1,
+                                    mnist_data=mock_mnist_data)

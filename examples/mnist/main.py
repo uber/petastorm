@@ -14,9 +14,9 @@
 
 ###
 # Adapted to petastorm dataset using original contents from
-# pytorch/examples/mnist/main.py .
+# https://github.com/pytorch/examples/mnist/main.py .
 ###
-from __future__ import print_function
+from __future__ import division, print_function
 import argparse
 import os
 import sys
@@ -24,13 +24,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.utils.data.dataloader import default_collate
-from torch.utils.data.sampler import RandomSampler, BatchSampler
 from torchvision import transforms
 
-from petastorm.reader import Reader
-from petastorm.tf_utils import tf_tensors
-from petastorm.workers_pool.thread_pool import ThreadPool
+from petastorm.pytorch import DataLoader
 
 
 class Net(nn.Module):
@@ -42,6 +38,7 @@ class Net(nn.Module):
         self.fc1 = nn.Linear(320, 50)
         self.fc2 = nn.Linear(50, 10)
 
+    # pylint: disable=arguments-differ
     def forward(self, x):
         x = F.relu(F.max_pool2d(self.conv1(x), 2))
         x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
@@ -51,31 +48,7 @@ class Net(nn.Module):
         x = self.fc2(x)
         return F.log_softmax(x, dim=1)
 
-_image_transform = transforms.Compose([
-   transforms.ToTensor(),
-   transforms.Normalize((0.1307,), (0.3081,))
-])
-
-class BatchMaker(object):
-    def __init__(self, reader, batch_size, total_size):
-        self.reader = reader
-        self.batch_size = batch_size
-        self.total_size = total_size
-
-    def __len__(self):
-        return (self.total_size + self.batch_size - 1) // self.batch_size
-
-    def __iter__(self):
-        batch = []
-        for mnist in self.reader:
-            batch.append((_image_transform(mnist.image), mnist.digit))
-            if len(batch) == self.batch_size:
-                yield default_collate(batch)
-                batch = []
-        if len(batch) > 0:
-            yield default_collate(batch)
-
-def train(args, model, device, train_loader, optimizer, epoch):
+def train(model, device, train_loader, log_interval, optimizer, epoch):
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
@@ -84,12 +57,12 @@ def train(args, model, device, train_loader, optimizer, epoch):
         loss = F.nll_loss(output, target)
         loss.backward()
         optimizer.step()
-        if batch_idx % args.log_interval == 0:
+        if batch_idx % log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(data), train_loader.total_size,
+                epoch, batch_idx * len(data), len(train_loader.reader),
                 100. * batch_idx / len(train_loader), loss.item()))
 
-def test(args, model, device, test_loader):
+def test(model, device, test_loader):
     model.eval()
     test_loss = 0
     correct = 0
@@ -101,10 +74,23 @@ def test(args, model, device, test_loader):
             pred = output.max(1, keepdim=True)[1] # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
 
-    test_loss /= test_loader.total_size
+    test_loss /= len(test_loader.reader)
     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-        test_loss, correct, test_loader.total_size,
-        100. * correct / test_loader.total_size))
+        test_loss, correct, len(test_loader.reader),
+        100. * correct / len(test_loader.reader)))
+
+def _transform_row(mnist_row):
+    # For this example, the images are stored as simpler ndarray (28,28), but the
+    # training network expects 3-dim images, hence the additional lambda transform.
+    transform = transforms.Compose([
+        transforms.Lambda(lambda nd: nd.reshape(28, 28, 1)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+    ])
+    # In addition, the petastorm pytorch DataLoader does not distinguish the notion of
+    # data or target transform, but that actually gives the user more flexibility
+    # to make the desired partial transform, as shown here.
+    return (transform(mnist_row.image), mnist_row.digit)
 
 def main():
     # Training settings
@@ -120,6 +106,8 @@ def main():
                         help='input batch size for testing (default: 1000)')
     parser.add_argument('--epochs', type=int, default=10, metavar='N',
                         help='number of epochs to train (default: 10)')
+    parser.add_argument('--all-epochs', action='store_true', default=False,
+                        help='train all epochs before testing accuracy/loss')
     parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
                         help='learning rate (default: 0.01)')
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M',
@@ -135,18 +123,28 @@ def main():
 
     torch.manual_seed(args.seed)
 
-    device = torch.device("cuda" if use_cuda else "cpu")
+    device = torch.device('cuda' if use_cuda else 'cpu')
 
     model = Net().to(device)
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
 
-    for epoch in range(1, args.epochs + 1):
-        # Handle multiple epochs by reinstantiating reader per epoch
-        with Reader('{}/train'.format(args.dataset_url), shuffle=True, reader_pool=ThreadPool(1), num_epochs=1) as reader:
-            train(args, model, device, BatchMaker(reader, args.batch_size, 60000), optimizer, epoch)
-
-        with Reader('{}/test'.format(args.dataset_url), shuffle=True, reader_pool=ThreadPool(1), num_epochs=1) as reader:
-            test(args, model, device, BatchMaker(reader, args.batch_size, 10000))
+    if args.all_epochs:
+        # Run training across all the epochs before testing for accuracy
+        with DataLoader('{}/train'.format(args.dataset_url), transform=_transform_row,
+                        batch_size=args.batch_size, shuffle_options=True, num_epochs=args.epochs) as train_loader:
+            train(model, device, train_loader, args.log_interval, optimizer, 0)
+        with DataLoader('{}/test'.format(args.dataset_url), transform=_transform_row,
+                        batch_size=args.test_batch_size, shuffle_options=True, num_epochs=args.epochs) as test_loader:
+            test(model, device, test_loader)
+    else:
+        # Test for accuracy each epoch
+        for epoch in range(1, args.epochs + 1):
+            with DataLoader('{}/train'.format(args.dataset_url), transform=_transform_row,
+                            batch_size=args.batch_size, shuffle_options=True, num_epochs=1) as train_loader:
+                train(model, device, train_loader, args.log_interval, optimizer, epoch)
+            with DataLoader('{}/test'.format(args.dataset_url), transform=_transform_row,
+                            batch_size=args.test_batch_size, shuffle_options=True, num_epochs=1) as test_loader:
+                test(model, device, test_loader)
 
 
 if __name__ == '__main__':
