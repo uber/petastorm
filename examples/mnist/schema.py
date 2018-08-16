@@ -21,5 +21,5 @@ from petastorm.unischema import Unischema, UnischemaField
 MnistSchema = Unischema('MnistSchema', [
     UnischemaField('idx', np.int_, (), ScalarCodec(IntegerType()), False),
     UnischemaField('digit', np.int_, (), ScalarCodec(IntegerType()), False),
-    UnischemaField('image', np.uint8, (28, 28, 1), NdarrayCodec(), False),
+    UnischemaField('image', np.uint8, (28, 28), NdarrayCodec(), False),
 ])
