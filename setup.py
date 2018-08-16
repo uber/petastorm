@@ -53,4 +53,7 @@ setup(
     description='petastorm library TODO: more info',
     license='Apache 2.0',
     extras_require=EXTRA_REQUIRE,
+    entry_points = {
+        'console_scripts': ['petastorm-generate-metadata=petastorm.etl.petastorm_generate_metadata:main'],
+    },
 )
