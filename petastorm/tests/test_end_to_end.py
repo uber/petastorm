@@ -348,7 +348,7 @@ def test_rowgroup_selector_string_field(synthetic_dataset):
         for row in reader:
             count += 1
         # Since we use artificial dataset all sensors have the same name,
-        # so all row groups should be selected and all 1000 generated rows should be returned
+        # so all row groups should be selected and all 100 generated rows should be returned
         assert 100 == count
 
 def test_rowgroup_selector_nullable_array_field(synthetic_dataset):
@@ -364,7 +364,7 @@ def test_rowgroup_selector_nullable_array_field(synthetic_dataset):
         #   np.asarray([str(i+id) for i in xrange(2)], dtype=np.string_)
         # hence '100' could be present in row id 99 as 99+1 and row id 100 as 100+0
         # but row 100 will be skipped by ' None if id % 5 == 0' condition, so only one row group should be selected
-        assert 100 == count
+        assert 10 == count
 
 
 def test_rowgroup_selector_wrong_index_name(synthetic_dataset):
