@@ -14,7 +14,7 @@
 
 import numpy as np
 from collections import defaultdict
-
+from enum import Enum
 from petastorm.etl import RowGroupIndexerBase
 
 
@@ -24,6 +24,9 @@ class SingleFieldIndexer(RowGroupIndexerBase):
 
     This indexer only indexes numpty strings, numpty integers, or numpy arrays of strings.
     """
+    class FieldType(Enum):
+        single_value = 1
+        list_of_values = 2
 
     def __init__(self, index_name, index_field):
         self._index_name = index_name
@@ -62,21 +65,26 @@ class SingleFieldIndexer(RowGroupIndexerBase):
             raise ValueError("Cannot build index for empty rows, column '{}'"
                              .format(self._column_name))
 
-        index_single_val = isinstance(field_column[0], np.string_) or \
-                           isinstance(field_column[0], np.unicode_) or \
-                           isinstance(field_column[0], np.integer)
-        index_list_of_vals = (isinstance(field_column[0], np.ndarray) and
-                              (len(field_column[0]) == 0 or
-                               isinstance(field_column[0][0], np.string_) or
-                               isinstance(field_column[0][0], np.unicode_)))
-        if index_single_val == index_list_of_vals:
-            raise ValueError("Cannot build index for '{}' column".format(self._column_name))
+        def infer_field_type(field_val):
+            if isinstance(field_val, np.ndarray) and (np.issubdtype(field_val.dtype, np.string_) or
+                                                      np.issubdtype(field_val.dtype, np.unicode_)):
+                return self.FieldType.list_of_values
+            elif isinstance(field_column[0], np.string_) or \
+                 isinstance(field_column[0], np.unicode_) or \
+                 isinstance(field_column[0], np.integer):
+                return self.FieldType.single_value
+            else:
+                raise ValueError("Column '{}' has type '{}' not supported by SingleFieldIndexer".
+                                                                    format(self._column_name, str(field_val.dtype)))
 
+        field_type = None
         for field_val in field_column:
             if field_val is not None:
-                if index_single_val:
+                if field_type is None:
+                    field_type = infer_field_type(field_val)
+                if field_type == self.FieldType.single_value:
                     self._index_data[field_val].add(piece_index)
-                if index_list_of_vals:
+                if  field_type == self.FieldType.list_of_values:
                     for val in field_val:
                         self._index_data[val].add(piece_index)
 
