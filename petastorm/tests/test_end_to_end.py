@@ -11,21 +11,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import json
-import os
 import random
 from collections import namedtuple
 from shutil import rmtree, copytree
 
 import numpy as np
 import pytest
-from pyarrow import parquet as pq
 from pyspark.sql import SparkSession
 from pyspark.sql.types import LongType, ShortType, StringType
 
 from petastorm.codecs import ScalarCodec
-from petastorm.etl.dataset_metadata import ROW_GROUPS_PER_FILE_KEY, \
-    ROW_GROUPS_PER_FILE_KEY_ABSOLUTE_PATHS
 from petastorm.local_disk_cache import LocalDiskCache
 from petastorm.reader import Reader, ShuffleOptions
 from petastorm.selectors import SingleIndexSelector
