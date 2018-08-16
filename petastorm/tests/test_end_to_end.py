@@ -366,7 +366,6 @@ def test_rowgroup_selector_nullable_array_field(synthetic_dataset):
         # but row 100 will be skipped by ' None if id % 5 == 0' condition, so only one row group should be selected
         assert 10 == count
 
-
 def test_rowgroup_selector_wrong_index_name(synthetic_dataset):
     """ Attempt to select row groups to based on wrong dataset index,
         Reader should raise exception
