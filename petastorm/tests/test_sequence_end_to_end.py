@@ -21,7 +21,8 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python.framework.errors_impl import OutOfRangeError
 
-from petastorm.reader import Reader, ShuffleOptions
+from petastorm.reader import Reader
+from petastorm.shuffle_options import ShuffleOptions
 from petastorm.sequence import Sequence
 from petastorm.tests.tempdir import temporary_directory
 from petastorm.tests.test_common import create_test_dataset, TestSchema

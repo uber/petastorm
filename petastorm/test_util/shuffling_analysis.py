@@ -19,7 +19,8 @@ from pyspark.sql.types import LongType
 
 from petastorm.codecs import ScalarCodec, NdarrayCodec
 from petastorm.etl.dataset_metadata import materialize_dataset
-from petastorm.reader import Reader, ShuffleOptions
+from petastorm.reader import Reader
+from petastorm.shuffle_options import ShuffleOptions
 from petastorm.unischema import Unischema, UnischemaField, dict_to_spark_row
 from petastorm.workers_pool.dummy_pool import DummyPool
 

@@ -20,6 +20,7 @@ from petastorm import __version__
 PACKAGE_NAME = 'petastorm'
 
 REQUIRED_PACKAGES = [
+    'dill',
     'diskcache>=3.0.0',
     'numpy>=1.13.3',
     'pandas>=0.19.0',
