@@ -19,7 +19,7 @@ import numpy as np
 class ReaderMock(object):
     """Reads a unischema based mock dataset."""
 
-    def __init__(self, schema, schema_data_generator, sequence=None):
+    def __init__(self, schema, schema_data_generator, ngram=None):
         """Initializes a reader object.
 
         :param schema: unischema instance
@@ -28,9 +28,9 @@ class ReaderMock(object):
         """
         self.schema = schema
         self.schema_data_generator = schema_data_generator
-        if sequence is not None:
+        if ngram is not None:
             raise ValueError('Sequence argument not supported for ReaderMock')
-        self.sequence = sequence
+        self.ngram = ngram
 
     def fetch(self):
         """
