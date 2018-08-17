@@ -70,7 +70,7 @@ def build_rowgroup_index(dataset_url, spark_context, indexers):
     piece_info_rdd = spark_context.parallelize(piece_info_list, min(len(piece_info_list), PARALLEL_SLICE_NUM))
     indexer_rdd = piece_info_rdd.map(lambda piece_info: _index_columns(piece_info, dataset_url, partitions,
                                                                        indexers, schema))
-    indexer_list = indexer_rdd.reduce(lambda indexers1, indexers2: _combine_indexers(indexers1, indexers2))
+    indexer_list = indexer_rdd.reduce(_combine_indexers)
 
     indexer_dict = {indexer.index_name: indexer for indexer in indexer_list}
     serialized_indexers = pickle.dumps(indexer_dict, pickle.HIGHEST_PROTOCOL)
@@ -106,7 +106,7 @@ def _index_columns(piece_info, dataset_url, partitions, indexers, schema):
 
     # Decode columns values
     decoded_rows = [utils.decode_row(row, schema) for row in column_rows]
-    if len(decoded_rows) == 0:
+    if not decoded_rows:
         raise ValueError('Cannot build index with empty decoded_rows, columns: {}, partitions: {}'
                          .format(column_names, partitions))
 

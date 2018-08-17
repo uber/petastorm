@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import division
+
 from decimal import Decimal
 from functools import partial
 
@@ -44,12 +46,12 @@ TestSchema = Unischema('TestSchema', [
 ])
 
 
-def _randomize_row(id):
+def _randomize_row(id_num):
     """Returns a row with random values"""
     row_dict = {
-        TestSchema.id.name: id,
-        TestSchema.id2.name: id % 2,
-        TestSchema.partition_key.name: 'p_{}'.format(int(id / 10)),
+        TestSchema.id.name: id_num,
+        TestSchema.id2.name: id_num % 2,
+        TestSchema.partition_key.name: 'p_{}'.format(int(id_num / 10)),
         TestSchema.python_primitive_uint8.name: np.random.randint(0, 255),
         TestSchema.image_png.name: np.random.randint(0, 255, _DEFAULT_IMAGE_SIZE).astype(np.uint8),
         TestSchema.matrix.name: np.random.randint(0, 255, _DEFAULT_IMAGE_SIZE).astype(np.float32),

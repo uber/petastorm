@@ -42,7 +42,7 @@ def make_test_metadata(path):
     :param path: path to store the test dataset
     :return: resulting dataset as a dictionary
     """
-    assert len(path) > 0, 'Please supply a nonempty path to store test dataset.'
+    assert path, 'Please supply a nonempty path to store test dataset.'
     return create_test_dataset('file://{}'.format(path), range(ROWS_COUNT))
 
 
@@ -54,11 +54,11 @@ if __name__ == '__main__':
             if opt in ('-h', '--help'):
                 usage_exit()
             if opt in ('-o', '--output-dir'):
-                if len(value) > 0:
+                if value:
                     path = value
-        if path is None or len(path) == 0:
+        if path is None or not path == 0:
             usage_exit('Please supply an output directory.')
         else:
-            make_test_metadata(value)
+            make_test_metadata(path)
     except getopt.GetoptError as msg:
         usage_exit(msg)

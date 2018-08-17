@@ -11,10 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import division
 
 import hashlib
-import math
-from decimal import Decimal
 
 import numpy as np
 from pyarrow import parquet as pq
@@ -58,6 +57,7 @@ class ReaderWorker(WorkerBase):
         # all Worker constructors are serialized
         self._dataset = None
 
+    # pylint: disable=arguments-differ
     def process(self, piece_index, worker_predicate, shuffle_row_drop_partition):
         """Main worker function. Loads and returns all rows matching the predicate from a rowgroup
 
@@ -200,7 +200,7 @@ class ReaderWorker(WorkerBase):
         if self._sequence:
             # If we have a sequence we need to take elements from the next partition to build the sequence
             next_partition_indexes = np.where(partition_indexes >= this_partition + 1)
-            if len(next_partition_indexes[0]) > 0:
+            if next_partition_indexes[0]:
                 next_partition_to_add = next_partition_indexes[0][0:self._sequence.length - 1]
                 partition_indexes[next_partition_to_add] = this_partition
 

@@ -11,13 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import division
+
 from functools import partial
 
 import numpy as np
-from pyspark.sql import SparkSession
 from pyspark.sql.types import LongType
 
-from petastorm.codecs import ScalarCodec, NdarrayCodec
+from petastorm.codecs import ScalarCodec
 from petastorm.etl.dataset_metadata import materialize_dataset
 from petastorm.reader import Reader, ShuffleOptions
 from petastorm.unischema import Unischema, UnischemaField, dict_to_spark_row
@@ -72,7 +73,7 @@ def compute_correlation_distribution(dataset_url,
         unshuffled = [row[id_column] for row in reader]
 
     correlations = []
-    for i in range(num_corr_samples):
+    for _ in range(num_corr_samples):
         with Reader(dataset_url,
                     shuffle_options=shuffle_options) as reader:
             shuffled = [row[id_column] for row in reader]

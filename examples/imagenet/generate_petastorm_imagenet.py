@@ -22,6 +22,7 @@ Schema defined in examples.imagenet.schema.ImagenetSchema will be used. The sche
 
 NOTE: Imagenet dataset needs to be requested and downloaded separately by the user.
 """
+from __future__ import division
 
 import argparse
 import glob

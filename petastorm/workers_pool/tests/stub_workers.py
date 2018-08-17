@@ -18,8 +18,9 @@ from petastorm.workers_pool.worker_base import WorkerBase
 
 
 class CoeffMultiplierWorker(WorkerBase):
-    def process(self, message, value):
+    def process(self, *args, **kargs):
         # If value is a list, generate multiple outputs
+        value = kargs['value']
         if isinstance(value, list):
             for v in value:
                 self.publish_func(v * self.args['coeff'])
@@ -27,24 +28,19 @@ class CoeffMultiplierWorker(WorkerBase):
             self.publish_func(value * self.args['coeff'])
 
 
-class AdditionWorker(WorkerBase):
-    def process(self, x, y):
-        self.publish_func(x + y)
-
-
 class IdentityWorker(WorkerBase):
-    def process(self, item):
-        self.publish_func(item)
+    def process(self, *args, **kargs):
+        self.publish_func(kargs['item'])
 
 
 class WorkerIdGeneratingWorker(WorkerBase):
-    def process(self):
+    def process(self, *args, **kargs):
         self.publish_func(self.worker_id)
 
 
 class WorkerMultiIdGeneratingWorker(WorkerBase):
-    def process(self):
-        for i in range(2):
+    def process(self, *args, **kargs):
+        for _ in range(2):
             self.publish_func(self.worker_id)
 
 
@@ -56,12 +52,12 @@ class SleepyDoingNothingWorker(WorkerIdGeneratingWorker):
         super(SleepyDoingNothingWorker, self).__init__(worker_id, publish_func, args)
         self._sleep = args
 
-    def process(self):
+    def process(self, *args, **kargs):
         sleep(self._sleep)
 
 
 class SleepyWorkerIdGeneratingWorker(WorkerIdGeneratingWorker):
-    def process(self):
+    def process(self, *args, **kargs):
         sleep(1)
         super(SleepyWorkerIdGeneratingWorker, self).process()
 

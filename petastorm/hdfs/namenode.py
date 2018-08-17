@@ -55,10 +55,10 @@ class HdfsNamenodeResolver(object):
                     break
             if hadoop_configuration is None:
                 # ensures at least an empty dict so no further checks required in member functions
-                logger.warn('Unable to populate a sensible HadoopConfiguration for namenode resolution!\n'
-                            'Path of last environment var ({}) tried [{}]. Please set up your Hadoop and \n'
-                            'define environment variable HADOOP_HOME to point to your Hadoop installation path.'
-                            .format(self._hadoop_env, self._hadoop_path))
+                logger.warning('Unable to populate a sensible HadoopConfiguration for namenode resolution!\n'
+                               'Path of last environment var (%s) tried [%s]. Please set up your Hadoop and \n'
+                               'define environment variable HADOOP_HOME to point to your Hadoop installation path.',
+                               self._hadoop_env, self._hadoop_path)
                 hadoop_configuration = {}
         self._hadoop_configuration = hadoop_configuration
 
@@ -69,7 +69,7 @@ class HdfsNamenodeResolver(object):
                 in_dict[prop.find('name').text] = prop.find('value').text
         except ET.ParseError as ex:
             logger.error(
-                'Unable to obtain a root node for the supplied XML in {}: {}'.format(xml_path, ex))
+                'Unable to obtain a root node for the supplied XML in %s: %s', xml_path, ex)
 
     def _build_error_string(self, msg):
         if self._hadoop_path is not None:
@@ -289,7 +289,7 @@ class HdfsConnector(object):
                 except ArrowIOError:
                     # This is an expected error if the namenode we are trying to connect to is
                     # not the active one
-                    logger.debug('Attempted to connect to namenode {} but failed'.format(host))
+                    logger.debug('Attempted to connect to namenode %s but failed', host)
         # It is a problem if we cannot connect to either of the namenodes when tried back-to-back,
         # so better raise an error.
         raise HdfsConnectError("Unable to connect to HDFS cluster!")
