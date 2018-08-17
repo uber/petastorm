@@ -1,6 +1,6 @@
 # Petastorm
 
-[![Build Status](https://travis-ci.org/uber/petastorm.svg?branch=master)](https://travis-ci.org/uber/petastorm) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Build Status](https://travis-ci.com/uber/petastorm.svg?branch=master)](https://travis-ci.com/uber/petastorm) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 Petastorm is a library enabling the use of Parquet storage from Tensorflow, Pytorch and other Python based ML training frameworks. Using datasets stored in Parquet from a deep-learning training/evaluation procedures bridges between a common big-data storage format and deep-learning frameworks making it simpler to combine them.
 ## Install
