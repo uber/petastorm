@@ -21,8 +21,8 @@ from tempfile import mkdtemp
 import numpy as np
 import tensorflow as tf
 
+from petastorm.ngram import NGram
 from petastorm.reader import Reader
-from petastorm.sequence import Sequence
 from petastorm.tests.test_common import create_test_dataset, TestSchema
 from petastorm.tf_utils import _sanitize_field_tf_types, _numpy_to_tf_dtypes, \
     _schema_to_tf_dtypes, tf_tensors
@@ -98,7 +98,7 @@ class TestTfTensors(unittest.TestCase):
         # Remove everything created with "get_temp_dir"
         rmtree(cls._dataset_dir)
 
-    def _read_from_tf_tensors(self, count, shuffling_queue_capacity, min_after_dequeue, sequence):
+    def _read_from_tf_tensors(self, count, shuffling_queue_capacity, min_after_dequeue, ngram):
         """Used by several test cases. Reads a 'count' rows using reader.
 
         The reader is configured without row-group shuffling and guarantees deterministic order of rows up to the
@@ -109,9 +109,10 @@ class TestTfTensors(unittest.TestCase):
 
         # Nullable fields can not be read by tensorflow (what would be the dimension of a tensor for null data?)
         fields = set(TestSchema.fields.values()) - {TestSchema.matrix_nullable}
+        schema_fields = (fields if ngram is None else ngram)
 
-        reader = Reader(self._dataset_url, schema_fields=fields, shuffle=False, reader_pool=DummyPool(),
-                        sequence=sequence)
+        reader = Reader(schema_fields=schema_fields, dataset_url=self._dataset_url, reader_pool=DummyPool(),
+                        shuffle=False)
 
         row_tensors = tf_tensors(reader, shuffling_queue_capacity=shuffling_queue_capacity,
                                  min_after_dequeue=min_after_dequeue)
@@ -168,7 +169,7 @@ class TestTfTensors(unittest.TestCase):
         """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
         data"""
         rows_data, row_tensors = \
-            self._read_from_tf_tensors(count=30, shuffling_queue_capacity=0, min_after_dequeue=0, sequence=None)
+            self._read_from_tf_tensors(count=30, shuffling_queue_capacity=0, min_after_dequeue=0, ngram=None)
 
         # Make sure we have static shape info for all fields
         self._assert_all_tensors_have_shape(row_tensors)
@@ -177,13 +178,13 @@ class TestTfTensors(unittest.TestCase):
     def test_shuffling_queue(self):
         """Read data without tensorflow shuffling queue and with it. Check the the order is deterministic within
         unshuffled read and is random with shuffled read"""
-        unshuffled_1, _ = self._read_from_tf_tensors(30, shuffling_queue_capacity=0, min_after_dequeue=0, sequence=None)
-        unshuffled_2, _ = self._read_from_tf_tensors(30, shuffling_queue_capacity=0, min_after_dequeue=0, sequence=None)
+        unshuffled_1, _ = self._read_from_tf_tensors(30, shuffling_queue_capacity=0, min_after_dequeue=0, ngram=None)
+        unshuffled_2, _ = self._read_from_tf_tensors(30, shuffling_queue_capacity=0, min_after_dequeue=0, ngram=None)
 
         shuffled_1, shuffled_1_row_tensors = \
-            self._read_from_tf_tensors(30, shuffling_queue_capacity=10, min_after_dequeue=0, sequence=None)
+            self._read_from_tf_tensors(30, shuffling_queue_capacity=10, min_after_dequeue=0, ngram=None)
         shuffled_2, _ = \
-            self._read_from_tf_tensors(30, shuffling_queue_capacity=10, min_after_dequeue=0, sequence=None)
+            self._read_from_tf_tensors(30, shuffling_queue_capacity=10, min_after_dequeue=0, ngram=None)
 
         # Make sure we have static shapes and the data matches reference data (important since a different code path
         # is executed within tf_tensors when shuffling is specified
@@ -199,44 +200,52 @@ class TestTfTensors(unittest.TestCase):
         self.assertNotEqual([f.id for f in shuffled_1],
                             [f.id for f in shuffled_2])
 
-    def test_simple_sequence_read_tensorflow(self):
-        """Read a single sequence. Make sure all shapes are set and the data read matches reference data"""
-        SEQUENCE_LENGTH = 3
+    def test_simple_ngram_read_tensorflow(self):
+        """Read a single ngram. Make sure all shapes are set and the data read matches reference data"""
+        fields = {
+            0: [TestSchema.id],
+            1: [TestSchema.id],
+            2: [TestSchema.id]
+        }
 
         # Expecting delta between ids to be 1. Setting 1.5 as upper bound
-        sequence = Sequence(length=SEQUENCE_LENGTH, delta_threshold=1.5, timestamp_field='id')
+        ngram = NGram(fields=fields, delta_threshold=1.5, timestamp_field=TestSchema.id)
 
-        sequences, row_tensors_seq = \
-            self._read_from_tf_tensors(30, shuffling_queue_capacity=0, min_after_dequeue=0, sequence=sequence)
+        ngrams, row_tensors_seq = \
+            self._read_from_tf_tensors(30, shuffling_queue_capacity=0, min_after_dequeue=0, ngram=ngram)
 
         for row_tensors in row_tensors_seq.values():
             self._assert_all_tensors_have_shape(row_tensors)
 
-        for one_sequence_dict in sequences:
-            self._assert_expected_rows_data(one_sequence_dict.values())
+        for one_ngram_dict in ngrams:
+            self._assert_expected_rows_data(one_ngram_dict.values())
 
-    def test_shuffling_queue_with_sequences(self):
-        """Read data without tensorflow shuffling queue and with it (no rowgroup shuffling). Read sequences
+    def test_shuffling_queue_with_ngrams(self):
+        """Read data without tensorflow shuffling queue and with it (no rowgroup shuffling). Read ngrams
         Check the the order is deterministic within unshuffled read and is random with shuffled read"""
-        SEQUENCE_LENGTH = 3
+        fields = {
+            0: [TestSchema.id],
+            1: [TestSchema.id],
+            2: [TestSchema.id]
+        }
 
         # Expecting delta between ids to be 1. Setting 1.5 as upper bound
-        sequence = Sequence(length=SEQUENCE_LENGTH, delta_threshold=1.5, timestamp_field='id')
+        ngram = NGram(fields=fields, delta_threshold=1.5, timestamp_field=TestSchema.id)
         unshuffled_1, _ = self._read_from_tf_tensors(30, shuffling_queue_capacity=0, min_after_dequeue=0,
-                                                     sequence=sequence)
+                                                     ngram=ngram)
         unshuffled_2, _ = self._read_from_tf_tensors(30, shuffling_queue_capacity=0, min_after_dequeue=0,
-                                                     sequence=sequence)
+                                                     ngram=ngram)
 
-        shuffled_1, shuffled_1_sequence = \
-            self._read_from_tf_tensors(30, shuffling_queue_capacity=10, min_after_dequeue=0, sequence=sequence)
+        shuffled_1, shuffled_1_ngram = \
+            self._read_from_tf_tensors(30, shuffling_queue_capacity=10, min_after_dequeue=0, ngram=ngram)
         shuffled_2, _ = \
-            self._read_from_tf_tensors(30, shuffling_queue_capacity=10, min_after_dequeue=0, sequence=sequence)
+            self._read_from_tf_tensors(30, shuffling_queue_capacity=10, min_after_dequeue=0, ngram=ngram)
 
-        # shuffled_1_sequence is a dictionary of named tuple indexed by time:
+        # shuffled_1_ngram is a dictionary of named tuple indexed by time:
         # {0: (tensor, tensor, tensor, ...),
         #  1: (tensor, tensor, tensor, ...),
         #  ...}
-        for row_tensor in shuffled_1_sequence.values():
+        for row_tensor in shuffled_1_ngram.values():
             self._assert_all_tensors_have_shape(row_tensor)
 
         # shuffled_1 is a list of dictionaries of named tuples indexed by time:
@@ -247,11 +256,11 @@ class TestTfTensors(unittest.TestCase):
         #  1: (tensor, tensor, tensor, ...),
         #  ...},...
         # ]
-        for one_sequence_dict in shuffled_1:
-            self._assert_expected_rows_data(one_sequence_dict.values())
+        for one_ngram_dict in shuffled_1:
+            self._assert_expected_rows_data(one_ngram_dict.values())
 
-        def flatten(list_of_sequences):
-            return [row for seq in list_of_sequences for row in seq.values()]
+        def flatten(list_of_ngrams):
+            return [row for seq in list_of_ngrams for row in seq.values()]
 
         self.assertEqual([f.id for f in flatten(unshuffled_1)],
                          [f.id for f in flatten(unshuffled_2)])

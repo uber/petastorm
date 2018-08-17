@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import decimal
+import collections
 import logging
 import os
 import warnings
@@ -23,6 +23,7 @@ from petastorm import PredicateBase, RowGroupSelectorBase
 from petastorm.cache import NullCache
 from petastorm.etl import dataset_metadata, rowgroup_indexing
 from petastorm.fs_utils import FilesystemResolver
+from petastorm.ngram import NGram
 from petastorm.reader_worker import ReaderWorker
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.thread_pool import ThreadPool
@@ -60,9 +61,11 @@ class Reader(object):
                  read_timeout_s=None, cache=None, shuffle_options=None):
         """Initializes a reader object.
 
-        :param schema_fields: list of unischema fields to subset, or None to read all fields.
         :param dataset_url: an filepath or a url to a parquet directory,
                        e.g. 'hdfs://some_hdfs_cluster/user/yevgeni/parquet8', or '/tmp/mydataset'
+        :param schema_fields:
+            Either list of unischema fields to subset, or None to read all fields.
+            OR an NGram object, then it will return an NGram of the specified properties.
         :param predicate: instance of predicate object to filter rows to be returned by reader.
         :param rowgroup_selector: instance of row group selector object to select row groups to be read
         :param reader_pool: parallelization pool. ThreadPool(10) (10 threads) is used by default.
@@ -70,8 +73,7 @@ class Reader(object):
                        Any object from workers_pool package can be used (e.g. ProcessPool)
         :param num_epochs: An epoch is a single pass over all samples in the dataset. Setting num_epochs to 'None' will
                        result in an infinite number of epochs.
-        :param sequence: If it is set to a Sequence object, then will fetch will return a sequence, otherwise fetch
-                       will return an item.
+        :param sequence: This is deprecated. To use sequence/ngram, please supply the argument in schema_fields instead.
         :param training_partition: An int denoting the partition number used for multi node training. Each node should
                        pass in a unique partition number in the range [0, num_training_partitions).
                        num_training_partitions must be supplied as well.
@@ -99,8 +101,17 @@ class Reader(object):
         #    c. partition: used to get a subset of data for distributed training
         # 4. Create a rowgroup ventilator object
         # 5. Start workers pool
+        if not (isinstance(schema_fields, collections.Iterable) or isinstance(schema_fields, NGram)
+                or schema_fields is None):
+            raise ValueError("""Fields must be either None, an iterable collection of Unischema fields or an NGram
+            object.""")
 
-        self.sequence = sequence
+        if sequence is not None:
+            raise ValueError("""'sequence' argument of Reader object is deprecated. Please pass an NGram instance to
+            'schema_fields' argument instead.""")
+
+        self.ngram = schema_fields if isinstance(schema_fields, NGram) else None
+
         cache = cache or NullCache()
         dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
         self._workers_pool = reader_pool or ThreadPool(10)
@@ -116,7 +127,8 @@ class Reader(object):
 
         # Make a schema view (a view is a Unischema containing only a subset of fields
         # Will raise an exception if invalid schema fields are in schema_fields
-        self.schema = stored_schema.create_schema_view(schema_fields) if schema_fields else stored_schema
+        fields = schema_fields if isinstance(schema_fields, collections.Iterable) else None
+        self.schema = stored_schema.create_schema_view(fields) if fields else stored_schema
 
         # 2. Get a list of all groups
         row_groups = dataset_metadata.load_row_groups(dataset)
@@ -136,7 +148,7 @@ class Reader(object):
 
         # 5. Start workers pool
         self._workers_pool.start(ReaderWorker,
-                                 (dataset_url, self.schema, sequence, row_groups, cache, worker_predicate),
+                                 (dataset_url, self.schema, self.ngram, row_groups, cache, worker_predicate),
                                  ventilator=ventilator)
         self._read_timeout_s = read_timeout_s
 
