@@ -62,23 +62,15 @@ class SingleFieldIndexer(RowGroupIndexerBase):
             raise ValueError("Cannot build index for empty rows, column '{}'"
                              .format(self._column_name))
 
-        index_single_val = isinstance(field_column[0], np.string_) or \
-                           isinstance(field_column[0], np.unicode_) or \
-                           isinstance(field_column[0], np.integer)
-        index_list_of_vals = (isinstance(field_column[0], np.ndarray) and
-                              (len(field_column[0]) == 0 or
-                               isinstance(field_column[0][0], np.string_) or
-                               isinstance(field_column[0][0], np.unicode_)))
-        if index_single_val == index_list_of_vals:
-            raise ValueError("Cannot build index for '{}' column".format(self._column_name))
-
         for field_val in field_column:
             if field_val is not None:
-                if index_single_val:
-                    self._index_data[field_val].add(piece_index)
-                if index_list_of_vals:
+                # check type of field, if it is array index each array value,
+                # otherwise index field value directly
+                if isinstance(field_val, np.ndarray):
                     for val in field_val:
                         self._index_data[val].add(piece_index)
+                else:
+                    self._index_data[field_val].add(piece_index)
 
         return self._index_data
 
