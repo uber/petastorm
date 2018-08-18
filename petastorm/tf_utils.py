@@ -87,18 +87,19 @@ def _schema_to_tf_dtypes(schema):
     return [_numpy_to_tf_dtypes(f.numpy_dtype) for f in schema.fields.values()]
 
 
-def _schema_to_tf_dtypes_sequence(schema, sequence):
+def _schema_to_tf_dtypes_ngram(schema, ngram):
     """
-    Returns schema as a list of tensorflow dtypes for a sequence.
+    Returns schema as a list of tensorflow dtypes for a ngram.
     :param schema: The schema.
-    :param sequence: The sequence.
-    :return: tensorflow dtypes for a sequence.
+    :param ngram: The ngram.
+    :return: tensorflow dtypes for a ngram.
     """
     result = []
     # Iterate over each timestep
-    for _ in range(sequence.length):
-        # Iterate over each field
-        for field in schema.fields.values():
+    for key in sorted(ngram.fields.keys()):
+        # Get schema at that timestep
+        new_schema = ngram.get_schema_at_timestep(schema=schema, timestep=key)
+        for field in new_schema.fields.values():
             result.append(_numpy_to_tf_dtypes(field.numpy_dtype))
     return result
 
@@ -132,34 +133,39 @@ def _flatten(data):
     :return: The flattened dictionary.
     """
     flattened = OrderedDict()
-    for key in data:
+    for index, key in enumerate(sorted(data.keys())):
         data_dict = data[key]._asdict()
         for subkey in data_dict:
-            encoded_key = subkey + '_' + str(key)
+            encoded_key = subkey + '_' + str(index)
             flattened[encoded_key] = data_dict[subkey]
 
     FlattenedTuple = namedtuple('flattened', list(flattened.keys()))
     return FlattenedTuple(**flattened)
 
 
-def make_namedtuple_tf_sequence(unischema, sequence, *args, **kargs):
+def make_namedtuple_tf_ngram(unischema, ngram, *args, **kargs):
     """
     Creates a dictionary of timestep keys and namedtuple values from args and kargs.
 
-    :param sequence: The sequence definition.
+    :param ngram: The ngram definition.
     :param args: args.
     :param kargs: kargs
     :return: A dictionary of timestep keys and namedtuple values.
     """
-    sequence_result = {}
-    for timestep in range(sequence.length):
+
+    ngram_result = {}
+    previous_args_end = 0
+    for timestep in range(min(ngram.fields.keys()), max(ngram.fields.keys()) + 1):
         # For each timestep iteration, mark the args and kargs for that timestep and create
         # a namedtuple from them.
-        fields_length = len(unischema._fields)
-        args_timestep = args[timestep * fields_length:(timestep + 1) * fields_length]
+        current_field_names = ngram.get_field_names_at_timestep(timestep)
+        new_schema = ngram.get_schema_at_timestep(schema=unischema, timestep=timestep)
+        new_args_end = previous_args_end + len(current_field_names)
+        args_timestep = args[previous_args_end:new_args_end]
+        previous_args_end = new_args_end
         kargs_timestep = (kargs[str(timestep)] if str(timestep) in kargs else {})
-        sequence_result[timestep] = unischema._get_namedtuple()(*args_timestep, **kargs_timestep)
-    return sequence_result
+        ngram_result[timestep] = new_schema._get_namedtuple()(*args_timestep, **kargs_timestep)
+    return ngram_result
 
 
 def _set_shape(schema, fields_as_dict):
@@ -198,8 +204,8 @@ def _shuffling_queue(shuffling_queue_capacity, min_after_dequeue, dtypes, fields
     return fields_as_list
 
 
-def _tf_tensors_nonsequence(reader, shuffling_queue_capacity, min_after_dequeue):
-    """A tensorflow data adapter for non sequences. Return value is a named tuple with tensorflow tensors supplying
+def _tf_tensors_nonngram(reader, shuffling_queue_capacity, min_after_dequeue):
+    """A tensorflow data adapter for non ngrams. Return value is a named tuple with tensorflow tensors supplying
     the data directly into a Tensoflow graph. See `tf_tensor` documentation for input/output arguments meaning."""
 
     # TODO(yevgeni): implement a mechanism for signaling that we have no more data
@@ -230,8 +236,8 @@ def _tf_tensors_nonsequence(reader, shuffling_queue_capacity, min_after_dequeue)
     return reader.schema.make_namedtuple_tf(**fields_as_dict)
 
 
-def _tf_tensors_sequence(reader, shuffling_queue_capacity, min_after_dequeue):
-    """A tensorflow data adapter for sequences. Return value is a named tuple with tensorflow tensors supplying
+def _tf_tensors_ngram(reader, shuffling_queue_capacity, min_after_dequeue):
+    """A tensorflow data adapter for ngrams. Return value is a named tuple with tensorflow tensors supplying
     the data directly into a Tensoflow graph. See `tf_tensor` documentation for input/output arguments meaning."""
 
     # TODO(yevgeni): implement a mechanism for signaling that we have no more data
@@ -240,21 +246,21 @@ def _tf_tensors_sequence(reader, shuffling_queue_capacity, min_after_dequeue):
         assert isinstance(next_sample, dict)
 
         # Create a dictionary, where each key is a timestep, and value is named tuple or dictionary.
-        sequence = {}
+        ngram = {}
         for timestep in next_sample:
-            sequence[timestep] = _sanitize_field_tf_types(next_sample[timestep])
+            ngram[timestep] = _sanitize_field_tf_types(next_sample[timestep])
 
-        return _flatten(sequence)
+        return _flatten(ngram)
 
     fields_as_list = tf.py_func(dequeue_sample_impl, [tf.constant(1)],
-                                _schema_to_tf_dtypes_sequence(reader.schema, reader.sequence))
+                                _schema_to_tf_dtypes_ngram(reader.schema, reader.ngram))
 
     if shuffling_queue_capacity > 0:
         # Pass py_func output via shuffling queue if requested.
         fields_as_list = _shuffling_queue(shuffling_queue_capacity, min_after_dequeue,
-                                          _schema_to_tf_dtypes_sequence(reader.schema, reader.sequence), fields_as_list)
+                                          _schema_to_tf_dtypes_ngram(reader.schema, reader.ngram), fields_as_list)
 
-    fields_as_namedtuple = make_namedtuple_tf_sequence(reader.schema, reader.sequence, *fields_as_list)
+    fields_as_namedtuple = make_namedtuple_tf_ngram(reader.schema, reader.ngram, *fields_as_list)
 
     # We change the key to str format here in order to be able to use ** later to expand the dictionary as kargs.
     fields_as_dict = {
@@ -262,10 +268,10 @@ def _tf_tensors_sequence(reader, shuffling_queue_capacity, min_after_dequeue):
     for timestep in fields_as_dict:
         _set_shape(reader.schema, fields_as_dict[timestep])
 
-    return make_namedtuple_tf_sequence(reader.schema, reader.sequence, **fields_as_dict)
+    return make_namedtuple_tf_ngram(reader.schema, reader.ngram, **fields_as_dict)
 
 
-def tf_tensors(reader, shuffling_queue_capacity=0, min_after_dequeue=0):
+def  tf_tensors(reader, shuffling_queue_capacity=0, min_after_dequeue=0):
     """Bridges between python-only interface of the Reader (next(Reader)) and tensorflow world.
 
     This function returns a named tuple of tensors form the dataset, e.g.
@@ -274,7 +280,7 @@ def tf_tensors(reader, shuffling_queue_capacity=0, min_after_dequeue=0):
     >>>         field_2=<tf.Tensor 'StringSplit:1' shape=(?,) dtype=string>,
     >>>         field_3=<tf.Tensor 'PyFunc:2' shape=() dtype=int64>, ...)
 
-    If the reader was created with `sequence=Sequence(...)` parameter, then a dictionary of named tuples is returned
+    If the reader was created with `ngram=NGram(...)` parameter, then a dictionary of named tuples is returned
     (indexed by time)
     >>> row_tensors
     >>> Out[6]:
@@ -294,16 +300,16 @@ def tf_tensors(reader, shuffling_queue_capacity=0, min_after_dequeue=0):
     :param min_after_dequeue: If shuffling_queue_capacity>0, this value is passed to the underlying
     tf.RandomShuffleQueue
 
-    :return: If no sequence reading is used, the function will return a named tuple with tensors that are populated
-    from the underlying dataset. If sequence reading is enabled, a dictionary of named tuples of tensors is returned.
+    :return: If no ngram reading is used, the function will return a named tuple with tensors that are populated
+    from the underlying dataset. If ngram reading is enabled, a dictionary of named tuples of tensors is returned.
     The dictionary is indexed by time.
     """
 
-    # Sequence enabled and disabled code is quite different. It appears to be cleaner to simply go in orthogonal
+    # NGram enabled and disabled code is quite different. It appears to be cleaner to simply go in orthogonal
     # execution paths.
-    if reader.sequence:
-        result = _tf_tensors_sequence(reader, shuffling_queue_capacity, min_after_dequeue)
+    if reader.ngram:
+        result = _tf_tensors_ngram(reader, shuffling_queue_capacity, min_after_dequeue)
     else:
-        result = _tf_tensors_nonsequence(reader, shuffling_queue_capacity, min_after_dequeue)
+        result = _tf_tensors_nonngram(reader, shuffling_queue_capacity, min_after_dequeue)
 
     return result

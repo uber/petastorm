@@ -49,7 +49,7 @@ class ReaderWorker(WorkerBase):
 
         self._dataset_url_parsed = urlparse(args[0])
         self._schema = args[1]
-        self._sequence = args[2]
+        self._ngram = args[2]
         self._split_pieces = args[3]
         self._local_cache = args[4]
 
@@ -105,8 +105,8 @@ class ReaderWorker(WorkerBase):
 
         all_cols_as_tuples = [self._schema.make_namedtuple(**row) for row in all_cols]
 
-        if self._sequence:
-            all_cols_as_tuples = self._sequence.form_sequence(data=all_cols_as_tuples)
+        if self._ngram:
+            all_cols_as_tuples = self._ngram.form_ngram(data=all_cols_as_tuples, schema=self._schema)
 
         for item in all_cols_as_tuples:
             self.publish_func(item)
@@ -197,11 +197,11 @@ class ReaderWorker(WorkerBase):
 
         partition_indexes = np.floor(np.arange(num_rows) / (float(num_rows) / min(num_rows, num_partitions)))
 
-        if self._sequence:
-            # If we have a sequence we need to take elements from the next partition to build the sequence
+        if self._ngram:
+            # If we have an ngram we need to take elements from the next partition to build the sequence
             next_partition_indexes = np.where(partition_indexes >= this_partition + 1)
             if next_partition_indexes[0].size:
-                next_partition_to_add = next_partition_indexes[0][0:self._sequence.length - 1]
+                next_partition_to_add = next_partition_indexes[0][0:self._ngram.length - 1]
                 partition_indexes[next_partition_to_add] = this_partition
 
         selected_dataframe = data_frame.loc[partition_indexes == this_partition]
