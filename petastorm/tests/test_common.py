@@ -43,6 +43,7 @@ TestSchema = Unischema('TestSchema', [
     UnischemaField('empty_matrix_string', np.string_, (None,), NdarrayCodec(), False),
     UnischemaField('matrix_nullable', np.uint16, _DEFAULT_IMAGE_SIZE, NdarrayCodec(), True),
     UnischemaField('sensor_name', np.unicode_, (1,), NdarrayCodec(), False),
+    UnischemaField('string_array_nullable', np.string_, (None,), NdarrayCodec(), True),
 ])
 
 
@@ -61,6 +62,9 @@ def _randomize_row(id_num):
         TestSchema.empty_matrix_string.name: np.asarray([], dtype=np.string_),
         TestSchema.matrix_nullable.name: None,
         TestSchema.sensor_name.name: np.asarray(['test_sensor'], dtype=np.unicode_),
+        TestSchema.string_array_nullable.name: None if id % 5 == 0 else
+                                               np.asarray([], dtype=np.string_) if id % 4 == 0 else
+                                               np.asarray([str(i+id) for i in range(2)], dtype=np.string_),
     }
     return row_dict
 
@@ -110,7 +114,8 @@ def create_test_dataset(tmp_url, rows, num_files=2, spark=None):
     # Create list of objects to build row group indexes
     indexers = [
         SingleFieldIndexer(TestSchema.id.name, TestSchema.id.name),
-        SingleFieldIndexer(TestSchema.sensor_name.name, TestSchema.sensor_name.name)
+        SingleFieldIndexer(TestSchema.sensor_name.name, TestSchema.sensor_name.name),
+        SingleFieldIndexer(TestSchema.string_array_nullable.name, TestSchema.string_array_nullable.name),
     ]
     build_rowgroup_index(tmp_url, spark_context, indexers)
 
