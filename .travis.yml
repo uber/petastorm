@@ -14,6 +14,7 @@
 
 dist: trusty
 language: python
+cache: pip
 python:
   - '2.7'
   - '3.6'
@@ -28,7 +29,7 @@ install:
 
 script:
   - pylint --rcfile=.pylintrc petastorm examples -f parseable -r n
-  - pytest
+  - pytest -v
 
 before_deploy:
   # Build a python wheel before deployment
