@@ -15,6 +15,7 @@
 import collections
 import logging
 import os
+import six
 import warnings
 
 from pyarrow import parquet as pq
@@ -101,6 +102,9 @@ class Reader(object):
         #    c. partition: used to get a subset of data for distributed training
         # 4. Create a rowgroup ventilator object
         # 5. Start workers pool
+        if dataset_url is None or not isinstance(dataset_url, six.string_types):
+            raise ValueError("""dataset_url must be a string""")
+
         if not (isinstance(schema_fields, collections.Iterable) or isinstance(schema_fields, NGram)
                 or schema_fields is None):
             raise ValueError("""Fields must be either None, an iterable collection of Unischema fields or an NGram
