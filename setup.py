@@ -30,6 +30,7 @@ REQUIRED_PACKAGES = [
     'pyzmq>=14.0.0',
     'pyarrow>=0.10',
     'six>=1.5.0',
+    'futures>=2.0; python_version == "2.7"',  # TODO(yevgeni): check if 2.0 is the minimum
 ]
 
 EXTRA_REQUIRE = {
