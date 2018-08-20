@@ -387,3 +387,11 @@ def test_materialize_dataset_hadoop_config(synthetic_dataset):
     assert hadoop_config.get('parquet.block.size.row.check.min') is None
     spark.sparkContext.stop()
     rmtree(destination)
+
+
+def test_dataset_path_is_a_unicode(synthetic_dataset):
+    """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
+    # Making sure unicode_in_p23 is a unicode both in python 2 and 3
+    unicode_in_p23 = synthetic_dataset.url.encode().decode('utf-8')
+    with Reader(unicode_in_p23, reader_pool=DummyPool()) as reader:
+        next(reader)
