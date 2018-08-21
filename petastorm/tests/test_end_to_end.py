@@ -23,6 +23,7 @@ from petastorm.codecs import ScalarCodec
 from petastorm.local_disk_cache import LocalDiskCache
 from petastorm.reader import Reader, ShuffleOptions
 from petastorm.selectors import SingleIndexSelector
+from petastorm.tests.conftest import ROWS_COUNT
 from petastorm.tests.test_common import create_test_dataset, TestSchema
 from petastorm.tests.test_end_to_end_predicates_impl import \
     PartitionKeyInSetPredicate, EqualPredicate
@@ -30,8 +31,6 @@ from petastorm.unischema import UnischemaField, Unischema
 from petastorm.workers_pool.dummy_pool import DummyPool
 from petastorm.workers_pool.process_pool import ProcessPool
 from petastorm.workers_pool.thread_pool import ThreadPool
-
-# Number of rows in a fake dataset
 
 # pylint: disable=unnecessary-lambda
 ALL_READER_FLAVOR_FACTORIES = [lambda url, **kwargs: Reader(url, reader_pool=DummyPool(), **kwargs),
@@ -396,3 +395,10 @@ def test_dataset_path_is_a_unicode(synthetic_dataset):
     unicode_in_p23 = synthetic_dataset.url.encode().decode('utf-8')
     with Reader(unicode_in_p23, reader_pool=DummyPool()) as reader:
         next(reader)
+
+
+def test_reader_len(synthetic_dataset):
+    with Reader(synthetic_dataset.url, reader_pool=DummyPool()) as reader:
+        # multiple access yields the same value
+        assert len(reader) == ROWS_COUNT
+        assert len(reader) == ROWS_COUNT
