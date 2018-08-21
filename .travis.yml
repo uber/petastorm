@@ -31,6 +31,10 @@ script:
   - pylint --rcfile=.pylintrc petastorm examples -f parseable -r n
   - pytest -v
 
+  # Verify caching of synthetic dataset is working (at least not failing)
+  - pytest --cache-synthetic-dataset --log-cli-level info petastorm/tests/test_end_to_end.py::test_reading_subset_of_columns
+  - pytest --cache-synthetic-dataset --log-cli-level info petastorm/tests/test_end_to_end.py::test_reading_subset_of_columns
+
 before_deploy:
   # Build a python wheel before deployment
   - python setup.py bdist_wheel
