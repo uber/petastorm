@@ -27,6 +27,8 @@ import torch.optim as optim
 from torchvision import transforms
 
 from petastorm.pytorch import DataLoader
+from petastorm.reader import Reader, ShuffleOptions
+from petastorm.workers_pool.thread_pool import ThreadPool
 
 
 class Net(nn.Module):
@@ -128,23 +130,28 @@ def main():
     model = Net().to(device)
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
 
+    # Configure loop and Reader epoch for illustrative purposes.
+    # Typical training usage would use the `all_epochs` approach.
+    #
     if args.all_epochs:
         # Run training across all the epochs before testing for accuracy
-        with DataLoader('{}/train'.format(args.dataset_url), transform=_transform_row,
-                        batch_size=args.batch_size, shuffle_options=True, num_epochs=args.epochs) as train_loader:
-            train(model, device, train_loader, args.log_interval, optimizer, 0)
-        with DataLoader('{}/test'.format(args.dataset_url), transform=_transform_row,
-                        batch_size=args.test_batch_size, shuffle_options=True, num_epochs=args.epochs) as test_loader:
-            test(model, device, test_loader)
+        loop_epochs = 1
+        reader_epochs = args.epochs
     else:
-        # Test for accuracy each epoch
-        for epoch in range(1, args.epochs + 1):
-            with DataLoader('{}/train'.format(args.dataset_url), transform=_transform_row,
-                            batch_size=args.batch_size, shuffle_options=True, num_epochs=1) as train_loader:
-                train(model, device, train_loader, args.log_interval, optimizer, epoch)
-            with DataLoader('{}/test'.format(args.dataset_url), transform=_transform_row,
-                            batch_size=args.test_batch_size, shuffle_options=True, num_epochs=1) as test_loader:
-                test(model, device, test_loader)
+        # Test training accuracy after each epoch
+        loop_epochs = args.epochs
+        reader_epochs = 1
+
+    # Instantiate each petastorm Reader with a single thread, shuffle enabled, and appropriate epoch setting
+    for epoch in range(1, loop_epochs + 1):
+        with DataLoader(Reader('{}/train'.format(args.dataset_url), reader_pool=ThreadPool(1),
+                               shuffle_options=ShuffleOptions(), num_epochs=reader_epochs),
+                        batch_size=args.batch_size, transform=_transform_row) as train_loader:
+            train(model, device, train_loader, args.log_interval, optimizer, epoch)
+        with DataLoader(Reader('{}/test'.format(args.dataset_url), reader_pool=ThreadPool(1),
+                               shuffle_options=ShuffleOptions(), num_epochs=reader_epochs),
+                        batch_size=args.test_batch_size, transform=_transform_row) as test_loader:
+            test(model, device, test_loader)
 
 
 if __name__ == '__main__':

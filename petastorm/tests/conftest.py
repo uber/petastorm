@@ -19,13 +19,20 @@ from collections import namedtuple
 
 import pytest
 import six
+import sys
+
+if sys.version_info < (3, 0):
+    # Per https://github.com/pytorch/pytorch/issues/2083, torch needs to be imported early to avoid
+    # dlopen running out of static TLS.  Since we have pytests that require pytorch, importing here
+    # resolves test collection time import failures.  It does not affect Python 3.x
+    import torch  # pylint: disable=unused-import
 
 from petastorm.tests.test_common import create_test_dataset
+
 
 SyntheticDataset = namedtuple('synthetic_dataset', ['url', 'data', 'path'])
 
 # Number of rows in a fake dataset
-
 ROWS_COUNT = 100
 
 _CACHE_FAKE_DATASET_OPTION = '--cache-synthetic-dataset'
