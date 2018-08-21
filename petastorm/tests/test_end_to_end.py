@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import random
-from collections import namedtuple
 from shutil import rmtree, copytree
 
 import numpy as np
@@ -34,22 +33,10 @@ from petastorm.workers_pool.thread_pool import ThreadPool
 
 # Number of rows in a fake dataset
 
-ROWS_COUNT = 100
-
 # pylint: disable=unnecessary-lambda
 ALL_READER_FLAVOR_FACTORIES = [lambda url, **kwargs: Reader(url, reader_pool=DummyPool(), **kwargs),
                                lambda url, **kwargs: Reader(url, reader_pool=ThreadPool(10), **kwargs),
                                lambda url, **kwargs: Reader(url, reader_pool=ProcessPool(10), **kwargs)]
-
-SyntheticDataset = namedtuple('synthetic_dataset', ['url', 'data', 'path'])
-
-
-@pytest.fixture(scope="session")
-def synthetic_dataset(tmpdir_factory):
-    path = tmpdir_factory.mktemp('data').strpath
-    url = 'file://' + path
-    data = create_test_dataset(url, range(ROWS_COUNT))
-    return SyntheticDataset(url=url, path=path, data=data)
 
 
 def _check_simple_reader(reader, expected_data):
