@@ -182,9 +182,9 @@ class TestTfTensors(unittest.TestCase):
         unshuffled_2, _ = self._read_from_tf_tensors(30, shuffling_queue_capacity=0, min_after_dequeue=0, ngram=None)
 
         shuffled_1, shuffled_1_row_tensors = \
-            self._read_from_tf_tensors(30, shuffling_queue_capacity=10, min_after_dequeue=0, ngram=None)
+            self._read_from_tf_tensors(30, shuffling_queue_capacity=10, min_after_dequeue=9, ngram=None)
         shuffled_2, _ = \
-            self._read_from_tf_tensors(30, shuffling_queue_capacity=10, min_after_dequeue=0, ngram=None)
+            self._read_from_tf_tensors(30, shuffling_queue_capacity=10, min_after_dequeue=9, ngram=None)
 
         # Make sure we have static shapes and the data matches reference data (important since a different code path
         # is executed within tf_tensors when shuffling is specified
@@ -237,9 +237,9 @@ class TestTfTensors(unittest.TestCase):
                                                      ngram=ngram)
 
         shuffled_1, shuffled_1_ngram = \
-            self._read_from_tf_tensors(20, shuffling_queue_capacity=30, min_after_dequeue=0, ngram=ngram)
+            self._read_from_tf_tensors(20, shuffling_queue_capacity=30, min_after_dequeue=29, ngram=ngram)
         shuffled_2, _ = \
-            self._read_from_tf_tensors(20, shuffling_queue_capacity=30, min_after_dequeue=0, ngram=ngram)
+            self._read_from_tf_tensors(20, shuffling_queue_capacity=30, min_after_dequeue=29, ngram=ngram)
 
         # shuffled_1_ngram is a dictionary of named tuple indexed by time:
         # {0: (tensor, tensor, tensor, ...),
