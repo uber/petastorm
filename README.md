@@ -4,16 +4,20 @@
 
 Petastorm is a library enabling the use of Parquet storage from Tensorflow, Pytorch and other Python based ML training frameworks. Using datasets stored in Parquet from a deep-learning training/evaluation procedures bridges between a common big-data storage format and deep-learning frameworks making it simpler to combine them.
 ## Install
-Petastorm defines tensorflow or tensorflow-gpu as an “extra” package. That way you can choose to depend on either a CPU or a GPU version of tensorflow, or not to install it at all. 
+Petastorm defines tensorflow or tensorflow-gpu as an “extra” package. That way you can choose to depend on either a CPU or a GPU version of tensorflow, or not to install it at all.
+
+Note that although petastorm depends on opencv, it is defined as an extra package to allow opencv
+to be installed by debian package (or source) as opposed to pip. It is recommended to install it when
+testing out petastorm however (and is therefore shown in the examples).  
 
 Install with tensorflow CPU dependency:
 ```bash
-pip install petastorm[tf]
+pip install petastorm[opencv, tf]
 ```
 
 Install with tensorflow GPU dependency:
 ```bash
-pip install petastorm[tf_gpu]
+pip install petastorm[opencv, tf_gpu]
 ```
 ## Usage
 ### Generating a dataset
