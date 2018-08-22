@@ -116,6 +116,10 @@ class Reader(object):
 
         self.ngram = schema_fields if isinstance(schema_fields, NGram) else None
 
+        if self.ngram and not self.ngram.timestamp_overlap and shuffle_options.shuffle_row_drop_partitions > 1:
+            raise NotImplementedError('Using timestamp_overlap=False is not implemented with'
+                                      ' shuffle_options.shuffle_row_drop_partitions > 1')
+
         cache = cache or NullCache()
         dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
         self._workers_pool = reader_pool or ThreadPool(10)

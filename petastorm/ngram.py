@@ -83,16 +83,25 @@ class NGram(object):
     key will be the item.
     """
 
-    def __init__(self, fields, delta_threshold, timestamp_field):
+    def __init__(self, fields, delta_threshold, timestamp_field, timestamp_overlap=True):
         """
         Constructor to initialize ngram with fields, delta_threshold and timestamp_field.
         :param fields: A dictionary, with consecutive integers as keys and each value is an array of Unischema fields.
         :param delta_threshold: The maximum threshold of delta between timestamp_field.
         :param timestamp_field: The field that represents the timestamp.
+        :param timestamp_overlap: Whether timestamps in sequences are allowed to overlap (defaults to True)
+                        e.g. If the data consists of consecutive timestamps [{'id': 0}, {'id': 1}, ..., {'id': 5}]
+                        and you are asking for NGram of length 3 with timestamp_overlap set to True you will receive
+                        NGrams of [{'id': 0}, {'id': 1}, {'id': 2}] and [{'id': 1}, {'id': 2}, {'id': 3}] (in addition
+                        to others) however note that {'id': 1}, and {'id': 2} appear twice. With timestamp_overlap set
+                        to False this would not occur and instead return [{'id': 0}, {'id': 1}, {'id': 2}] and
+                        [{'id': 3}, {'id': 4}, {'id': 5}]. There is no overlap of timestamps between NGrams (and each
+                        timestamp record should only occur once in the returned data)
         """
         self._fields = fields
         self._delta_threshold = delta_threshold
         self._timestamp_field = timestamp_field
+        self.timestamp_overlap = timestamp_overlap
 
         self._validate_ngram(fields, delta_threshold, timestamp_field)
 
@@ -143,6 +152,9 @@ class NGram(object):
         if timestamp_field is None or not isinstance(timestamp_field, UnischemaField):
             raise ValueError('timestamp_field must be set and must be of type UnischemaField.')
 
+        if self.timestamp_overlap is None or not isinstance(self.timestamp_overlap, bool):
+            raise ValueError('timestamp_overlap must be set and must be of type bool')
+
     def _ngram_pass_threshold(self, ngram):
         """
         Returns true if each item in a ngram passes the threshold, otherwise False.
@@ -190,6 +202,7 @@ class NGram(object):
 
         base_key = min(self._fields.keys())
         result = []
+        prev_ngram_end_timestamp = None
 
         for index in range(len(data) - self.length + 1):
             # Potential ngram: [index, index + self.length[
@@ -201,6 +214,13 @@ class NGram(object):
             if not is_sorted:
                 raise NotImplementedError('NGram assumes that the data is sorted by {0} field which is not the case'
                                           .format(self._timestamp_field.name))
+
+            if not self.timestamp_overlap and prev_ngram_end_timestamp is not None:
+                # If we dont want timestamps of NGrams to overlap, check that the start timestamp of the next NGram
+                # is not less than the end timestamp of the previous NGram
+                next_ngram_start_timestamp = getattr(potential_ngram[0], self._timestamp_field.name)
+                if next_ngram_start_timestamp <= prev_ngram_end_timestamp:
+                    continue
 
             # If all elements in potential_ngram passes the ngram threshold
             # (i.e. current element timestamp - previous element timestamp <= delta_threshold)
@@ -215,5 +235,8 @@ class NGram(object):
                         **{k: current_item[k] for k in current_item if k in self.get_field_names_at_timestep(key)}
                     )
                 result.append(new_item)
+
+                if not self.timestamp_overlap:
+                    prev_ngram_end_timestamp = getattr(potential_ngram[-1], self._timestamp_field.name)
 
         return result
