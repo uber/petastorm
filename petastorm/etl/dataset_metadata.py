@@ -134,25 +134,6 @@ def _cleanup_spark(spark, current_spark_config, row_group_size_mb=None):
             hadoop_config.unset(key)
 
 
-def add_dataset_metadata(dataset_url, spark_context, schema):
-    """
-    DEPRECATED: Use materialize_dataset context manager instead
-
-    Adds all the metadata to the dataset needed to read the data using petastorm
-    :param dataset_url: (str) the url for the dataset (or a path if you would like to use the default hdfs config)
-    :param spark_context: (SparkContext)
-    :param schema: (Unischema) the schema for the dataset
-    :return: None, upon successful completion the metadata file will exist
-    """
-    resolver = FilesystemResolver(dataset_url, spark_context._jsc.hadoopConfiguration())
-    dataset = pq.ParquetDataset(
-        resolver.parsed_dataset_url().path,
-        filesystem=resolver.filesystem(),
-        validate_schema=False)
-
-    _generate_unischema_metadata(dataset, schema)
-
-
 def _generate_unischema_metadata(dataset, schema):
     """
     Generates the serialized unischema and adds it to the dataset parquet metadata to be used upon reading.
