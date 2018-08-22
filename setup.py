@@ -29,19 +29,11 @@ REQUIRED_PACKAGES = [
     'six>=1.5.0',
 ]
 
-if '--minimal-deps' not in sys.argv:
-    REQUIRED_PACKAGES += [
-        'opencv-python>=3.2.0.6',
-    ]
-else:
-    PACKAGE_NAME += '_min_deps'
-    sys.argv.remove('--minimal-deps')
-
-
 EXTRA_REQUIRE = {
+    'opencv': ['opencv-python>=3.2.0.6'],
     'tf': ['tensorflow>=1.4.0'],
     'tf_gpu': ['tensorflow-gpu>=1.4.0'],
-    'test' : ['pytest>=3.0.0', 'Pillow>=3.0', 'pylint>=1.9'],
+    'test' : ['opencv-python>=3.2.0.6', 'pytest>=3.0.0', 'Pillow>=3.0', 'pylint>=1.9'],
 }
 
 packages = setuptools.find_packages()
