@@ -33,7 +33,8 @@ EXTRA_REQUIRE = {
     'opencv': ['opencv-python>=3.2.0.6'],
     'tf': ['tensorflow>=1.4.0'],
     'tf_gpu': ['tensorflow-gpu>=1.4.0'],
-    'test' : ['opencv-python>=3.2.0.6', 'pytest>=3.0.0', 'Pillow>=3.0', 'pylint>=1.9'],
+    'test' : ['opencv-python>=3.2.0.6', 'pytest>=3.0.0', 'pytest-cov>=2.5.1',
+              'Pillow>=3.0', 'pylint>=1.9', 'codecov>=2.0.15'],
 }
 
 packages = setuptools.find_packages()
