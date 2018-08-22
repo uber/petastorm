@@ -38,7 +38,7 @@ from petastorm.ngram import NGram
 ngram_fields = NGram(
   fields={step: MySchema.fields for step in range(5)},
   delta_treshold=10,
-  timestamp_field='timestamp'
+  timestamp_field=MySchema.timestamp
 )
 reader = Reader(dataset_url, schema_fields=ngram_fields)
 ...
