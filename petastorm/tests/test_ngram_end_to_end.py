@@ -274,6 +274,34 @@ def test_ngram_basic_longer_shuffle_multi_partition(synthetic_dataset):
     _test_noncontinuous_ngram(fields, synthetic_dataset)
 
 
+def test_ngram_basic_longer_no_overlap(synthetic_dataset):
+    """Tests basic ngram with no delta threshold with no overlaps of timestamps."""
+    fields = {
+        -5: [TestSchema.id, TestSchema.id2, TestSchema.matrix],
+        -4: [TestSchema.id, TestSchema.id2, TestSchema.image_png],
+        -3: [TestSchema.id, TestSchema.id2, TestSchema.decimal],
+        -2: [TestSchema.id, TestSchema.id2, TestSchema.sensor_name],
+        -1: [TestSchema.id, TestSchema.id2]
+    }
+
+    dataset_dicts = synthetic_dataset.data
+    ngram = NGram(fields=fields, delta_threshold=10, timestamp_field=TestSchema.id, timestamp_overlap=False)
+    with Reader(
+            schema_fields=ngram,
+            dataset_url=synthetic_dataset.url,
+            reader_pool=DummyPool(),
+            shuffle_options=ShuffleOptions(False)) as reader:
+
+        timestamps_seen = set()
+        for actual in reader:
+            expected_ngram = _get_named_tuple_from_ngram(ngram, dataset_dicts, actual[min(actual.keys())].id)
+            np.testing.assert_equal(actual, expected_ngram)
+            for step in actual.values():
+                timestamp = step.id
+                assert timestamp not in timestamps_seen
+                timestamps_seen.add(timestamp)
+
+
 def test_ngram_delta_threshold_tf(dataset_0_3_8_10_11_20_23):
     """Test to verify that delta threshold work as expected in one partition in the same ngram
     and between consecutive ngrams. delta threshold here refers that each ngram must not be
@@ -419,6 +447,10 @@ def test_ngram_validation():
     with pytest.raises(ValueError):
         # Each value in fields must be an array
         NGram(fields={0: 'test'}, delta_threshold=5, timestamp_field=TestSchema.id)
+
+    with pytest.raises(ValueError):
+        # timestamp_overlap must be bool
+        NGram(fields=fields, delta_threshold=0.5, timestamp_field=TestSchema.id, timestamp_overlap=2)
 
     # Check some positive cases
     NGram(fields=fields, delta_threshold=0.5, timestamp_field=TestSchema.id)
