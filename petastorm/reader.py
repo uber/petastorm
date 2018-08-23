@@ -152,7 +152,7 @@ class Reader(object):
             else:
                 logger.warning('shuffle option is deprecated. Please use shuffle_options instead')
             shuffle_options = ShuffleOptions(shuffle)
-        self._normalize_shuffle_options(shuffle_options, dataset)
+        self._normalize_shuffle_options(shuffle_options, self.dataset)
         ventilator = self._create_ventilator(filtered_row_group_indexes, shuffle_options, num_epochs, worker_predicate)
 
         # 5. Start workers pool

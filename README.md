@@ -139,12 +139,10 @@ def _transform_row(mnist_row):
     ])
     return (transform(mnist_row.image), mnist_row.digit)
 
-with DataLoader(Reader('file:///localpath/mnist/train', reader_pool=ThreadPool(1),
-                       shuffle_options=ShuffleOptions(), num_epochs=10),
+with DataLoader(Reader('file:///localpath/mnist/train', num_epochs=10),
                 batch_size=64, transform=_transform_row) as train_loader:
     train(model, device, train_loader, 10, optimizer, 1)
-with DataLoader(Reader('file:///localpath/mnist/test', reader_pool=ThreadPool(1),
-                       shuffle_options=ShuffleOptions(), num_epochs=10),
+with DataLoader(Reader('file:///localpath/mnist/test', num_epochs=10),
                 batch_size=1000, transform=_transform_row) as test_loader:
     test(model, device, test_loader)
 ```
