@@ -35,7 +35,7 @@ EXTRA_REQUIRE = {
     'tf_gpu': ['tensorflow-gpu>=1.4.0'],
     'test' : ['opencv-python>=3.2.0.6', 'pytest>=3.0.0', 'pytest-cov>=2.5.1',
               'Pillow>=3.0', 'pylint>=1.9', 'codecov>=2.0.15'],
-    'torch' : ['torchvision>=0.2.1'],
+    'torch': ['torchvision>=0.2.1'],
 }
 
 packages = setuptools.find_packages()
