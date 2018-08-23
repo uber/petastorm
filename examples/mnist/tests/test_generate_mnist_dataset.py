@@ -23,7 +23,7 @@ import numpy as np
 from examples.mnist.generate_petastorm_mnist import download_mnist_data, \
     mnist_data_to_petastorm_dataset
 from petastorm.reader import Reader, ShuffleOptions
-from petastorm.workers_pool.thread_pool import ThreadPool
+from petastorm.workers_pool.dummy_pool import DummyPool
 
 logging.basicConfig(level=logging.INFO)
 
@@ -113,31 +113,25 @@ def test_mnist_download(tmpdir):
     assert o[len(o)-1][1] == 6
 
 
-def test_generate_mnist_dataset(small_mock_mnist_data, tmpdir_factory):
-    tmpdir = generate_mnist_dataset(small_mock_mnist_data, tmpdir_factory)
-
-    train_path = os.path.join(tmpdir, 'train')
+def test_generate_mnist_dataset(generate_mnist_dataset):
+    train_path = os.path.join(generate_mnist_dataset, 'train')
     assert os.path.exists(train_path)
     assert os.path.exists(os.path.join(train_path, '_common_metadata'))
     assert os.path.exists(os.path.join(train_path, '_metadata'))
 
-    test_path = os.path.join(tmpdir, 'test')
+    test_path = os.path.join(generate_mnist_dataset, 'test')
     assert os.path.exists(test_path)
     assert os.path.exists(os.path.join(test_path, '_common_metadata'))
     assert os.path.exists(os.path.join(test_path, '_metadata'))
 
 
-@pytest.mark.skipif(sys.version_info < (3, 0),
-                    reason='unstable with chance of seg fault under Python 2.x, issue #52')
 def test_read_mnist_dataset(generate_mnist_dataset):
     # Verify both datasets via a reader
     for dset in SMALL_MOCK_IMAGE_COUNT.keys():
-        with Reader('file://{}/{}'.format(generate_mnist_dataset, dset), reader_pool=ThreadPool(1)) as reader:
+        with Reader('file://{}/{}'.format(generate_mnist_dataset, dset), reader_pool=DummyPool()) as reader:
             assert len(reader) == SMALL_MOCK_IMAGE_COUNT[dset]
 
 
-@pytest.mark.skipif(sys.version_info < (3, 0),
-                    reason='unstable with chance of seg fault under Python 2.x, issue #52')
 def test_full_pytorch_example(large_mock_mnist_data, tmpdir):
     # First, generate mock dataset
     dataset_url = 'file://{}'.format(tmpdir)
@@ -153,11 +147,9 @@ def test_full_pytorch_example(large_mock_mnist_data, tmpdir):
     model = main.Net().to(device)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.5)
 
-    with DataLoader(Reader('{}/train'.format(dataset_url), reader_pool=ThreadPool(1),
-                           shuffle_options=ShuffleOptions(), num_epochs=1),
+    with DataLoader(Reader('{}/train'.format(dataset_url), reader_pool=DummyPool(), num_epochs=1),
                     batch_size=32, transform=main._transform_row) as train_loader:
         main.train(model, device, train_loader, 10, optimizer, 1)
-    with DataLoader(Reader('{}/test'.format(dataset_url), reader_pool=ThreadPool(1),
-                           shuffle_options=ShuffleOptions(), num_epochs=1),
+    with DataLoader(Reader('{}/test'.format(dataset_url), reader_pool=DummyPool(), num_epochs=1),
                     batch_size=100, transform=main._transform_row) as test_loader:
         main.test(model, device, test_loader)
