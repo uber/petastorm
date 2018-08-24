@@ -52,7 +52,3 @@ deploy:
   file: dist/*.whl
   on:
     tags: true
-
-branches:
-    only:
-    - master
