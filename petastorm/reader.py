@@ -152,6 +152,7 @@ class Reader(object):
             else:
                 logger.warning('shuffle option is deprecated. Please use shuffle_options instead')
             shuffle_options = ShuffleOptions(shuffle)
+        self._normalize_shuffle_options(shuffle_options, dataset)
         ventilator = self._create_ventilator(filtered_row_group_indexes, shuffle_options, num_epochs, worker_predicate)
 
         # 5. Start workers pool
@@ -261,6 +262,18 @@ class Reader(object):
             filtered_row_group_indexes = list(range(len(row_groups)))
             worker_predicate = None
         return filtered_row_group_indexes, worker_predicate
+
+    @staticmethod
+    def _normalize_shuffle_options(shuffle_options, dataset):
+        """Checks that shuffle_options doesnt ask for more patitions than rows in a row group.
+        This prevents sending partitions to workers which will result in not reading anything."""
+        if shuffle_options.shuffle_row_drop_partitions > 1 and dataset.metadata and dataset.metadata.num_row_groups:
+            max_rows_in_row_group = 1
+            for i in six.moves.xrange(dataset.metadata.num_row_groups):
+                max_rows_in_row_group = max(max_rows_in_row_group, dataset.metadata.row_group(i).num_rows)
+
+            shuffle_options.shuffle_row_drop_partitions = min(shuffle_options.shuffle_row_drop_partitions,
+                                                              max_rows_in_row_group)
 
     def _create_ventilator(self, row_group_indexes, shuffle_options, num_epochs, worker_predicate):
         items_to_ventilate = []
