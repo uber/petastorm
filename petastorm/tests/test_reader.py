@@ -11,21 +11,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import pyarrow.parquet as pq
 import pytest
 
-import pyarrow.parquet as pq
 from petastorm.reader import Reader, ShuffleOptions
 
+READER_FACTORIES = [Reader]
 
-def test_dataset_url_must_be_string():
+
+@pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+def test_dataset_url_must_be_string(reader_factory):
     with pytest.raises(ValueError):
-        Reader(dataset_url=None)
+        reader_factory(dataset_url=None)
 
     with pytest.raises(ValueError):
-        Reader(dataset_url=123)
+        reader_factory(dataset_url=123)
 
     with pytest.raises(ValueError):
-        Reader(dataset_url=[])
+        reader_factory(dataset_url=[])
 
 
 @pytest.mark.skip('We no longer know how many rows in each row group')
