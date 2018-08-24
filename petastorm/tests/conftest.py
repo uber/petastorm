@@ -42,29 +42,42 @@ def pytest_addoption(parser):
     )
 
 
-@pytest.fixture(scope="session")
-def synthetic_dataset(request, tmpdir_factory):
-    # We speedup test startup time by caching previously generated synthetic dataset.
-    # This is useful while developing for tests reruns, but can be dangerous since we can
-    # get stale results when petastorm code participating in dataset generation is used.
-    if request.config.getoption(_CACHE_FAKE_DATASET_OPTION):
-        cache_key = 'synthetic_dataset_{}'.format('PY2' if six.PY2 else 'PY3')
-        serialized = request.config.cache.get(cache_key, None)
+def maybe_cached_dataset(config, name, generating_func):
+    """Returns cached dataset instance if caching of datasets is enabled and a valid dataset is available.
+
+    We speedup test startup time by caching previously generated synthetic dataset.
+    This is useful while developing for tests reruns, but can be dangerous since we can
+    get stale results when petastorm code participating in dataset generation is used.
+
+    :param config: request.config object.
+    :param name: name of the cached dataset. Used as a cache key.
+    :param generating_func: This function will be called (`generating_func()`) if dataset cache is disabled or
+      no valid dataset is found in cache.
+    :return:
+    """
+    if config.getoption(_CACHE_FAKE_DATASET_OPTION):
+        cache_key = '{}_{}'.format(name, 'PY2' if six.PY2 else 'PY3')
+        serialized = config.cache.get(cache_key, None)
         dataset = pickle.loads(b64decode(serialized)) if serialized else None
         if not dataset or not os.path.exists(dataset.path):
-            dataset = _synthetic_dataset_no_cache(tmpdir_factory)
-            request.config.cache.set(cache_key, b64encode(pickle.dumps(dataset)).decode('ascii'))
+            dataset = generating_func()
+            config.cache.set(cache_key, b64encode(pickle.dumps(dataset)).decode('ascii'))
         else:
-            logger.warn('CAUTION: %s HAS BEEN USED. CACHED TEST DATASET! MAYBE STALE!', _CACHE_FAKE_DATASET_OPTION)
+            logger.warn('CAUTION: %s HAS BEEN USED. USING %s CACHED TEST DATASET! MAYBE STALE!',
+                        _CACHE_FAKE_DATASET_OPTION, name)
     else:
-        dataset = _synthetic_dataset_no_cache(tmpdir_factory)
+        dataset = generating_func()
 
     return dataset
 
 
-def _synthetic_dataset_no_cache(tmpdir_factory):
-    path = tmpdir_factory.mktemp("data").strpath
-    url = 'file://' + path
-    data = create_test_dataset(url, range(ROWS_COUNT))
-    dataset = SyntheticDataset(url=url, path=path, data=data)
-    return dataset
+@pytest.fixture(scope="session")
+def synthetic_dataset(request, tmpdir_factory):
+    def _synthetic_dataset_no_cache():
+        path = tmpdir_factory.mktemp("data").strpath
+        url = 'file://' + path
+        data = create_test_dataset(url, range(ROWS_COUNT))
+        dataset = SyntheticDataset(url=url, path=path, data=data)
+        return dataset
+
+    return maybe_cached_dataset(request.config, 'synthetic_dataset', _synthetic_dataset_no_cache)
