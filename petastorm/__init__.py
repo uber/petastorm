@@ -15,7 +15,7 @@
 import abc
 import six
 
-__version__ = '0.3.0'
+__version__ = '0.3.1'
 
 
 @six.add_metaclass(abc.ABCMeta)
