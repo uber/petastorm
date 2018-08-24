@@ -15,9 +15,9 @@
 """Script to add petastorm metadata to an existing parquet dataset"""
 
 import argparse
+import sys
 from pydoc import locate
 
-import sys
 from pyarrow import parquet as pq
 from pyspark.sql import SparkSession
 
@@ -108,4 +108,8 @@ def _main(args):
 
 
 def main():
+    _main(sys.argv[1:])
+
+
+if __name__ == '__main__':
     _main(sys.argv[1:])
