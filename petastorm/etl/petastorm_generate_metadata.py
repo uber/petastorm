@@ -21,8 +21,10 @@ from pydoc import locate
 from pyarrow import parquet as pq
 from pyspark.sql import SparkSession
 
-from petastorm.etl.dataset_metadata import materialize_dataset, get_schema
+from petastorm.etl.dataset_metadata import materialize_dataset, get_schema, ROW_GROUPS_PER_FILE_KEY
+from petastorm.etl.rowgroup_indexing import ROWGROUPS_INDEX_KEY
 from petastorm.fs_utils import FilesystemResolver
+from petastorm.utils import add_to_dataset_metadata
 
 example_text = '''This is meant to be run as a spark job. Example (some replacement required):
 
@@ -50,20 +52,25 @@ def generate_petastorm_metadata(spark, dataset_url, unischema_class=None):
     """
     sc = spark.sparkContext
 
+    resolver = FilesystemResolver(dataset_url, sc._jsc.hadoopConfiguration())
+    dataset = pq.ParquetDataset(
+        resolver.parsed_dataset_url().path,
+        filesystem=resolver.filesystem(),
+        validate_schema=False)
+
     if unischema_class:
         schema = locate(unischema_class)
     else:
-        resolver = FilesystemResolver(dataset_url, sc._jsc.hadoopConfiguration())
-        dataset = pq.ParquetDataset(
-            resolver.parsed_dataset_url().path,
-            filesystem=resolver.filesystem(),
-            validate_schema=False)
 
         try:
             schema = get_schema(dataset)
         except ValueError:
             raise ValueError('Unischema class could not be located in existing dataset,'
                              ' please specify it')
+
+    # In order to be backwards compatible, we retrieve the common metadata from the dataset before
+    # overwriting the metadata to keep row group indexes and the old row group per file index
+    arrow_metadata = dataset.common_metadata or None
 
     with materialize_dataset(spark, dataset_url, schema):
         # Inside the materialize dataset context we just need to write the metadata file as the schema will
@@ -74,6 +81,15 @@ def generate_petastorm_metadata(spark, dataset_url, unischema_class=None):
         Path = sc._gateway.jvm.org.apache.hadoop.fs.Path
         parquet_output_committer = sc._gateway.jvm.org.apache.parquet.hadoop.ParquetOutputCommitter
         parquet_output_committer.writeMetaDataFile(hadoop_config, Path(dataset_url))
+
+    if arrow_metadata:
+        # If there was the old row groups per file key or the row groups index key, add them to the new dataset metadata
+        base_schema = arrow_metadata.schema.to_arrow_schema()
+        metadata_dict = base_schema.metadata
+        if ROW_GROUPS_PER_FILE_KEY in metadata_dict:
+            add_to_dataset_metadata(dataset, ROW_GROUPS_PER_FILE_KEY, metadata_dict[ROW_GROUPS_PER_FILE_KEY])
+        if ROWGROUPS_INDEX_KEY in metadata_dict:
+            add_to_dataset_metadata(dataset, ROWGROUPS_INDEX_KEY, metadata_dict[ROWGROUPS_INDEX_KEY])
 
 
 def _main(args):
