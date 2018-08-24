@@ -7,7 +7,8 @@ import pytest
 import pyarrow.parquet as pq
 
 from petastorm.reader import Reader
-from petastorm.tests.test_common import create_test_dataset
+from petastorm.selectors import SingleIndexSelector
+from petastorm.tests.test_common import create_test_dataset, TestSchema
 from petastorm.workers_pool.dummy_pool import DummyPool
 from petastorm.etl import petastorm_generate_metadata
 
@@ -24,9 +25,9 @@ def synthetic_dataset(tmpdir_factory):
     return SyntheticDataset(url=url, path=path, data=data)
 
 
-def _check_reader(path):
+def _check_reader(path, rowgroup_selector=None):
     # Just check that you can open and read from a reader successfully
-    with Reader('file://{}'.format(path), reader_pool=DummyPool()) as reader:
+    with Reader('file://{}'.format(path), reader_pool=DummyPool(), rowgroup_selector=rowgroup_selector) as reader:
         [next(reader) for _ in range(10)]
 
 
@@ -48,8 +49,8 @@ def test_regenerate_row_group_metadata(synthetic_dataset, tmpdir):
     # Regenerate the metadata (taking the schema information from the common_metadata which exists)
     petastorm_generate_metadata._main(['--dataset_url', 'file://{}'.format(a_moved_path)])
 
-    # Reader should now work again
-    _check_reader(a_moved_path)
+    # Reader should now work again with rowgroup selector since it was in original metadata
+    _check_reader(a_moved_path, SingleIndexSelector(TestSchema.id.name, [2, 18]))
 
 
 def test_regenerate_all_metadata(synthetic_dataset, tmpdir):
@@ -74,7 +75,7 @@ def test_regenerate_all_metadata(synthetic_dataset, tmpdir):
         '--unischema_class', 'petastorm.tests.test_common.TestSchema',
     ])
 
-    # Reader should now work again
+    # Reader should now work again (row group selector will not since we removed all metadata)
     _check_reader(a_moved_path)
 
 
