@@ -13,7 +13,8 @@
 # limitations under the License.
 import pytest
 
-from petastorm.reader import Reader
+import pyarrow.parquet as pq
+from petastorm.reader import Reader, ShuffleOptions
 
 
 def test_dataset_url_must_be_string():
@@ -25,3 +26,14 @@ def test_dataset_url_must_be_string():
 
     with pytest.raises(ValueError):
         Reader(dataset_url=[])
+
+
+def test_normalize_shuffle_partitions(synthetic_dataset):
+    dataset = pq.ParquetDataset(synthetic_dataset.path)
+    shuffle_options = ShuffleOptions(True, 2)
+    Reader._normalize_shuffle_options(shuffle_options, dataset)
+    assert shuffle_options.shuffle_row_drop_partitions == 2
+
+    shuffle_options = ShuffleOptions(True, 1000)
+    Reader._normalize_shuffle_options(shuffle_options, dataset)
+    assert shuffle_options.shuffle_row_drop_partitions == 10
