@@ -106,12 +106,15 @@ def _main(args):
     parser.add_argument('--master', type=str,
                         help='Spark master. Default if not specified. To run on a local machine, specify '
                              '"local[W]" (where W is the number of local spark workers, e.g. local[10])')
+    parser.add_argument('--spark-driver-memory', type=str, help='The amount of memory the driver process will have',
+                        default='4g')
     args = parser.parse_args(args)
 
     # Open Spark Session
     spark_session = SparkSession \
         .builder \
-        .appName("Petastorm Metadata Index")
+        .appName("Petastorm Metadata Index") \
+        .config('spark.driver.memory', args.spark_driver_memory)
     if args.master:
         spark_session.master(args.master)
 
