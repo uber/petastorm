@@ -20,6 +20,7 @@ from petastorm import __version__
 PACKAGE_NAME = 'petastorm'
 
 REQUIRED_PACKAGES = [
+    'dill>=0.2.8',  # TODO(yevgeni): find a tight minimal version
     'diskcache>=3.0.0',
     'numpy>=1.13.3',
     'pandas>=0.19.0',
@@ -27,6 +28,7 @@ REQUIRED_PACKAGES = [
     'pyzmq>=14.0.0',
     'pyarrow>=0.10',
     'six>=1.5.0',
+    'futures>=2.0; python_version == "2.7"',  # TODO(yevgeni): check if 2.0 is the minimum
 ]
 
 EXTRA_REQUIRE = {
