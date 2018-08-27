@@ -92,3 +92,16 @@ will run on your local pyspark which should be fine given that the job does not 
 (only a driver). Note that pyspark running locally seems to have trouble picking up hadoop configuration files
 (e.g. `core-site.xml` or `hdfs-site.xml`) so it might be necessary to supply the namenode hostname directly instead
 of using a nameservice or relying on defaults set in those files.
+
+## Updating image codec parameter name in `CompressedImageCodec` constructor
+We changed the `format` argument name to `image_codec` in `CompressedImageCodec`'s constructor since `format` is a 
+Python keyword. Example:
+
+Old argument name:
+```python
+CompressedImageCodec(format='jpeg')
+```  
+New argument name:
+```python
+CompressedImageCodec(image_codec='jpeg')
+```
