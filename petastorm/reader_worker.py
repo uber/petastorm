@@ -105,8 +105,8 @@ class ReaderWorker(WorkerBase):
         if self._ngram:
             all_cols = self._ngram.form_ngram(data=all_cols, schema=self._schema)
 
-        for item in all_cols:
-            self.publish_func(item)
+        if all_cols:
+            self.publish_func(all_cols)
 
     def _load_rows(self, pq_file, piece, shuffle_row_drop_range):
         """Loads all rows from a piece"""

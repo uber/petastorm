@@ -170,6 +170,9 @@ class Reader(object):
                                  ventilator=ventilator)
         self._read_timeout_s = read_timeout_s
 
+        # _result
+        self._result_buffer = []
+
     def _filter_row_groups(self, dataset, row_groups, predicate, rowgroup_selector, training_partition,
                            num_training_partitions):
         """Calculates which rowgroups will be read during.
@@ -329,12 +332,26 @@ class Reader(object):
 
     def __next__(self):
         try:
-            # Namedtuples are returned to the user. All internal processing is done as dictionaries. Convert.
-            result = self._workers_pool.get_results(timeout=self._read_timeout_s)
-            if self.ngram:
-                return self.ngram.make_namedtuple(self.schema, result)
-            else:
-                return self.schema.make_namedtuple(**result)
+            # We are receiving decoded rows from the worker in chunks. We store the list internally
+            # and return a single item upon each consequent call to __next__
+            if not self._result_buffer:
+                # Reverse order, so we can pop from the end of the list in O(1) while maintaining
+                # order the items are returned from the worker
+                rows_as_dict = list(reversed(self._workers_pool.get_results(timeout=self._read_timeout_s)))
+
+                if self.ngram:
+                    for ngram_row in rows_as_dict:
+                        for timestamp in ngram_row.keys():
+                            row = ngram_row[timestamp]
+                            schema_at_timestamp = self.ngram.get_schema_at_timestep(self.schema, timestamp)
+
+                            ngram_row[timestamp] = schema_at_timestamp.make_namedtuple(**row)
+                    self._result_buffer = rows_as_dict
+                else:
+                    self._result_buffer = [self.schema.make_namedtuple(**row) for row in rows_as_dict]
+
+            return self._result_buffer.pop()
+
         except EmptyResultError:
             raise StopIteration
 
