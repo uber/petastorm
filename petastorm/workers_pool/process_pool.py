@@ -19,6 +19,7 @@ import sys
 from time import sleep, time
 from traceback import format_exc
 
+import pyarrow
 import zmq
 from zmq.utils import monitor
 
@@ -210,7 +211,8 @@ class ProcessPool(object):
                 self.join()
                 raise result
             else:
-                return result
+                deserialized_result = pyarrow.read_serialized(result).deserialize()
+                return deserialized_result
 
     def stop(self):
         """Stops all workers (non-blocking)"""
@@ -235,6 +237,9 @@ class ProcessPool(object):
         self._results_receiver.close()
         self._context.destroy()
 
+def _serialize_result_and_send(socket, data):
+    serialized = pyarrow.serialize(data)
+    socket.send_pyobj(serialized.to_buffer())
 
 def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_socket, results_sender_socket,
                       worker_args):
@@ -272,7 +277,7 @@ def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_s
     poller.register(control_receiver, zmq.POLLIN)
 
     # Instantiate a worker
-    worker = worker_class(worker_id, results_sender.send_pyobj, worker_args)
+    worker = worker_class(worker_id, lambda data: _serialize_result_and_send(results_sender, data), worker_args)
 
     # Loop and accept messages from both channels, acting accordingly
     while True:

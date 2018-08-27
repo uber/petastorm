@@ -20,6 +20,8 @@ transitively to parquet files.
 NOTE: Due to the way unischema is stored alongside dataset (with pickling), changing any of these codecs class names
 and fields can result in reader breakages.
 """
+import decimal
+
 import cv2
 from io import BytesIO
 from abc import abstractmethod
@@ -181,7 +183,14 @@ class ScalarCodec(DataframeColumnCodec):
         return array
 
     def decode(self, unischema_field, value):
-        return unischema_field.numpy_dtype(value)
+        # We are using pyarrow.serialize that does not support Decimal field types.
+        # Tensorflow does not support Decimal types neither. We convert all decimals to
+        # strings hence prevent Decimals from getting into anywhere in the reader. We may
+        # choose to resurrect Decimals support in the future.
+        if isinstance(value, decimal.Decimal):
+            return str(value.normalize())
+        else:
+            return unischema_field.numpy_dtype(value)
 
     def spark_dtype(self):
         return self._spark_type

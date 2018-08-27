@@ -43,7 +43,7 @@ def _check_simple_reader(reader, expected_data):
     for row in reader:
         actual = dict(row._asdict())
         expected = next(d for d in expected_data if d['id'] == actual['id'])
-        np.testing.assert_equal(actual, expected)
+        np.testing.assert_equal(expected, actual)
 
 
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)

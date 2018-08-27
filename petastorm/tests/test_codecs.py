@@ -81,7 +81,7 @@ class ScalarCodecsTest(unittest.TestCase):
         field = UnischemaField(name='field_decimal', numpy_dtype=Decimal, shape=(), codec=codec, nullable=False)
 
         value = Decimal('123.4567')
-        self.assertEqual(codec.decode(field, codec.encode(field, value)), value)
+        self.assertEqual(codec.decode(field, codec.encode(field, value)), str(value))
 
 
 class CompressedImageCodecsTest(unittest.TestCase):
