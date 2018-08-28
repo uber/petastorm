@@ -25,7 +25,7 @@ from petastorm.tests.test_common import create_test_dataset
 SyntheticDataset = namedtuple('synthetic_dataset', ['url', 'data', 'path'])
 
 # Number of rows in a fake dataset
-ROWS_COUNT = 100
+_ROWS_COUNT = 100
 
 _CACHE_FAKE_DATASET_OPTION_SHORT = '-Y'
 _CACHE_FAKE_DATASET_OPTION = '--cache-synthetic-dataset'
@@ -76,7 +76,7 @@ def synthetic_dataset(request, tmpdir_factory):
     def _synthetic_dataset_no_cache():
         path = tmpdir_factory.mktemp("data").strpath
         url = 'file://' + path
-        data = create_test_dataset(url, range(ROWS_COUNT))
+        data = create_test_dataset(url, range(_ROWS_COUNT))
         dataset = SyntheticDataset(url=url, path=path, data=data)
         return dataset
 
