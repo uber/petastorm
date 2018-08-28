@@ -23,7 +23,6 @@ from petastorm.codecs import ScalarCodec
 from petastorm.local_disk_cache import LocalDiskCache
 from petastorm.reader import Reader, ShuffleOptions
 from petastorm.selectors import SingleIndexSelector
-from petastorm.tests.conftest import ROWS_COUNT
 from petastorm.tests.test_common import create_test_dataset, TestSchema
 from petastorm.tests.test_end_to_end_predicates_impl import \
     PartitionKeyInSetPredicate, EqualPredicate
@@ -400,5 +399,5 @@ def test_dataset_path_is_a_unicode(synthetic_dataset):
 def test_reader_len(synthetic_dataset):
     with Reader(synthetic_dataset.url, reader_pool=DummyPool()) as reader:
         # multiple access yields the same value
-        assert len(reader) == ROWS_COUNT
-        assert len(reader) == ROWS_COUNT
+        assert len(reader) == len(synthetic_dataset.data)
+        assert len(reader) == len(synthetic_dataset.data)
