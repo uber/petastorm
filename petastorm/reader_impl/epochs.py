@@ -32,6 +32,10 @@ def epoch_generator(items, num_epochs, shuffle):
     :param shuffle: If True, the order of items in each epoch is randomized
     :return:
     """
+
+    if num_epochs is not None and (not isinstance(num_epochs, int) or num_epochs < 1):
+        raise ValueError('iterations must be positive integer or None')
+
     curr_item_index = 0
 
     epochs_left = num_epochs
