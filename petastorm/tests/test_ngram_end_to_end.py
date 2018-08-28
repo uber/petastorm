@@ -23,7 +23,8 @@ import tensorflow as tf
 from tensorflow.python.framework.errors_impl import OutOfRangeError
 
 from petastorm.ngram import NGram
-from petastorm.reader import Reader, ShuffleOptions
+from petastorm.reader import Reader, ShuffleOptions, ReaderV2
+from petastorm.reader_impl.same_thread_executor import SameThreadExecutor
 from petastorm.tests.conftest import SyntheticDataset, maybe_cached_dataset
 from petastorm.tests.test_common import create_test_dataset, TestSchema
 from petastorm.tf_utils import tf_tensors
@@ -33,6 +34,7 @@ from petastorm.workers_pool.dummy_pool import DummyPool
 # pylint: disable=unnecessary-lambda
 READER_FACTORIES = [
     lambda url, **kwargs: Reader(url, reader_pool=DummyPool(), **kwargs),
+    lambda url, **kwargs: ReaderV2(url, loader_pool=SameThreadExecutor(), decoder_pool=SameThreadExecutor(), **kwargs),
 ]
 
 
@@ -286,6 +288,7 @@ def test_ngram_basic_longer_shuffle_multi_partition(synthetic_dataset, reader_fa
         -1: [TestSchema.id, TestSchema.id2]
     }
     _test_noncontinuous_ngram(fields, synthetic_dataset, reader_factory)
+
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
 def test_ngram_basic_longer_no_overlap(synthetic_dataset, reader_factory):
