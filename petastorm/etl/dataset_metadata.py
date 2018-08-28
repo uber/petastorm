@@ -80,7 +80,7 @@ def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None):
     _generate_unischema_metadata(dataset, schema)
     if not dataset.metadata_path:
         raise MetadataGenerationError('Could not find summary metadata file. The dataset will exist but you will need'
-                                      ' to execute petastorm-generate-metadata before you can read your dataset '
+                                      ' to execute petastorm-generate-metadata.py before you can read your dataset '
                                       ' in order to generate the necessary metadata.'
                                       ' Try increasing spark driver memory next time and making sure you are'
                                       ' using parquet-mr >= 1.8.3')
@@ -159,7 +159,7 @@ def load_row_groups(dataset):
         raise ValueError('Could not find _metadata file.'
                          ' Use materialize_dataset(..) in petastorm.etl.dataset_metadata.py to generate'
                          ' this file in your ETL code.'
-                         ' You can generate it on an existing dataset using petastorm-generate-metadata')
+                         ' You can generate it on an existing dataset using petastorm-generate-metadata.py')
 
     num_row_groups = metadata.num_row_groups
 
@@ -168,14 +168,14 @@ def load_row_groups(dataset):
         return _split_row_groups(dataset)
 
     # If we don't have row groups in the common metadata we look for the old way of loading it
-    logger.warning('You are using a deprecated metadata version. Please run petastorm-generate-metadata'
+    logger.warning('You are using a deprecated metadata version. Please run petastorm-generate-metadata.py'
                    ' on spark to update.')
     dataset_metadata_dict = dataset.common_metadata.metadata
     if ROW_GROUPS_PER_FILE_KEY not in dataset_metadata_dict:
         raise ValueError('Could not find row group metadata in _metadata file.'
                          ' Use materialize_dataset(..) in petastorm.etl.dataset_metadata.py to generate'
                          ' this file in your ETL code.'
-                         ' You can generate it on an existing dataset using petastorm-generate-metadata')
+                         ' You can generate it on an existing dataset using petastorm-generate-metadata.py')
     metadata_dict_key = ROW_GROUPS_PER_FILE_KEY
     row_groups_per_file = json.loads(dataset_metadata_dict[metadata_dict_key].decode())
 
@@ -242,7 +242,7 @@ def get_schema(dataset):
         raise ValueError('Could not find _common_metadata file. Use materialize_dataset(..) in'
                          ' petastorm.etl.dataset_metadata.py to generate this file in your '
                          ' ETL code.'
-                         ' You can generate it on an existing dataset using petastorm-generate-metadata')
+                         ' You can generate it on an existing dataset using petastorm-generate-metadata.py')
 
     dataset_metadata_dict = dataset.common_metadata.metadata
 
@@ -254,7 +254,7 @@ def get_schema(dataset):
                          ' Make sure to use materialize_dataset(..) in'
                          ' petastorm.etl.dataset_metadata to'
                          ' properly generate this file in your ETL code.'
-                         ' You can generate it on an existing dataset using petastorm-generate-metadata')
+                         ' You can generate it on an existing dataset using petastorm-generate-metadata.py')
     ser_schema = dataset_metadata_dict[UNISCHEMA_KEY]
     # Since we have moved the unischema class around few times, unpickling old schemas will not work. In this case we
     # override the old import path to get backwards compatibility
