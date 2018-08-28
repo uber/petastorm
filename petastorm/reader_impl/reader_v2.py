@@ -11,81 +11,79 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import collections
 import logging
 import os
-import warnings
+import threading
+from collections import Counter
 
 import six
+from concurrent.futures import ThreadPoolExecutor
 from pyarrow import parquet as pq
+from six.moves.queue import Queue
 from six.moves.urllib.parse import urlparse
 
-import petastorm.shuffle_options
 from petastorm.cache import NullCache
 from petastorm.etl import dataset_metadata, rowgroup_indexing
 from petastorm.fs_utils import FilesystemResolver
 from petastorm.ngram import NGram
 from petastorm.predicates import PredicateBase
-from petastorm.reader_impl.reader_v2 import ReaderV2
-from petastorm.reader_worker import ReaderWorker
+from petastorm.reader_impl.epochs import epoch_generator
+from petastorm.reader_impl.row_group_decoder import RowDecoder
+from petastorm.reader_impl.row_group_loader import RowGroupLoader
+from petastorm.reader_impl.shuffling_buffer import NoopShufflingBuffer
+from petastorm.reader_impl.worker_loop import worker_loop, EOFSentinel, WorkerLoopError
 from petastorm.selectors import RowGroupSelectorBase
-from petastorm.workers_pool import EmptyResultError
-from petastorm.workers_pool.thread_pool import ThreadPool
-from petastorm.workers_pool.ventilator import ConcurrentVentilator
+from petastorm.shuffle_options import ShuffleOptions
 
 logger = logging.getLogger(__name__)
 
-# For backward compatibility. Would clean this up with package reorganization in the future
-# https://github.com/uber/petastorm/issues/134
-ShuffleOptions = petastorm.shuffle_options.ShuffleOptions
+_OUTPUT_QUEUE_SIZE = 30
 
 
-# Make it easier to import as "from petastorm.reader import ReaderV2"
-ReaderV2 = ReaderV2
-
-
-class Reader(object):
-    """Reads a dataset from a Petastorm dataset.
-
-    :ivar last_row_consumed: True if the last row was already returned by the Reader.
-    """
+class ReaderV2(object):
+    """Reads a unischema based dataset from a parquet file."""
 
     def __init__(self, dataset_url, schema_fields=None, shuffle=None, predicate=None, rowgroup_selector=None,
-                 reader_pool=None, num_epochs=1, sequence=None, training_partition=None, num_training_partitions=None,
-                 read_timeout_s=None, cache=None, shuffle_options=None, pyarrow_filesystem=None):
+                 num_epochs=1, sequence=None, training_partition=None, num_training_partitions=None,
+                 read_timeout_s=None, cache=None, loader_pool=None, decoder_pool=None, shuffling_queue=None,
+                 shuffle_options=None, pyarrow_filesystem=None):
         """Initializes a reader object.
 
         :param dataset_url: an filepath or a url to a parquet directory,
-            e.g. ``'hdfs://some_hdfs_cluster/user/yevgeni/parquet8'``, or ``'/tmp/mydataset'``.
-        :param schema_fields: Either list of unischema fields to subset, or ``None`` to read all fields.
+                       e.g. 'hdfs://some_hdfs_cluster/user/yevgeni/parquet8', or '/tmp/mydataset'
+        :param schema_fields:
+            Either list of unischema fields to subset, or None to read all fields.
             OR an NGram object, then it will return an NGram of the specified properties.
         :param predicate: instance of predicate object to filter rows to be returned by reader.
         :param rowgroup_selector: instance of row group selector object to select row groups to be read
-        :param reader_pool: parallelization pool. ``ThreadPool(10)`` (10 threads) is used by default.
-            This pool is a custom implementation used to parallelize reading data from the dataset.
-            Any object from workers_pool package can be used
-            (e.g. :class:`petastorm.workers_pool.process_pool.ProcessPool`).
-        :param num_epochs: An epoch is a single pass over all rows in the dataset. Setting ``num_epochs`` to
-            ``None`` will result in an infinite number of epochs.
+        :param reader_pool: parallelization pool. ThreadPool(10) (10 threads) is used by default.
+                       This pool is a custom implementation used to parallelize reading data from the dataset.
+                       Any object from workers_pool package can be used (e.g. ProcessPool)
+        :param num_epochs: An epoch is a single pass over all samples in the dataset. Setting num_epochs to 'None' will
+                       result in an infinite number of epochs.
+        :param sequence: This is deprecated. To use sequence/ngram, please supply the argument in schema_fields instead.
         :param training_partition: An int denoting the partition number used for multi node training. Each node should
-            pass in a unique partition number in the range ``[0, num_training_partitions)``.
-            ``num_training_partitions`` must be supplied as well.
-        :param num_training_partitions: An int denoting the number of training partitions (how many nodes are performing
-            the multi node training).
+                       pass in a unique partition number in the range [0, num_training_partitions).
+                       num_training_partitions must be supplied as well.
+        :param num_training_partitions An int denoting the number of training partitions (how many nodes are performing
+                       the multi node training)
         :param read_timeout_s: A numeric with the amount of time in seconds you would like to give a read before it
-            times out and raises an EmptyResultError. Pass in None for an infinite timeout.
-        :param cache: An object conforming to :class:`.CacheBase` interface. Before loading row groups from a parquet
-            file the Reader will attempt to load these values from cache. Caching is useful when communication
-            to the main data store is either slow or expensive and the local machine has large enough storage
-            to store entire dataset (or a partition of a dataset if num_training_partitions is used).
-            By default, use the :class:`.NullCache` implementation.
-        :param shuffle_options: ShuffleOptions object to describe how to shuffle dataset (supercedes shuffle parameter)
-            defaults to shuffling row groups but not to drop rows based on partitions.
-        :param sequence: *DEPRECATED* To use sequence/ngram, please supply the argument in
-            ``schema_fields`` instead.
-        :param shuffle: *DEPRECATED* Boolean whether to shuffle the row group order.
-            Use ``shuffle_row_groups`` in :class:`.ShuffleOptions` instead.
+                       times out and raises an EmptyResultError. Pass in None for an infinite timeout
+        :param cache: An object conforming to `cache.CacheBase` interface. Before loading row groups from a parquet file
+                       the Reader will attempt to load these values from cache. Caching is useful when communication
+                       to the main data store is either slow or expensive and the local machine has large enough storage
+                       to store entire dataset (or a partition of a dataset if num_training_partitions is used).
+        :param decoder_pool: An instance of a concurrent.futures pool executor used for decoding. If None,
+          a default ThreadPoolExecutor(5) will be used.
+        :param loader_pool: An instance of a concurrent.futures pool executor used for decoding. If None,
+          a default ThreadPoolExecutor(5) will be used.
+        :param shuffle_options : ShuffleOptions object to describe how to shuffle dataset (supercedes shuffle parameter)
+                       defaults to shuffling row groups but not to drop rows based on partitions.
+        :param shuffle: DEPRECATED boolean whether to shuffle the row group order. Use shuffle_row_groups in
+                       ShuffleOptions instead.
+
+        By default, `NullCache` implementation
         """
 
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
@@ -94,8 +92,8 @@ class Reader(object):
         #    a. predicates
         #    b. row-group selector (our indexing mechanism)
         #    c. partition: used to get a subset of data for distributed training
-        # 4. Create a rowgroup ventilator object
-        # 5. Start workers pool
+        # 4. Launch a new thread running `worker_loop` function.
+
         if dataset_url is None or not isinstance(dataset_url, six.string_types):
             raise ValueError("""dataset_url must be a string""")
 
@@ -116,7 +114,13 @@ class Reader(object):
 
         cache = cache or NullCache()
         dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
-        self._workers_pool = reader_pool or ThreadPool(10)
+
+        if shuffle_options is None:
+            if shuffle is None:
+                shuffle = True
+            else:
+                logger.warning('shuffle option is deprecated. Please use shuffle_options instead')
+            shuffle_options = ShuffleOptions(shuffle)
 
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
         logger.debug('dataset_url: %s', dataset_url)
@@ -128,11 +132,13 @@ class Reader(object):
             resolver = FilesystemResolver(dataset_url)
             filesystem = resolver.filesystem()
             dataset_path = resolver.parsed_dataset_url().path
-        self.dataset = pq.ParquetDataset(dataset_path, filesystem=filesystem,
-                                         validate_schema=False)
+
+        self._dataset = pq.ParquetDataset(dataset_path, filesystem=filesystem, validate_schema=False)
+
+        self._normalize_shuffle_options(shuffle_options, self._dataset)
 
         # Get a unischema stored in the dataset metadata.
-        stored_schema = dataset_metadata.get_schema(self.dataset)
+        stored_schema = dataset_metadata.get_schema(self._dataset)
 
         # Make a schema view (a view is a Unischema containing only a subset of fields
         # Will raise an exception if invalid schema fields are in schema_fields
@@ -140,40 +146,57 @@ class Reader(object):
         self.schema = stored_schema.create_schema_view(fields) if fields else stored_schema
 
         # 2. Get a list of all groups
-        row_groups = dataset_metadata.load_row_groups(self.dataset)
+        row_groups = dataset_metadata.load_row_groups(self._dataset)
 
         # 3. Filter rowgroups
-        filtered_row_group_indexes, worker_predicate = self._filter_row_groups(self.dataset, row_groups, predicate,
-                                                                               rowgroup_selector, training_partition,
-                                                                               num_training_partitions)
-        # 4. Create a rowgroup ventilator object
-        if shuffle_options is None:
-            if shuffle is None:
-                shuffle = True
-            else:
-                logger.warning('shuffle option is deprecated. Please use shuffle_options instead')
-            shuffle_options = petastorm.shuffle_options.ShuffleOptions(shuffle)
-        self._normalize_shuffle_options(shuffle_options, self.dataset)
-        ventilator = self._create_ventilator(filtered_row_group_indexes, shuffle_options, num_epochs, worker_predicate)
+        filtered_row_groups, worker_predicate = self._filter_row_groups(self._dataset, row_groups, predicate,
+                                                                        rowgroup_selector, training_partition,
+                                                                        num_training_partitions)
 
-        # 5. Start workers pool
-        self._workers_pool.start(ReaderWorker,
-                                 (dataset_url, self.schema, self.ngram, row_groups, cache, filesystem),
-                                 ventilator=ventilator)
+        epoch_items = self._apply_row_drop_partition(filtered_row_groups, shuffle_options)
+
+        # 4. Launch a new thread running `worker_loop` function.
+        epochs_iterator = lambda: epoch_generator(epoch_items, num_epochs, shuffle_options.shuffle_row_groups)
+
+        self._results_queue = Queue(_OUTPUT_QUEUE_SIZE)
+
+        loader = RowGroupLoader(dataset_url, self.schema, self.ngram, cache, worker_predicate)
+        decoder = RowDecoder(self.schema, self.ngram)
+        self._loader_pool = loader_pool or ThreadPoolExecutor(5)
+        self._decoder_pool = decoder_pool or ThreadPoolExecutor(5)
+        self._stop_flow_manager_event = threading.Event()
+        stats = Counter()
+
+        if not shuffling_queue:
+            shuffling_queue = NoopShufflingBuffer()
+
+        self._flow_manager_thread = threading.Thread(target=worker_loop,
+                                                     args=(epochs_iterator, self._loader_pool, loader,
+                                                           self._decoder_pool,
+                                                           decoder,
+                                                           shuffling_queue, self._results_queue,
+                                                           self._stop_flow_manager_event, stats))
+        self._flow_manager_thread.daemon = True
+        self._flow_manager_thread.start()
+
         self._read_timeout_s = read_timeout_s
-        self.last_row_consumed = False
 
-        # _result
-        self._result_buffer = []
+    def _apply_row_drop_partition(self, row_groups, shuffle_options):
+        items_to_ventilate = []
+        for row_group in row_groups:
+            for shuffle_row_drop_partition in range(shuffle_options.shuffle_row_drop_partitions):
+                items_to_ventilate.append(
+                    {'row_group': row_group,
+                     'shuffle_row_drop_partition': (shuffle_row_drop_partition,
+                                                    shuffle_options.shuffle_row_drop_partitions)})
+
+        return items_to_ventilate
 
     def _filter_row_groups(self, dataset, row_groups, predicate, rowgroup_selector, training_partition,
                            num_training_partitions):
         """Calculates which rowgroups will be read during.
 
-        The following filters are applied:
-        - predicates;
-        - row-group selector (our indexing mechanism);
-        - training partition
+        The following filters are applied: predicates;  row-group selector (our indexing mechanism); training partition
 
         :param dataset: ParquetDataset instance
         :param row_groups: a list of row groups (a list of ParquetDatasetPiece objects)
@@ -200,7 +223,7 @@ class Reader(object):
             filtered_row_group_indexes = self._partition_row_groups(dataset, row_groups, num_training_partitions,
                                                                     training_partition,
                                                                     filtered_row_group_indexes)
-        return filtered_row_group_indexes, worker_predicate
+        return [row_groups[i] for i in filtered_row_group_indexes], worker_predicate
 
     def _partition_row_groups(self, dataset, row_groups, num_training_partitions, training_partition,
                               filtered_row_group_indexes):
@@ -283,64 +306,26 @@ class Reader(object):
             shuffle_options.shuffle_row_drop_partitions = min(shuffle_options.shuffle_row_drop_partitions,
                                                               max_rows_in_row_group)
 
-    def _create_ventilator(self, row_group_indexes, shuffle_options, num_epochs, worker_predicate):
-        items_to_ventilate = []
-        for piece_index in row_group_indexes:
-            for shuffle_row_drop_partition in range(shuffle_options.shuffle_row_drop_partitions):
-                items_to_ventilate.append(
-                    {'piece_index': piece_index,
-                     'worker_predicate': worker_predicate,
-                     'shuffle_row_drop_partition': (shuffle_row_drop_partition,
-                                                    shuffle_options.shuffle_row_drop_partitions)})
-
-        return ConcurrentVentilator(self._workers_pool.ventilate,
-                                    items_to_ventilate,
-                                    iterations=num_epochs,
-                                    randomize_item_order=shuffle_options.shuffle_row_groups)
-
     def stop(self):
-        """Stops all worker threads/processes."""
-        self._workers_pool.stop()
+        """Stops all worker threads/processes"""
+        self._stop_flow_manager_event.set()
 
     def join(self):
-        """Joins all worker threads/processes. Will block until all worker workers have been fully terminated."""
-        self._workers_pool.join()
-
-    def fetch(self, timeout=None):
-        warning_message = 'fetch is deprecated. Please use iterator api to fetch data instead.'
-        warnings.warn(warning_message, DeprecationWarning)
-        # Since warnings are generally ignored in av, print out a logging warning as well
-        logger.warn(warning_message)
-        return self._workers_pool.get_results(timeout=timeout)
+        self._flow_manager_thread.join()
+        self._loader_pool.shutdown()
+        self._decoder_pool.shutdown(wait=False)
 
     def __iter__(self):
         return self
 
     def __next__(self):
-        try:
-            # We are receiving decoded rows from the worker in chunks. We store the list internally
-            # and return a single item upon each consequent call to __next__
-            if not self._result_buffer:
-                # Reverse order, so we can pop from the end of the list in O(1) while maintaining
-                # order the items are returned from the worker
-                rows_as_dict = list(reversed(self._workers_pool.get_results(timeout=self._read_timeout_s)))
-
-                if self.ngram:
-                    for ngram_row in rows_as_dict:
-                        for timestamp in ngram_row.keys():
-                            row = ngram_row[timestamp]
-                            schema_at_timestamp = self.ngram.get_schema_at_timestep(self.schema, timestamp)
-
-                            ngram_row[timestamp] = schema_at_timestamp.make_namedtuple(**row)
-                    self._result_buffer = rows_as_dict
-                else:
-                    self._result_buffer = [self.schema.make_namedtuple(**row) for row in rows_as_dict]
-
-            return self._result_buffer.pop()
-
-        except EmptyResultError:
-            self.last_row_consumed = True
+        result = self._results_queue.get(timeout=self._read_timeout_s)
+        if isinstance(result, EOFSentinel):
             raise StopIteration
+        elif isinstance(result, WorkerLoopError):
+            logger.error('An unhandled exception was raised in worker_loop: %s', str(result))
+            raise result.inner_error
+        return result
 
     def next(self):
         return self.__next__()

@@ -86,28 +86,31 @@ class RowGroupLoader(object):
         shuffle_row_drop_partition = rowgroup_spec['shuffle_row_drop_partition']
 
         # Create pyarrow file system
-        parquet_file = ParquetFile(self._dataset.fs.open(piece.path))
+        with self._dataset.fs.open(piece.path) as piece_file_handle:
+            parquet_file = ParquetFile(piece_file_handle)
 
-        if not isinstance(self._local_cache, NullCache):
+            if not isinstance(self._local_cache, NullCache):
+                if self._worker_predicate:
+                    raise RuntimeError('Local cache is not supported together with predicates, '
+                                       'unless the dataset is partitioned by the column the predicate operates on.')
+                if shuffle_row_drop_partition[1] != 1:
+                    raise RuntimeError('Local cache is not supported together with shuffle_row_drop_partitions > 1')
+
             if self._worker_predicate:
-                raise RuntimeError('Local cache is not supported together with predicates, '
-                                   'unless the dataset is partitioned by the column the predicate operates on.')
-            if shuffle_row_drop_partition[1] != 1:
-                raise RuntimeError('Local cache is not supported together with shuffle_row_drop_partitions > 1')
-
-        if self._worker_predicate:
-            all_cols = self._load_rows_with_predicate(parquet_file, piece, self._worker_predicate,
-                                                      shuffle_row_drop_partition)
-        else:
-            # Using hash of the dataset url with the relative path in order to:
-            #  1. Make sure if a common cache serves multiple processes (e.g. redis), we don't have conflicts
-            #  2. Dataset url is hashed, to make sure we don't create too long keys, which maybe incompatible with
-            #     some cache implementations
-            #  3. Still leave relative path and the piece_index in plain text to make it easier to debug
-            cache_key = '{}:{}:{}'.format(hashlib.md5(urlunparse(self._dataset_url_parsed).encode('utf-8')).hexdigest(),
-                                          piece.path, piece.row_group)
-            all_cols = self._local_cache.get(cache_key,
-                                             lambda: self._load_rows(parquet_file, piece, shuffle_row_drop_partition))
+                all_cols = self._load_rows_with_predicate(parquet_file, piece, self._worker_predicate,
+                                                          shuffle_row_drop_partition)
+            else:
+                # Using hash of the dataset url with the relative path in order to:
+                #  1. Make sure if a common cache serves multiple processes (e.g. redis), we don't have conflicts
+                #  2. Dataset url is hashed, to make sure we don't create too long keys, which maybe incompatible with
+                #     some cache implementations
+                #  3. Still leave relative path and the piece_index in plain text to make it easier to debug
+                cache_key = '{}:{}:{}'.format(
+                    hashlib.md5(urlunparse(self._dataset_url_parsed).encode('utf-8')).hexdigest(),
+                    piece.path, piece.row_group)
+                all_cols = self._local_cache.get(cache_key,
+                                                 lambda: self._load_rows(parquet_file, piece,
+                                                                         shuffle_row_drop_partition))
 
         if self._ngram:
             all_cols_as_ngrams = self._ngram.form_ngram(data=all_cols, schema=self._schema)
