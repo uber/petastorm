@@ -43,6 +43,10 @@ script:
 after_success:
   - codecov
 
+after_failure:
+  - COREFILE=$(find . -maxdepth 2 -name "core*" | head -n 1)
+  - if [[ -f "$COREFILE" ]]; then gdb -c "$COREFILE" pytest -ex "thread apply all bt" -ex "set pagination 0" -batch; fi
+
 before_deploy:
   # Build a python wheel before deployment
   - python setup.py bdist_wheel
