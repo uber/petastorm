@@ -93,6 +93,15 @@ will run on your local pyspark which should be fine given that the job does not 
 (e.g. `core-site.xml` or `hdfs-site.xml`) so it might be necessary to supply the namenode hostname directly instead
 of using a nameservice or relying on defaults set in those files.
 
+If you are running this on your local machine, also note that it will run under your user. If you are running this on
+a location in remote storage (e.g. HDFS) you will need write permission to both the dataset directory and the
+`_common_metadata`/`_metadata` files (if they exist). The easiest way to accomplish this is to make the directory writeable
+to your user either by changing file permissions, changing file ownership, etc. The easiest way to guarantee success would
+be to `chmod -R` the directory to `777` however do this at your own risk. Another option would be to run
+`petastorm-generate-metadata` from within spark to have it share the same runtime environment permissions as the
+original dataset run.
+
+
 ## Updating image codec parameter name in `CompressedImageCodec` constructor
 We changed the `format` argument name to `image_codec` in `CompressedImageCodec`'s constructor since `format` is a 
 Python keyword. Example:
