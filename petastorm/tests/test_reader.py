@@ -22,13 +22,13 @@ READER_FACTORIES = [Reader]
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
 def test_dataset_url_must_be_string(reader_factory):
     with pytest.raises(ValueError):
-        reader_factory(dataset_url=None)
+        reader_factory(None)
 
     with pytest.raises(ValueError):
-        reader_factory(dataset_url=123)
+        reader_factory(123)
 
     with pytest.raises(ValueError):
-        reader_factory(dataset_url=[])
+        reader_factory([])
 
 
 @pytest.mark.skip('We no longer know how many rows in each row group')
