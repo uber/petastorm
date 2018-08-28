@@ -26,18 +26,20 @@ from petastorm.etl.rowgroup_indexing import ROWGROUPS_INDEX_KEY
 from petastorm.fs_utils import FilesystemResolver
 from petastorm.utils import add_to_dataset_metadata
 
-example_text = '''This is meant to be run as a spark job. Example (some replacement required):
+example_text = '''Example (some replacement required):
 
-On Spark:    spark-submit \
-    --master spark://ip:port \
-    $(which petastorm-generate-metadata) \
-    --dataset_url hdfs:///path/to/my/hello_world_dataset \
-    --unischema_class examples.hello_world.hello_world_dataset.HelloWorldSchema
-
-Locally:     petastorm-generate-metadata \
-    --dataset_url hdfs:///path/to/my/hello_world_dataset \
-    --unischema_class examples.hello_world.hello_world_dataset.HelloWorldSchema
+Locally:     
+petastorm-generate-metadata.py \\
+    --dataset_url hdfs:///path/to/my/hello_world_dataset \\
+    --unischema_class examples.hello_world.hello_world_dataset.HelloWorldSchema \\
     --master local[*]
+
+On Spark:    
+spark-submit \\
+    --master spark://ip:port \\
+    $(which petastorm-generate-metadata.py) \\
+    --dataset_url hdfs:///path/to/my/hello_world_dataset \\
+    --unischema_class examples.hello_world.hello_world_dataset.HelloWorldSchema
 '''
 
 
@@ -113,7 +115,7 @@ def _main(args):
     # Open Spark Session
     spark_session = SparkSession \
         .builder \
-        .appName("Petastorm Metadata Index") \
+        .appName("Petastorm Generate Metadata") \
         .config('spark.driver.memory', args.spark_driver_memory)
     if args.master:
         spark_session.master(args.master)
