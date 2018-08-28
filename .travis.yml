@@ -29,10 +29,17 @@ install:
   # (or optionally install pyarrow from source instead of through binaries)
   - pip install --upgrade numpy
 
+before_script:
+  # enable core dumps
+  - ulimit -c unlimited -S
+
 script:
   - pylint --rcfile=.pylintrc petastorm examples -f parseable -r n
   # Completely ignore two pytorch tests to prevent static-TLS-caused torch-import seg-fault
-  - pytest -v --ignore=petastorm/tests/test_pytorch_utils.py --ignore=examples/mnist/tests/test_generate_mnist_dataset.py --cov=./
+  - pytest -v --cov=./
+    --ignore=petastorm/tests/test_pytorch_utils.py
+    --ignore=examples/mnist/tests/test_generate_mnist_dataset.py
+    -p no:examples/mnist/tests/conftest.py
   # Run the pytorch tests separately, but accumulate code coverage data
   - pytest -v examples/mnist/tests/test_generate_mnist_dataset.py petastorm/tests/test_pytorch_utils.py --cov=./ --cov-append
 
@@ -44,8 +51,12 @@ after_success:
   - codecov
 
 after_failure:
+  # Only upon failure, install gdb to process core dump
+  - sudo apt-get install -y gdb
   - COREFILE=$(find . -maxdepth 2 -name "core*" | head -n 1)
-  - if [[ -f "$COREFILE" ]]; then gdb -c "$COREFILE" pytest -ex "thread apply all bt" -ex "set pagination 0" -batch; fi
+  # NOTE: without debug info, the stack trace won't be too useful.
+  # If it's possible to run with python2.7-dbg, then gdb hook py-bt will do its magic.
+  - if [[ -f "$COREFILE" ]]; then gdb -c "$COREFILE" python -ex "thread apply all bt" -ex "set pagination 0" -batch; fi
 
 before_deploy:
   # Build a python wheel before deployment
