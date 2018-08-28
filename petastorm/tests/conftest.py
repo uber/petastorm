@@ -27,6 +27,7 @@ SyntheticDataset = namedtuple('synthetic_dataset', ['url', 'data', 'path'])
 # Number of rows in a fake dataset
 ROWS_COUNT = 100
 
+_CACHE_FAKE_DATASET_OPTION_SHORT = '-Y'
 _CACHE_FAKE_DATASET_OPTION = '--cache-synthetic-dataset'
 
 logger = logging.getLogger(__name__)
@@ -34,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 def pytest_addoption(parser):
     parser.addoption(
-        _CACHE_FAKE_DATASET_OPTION, action="store_true", default=False,
+        _CACHE_FAKE_DATASET_OPTION_SHORT, _CACHE_FAKE_DATASET_OPTION, action="store_true", default=False,
         help='Use a cached version of synthetic dataset if available. This helps speedup local tests reruns as '
              'we don\'t have to rerun spark. CAUTION: you won\'t be exercising dataset generating parts of petastorm '
              'hence tests results maybe inaccurate'
