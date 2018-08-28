@@ -149,8 +149,8 @@ with DataLoader(Reader('file:///localpath/mnist/test', num_epochs=10),
 
 
 # Troubleshooting
-See the [Troubleshooting](docs/troubleshooting.md) page and please submit the [ticket](https://github.com/uber/petastorm/issues/new)
+See the [Troubleshooting](docs/troubleshoot.md) page and please submit a [ticket](https://github.com/uber/petastorm/issues/new)
 if you can't find an answer.
 
 # Development
-See the [Development](doc/development.md) page for instructions on how to develop Petastorm and run tests.
+See the [Development](docs/development.md) page for instructions on how to develop Petastorm and run tests.
