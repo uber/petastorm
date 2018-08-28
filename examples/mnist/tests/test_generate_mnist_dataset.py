@@ -14,18 +14,16 @@
 
 import logging
 import os
+
+import numpy as np
 import pytest
-import sys
 import torch  # pylint: disable=unused-import
-import tensorflow as tf
 
 import examples.mnist.pytorch_example as pytorch_example
 import examples.mnist.tf_example as tf_example
-import numpy as np
-
 from examples.mnist.generate_petastorm_mnist import download_mnist_data, \
     mnist_data_to_petastorm_dataset
-from petastorm.reader import Reader, ShuffleOptions
+from petastorm.reader import Reader
 from petastorm.workers_pool.dummy_pool import DummyPool
 
 logging.basicConfig(level=logging.INFO)
@@ -45,6 +43,7 @@ LARGE_MOCK_IMAGE_COUNT = {
 
 class MockDataObj(object):
     """ Wraps a mock image array and provide a needed getdata() interface function. """
+
     def __init__(self, a):
         self.a = a
 
@@ -65,7 +64,8 @@ def _mock_mnist_data(mock_spec):
 
     for dset, data in bogus_data.items():
         for _ in range(mock_spec[dset]):
-            pair = (MockDataObj(np.random.randint(0, 255, size=MOCK_IMAGE_SIZE, dtype=np.uint8)), np.random.randint(0, 9))
+            pair = (
+            MockDataObj(np.random.randint(0, 255, size=MOCK_IMAGE_SIZE, dtype=np.uint8)), np.random.randint(0, 9))
             data.append(pair)
 
     return bogus_data
@@ -113,7 +113,7 @@ def test_mnist_download(tmpdir):
     o = download_mnist_data(tmpdir, train=False)
     assert 10000 == len(o)
     assert o[0][1] == 7
-    assert o[len(o)-1][1] == 6
+    assert o[len(o) - 1][1] == 6
 
 
 def test_generate_mnist_dataset(generate_mnist_dataset):
