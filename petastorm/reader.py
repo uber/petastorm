@@ -310,7 +310,12 @@ class Reader(object):
 
     def __next__(self):
         try:
-            return self._workers_pool.get_results(timeout=self._read_timeout_s)
+            # Namedtuples are returned to the user. All internal processing is done as dictionaries. Convert.
+            result = self._workers_pool.get_results(timeout=self._read_timeout_s)
+            if self.ngram:
+                return self.ngram.make_namedtuple(self.schema, result)
+            else:
+                return self.schema.make_namedtuple(**result)
         except EmptyResultError:
             raise StopIteration
 

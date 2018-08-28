@@ -11,10 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import numbers
 
 from petastorm.unischema import UnischemaField
+
 
 class NGram(object):
     """
@@ -167,8 +167,7 @@ class NGram(object):
         """
         # Verify that each element and it's previous element do not exceed the delta_threshold
         for previous, current in zip(ngram[:-1], ngram[1:]):
-            if getattr(current, self._timestamp_field.name) - getattr(previous, self._timestamp_field.name) > \
-                    self.delta_threshold:
+            if current[self._timestamp_field.name] - previous[self._timestamp_field.name] > self.delta_threshold:
                 return False
         return True
 
@@ -208,8 +207,8 @@ class NGram(object):
             # Potential ngram: [index, index + self.length[
             potential_ngram = data[index:index + self.length]
 
-            is_sorted = all(getattr(potential_ngram[i], self._timestamp_field.name) <=
-                            getattr(potential_ngram[i + 1], self._timestamp_field.name)
+            is_sorted = all(potential_ngram[i][self._timestamp_field.name] <=
+                            potential_ngram[i + 1][self._timestamp_field.name]
                             for i in range(len(potential_ngram) - 1))
             if not is_sorted:
                 raise NotImplementedError('NGram assumes that the data is sorted by {0} field which is not the case'
@@ -218,7 +217,7 @@ class NGram(object):
             if not self.timestamp_overlap and prev_ngram_end_timestamp is not None:
                 # If we dont want timestamps of NGrams to overlap, check that the start timestamp of the next NGram
                 # is not less than the end timestamp of the previous NGram
-                next_ngram_start_timestamp = getattr(potential_ngram[0], self._timestamp_field.name)
+                next_ngram_start_timestamp = potential_ngram[0][self._timestamp_field.name]
                 if next_ngram_start_timestamp <= prev_ngram_end_timestamp:
                     continue
 
@@ -228,15 +227,38 @@ class NGram(object):
             if len(potential_ngram) == self.length and self._ngram_pass_threshold(potential_ngram):
                 new_item = {(base_key + key): value for (key, value) in enumerate(potential_ngram)}
                 for key in new_item:
-                    current_schema = self.get_schema_at_timestep(schema=schema, timestep=key)
                     # Get the data for that current timestep and create a namedtuple
-                    current_item = new_item[key]._asdict()
-                    new_item[key] = current_schema.make_namedtuple(
-                        **{k: current_item[k] for k in current_item if k in self.get_field_names_at_timestep(key)}
-                    )
+                    current_item = new_item[key]
+                    new_item[key] = {k: current_item[k]
+                                     for k in current_item if k in self.get_field_names_at_timestep(key)}
                 result.append(new_item)
 
                 if not self.timestamp_overlap:
-                    prev_ngram_end_timestamp = getattr(potential_ngram[-1], self._timestamp_field.name)
+                    prev_ngram_end_timestamp = potential_ngram[-1][self._timestamp_field.name]
 
         return result
+
+    def make_namedtuple(self, schema, ngram_as_dicts):
+        """Converts a ngram structure where mapped values are dictionaries to a mapped structure where mapped values
+        are namedtuples.
+
+        Example:
+          { -1 : {'f1': 10, 'f2': 20},
+             0 : {'f1': 30},
+          }
+
+        is converted to
+          { -1 : namedtuple(f1=10, f2=20),
+             0 : namedtuple(f1=30),
+          }
+
+        :param schema: schema used for conversion
+        :param ngram_as_dicts: ngram in the timestamp-to-dict mapping
+        :return: ngram in the timestamp-to-namedtuple mapping
+        """
+        ngram_as_tuples = {}
+        for timestamp in ngram_as_dicts.keys():
+            data_as_dict = ngram_as_dicts[timestamp]
+            current_schema = self.get_schema_at_timestep(schema=schema, timestep=timestamp)
+            ngram_as_tuples[timestamp] = current_schema.make_namedtuple(**data_as_dict)
+        return ngram_as_tuples

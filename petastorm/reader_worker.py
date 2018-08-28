@@ -103,12 +103,10 @@ class ReaderWorker(WorkerBase):
             all_cols = self._local_cache.get(cache_key,
                                              lambda: self._load_rows(parquet_file, piece, shuffle_row_drop_partition))
 
-        all_cols_as_tuples = [self._schema.make_namedtuple(**row) for row in all_cols]
-
         if self._ngram:
-            all_cols_as_tuples = self._ngram.form_ngram(data=all_cols_as_tuples, schema=self._schema)
+            all_cols = self._ngram.form_ngram(data=all_cols, schema=self._schema)
 
-        for item in all_cols_as_tuples:
+        for item in all_cols:
             self.publish_func(item)
 
     def _load_rows(self, pq_file, piece, shuffle_row_drop_range):
