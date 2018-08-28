@@ -20,12 +20,13 @@ import warnings
 
 from pyarrow import parquet as pq
 
-from petastorm import PredicateBase, RowGroupSelectorBase
 from petastorm.cache import NullCache
 from petastorm.etl import dataset_metadata, rowgroup_indexing
 from petastorm.fs_utils import FilesystemResolver
 from petastorm.ngram import NGram
+from petastorm.predicates import PredicateBase
 from petastorm.reader_worker import ReaderWorker
+from petastorm.selectors import RowGroupSelectorBase
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.thread_pool import ThreadPool
 from petastorm.workers_pool.ventilator import ConcurrentVentilator

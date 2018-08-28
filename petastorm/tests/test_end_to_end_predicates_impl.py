@@ -14,7 +14,7 @@
 
 """In order for the predicates to be accessible from a process_pool and the test_end_to_end.py is ran directly as
 __main__, these predicates have to be implemented in a separate module"""
-from petastorm import PredicateBase
+from petastorm.predicates import PredicateBase
 
 
 class PartitionKeyInSetPredicate(PredicateBase):

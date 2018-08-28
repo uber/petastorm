@@ -15,12 +15,24 @@
 """
 Predicates for petastorm
 """
+import abc
 import collections
 import hashlib
 import numpy as np
+import six
 import sys
 
-from petastorm import PredicateBase
+@six.add_metaclass(abc.ABCMeta)
+class PredicateBase(object):
+    """ Base class for row predicates """
+
+    @abc.abstractmethod
+    def get_fields(self):
+        pass
+
+    @abc.abstractmethod
+    def do_include(self, values):
+        pass
 
 
 def _string_to_bucket(string, bucket_num):

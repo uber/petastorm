@@ -12,7 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from petastorm import RowGroupSelectorBase
+import abc
+import six
+
+
+@six.add_metaclass(abc.ABCMeta)
+class RowGroupSelectorBase(object):
+    """ Base class for row group selectors."""
+
+    @abc.abstractmethod
+    def get_index_names(self):
+        """ Return list of indexes required for given selector."""
+        pass
+
+    @abc.abstractmethod
+    def select_row_groups(self, index_dict):
+        """ Return set of row groups which are selected."""
+        pass
 
 
 class SingleIndexSelector(RowGroupSelectorBase):
