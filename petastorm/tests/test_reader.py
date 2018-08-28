@@ -15,8 +15,12 @@ import pyarrow.parquet as pq
 import pytest
 
 from petastorm.reader import Reader, ShuffleOptions
+from petastorm.reader_impl.reader_v2 import ReaderV2
 
-READER_FACTORIES = [Reader]
+READER_FACTORIES = [
+    Reader,
+    ReaderV2,
+]
 
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
