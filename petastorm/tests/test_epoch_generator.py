@@ -1,3 +1,5 @@
+import pytest
+
 from petastorm.reader_impl.epochs import epoch_generator
 
 
@@ -42,3 +44,14 @@ def test_unlimited_epochs():
 
 def test_one_item_epoch():
     assert list(epoch_generator([1, ], 3, False)) == [1, 1, 1]
+
+
+def test_invalid_number_of_epochs():
+    with pytest.raises(ValueError):
+        list(epoch_generator([0, 1], 0, False))
+
+    with pytest.raises(ValueError):
+        list(epoch_generator([0, 1], -1, False))
+
+    with pytest.raises(ValueError):
+        list(epoch_generator([0, 1], 'abc', False))
