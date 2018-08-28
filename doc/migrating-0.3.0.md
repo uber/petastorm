@@ -78,14 +78,14 @@ with materialize_dataset(spark, dataset_url, MySchema):
 
 ## Updating Metadata Of Existing Datasets
 We changed how dataset metadata is stored, which will likely result in a warning message of:
-`You are using a deprecated metadata version. Please run petastorm-generate-metadata on spark to update.`
+`You are using a deprecated metadata version. Please run petastorm-generate-metadata.py on spark to update.`
 
 This is just recommending you to regenerate the metadata for any existing petastorm datasets to use the new structure.
 Luckily while in the past it took several minutes to regenerate metadata for a dataset, it now should only take a few
-seconds. There is a script `petastorm-generate-metadata` included in petastorm 0.3.0 which makes this easy.
+seconds. There is a script `petastorm-generate-metadata.py` included in petastorm 0.3.0 which makes this easy.
 Simply run:
 ```bash
-petastorm-generate-metadata --dataset_url hdfs://namenode-host:port/path/to/dataset
+petastorm-generate-metadata.py --dataset_url hdfs://namenode-host:port/path/to/dataset
 ```
 Which will regenerate the dataset metadata, reusing the schema information already there. By default this
 will run on your local pyspark which should be fine given that the job does not utilize any executors
@@ -98,7 +98,7 @@ a location in remote storage (e.g. HDFS) you will need write permission to both 
 `_common_metadata`/`_metadata` files (if they exist). The easiest way to accomplish this is to make the directory writeable
 to your user either by changing file permissions, changing file ownership, etc. The easiest way to guarantee success would
 be to `chmod -R` the directory to `777` however do this at your own risk. Another option would be to run
-`petastorm-generate-metadata` from within spark to have it share the same runtime environment permissions as the
+`petastorm-generate-metadata.py` from within spark to have it share the same runtime environment permissions as the
 original dataset run.
 
 
