@@ -26,7 +26,6 @@ from petastorm import utils
 from petastorm.etl.legacy import depickle_legacy_package_name_compatible
 from petastorm.fs_utils import FilesystemResolver
 
-
 logger = logging.getLogger(__name__)
 
 ROW_GROUPS_PER_FILE_KEY = b'dataset-toolkit.num_row_groups_per_file.v1'
@@ -234,7 +233,7 @@ def _split_row_groups(dataset):
 def get_schema(dataset):
     """
     Retrieve schema object stored as part of dataset methadata
-    :param dataset:
+    :param dataset: an instance of pyarrow.ParquetDatasetobject
     :return: unischema object
     """
     # Split the dataset pieces by row group using the precomputed index
@@ -262,3 +261,19 @@ def get_schema(dataset):
     schema = depickle_legacy_package_name_compatible(ser_schema)
 
     return schema
+
+
+def get_schema_from_dataset_url(dataset_url):
+    """Returns a Unischema object loaded from a dataset specified by a url.
+
+    :param dataset_url: A dataset url
+    :return: A Unischema object
+    """
+    resolver = FilesystemResolver(dataset_url)
+    dataset = pq.ParquetDataset(resolver.parsed_dataset_url().path, filesystem=resolver.filesystem(),
+                                validate_schema=False)
+
+    # Get a unischema stored in the dataset metadata.
+    stored_schema = get_schema(dataset)
+
+    return stored_schema
