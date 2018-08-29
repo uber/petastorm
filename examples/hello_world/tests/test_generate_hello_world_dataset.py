@@ -12,24 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
-import shutil
-import tempfile
-import unittest
 
 from examples.hello_world.hello_world_dataset import generate_hello_world_dataset
+from petastorm.reader import Reader
 
 
-class TestGenerateHelloWorldDataset(unittest.TestCase):
+def test_generate(tmpdir):
+    temp_url = 'file://' + tmpdir.strpath
 
-    def test_generate(self):
-        temp_dir = tempfile.mkdtemp()
-        try:
-            generate_hello_world_dataset('file://' + temp_dir)
-            self.assertTrue('_SUCCESS' in os.listdir(temp_dir))
-        finally:
-            if os.path.exists(temp_dir):
-                shutil.rmtree(temp_dir)
+    # Generate a dataset
+    generate_hello_world_dataset(temp_url)
+    assert '_SUCCESS' in os.listdir(tmpdir.strpath)
 
-
-if __name__ == '__main__':
-    unittest.main()
+    # Read from it
+    with Reader(temp_url) as reader:
+        all_samples = list(reader)
+    assert all_samples
