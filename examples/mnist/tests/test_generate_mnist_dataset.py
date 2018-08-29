@@ -16,6 +16,7 @@ import logging
 import os
 import pytest
 import sys
+import torch  # pylint: disable=unused-import
 
 import examples.mnist.main as main
 import numpy as np
