@@ -35,13 +35,13 @@ before_script:
 
 script:
   - pylint --rcfile=.pylintrc petastorm examples -f parseable -r n
-  # Completely ignore two pytorch tests to prevent static-TLS-caused torch-import seg-fault
-  - pytest -v --cov=./
-    --ignore=petastorm/tests/test_pytorch_utils.py
+  # Ignore two pytorch tests to prevent static-TLS-caused torch-import seg-fault
+  - pytest -v --cov=./ --trace-config
     --ignore=examples/mnist/tests/test_generate_mnist_dataset.py
-    -p no:examples/mnist/tests/conftest.py
-  # Run the pytorch tests separately, but accumulate code coverage data
-  # Temporary disabled till we figure out segfaults in the first test with `import torch` in conftest.py
+    --ignore=petastorm/tests/test_pytorch_utils.py
+  # Run the pytorch tests separately, in this order, but accumulate code coverage data
+  # Temporary disabled until we figure out (a) segfaults in the first test with `import torch`,
+  # and (b) hanging in `test_read_mnist_dataset`
   # - pytest -v examples/mnist/tests/test_generate_mnist_dataset.py petastorm/tests/test_pytorch_utils.py --cov=./ --cov-append
 
   # Verify caching of synthetic dataset is working (at least not failing)
