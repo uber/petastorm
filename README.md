@@ -1,6 +1,8 @@
 # Petastorm
 
-[![Build Status](https://travis-ci.com/uber/petastorm.svg?branch=master)](https://travis-ci.com/uber/petastorm) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Build Status](https://travis-ci.com/uber/petastorm.svg?branch=master)](https://travis-ci.com/uber/petastorm)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Latest Version](https://badge.fury.io/py/petastorm.svg)](https://pypi.org/project/petastorm)
 
 Petastorm is a library enabling the use of Parquet storage from Tensorflow, Pytorch, and other Python-based ML training frameworks.
 From the perspective of deep-learning training and evaluation procedures, using datasets stored in Parquet bridges a common, big-data storage format with deep-learning frameworks, making it simpler to combine them.
@@ -149,8 +151,8 @@ with DataLoader(Reader('file:///localpath/mnist/test', num_epochs=10),
 
 
 # Troubleshooting
-See the [Troubleshooting](docs/troubleshoot.md) page and please submit a [ticket](https://github.com/uber/petastorm/issues/new)
+See the [Troubleshooting](https://github.com/uber/petastorm/blob/master/docs/troubleshoot.md) page and please submit a [ticket](https://github.com/uber/petastorm/issues/new)
 if you can't find an answer.
 
 # Development
-See the [Development](docs/development.md) page for instructions on how to develop Petastorm and run tests.
+See the [Development](https://github.com/uber/petastorm/blob/master/docs/development.md) page for instructions on how to develop Petastorm and run tests.

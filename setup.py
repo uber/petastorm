@@ -19,6 +19,9 @@ from petastorm import __version__
 
 PACKAGE_NAME = 'petastorm'
 
+with open('README.md') as f:
+    long_description = f.read()
+
 REQUIRED_PACKAGES = [
     'diskcache>=3.0.0',
     'numpy>=1.13.3',
@@ -45,10 +48,26 @@ setup(
     version=__version__,
     install_requires=REQUIRED_PACKAGES,
     packages=packages,
-    description='petastorm library TODO: more info',
-    license='Apache 2.0',
+    description='Petastorm is a library enabling the use of Parquet storage from Tensorflow, Pytorch, and'
+                ' other Python-based ML training frameworks.',
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    license='Apache License, Version 2.0',
     extras_require=EXTRA_REQUIRE,
     entry_points = {
         'console_scripts': ['petastorm-generate-metadata.py=petastorm.etl.petastorm_generate_metadata:main'],
     },
+    url='https://github.com/uber/petastorm',
+    author='Uber Technologies, Inc.',
+    classifiers=[
+        'Environment :: Console',
+        'Environment :: Web Environment',
+        'Intended Audience :: Developers',
+        'Intended Audience :: Science/Research',
+        'License :: OSI Approved :: Apache Software License',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
+    ],
 )
