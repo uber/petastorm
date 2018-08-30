@@ -59,17 +59,12 @@ after_failure:
   # If it's possible to run with python2.7-dbg, then gdb hook py-bt will do its magic.
   - if [[ -f "$COREFILE" ]]; then gdb -c "$COREFILE" python -ex "thread apply all bt" -ex "set pagination 0" -batch; fi
 
-before_deploy:
-  # Build a python wheel before deployment
-  - python setup.py bdist_wheel
-
 deploy:
-  # Push all python wheels created to Github release (TODO: when public to Pypi)
-  provider: releases
-  skip_cleanup: true
-  api_key:
-    secure: I96u6KqgSj0Cqx2NvLLLgw6rx7+gN4/6wdptfBrP1zxppMERu/iaLYLgDwDKRXzgTIrx5LopFIllf9/kPcUJgDFj/AxESo6aukzcYK3tB2OhEYIAxYcZf8Kt3aV+AHp/TIDdZ9sGbVLxypuxSXqiAc5dJw8S0Njja/9Qgxe4jqNXNLjLxEb3qlCrYJFEA9MxxPgH/QsWZ6M43hR5gNrGWrhSaIHSjMXXkzRjQG+bGApFf+XRx7le2M5vIeaw1K/osJ930QEjDTnp0v5hFvkB9F1buC17rZO8Xy0KAAhB1+SaEWtS4N0lFIVYE1b3Ke1ek82kW1d7UDEAcEL6ccICboKtvhFfgb1MXVQkdRq4HlhwHl8n4FJIztbwXaQW1aISR5x+m6RIFwMuI+U/MjcVVt+CEgo8X4HATb2pdgWnFcS649t7lhrx7HCBNZpUNmfoZ/YyNgPdQf+vreCNxWOpqi4UacH890GhLFUFXtijeL7xGXWIg7ugQmlK27CfM1mMN1Vp9NTRAXA0x7HuqckWKY85lCJMT+3IJMgVjz+BdGZDQ5RJI22FmRDNuWrH/Mio77EK+sOsKm/X3Q8/Sb8uwU+Ft1Vb7aikQ2NIl89uQQdVxH4TlQw6/VQSZODacTUwMz5CkB0RJNrlbZpUpPrHiTVa4dRo7/34qe7iGA7XtfY=
-  file_glob: true
-  file: dist/*.whl
+  provider: pypi
+  user: uber
+  password:
+    secure: gDx2UHI5mcBBAJCM71CBiyn6N2QF+HUx7+42BDc5uR3tL7Mk0fgNsl9tygG3hAabsujsG6eTotHGWUw3zRRN2+htyfQ4iiprivS+9LkPW/N9rp3IwcqfygoJk4ZTYRAnYAOtGJ+EWQU/8L8hekxAmuDKuWZfqO0gUSjxyKzE5bP9ly0HHk7pm201NdkoVUpl2DR/WCazbEuOTeHgNz72NirB00hkG7ScdIP1c6dnNqGe4UH7lbd6ZDHkTfvJAOR0BTTzGjP29e303AeHum++R47ddleUTgeiwBdhhgNhaSZY5IhWq32oNLWNd+j8mDpc1YaAb3AzWPS0CJvFPtH/bWyVUvlw343WinxjD5y4svlcoqxYzYtvKwAgO70Txdi9VLuc0F7FHz5CxcoP7L4OCf9nMA3v/0LK9P3dbBb4q9VK9pla6SyaHVR64BUHm/7+uPM8qPlZWV+NCiSrKy5R83zMpxDwXrxa9xXVKIHdrs7osmxMg5/AVMmIu/UVjs58LmLCSQWMYnpYJBgfycYzqA2fSXlelJxSL9wsDjBtkt9sZ0OUP2BQ2rJQAAJaLzHXduDAIiyvjFpZz5fC2B1HNIRKENxD6u2TFGUNuO7ubajiPpyOeXH6cNcrJdDLuhSVQXHYXtNqMuX0XBnKC7wPSmQdegjd8HUIRIij8XMAjkE=
+  distributions: "sdist bdist_wheel"
   on:
     tags: true
+    python: 3.6
