@@ -21,6 +21,7 @@ class NGram(object):
     Defines an NGram, having certain fields as set by fields, where consecutive items in an NGram are no further apart
     than the argument delta_threshold (inclusive). The argument timestamp_field indicate which field refers to the
     timestamp in the data.
+
     The argument fields is a dictionary, where the keys are integers, and the value is an array of the Unischema fields
     to include at that timestep.
 
@@ -29,55 +30,69 @@ class NGram(object):
 
     The following are examples of what NGram will return based on the parameters:
 
-    Case 1:
-            - fields = {
-                -1: [TestSchema.id, TestSchema.id2, TestSchema.image_png, TestSchema.matrix],
-                0: [TestSchema.id, TestSchema.id2, TestSchema.sensor_name],
-            }
-            - delta_threshold=5
-            - timestamp_field='id'
+    A. Case 1:
 
-            The data being:
-                A {'id': 0,  ....}
-                B {'id': 10, ....}
-                C {'id': 20, ....}
-                D {'id': 30, ....}
+    >>> fields = {
+    >>>  -1: [TestSchema.id, TestSchema.id2, TestSchema.image_png,
+    >>>       TestSchema.matrix],
+    >>>   0: [TestSchema.id, TestSchema.id2,
+    >>>       TestSchema.sensor_name],
+    >>> }
+    >>> delta_threshold = 5
+    >>> timestamp_field = 'id'
 
-            The result will be empty, since delta is 10 (more than allowed delta_threshold of 5)
+      - The data being:
 
-    Case 2:
-            - fields = {
-                -1: [TestSchema.id, TestSchema.id2, TestSchema.image_png, TestSchema.matrix],
-                0: [TestSchema.id, TestSchema.id2, TestSchema.sensor_name],
-            }
-            - delta_threshold = 4
-            - timestamp_field = 'id'
+    >>> A {'id': 0,  ....}
+    >>> B {'id': 10, ....}
+    >>> C {'id': 20, ....}
+    >>> D {'id': 30, ....}
 
-            The data being:
-                A {'id': 0, .....}
-                B {'id': 3, .....}
-                C {'id': 8, .....}
-                D {'id': 10, .....}
-                E {'id': 11, .....}
-                G {'id': 20, .....}
-                H {'id': 30, .....}
+      - The result will be empty, since delta is 10 (more than allowed delta_threshold of 5)
 
-            The result will be {-1: A, 0: B}, {-1: C, 0: D}, {-1: D, 0: E}
-            Notice how:
-            - (B, C) was skipped since B id is 3 and C id is 8 (difference of 5 >= delta_threshold is 4)
-            - (E, G), (G, H) were also skipped due to the same reason
+    B. Case 2:
 
-    One caveat to note, that all NGrams within the same parquet row group are guaranteed to be returned, but not across
-    different parquet row groups. i.e. if row group 1 has [0, 5], row group 2 has [6, 10] then this will result in
-    (0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (6, 7), (7, 8), (8, 9), (9, 10)
-    Notice how the (5, 6) was skipped because it is across two different row groups
+    >>> fields = {
+    >>>     -1: [TestSchema.id, TestSchema.id2, TestSchema.image_png,
+    >>>          TestSchema.matrix],
+    >>>      0: [TestSchema.id, TestSchema.id2,
+    >>>          TestSchema.sensor_name],
+    >>> }
+    >>> delta_threshold = 4
+    >>> timestamp_field = 'id'
+
+      - The data being:
+
+    >>> A {'id': 0, .....}
+    >>> B {'id': 3, .....}
+    >>> C {'id': 8, .....}
+    >>> D {'id': 10, .....}
+    >>> E {'id': 11, .....}
+    >>> G {'id': 20, .....}
+    >>> H {'id': 30, .....}
+
+      - The result will be:
+
+    >>> {-1: A, 0: B},
+    >>> {-1: C, 0: D},
+    >>> {-1: D, 0: E}
+
+      - Notice how:
+        - ``(B, C)`` was skipped since B ``id`` is 3 and C ``id`` is 8 (difference of 5 ``>= delta_threshold`` of 4)
+        - ``(E, G), (G, H)`` were also skipped due to the same reason
+
+    One caveat to note: All NGrams within the same parquet row group are guaranteed to be returned, but not across
+    different parquet row groups. i.e. if row group 1 has ``[0, 5]``, row group 2 has ``[6, 10]`` then this will result
+    in ``(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (6, 7), (7, 8), (8, 9), (9, 10)``.
+
+    Notice how the ``(5, 6)`` was skipped because it is across two different row groups.
     In order to potentially produce more NGrams, the row group size should be increased (at minimum it needs to be
     at least as large as the NGram length).
 
-    Note: Passing a field argument like {-1: [TestSchema.id], 1: [TestSchema.id]} are allowed, the 0 field will just be
-          empty.
-          Passing a field argument like {1: [TestSchema.id], 0: [TestSchema.id]} is the same as passing a field argument
-          like {0: [TestSchema.id], 1: [TestSchema.id]}
+    Note: Passing a field argument like ``{-1: [TestSchema.id], 1: [TestSchema.id]}`` are allowed, the 0 field will
+    just be empty.
+    Passing a field argument like ``{1: [TestSchema.id], 0: [TestSchema.id]}`` is the same as passing a field
+    argument like ``{0: [TestSchema.id], 1: [TestSchema.id]}``
 
     The return type will be a dictionary where the keys are the same as the keys passed to fields and the value of each
     key will be the item.
@@ -86,17 +101,18 @@ class NGram(object):
     def __init__(self, fields, delta_threshold, timestamp_field, timestamp_overlap=True):
         """
         Constructor to initialize ngram with fields, delta_threshold and timestamp_field.
+
         :param fields: A dictionary, with consecutive integers as keys and each value is an array of Unischema fields.
         :param delta_threshold: The maximum threshold of delta between timestamp_field.
         :param timestamp_field: The field that represents the timestamp.
-        :param timestamp_overlap: Whether timestamps in sequences are allowed to overlap (defaults to True)
-                        e.g. If the data consists of consecutive timestamps [{'id': 0}, {'id': 1}, ..., {'id': 5}]
-                        and you are asking for NGram of length 3 with timestamp_overlap set to True you will receive
-                        NGrams of [{'id': 0}, {'id': 1}, {'id': 2}] and [{'id': 1}, {'id': 2}, {'id': 3}] (in addition
-                        to others) however note that {'id': 1}, and {'id': 2} appear twice. With timestamp_overlap set
-                        to False this would not occur and instead return [{'id': 0}, {'id': 1}, {'id': 2}] and
-                        [{'id': 3}, {'id': 4}, {'id': 5}]. There is no overlap of timestamps between NGrams (and each
-                        timestamp record should only occur once in the returned data)
+        :param timestamp_overlap: Whether timestamps in sequences are allowed to overlap (defaults to True),
+            e.g., If the data consists of consecutive timestamps ``[{'id': 0}, {'id': 1}, ..., {'id': 5}]``
+            and you are asking for NGram of length 3 with timestamp_overlap set to True you will receive
+            NGrams of ``[{'id': 0}, {'id': 1}, {'id': 2}]`` and ``[{'id': 1}, {'id': 2}, {'id': 3}]`` (in addition
+            to others); however, note that ``{'id': 1}``, and ``{'id': 2}`` appear twice. With timestamp_overlap set
+            to False, this would not occur and instead return ``[{'id': 0}, {'id': 1}, {'id': 2}]`` and
+            ``[{'id': 3}, {'id': 4}, {'id': 5}]``. There is no overlap of timestamps between NGrams (and each
+            timestamp record should only occur once in the returned data)
         """
         self._fields = fields
         self._delta_threshold = delta_threshold
@@ -108,7 +124,7 @@ class NGram(object):
     @property
     def length(self):
         """
-        return the ngram length requested.
+        Returns the ngram length requested.
         :return: the ngram length.
         """
         return max(self._fields.keys()) - min(self._fields.keys()) + 1
@@ -195,7 +211,7 @@ class NGram(object):
         """
         Return all the ngrams as dictated by fields, delta_threshold and timestamp_field.
         :param data: The data items, which is a list of Unischema items.
-        :return: A dictionary, with keys [0, length - 1]. The value of each key is the corresponding item in the
+        :return: A dictionary, with keys ``[0, length - 1]``. The value of each key is the corresponding item in the
         ngram at that position.
         """
 
@@ -243,14 +259,16 @@ class NGram(object):
         are namedtuples.
 
         Example:
-          { -1 : {'f1': 10, 'f2': 20},
-             0 : {'f1': 30},
-          }
+
+        >>> { -1 : {'f1': 10, 'f2': 20},
+        >>>    0 : {'f1': 30},
+        >>> }
 
         is converted to
-          { -1 : namedtuple(f1=10, f2=20),
-             0 : namedtuple(f1=30),
-          }
+
+        >>> { -1 : namedtuple(f1=10, f2=20),
+        >>>    0 : namedtuple(f1=30),
+        >>> }
 
         :param schema: schema used for conversion
         :param ngram_as_dicts: ngram in the timestamp-to-dict mapping

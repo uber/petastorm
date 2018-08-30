@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""'unischema' is a data structure definition which can be rendered as native schema/data-types objects
-in several different python libraries. Currently supported arepyspark, tensorflow, numpy"""
+"""A ``unischema`` is a data structure definition which can be rendered as native schema/data-types objects
+in several different python libraries. Currently supported are pyspark, tensorflow, and numpy.
+"""
 from collections import namedtuple, OrderedDict
 
 import copy
@@ -22,11 +23,10 @@ from pyspark.sql.types import StructField, StructType
 
 
 def _fields_as_tuple(field):
-    """
-    Common representation of UnischemaField for equality and hash operators.
+    """Common representation of UnischemaField for equality and hash operators.
     Defined outside class because the method won't be accessible otherwise.
 
-    The only difference is that the type name of the `codec` field is returned
+    The only difference is that the type name of the ``codec`` field is returned
     so that the codec object ID won't differentiate two otherwise identifcial
     UniSchema fields.
     """
@@ -34,15 +34,14 @@ def _fields_as_tuple(field):
 
 
 class UnischemaField(namedtuple('UnischemaField', ['name', 'numpy_dtype', 'shape', 'codec', 'nullable'])):
-    """
-    A type used to describe a single field in the schema:
+    """A type used to describe a single field in the schema:
 
     - name: name of the field.
-    - numpy_dtype: a numpy dtype reference
-    - shape: shape of the multidimensional array. 'None' value is used to define a dimension with variable number of
-             elements. E.g. (None, 3) defines a point cloud with three coordinates but unknown number of points.
+    - numpy_dtype: a numpy ``dtype`` reference
+    - shape: shape of the multidimensional array. None value is used to define a dimension with variable number of
+             elements. E.g. ``(None, 3)`` defines a point cloud with three coordinates but unknown number of points.
     - codec: An instance of a codec object used to encode/decode data during serialization
-             (e.g. CompressedImageCodec('png'))
+             (e.g. ``CompressedImageCodec('png')``)
     - nullable: Boolean indicating whether field can be None
 
     A field is considered immutable, so we override both equality and hash operators for consistency
@@ -50,8 +49,7 @@ class UnischemaField(namedtuple('UnischemaField', ['name', 'numpy_dtype', 'shape
     """
 
     def __eq__(self, other):
-        """
-        Comparing field objects via default namedtuple __repr__ representation doesn't work due to
+        """Comparing field objects via default namedtuple __repr__ representation doesn't work due to
         codec object ID changing when unpickled.
 
         Instead, compare all field attributes, but only codec type.
@@ -71,15 +69,15 @@ class UnischemaField(namedtuple('UnischemaField', ['name', 'numpy_dtype', 'shape
 # the dataset on disk
 class Unischema(object):
     """Describes a schema of a data structure which can be rendered as native schema/data-types objects
-    in several different python libraries. Currently supported arepyspark, tensorflow, numpy.
+    in several different python libraries. Currently supported are pyspark, tensorflow, and numpy.
     """
 
     def __init__(self, name, fields):
         """Creates an instance of a Unischema object.
 
         :param name: name of the schema
-        :param fields: A list of UniversalSchemaColumn instances describing the fields. The order of the fields is
-        not important - they are stored sorted by name internally
+        :param fields: a list of ``UnischemaField`` instances describing the fields. The order of the fields is
+            not important - they are stored sorted by name internally.
         """
         self._name = name
         self._fields = OrderedDict([(f.name, f) for f in sorted(fields, key=lambda t: t.name)])
@@ -90,17 +88,16 @@ class Unischema(object):
         self._namedtuple = None
 
     def create_schema_view(self, fields):
-        """
-        Creates a new instance of the schema using a subset of fields.
+        """Creates a new instance of the schema using a subset of fields.
         In the process, validates that all fields are part of the scheme.
 
         If one of the fields is not part of the schema an error is raised.
 
-        Example:
-            BBox2dSchema.create_schema_view(
-                [BBox2dSchema.image_aligned_veh_z_rgb_8, BBox2dSchema.image_rgb_8])
+        The example returns a schema, but with only two fields:
 
-            returns a schema, but with only two fields.
+        >>> BBox2dSchema.create_schema_view(
+        >>>     [BBox2dSchema.image_aligned_veh_z_rgb_8,
+        >>>      BBox2dSchema.image_rgb_8])
 
         :param fields: subset of fields from which to create a new schema
         :return: a new view of the original schema containing only the supplied fields
@@ -126,12 +123,12 @@ class Unischema(object):
         return state
 
     def __str__(self):
-        """
-        Represent this as the following form:
-          Unischema(name, [
-            UnischemaField(field_name, field_numpy_dtype, field_shape, field_codec, field_nullable),
-            ...
-          ])
+        """Represent this as the following form:
+
+        >>> Unischema(name, [
+        >>>   UnischemaField(name, numpy_dtype, shape, codec, field_nullable),
+        >>>   ...
+        >>> ])
         """
         fields_str = ''
         for field in self._fields.values():
@@ -149,10 +146,12 @@ class Unischema(object):
         return self._name
 
     def as_spark_schema(self):
-        """Returns as spark schema object derived from the unischema.
+        """Returns an object derived from the unischema as spark schema.
 
         Example:
-            spark.createDataFrame(dataset_rows, BBox2dSchema.as_spark_schema())
+
+        >>> spark.createDataFrame(dataset_rows,
+        >>>                       BBox2dSchema.as_spark_schema())
         """
         schema_entries = [
             StructField(
@@ -162,9 +161,11 @@ class Unischema(object):
         return StructType(schema_entries)
 
     def make_namedtuple(self, **kargs):
-        """Returns schema as a namedtuple type intialized with arguments passed to this method
+        """Returns schema as a namedtuple type intialized with arguments passed to this method.
 
-        Example: some_schema.make_namedtuple(field1=10, field2='abc')
+        Example:
+
+        >>> some_schema.make_namedtuple(field1=10, field2='abc')
         """
         # TODO(yevgeni): verify types
         typed_dict = dict()
@@ -183,7 +184,7 @@ def dict_to_spark_row(unischema, row_dict):
     """Converts a single row into a spark Row object.
 
     Verifies that the data confirms with unischema definition types and encodes the data using the codec specified
-    by the unischema
+    by the unischema.
 
     The parameters are keywords to allow use of functools.partial.
 
@@ -212,9 +213,10 @@ def dict_to_spark_row(unischema, row_dict):
 
 
 def insert_explicit_nulls(unischema, row_dict):
-    """If input dictionary has missing fields that are nullable, this function will add the missing keys with None value
+    """If input dictionary has missing fields that are nullable, this function will add the missing keys with
+    None value.
 
-    If the fields that are missing are not nullable, a ValueError is raised
+    If the fields that are missing are not nullable, a ``ValueError`` is raised.
 
     :param unischema: An instance of a unischema
     :param row_dict: dictionary that would be checked for missing nullable fields. The dictionary is modified inplace.

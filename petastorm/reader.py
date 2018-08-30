@@ -64,35 +64,35 @@ class Reader(object):
         """Initializes a reader object.
 
         :param dataset_url: an filepath or a url to a parquet directory,
-                       e.g. 'hdfs://some_hdfs_cluster/user/yevgeni/parquet8', or '/tmp/mydataset'
-        :param schema_fields:
-            Either list of unischema fields to subset, or None to read all fields.
+            e.g. ``'hdfs://some_hdfs_cluster/user/yevgeni/parquet8'``, or ``'/tmp/mydataset'``.
+        :param schema_fields: Either list of unischema fields to subset, or ``None`` to read all fields.
             OR an NGram object, then it will return an NGram of the specified properties.
         :param predicate: instance of predicate object to filter rows to be returned by reader.
         :param rowgroup_selector: instance of row group selector object to select row groups to be read
-        :param reader_pool: parallelization pool. ThreadPool(10) (10 threads) is used by default.
-                       This pool is a custom implementation used to parallelize reading data from the dataset.
-                       Any object from workers_pool package can be used (e.g. ProcessPool)
-        :param num_epochs: An epoch is a single pass over all samples in the dataset. Setting num_epochs to 'None' will
-                       result in an infinite number of epochs.
-        :param sequence: This is deprecated. To use sequence/ngram, please supply the argument in schema_fields instead.
+        :param reader_pool: parallelization pool. ``ThreadPool(10)`` (10 threads) is used by default.
+            This pool is a custom implementation used to parallelize reading data from the dataset.
+            Any object from workers_pool package can be used
+            (e.g. :class:`petastorm.workers_pool.process_pool.ProcessPool`).
+        :param num_epochs: An epoch is a single pass over all samples in the dataset. Setting ``num_epochs`` to
+            ``None`` will result in an infinite number of epochs.
         :param training_partition: An int denoting the partition number used for multi node training. Each node should
-                       pass in a unique partition number in the range [0, num_training_partitions).
-                       num_training_partitions must be supplied as well.
-        :param num_training_partitions An int denoting the number of training partitions (how many nodes are performing
-                       the multi node training)
+            pass in a unique partition number in the range ``[0, num_training_partitions)``.
+            ``num_training_partitions`` must be supplied as well.
+        :param num_training_partitions: An int denoting the number of training partitions (how many nodes are performing
+            the multi node training).
         :param read_timeout_s: A numeric with the amount of time in seconds you would like to give a read before it
-                       times out and raises an EmptyResultError. Pass in None for an infinite timeout
-        :param cache: An object conforming to `cache.CacheBase` interface. Before loading row groups from a parquet file
-                       the Reader will attempt to load these values from cache. Caching is useful when communication
-                       to the main data store is either slow or expensive and the local machine has large enough storage
-                       to store entire dataset (or a partition of a dataset if num_training_partitions is used).
-        :param shuffle_options : ShuffleOptions object to describe how to shuffle dataset (supercedes shuffle parameter)
-                       defaults to shuffling row groups but not to drop rows based on partitions.
-        :param shuffle: DEPRECATED boolean whether to shuffle the row group order. Use shuffle_row_groups in
-                       ShuffleOptions instead.
-
-        By default, `NullCache` implementation
+            times out and raises an EmptyResultError. Pass in None for an infinite timeout.
+        :param cache: An object conforming to :class:`.CacheBase` interface. Before loading row groups from a parquet
+            file the Reader will attempt to load these values from cache. Caching is useful when communication
+            to the main data store is either slow or expensive and the local machine has large enough storage
+            to store entire dataset (or a partition of a dataset if num_training_partitions is used).
+            By default, use the :class:`.NullCache` implementation.
+        :param shuffle_options: ShuffleOptions object to describe how to shuffle dataset (supercedes shuffle parameter)
+            defaults to shuffling row groups but not to drop rows based on partitions.
+        :param sequence: *DEPRECATED* To use sequence/ngram, please supply the argument in
+            ``schema_fields`` instead.
+        :param shuffle: *DEPRECATED* Boolean whether to shuffle the row group order.
+            Use ``shuffle_row_groups`` in :class:`.ShuffleOptions` instead.
         """
 
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
@@ -166,7 +166,10 @@ class Reader(object):
                            num_training_partitions):
         """Calculates which rowgroups will be read during.
 
-        The following filters are applied: predicates;  row-group selector (our indexing mechanism); training partition
+        The following filters are applied:
+        - predicates;
+        - row-group selector (our indexing mechanism);
+        - training partition
 
         :param dataset: ParquetDataset instance
         :param row_groups: a list of row groups (a list of ParquetDatasetPiece objects)
@@ -236,7 +239,7 @@ class Reader(object):
     def _apply_predicate_to_row_groups(self, dataset, row_groups, predicate):
         """Filters the list of row group indexes using rowgroup selector object. Returns a modified list of rowgroup
         indexes and a list of worker_predicate: predicates that could not be applied at this level
-        (parquet partitioning)"""
+        (parquet partitioning)."""
 
         if predicate:
             if not isinstance(predicate, PredicateBase):
@@ -292,11 +295,11 @@ class Reader(object):
                                     randomize_item_order=shuffle_options.shuffle_row_groups)
 
     def stop(self):
-        """Stops all worker threads/processes"""
+        """Stops all worker threads/processes."""
         self._workers_pool.stop()
 
     def join(self):
-        """Joins all worker threads/processes. Will block until all worker workers have been fully terminated"""
+        """Joins all worker threads/processes. Will block until all worker workers have been fully terminated."""
         self._workers_pool.join()
 
     def fetch(self, timeout=None):
