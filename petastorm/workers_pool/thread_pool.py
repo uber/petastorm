@@ -29,7 +29,7 @@ IO_TIMEOUT_INTERVAL_S = 0.001
 
 
 class WorkerTerminationRequested(Exception):
-    """This exception will be raised if a thread is being stopped while waiting to write to the results queue"""
+    """This exception will be raised if a thread is being stopped while waiting to write to the results queue."""
     pass
 
 
@@ -104,9 +104,10 @@ class ThreadPool(object):
         """Starts worker threads.
 
         :param worker_class: A class of the worker class. The class will be instantiated in the worker process. The
-        class must implement WorkerBase protocol
-        :param worker_setup_args: Argument that will be passed to 'args' property of the instantiated WorkerBase
-        :return: None
+          class must implement :class:`.WorkerBase` protocol
+        :param worker_setup_args: Argument that will be passed to ``args`` property of the instantiated
+          :class:`.WorkerBase`
+        :return: ``None``
         """
         # Verify stop_event and raise exception if it's already set!
         if self._stop_event.is_set():
@@ -135,17 +136,19 @@ class ThreadPool(object):
             self._ventilator.start()
 
     def ventilate(self, *args, **kargs):
-        """Send a work item to a worker process. Will result in worker.process(...) call with arbitrary arguments"""
+        """Sends a work item to a worker process. Will result in ``worker.process(...)`` call with arbitrary arguments.
+        """
         self._ventilated_items += 1
         self._ventilator_queue.put((args, kargs))
 
     def get_results(self, timeout=None):
         """Returns results from worker pool or re-raise worker's exception if any happen in worker thread.
-        :param timeout: If None, will block forever, otherwise will raise TimeoutWaitingForResultError
-                        exception if no data received within the timeout (in seconds)
 
-        :return: arguments passed to publish_func(...) by a worker. If no more results are anticipated,
-                 EmptyResultError.
+        :param timeout: If None, will block forever, otherwise will raise :class:`.TimeoutWaitingForResultError`
+            exception if no data received within the timeout (in seconds)
+
+        :return: arguments passed to ``publish_func(...)`` by a worker. If no more results are anticipated,
+                 :class:`.EmptyResultError`.
         """
 
         while True:
@@ -172,13 +175,13 @@ class ThreadPool(object):
                 raise TimeoutWaitingForResultError()
 
     def stop(self):
-        """Stops all workers (non-blocking)"""
+        """Stops all workers (non-blocking)."""
         if self._ventilator:
             self._ventilator.stop()
         self._stop_event.set()
 
     def join(self):
-        """Block until all workers are terminated"""
+        """Block until all workers are terminated."""
         for w in self._workers:
             if w.isAlive():
                 w.join()
@@ -194,11 +197,11 @@ class ThreadPool(object):
             stats.sort_stats('cumulative').print_stats()
 
     def _stop_aware_put(self, data):
-        """This method is called to write the results to the results queue. We use `put` in a non-blocking way so we
-        can gracefully terminate the worker thread without being stuck on Queue.put.
+        """This method is called to write the results to the results queue. We use ``put`` in a non-blocking way so we
+        can gracefully terminate the worker thread without being stuck on :func:`Queue.put`.
 
-        The method raises WorkerTerminationRequested exception that should be passed through all the way up to
-        WorkerThread.run which will gracefully terminate main worker loop"""
+        The method raises :class:`.WorkerTerminationRequested` exception that should be passed through all the way up to
+        :func:`WorkerThread.run` which will gracefully terminate main worker loop."""
         while True:
             try:
                 self._results_queue.put(data, block=True, timeout=IO_TIMEOUT_INTERVAL_S)

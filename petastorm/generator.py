@@ -19,7 +19,7 @@ LIST_SIZE = 13
 
 
 def generate_datapoint(schema):
-    """Generates random data point following a schema
+    """Generates random data point following a schema.
 
     :param schema: an instance of Unischema specifying the columns of the dataset (with name, dtype, shape and codec)
 

@@ -66,7 +66,7 @@ class ShufflingBufferBase(object):
 
     @abc.abstractmethod
     def finish(self):
-        """Call this method when no more `add_many` calls will be made.
+        """Call this method when no more :func:`add_many` calls will be made.
 
         This allows a user to deplete the buffer. Typically during last epoch. Otherwise, we would always have leftovers
         in the buffer at the end of the lifecycle.
@@ -108,26 +108,26 @@ class RandomShufflingBuffer(ShufflingBufferBase):
     def __init__(self, shuffling_buffer_capacity, min_after_retrieve, extra_capacity=1000):
         """Initializes a new ShufflingBuffer instance.
 
-        Items may be retrieved from the buffer once `min_after_retrieve` items were added to the queue
-        (indicated by `can_retrieve`).
+        Items may be retrieved from the buffer once ``min_after_retrieve`` items were added to the queue
+        (indicated by ``can_retrieve``).
 
         Items may be added to the buffer as long as the number of items in the buffer (not including the items
-        passed to `add_many`) does not exceed `shuffling_queue_capacity`.
+        passed to :func:`add_many`) does not exceed ``shuffling_queue_capacity``.
 
-        The amount of items in the buffer may actually become more than `shuffling_buffer_capacity` since `add_many`
-        is passed a list of items. The 'hard limit' on the number of items in the buffer is
-        `shuffling_buffer_capacity` + `extra_queue_capacity`.
+        The amount of items in the buffer may actually become more than ``shuffling_buffer_capacity`` since
+        :func:`add_many` is passed a list of items. The *hard limit* on the number of items in the buffer is
+        ``shuffling_buffer_capacity + extra_capacity``.
 
         :param shuffling_buffer_capacity: Items may be added to the buffer as long as the amount of items in the
-        buffer does not exceed the value of `shuffling_queue_capacity` (not including the items
-        passed to `add_many`).
+          buffer does not exceed the value of ``shuffling_queue_capacity`` (not including the items
+          passed to :func:`add_many`).
         :param min_after_retrieve: Minimal amount of items in the buffer that allows retrieval. This is needed to
-        guarantee good random shuffling of elements. Once `finish()` is called, items can be retrieved even if the
-        condition does not hold.
-        :param extra_capacity: The amount of items in the buffer may grow above `shuffling_buffer_capacity`
-        (due to a call to `add_many` with a list of items), but must remain under `extra_queue_capacity`. Should be
-        set to the upper bound of the number of items that can be added in a single call to `add_many` (can be a
-        loose bound).
+          guarantee good random shuffling of elements. Once :func:`finish` is called, items can be retrieved even if
+          the condition does not hold.
+        :param extra_capacity: The amount of items in the buffer may grow above ``shuffling_buffer_capacity``
+          (due to a call to :func:`add_many` with a list of items), but must remain under ``extra_capacity``. Should be
+          set to the upper bound of the number of items that can be added in a single call to :func:`add_many` (can be a
+          loose bound).
         """
         self._extra_capacity = extra_capacity
         # Preallocate the shuffling buffer.

@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""A set of dataframe-column-codecs complements limited data type variety of spark/pyarrow supported datatypes. Enables
-storing numpy multidimensional arrays as well as compressed images into spark dataframes (transitively to parquet files)
+"""
+A set of dataframe-column-codecs complements the limited data type variety of spark-/pyarrow-supported datatypes,
+enabling storage of numpy multidimensional arrays, as well as compressed images, into spark dataframes, and
+transitively to parquet files.
 
 NOTE: Due to the way unischema is stored alongside dataset (with pickling), changing any of these codecs class names
 and fields can result in reader breakages.
@@ -27,6 +29,7 @@ from pyspark.sql.types import BinaryType, LongType, IntegerType, ShortType, Byte
 
 
 class DataframeColumnCodec(object):
+    """The abstract base class of codecs."""
     @abstractmethod
     def encode(self, unischema_field, array):
         raise RuntimeError('Abstract method was called')
@@ -45,14 +48,14 @@ class CompressedImageCodec(DataframeColumnCodec):
     def __init__(self, image_codec='png', quality=80):
         """CompressedImageCodec would compress/encompress images.
 
-        :param image_codec: any format string supported by opencv. e.g. 'png', 'jpeg'
-        :param quality: used when using jpeg lossy compression
+        :param image_codec: any format string supported by opencv. e.g. ``png``, ``jpeg``
+        :param quality: used when using ``jpeg`` lossy compression
         """
         self._image_codec = '.' + image_codec
         self._quality = quality
 
     def encode(self, unischema_field, array):
-        """Encode the image using OpenCV"""
+        """Encodes the image using OpenCV."""
         if unischema_field.numpy_dtype != array.dtype:
             raise ValueError("Unexpected type of {} feature, expected {}, got {}".format(
                 unischema_field.name, unischema_field.numpy_dtype, array.dtype
@@ -79,7 +82,7 @@ class CompressedImageCodec(DataframeColumnCodec):
         return bytearray(contents)
 
     def decode(self, unischema_field, value):
-        """Decode the image using OpenCV"""
+        """Decodes the image using OpenCV."""
 
         # cv returns a BGR or grayscale image. Convert to RGB (unless a grayscale image).
         image_bgr_or_gray = cv2.imdecode(np.frombuffer(value, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
@@ -99,7 +102,7 @@ class CompressedImageCodec(DataframeColumnCodec):
 
 
 class NdarrayCodec(DataframeColumnCodec):
-    """Encodes numpy ndarray into a spark dataframe field"""
+    """Encodes numpy ndarray into, or decodes an ndarray from, a spark dataframe field."""
 
     def encode(self, unischema_field, array):
         expected_dtype = unischema_field.numpy_dtype
@@ -129,11 +132,12 @@ class NdarrayCodec(DataframeColumnCodec):
 
 
 class ScalarCodec(DataframeColumnCodec):
-    """Encodes a scalar into a spark dataframe field"""
+    """Encodes a scalar into a spark dataframe field."""
 
     def __init__(self, spark_type):
-        """Constructs a codec
-        :param spark_type: an instance of a *Type object from pyspark.sql.types
+        """Constructs a codec.
+
+        :param spark_type: an instance of a Type object from :mod:`pyspark.sql.types`
         """
         self._spark_type = spark_type
 
@@ -154,14 +158,16 @@ class ScalarCodec(DataframeColumnCodec):
 
 
 def _is_compliant_shape(a, b):
-    """Compares shapes of two arguments.
+    """Compares the shapes of two arguments.
 
     If size of a dimensions is None, this dimension size is ignored.
+
     Example:
-        assert _is_compliant_shape((1, 2, 3), (1, 2, 3))
-        assert _is_compliant_shape((1, 2, 3), (1, None, 3))
-        assert not _is_compliant_shape((1, 2, 3), (1, 10, 3))
-        assert not _is_compliant_shape((1, 2), (1,))
+
+    >>> assert _is_compliant_shape((1, 2, 3), (1, 2, 3))
+    >>> assert _is_compliant_shape((1, 2, 3), (1, None, 3))
+    >>> assert not _is_compliant_shape((1, 2, 3), (1, 10, 3))
+    >>> assert not _is_compliant_shape((1, 2), (1,))
 
     :return: True, if the shapes are compliant
     """

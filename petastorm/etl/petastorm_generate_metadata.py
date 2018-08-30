@@ -45,12 +45,12 @@ spark-submit \\
 
 def generate_petastorm_metadata(spark, dataset_url, unischema_class=None):
     """
-    Generate metadata necessary to read a petastorm dataset to an existing dataset.
+    Generates metadata necessary to read a petastorm dataset to an existing dataset.
+
     :param spark: spark session
     :param dataset_url: url of existing dataset
     :param unischema_class: (optional) fully qualified dataset unischema class. If not specified will attempt
-        to find one already in the dataset. (e.g. examples.hello_world.hello_world_dataset.HelloWorldSchema)
-    :return:
+        to find one already in the dataset. (e.g. :class:`examples.hello_world.hello_world_dataset.HelloWorldSchema`)
     """
     sc = spark.sparkContext
 

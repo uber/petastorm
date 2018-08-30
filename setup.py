@@ -33,6 +33,10 @@ REQUIRED_PACKAGES = [
 ]
 
 EXTRA_REQUIRE = {
+    # `docs` versions are to facilitate local generation of documentation.
+    # Sphinx 1.3 would be desirable, but is incompatible with current ATG setup.
+    # Thus the pinning of both sphinx and alabaster versions.
+    'docs': ['sphinx==1.2.2', 'alabaster==0.7.11'],
     'opencv': ['opencv-python>=3.2.0.6'],
     'tf': ['tensorflow>=1.4.0'],
     'tf_gpu': ['tensorflow-gpu>=1.4.0'],

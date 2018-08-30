@@ -24,7 +24,7 @@ _VENTILATION_INTERVAL = 0.01
 
 @six.add_metaclass(ABCMeta)
 class Ventilator(object):
-    """Manages items to be ventilated to a worker pool"""
+    """Manages items to be ventilated to a worker pool."""
 
     def __init__(self, ventilate_fn):
         self._ventilate_fn = ventilate_fn
@@ -32,24 +32,24 @@ class Ventilator(object):
     @abstractmethod
     def start(self):
         """Starts the ventilator, beginning to ventilate to the worker pool after this call.
-        Therefore the worker pool must be ready to receive ventilated items"""
+        Therefore the worker pool must be ready to receive ventilated items."""
         return
 
     @abstractmethod
     def processed_item(self):
         """A callback for the worker pool to tell the ventilator that it has processed an item from the ventilation
         queue. This allows the ventilator to know how many items are currently on the ventilation queue.
-        This function should not have a return value"""
+        This function should not have a return value."""
         pass
 
     @abstractmethod
     def completed(self):
-        """Return whether the ventilator has completed ventilating all items it expects to ever ventilate"""
+        """Returns whether the ventilator has completed ventilating all items it expects to ever ventilate."""
         return
 
     @abstractmethod
     def stop(self):
-        """Tell the ventilator to stop ventilating"""
+        """Tells the ventilator to stop ventilating."""
         return
 
 
@@ -73,18 +73,18 @@ class ConcurrentVentilator(Ventilator):
         Constructor for a concurrent ventilator.
 
         :param ventilate_fn: The function to be called when ventilating. Usually the worker pool ventilate function.
-        :param items_to_ventilate: (list[dict]) The list of items to ventilate. Each item is a dict denoting the
-                **kwargs eventually passed to a worker process function
+        :param items_to_ventilate: (``list[dict]``) The list of items to ventilate. Each item is a ``dict`` denoting
+                the ``**kwargs`` eventually passed to a worker process function
         :param iterations: (int) How many iterations through items_to_ventilate should be done and ventilated to the
                 worker pool. For example if set to 2 each item in items_to_ventilate will be ventilated 2 times. If
-                'None' is passed, the ventilator will continue ventilating forever.
-        :param randomize_item_order: (bool) Whether to randomize the item order in items_to_ventilate. This will be
+                ``None`` is passed, the ventilator will continue ventilating forever.
+        :param randomize_item_order: (``bool``) Whether to randomize the item order in items_to_ventilate. This will be
                 done on every individual iteration.
-        :param max_ventilation_queue_size: (int) The maximum number of items to be stored in the ventilation queue.
+        :param max_ventilation_queue_size: (``int``) The maximum number of items to be stored in the ventilation queue.
                 The higher this number, the higher potential memory requirements. By default it will use the size
                 of items_to_ventilate since that can definitely be held in memory.
-        :param ventilation_interval: (float in seconds) How much time passes between checks on whether something can be
-                ventilated (when the ventilation queue is considered full).
+        :param ventilation_interval: (``float`` in seconds) How much time passes between checks on whether something
+                can be ventilated (when the ventilation queue is considered full).
         """
         super(ConcurrentVentilator, self).__init__(ventilate_fn)
 

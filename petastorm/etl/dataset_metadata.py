@@ -49,21 +49,21 @@ def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None):
 
     Note: Any rowgroup indexing should happen outside the materialize_dataset block
 
-    e.g.
-    spark = SparkSession.builder...
-    dataset_url = 'hdfs:///path/to/my/dataset'
-    with materialize_dataset(spark, dataset_url, MyUnischema, 64):
-      spark.sparkContext.parallelize(range(0, 10)).\
-        ...
-        .write.parquet(dataset_url)
+    Example:
 
-    indexers = [SingleFieldIndexer(...)]
-    build_rowgroup_index(dataset_url, spark.sparkContext, indexers)
+    >>> spark = SparkSession.builder...
+    >>> ds_url = 'hdfs:///path/to/my/dataset'
+    >>> with materialize_dataset(spark, ds_url, MyUnischema, 64):
+    >>>   spark.sparkContext.parallelize(range(0, 10)).
+    >>>     ...
+    >>>     .write.parquet(ds_url)
+    >>> indexer = [SingleFieldIndexer(...)]
+    >>> build_rowgroup_index(ds_url, spark.sparkContext, indexer)
 
-    :param spark The spark session you are using
-    :param dataset_url The dataset url to output your dataset to (e.g. hdfs:///path/to/dataset)
-    :param schema The unischema definition of your dataset
-    :param row_group_size_mb The parquet row group size to use for your dataset
+    :param spark: The spark session you are using
+    :param dataset_url: The dataset url to output your dataset to (e.g. ``hdfs:///path/to/dataset``)
+    :param schema: The :class:`petastorm.unischema.Unischema` definition of your dataset
+    :param row_group_size_mb: The parquet row group size to use for your dataset
     """
     spark_config = {}
     _init_spark(spark, spark_config, row_group_size_mb)
@@ -231,10 +231,10 @@ def _split_row_groups(dataset):
 
 
 def get_schema(dataset):
-    """
-    Retrieve schema object stored as part of dataset methadata
-    :param dataset: an instance of pyarrow.ParquetDatasetobject
-    :return: unischema object
+    """Retrieves schema object stored as part of dataset methadata.
+
+    :param dataset: an instance of :class:`pyarrow.ParquetDatasetobject`
+    :return: A :class:`petastorm.unischema.Unischema` object
     """
     # Split the dataset pieces by row group using the precomputed index
     if not dataset.common_metadata:
@@ -264,10 +264,10 @@ def get_schema(dataset):
 
 
 def get_schema_from_dataset_url(dataset_url):
-    """Returns a Unischema object loaded from a dataset specified by a url.
+    """Returns a :class:`petastorm.unischema.Unischema` object loaded from a dataset specified by a url.
 
-    :param dataset_url: A dataset url
-    :return: A Unischema object
+    :param dataset_url: A dataset URL
+    :return: A :class:`petastorm.unischema.Unischema` object
     """
     resolver = FilesystemResolver(dataset_url)
     dataset = pq.ParquetDataset(resolver.parsed_dataset_url().path, filesystem=resolver.filesystem(),

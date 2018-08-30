@@ -39,13 +39,16 @@ def _keep_retrying_while_zmq_again(timeout, func):
     """Will keep executing func() as long as zmq.Again is being thrown.
 
     Usage example:
-            _keep_retrying_while_zmq_again(_KEEP_TRYING_WHILE_ZMQ_AGAIN_IS_RAIZED_TIMEOUT_S,
-                                       lambda: self._ventilator_send.send_pyobj((args, kargs),
-                                                                               flags=zmq.constants.NOBLOCK))
 
-    :param timeout: A RuntimeError is raised if could not execute func() without getting a zmq.Again within
-                    this timeout. The timeout is defined in seconds.
-    :param func:    The function will be executed (as func())
+    >>> _keep_retrying_while_zmq_again(
+    >>>   _KEEP_TRYING_WHILE_ZMQ_AGAIN_IS_RAIZED_TIMEOUT_S,
+    >>>   lambda: self._ventilator_send.send_pyobj(
+    >>>      (args, kargs),
+    >>>      flags=zmq.constants.NOBLOCK))
+
+    :param timeout: A :class:`RuntimeError` is raised if could not execute ``func()`` without getting a
+        :class:`zmq.Again` within this timeout. The timeout is defined in seconds.
+    :param func: The function will be executed (as ``func()``)
     :return: None
     """
     now = time()
@@ -61,11 +64,11 @@ def _keep_retrying_while_zmq_again(timeout, func):
 
 class ProcessPool(object):
     def __init__(self, workers_count):
-        """Initializes a ProcessPool
+        """Initializes a ProcessPool.
 
         This pool is different from standard Python pool implementations by the fact that the workers are spawned
         without using fork. Some issues with using jvm based HDFS driver were observed when the process was forked
-        (could not access HDFS from the forked worker if the driver was already used in the parent process)
+        (could not access HDFS from the forked worker if the driver was already used in the parent process).
 
         :param workers_count: Number of processes to be spawned
         """
@@ -84,7 +87,7 @@ class ProcessPool(object):
 
         :param context: zmq context
         :param socket_type: zmq socket type
-        :return: A tuple: (zmq_socket,endpoint_address)
+        :return: A tuple: ``(zmq_socket, endpoint_address)``
         """
         LOCALHOST = 'tcp://127.0.0.1'
         socket = context.socket(socket_type)
@@ -102,14 +105,15 @@ class ProcessPool(object):
 
         Will block until all processes to subscribe to the worker queue (the messages are distributed by zmq on write
         so if only one, out of many, workers is up at the time of 'ventilation', the initial load won't be balanced
-        between workers. If can not start the workers in timely fashion, will raise an exception
+        between workers. If can not start the workers in timely fashion, will raise an exception.
 
         :param worker_class: A class of the worker class. The class will be instantiated in the worker process. The
-        class must implement WorkerBase protocol
-        :param worker_setup_args: Argument that will be passed to 'args' property of the instantiated WorkerBase
+            class must implement :class:`.WorkerBase` protocol.
+        :param worker_setup_args: Argument that will be passed to 'args' property of the instantiated
+            :class:`.WorkerBase`.
         :param ventilator: Optional ventilator to handle ventilating items to the process pool. Process pool needs
-        to know about the ventilator to know if it has completed ventilating items
-        :return: None
+            to know about the ventilator to know if it has completed ventilating items.
+        :return: ``None``
         """
         # Initialize a zeromq context
         self._context = zmq.Context()
@@ -149,7 +153,7 @@ class ProcessPool(object):
             self._ventilator.start()
 
     def _wait_for_workers_to_start(self, monitor_sockets):
-        """Wait for all workers to start"""
+        """Waits for all workers to start."""
         now = time()
         for monitor_socket in monitor_sockets:
             started_count = 0
@@ -166,7 +170,7 @@ class ProcessPool(object):
                         started_count))
 
     def ventilate(self, *args, **kargs):
-        """Send a work item to a worker process. Will result in worker.process(...) call with arbitrary arguments"""
+        """Sends a work item to a worker process. Will result in worker.process(...) call with arbitrary arguments."""
         self._ventilated_items += 1
 
         # There is a race condition when sending objects to zmq that if all workers have been killed, sending objects
@@ -179,10 +183,10 @@ class ProcessPool(object):
     def get_results(self, timeout=None):
         """Returns results from worker pool
 
-        :param timeout: If None, will block forever, otherwise will raise TimeoutWaitingForResultError exception
-                        if no data received within the timeout (in seconds)
-        :return: arguments passed to publish_func(...) by a worker. If no more results are anticipated, EmptyResultError
-                 is raised.
+        :param timeout: If None, will block forever, otherwise will raise :class:`.TimeoutWaitingForResultError`
+            exception if no data received within the timeout (in seconds)
+        :return: arguments passed to ``publish_func(...)`` by a worker. If no more results are anticipated,
+            :class:`.EmptyResultError` is raised.
         """
 
         while True:
@@ -215,7 +219,7 @@ class ProcessPool(object):
         self._control_sender.send_string(_CONTROL_FINISHED)
 
     def join(self):
-        """Block until all workers are terminated"""
+        """Blocks until all workers are terminated."""
 
         # Slow joiner problem with zeromq means that not all workers are guaranteed to have gotten
         # the stop event. Therefore we will keep sending it until all workers are stopped to prevent
@@ -234,15 +238,15 @@ class ProcessPool(object):
 
 def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_socket, results_sender_socket,
                       worker_args):
-    """This is the root of the spawned worker processes
+    """This is the root of the spawned worker processes.
 
     :param worker_class: A class with worker implementation.
     :param worker_id: An integer. Unique for each worker.
-    :param control_socket: zmq socket used to control the worker (currently supports only "FINISHED" signal)
+    :param control_socket: zmq socket used to control the worker (currently supports only :class:`zmq.FINISHED` signal)
     :param worker_receiver_socket: A zmq socket used to deliver tasks to the worker
     :param results_sender_socket: A zmq socket used to deliver the work products to the consumer
     :param worker_args: Application specific parameter passed to worker constructor
-    :return: None
+    :return: ``None``
     """
     context = zmq.Context()
 
