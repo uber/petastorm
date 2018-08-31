@@ -22,7 +22,6 @@ from six.moves.urllib.parse import urlparse, urlunparse
 
 from petastorm import utils
 from petastorm.cache import NullCache
-from petastorm.fs_utils import FilesystemResolver
 from petastorm.workers_pool.worker_base import WorkerBase
 
 
@@ -52,6 +51,7 @@ class ReaderWorker(WorkerBase):
         self._ngram = args[2]
         self._split_pieces = args[3]
         self._local_cache = args[4]
+        self._filesystem = args[5]
 
         # We create datasets lazily in the first invocation of 'def process'. This speeds up startup time since
         # all Worker constructors are serialized
@@ -72,10 +72,9 @@ class ReaderWorker(WorkerBase):
         """
 
         if not self._dataset:
-            resolver = FilesystemResolver(self._dataset_url_parsed)
             self._dataset = pq.ParquetDataset(
-                resolver.parsed_dataset_url().path,
-                filesystem=resolver.filesystem(),
+                self._dataset_url_parsed.path,
+                filesystem=self._filesystem,
                 validate_schema=False)
 
         piece = self._split_pieces[piece_index]
