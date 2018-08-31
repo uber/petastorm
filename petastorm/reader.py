@@ -159,7 +159,7 @@ class Reader(object):
 
         # 5. Start workers pool
         self._workers_pool.start(ReaderWorker,
-                                 (dataset_url, self.schema, self.ngram, row_groups, cache, worker_predicate, filesystem),
+                                 (dataset_url, self.schema, self.ngram, row_groups, cache, filesystem),
                                  ventilator=ventilator)
         self._read_timeout_s = read_timeout_s
 
