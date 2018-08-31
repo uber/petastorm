@@ -22,7 +22,7 @@ from petastorm.hdfs.namenode import HdfsNamenodeResolver, HdfsConnector
 class FilesystemResolver(object):
     """Resolves a dataset URL, makes a connection via pyarrow, and provides a filesystem object."""
 
-    def __init__(self, dataset_url, hadoop_configuration=None, connector=HdfsConnector):
+    def __init__(self, dataset_url, hadoop_configuration=None, connector=HdfsConnector, pyarrow_fs=None):
         """
         Given a dataset URL and an optional hadoop configuration, parse and interpret the URL to
         instantiate a pyarrow filesystem.
@@ -51,6 +51,10 @@ class FilesystemResolver(object):
             self._parsed_dataset_url = urlparse(self._dataset_url)
         else:
             self._parsed_dataset_url = self._dataset_url
+
+        if pyarrow_fs is not None:
+            self._filesystem = pyarrow_fs
+            return
 
         if not self._parsed_dataset_url.scheme:
             # Case 1
