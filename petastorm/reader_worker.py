@@ -22,7 +22,6 @@ from six.moves.urllib.parse import urlparse, urlunparse
 
 from petastorm import utils
 from petastorm.cache import NullCache
-from petastorm.fs_utils import FilesystemResolver
 from petastorm.workers_pool.worker_base import WorkerBase
 
 
