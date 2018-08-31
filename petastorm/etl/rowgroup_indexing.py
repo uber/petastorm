@@ -35,7 +35,7 @@ ROWGROUPS_INDEX_KEY = b'dataset-toolkit.rowgroups_index.v1'
 PieceInfo = namedtuple('PieceInfo', ['piece_index', 'path', 'row_group', 'partition_keys'])
 
 
-def build_rowgroup_index(dataset_url, spark_context, indexers):
+def build_rowgroup_index(dataset_url, spark_context, indexers, pyarrow_fs=None):
     """
     Build index for given list of fields to use for fast rowgroup selection
     :param dataset_url: (str) the url for the dataset (or a path if you would like to use the default hdfs config)
@@ -48,7 +48,7 @@ def build_rowgroup_index(dataset_url, spark_context, indexers):
         dataset_url = dataset_url[:-1]
 
     # Create pyarrow file system
-    resolver = FilesystemResolver(dataset_url, spark_context._jsc.hadoopConfiguration())
+    resolver = FilesystemResolver(dataset_url, spark_context._jsc.hadoopConfiguration(), pyarrow_fs=None)
     dataset = pq.ParquetDataset(resolver.parsed_dataset_url().path, filesystem=resolver.filesystem(),
                                 validate_schema=False)
 
@@ -78,7 +78,7 @@ def build_rowgroup_index(dataset_url, spark_context, indexers):
     logger.info("Elapsed time of index creation: %f s", (time.time() - start_time))
 
 
-def _index_columns(piece_info, dataset_url, partitions, indexers, schema):
+def _index_columns(piece_info, dataset_url, partitions, indexers, schema, pyarrow_fs=None):
     """
     Function build indexes for  dataset piece described in piece_info
     :param piece_info: description of dataset piece
@@ -98,7 +98,7 @@ def _index_columns(piece_info, dataset_url, partitions, indexers, schema):
 
     # Read columns needed for indexing
     # Resolver in executor context will get hadoop config from environment
-    resolver = FilesystemResolver(dataset_url)
+    resolver = FilesystemResolver(dataset_url, pyarrow_fs=pyarrow_fs)
     column_rows = piece.read(
         open_file_func=resolver.filesystem().open,
         columns=list(column_names),

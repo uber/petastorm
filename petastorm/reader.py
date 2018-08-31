@@ -60,7 +60,7 @@ class Reader(object):
 
     def __init__(self, dataset_url, schema_fields=None, shuffle=None, predicate=None, rowgroup_selector=None,
                  reader_pool=None, num_epochs=1, sequence=None, training_partition=None, num_training_partitions=None,
-                 read_timeout_s=None, cache=None, shuffle_options=None):
+                 read_timeout_s=None, cache=None, shuffle_options=None, pyarrow_fs=None):
         """Initializes a reader object.
 
         :param dataset_url: an filepath or a url to a parquet directory,
@@ -127,8 +127,9 @@ class Reader(object):
 
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
         logger.debug('dataset_url: %s', dataset_url)
-        resolver = FilesystemResolver(dataset_url)
-        self.dataset = pq.ParquetDataset(resolver.parsed_dataset_url().path, filesystem=resolver.filesystem(),
+        resolver = FilesystemResolver(dataset_url, pyarrow_fs=pyarrow_fs)
+        filesystem = resolver.filesystem()
+        self.dataset = pq.ParquetDataset(resolver.parsed_dataset_url().path, filesystem=filesystem,
                                          validate_schema=False)
 
         # Get a unischema stored in the dataset metadata.
@@ -158,7 +159,7 @@ class Reader(object):
 
         # 5. Start workers pool
         self._workers_pool.start(ReaderWorker,
-                                 (dataset_url, self.schema, self.ngram, row_groups, cache, worker_predicate),
+                                 (dataset_url, self.schema, self.ngram, row_groups, cache, worker_predicate, filesystem),
                                  ventilator=ventilator)
         self._read_timeout_s = read_timeout_s
 
