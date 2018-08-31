@@ -15,6 +15,7 @@ import random
 from shutil import rmtree, copytree
 
 import numpy as np
+import pyarrow.hdfs
 import pytest
 from pyspark.sql import SparkSession
 from pyspark.sql.types import LongType, ShortType, StringType
@@ -74,6 +75,13 @@ def test_simple_read_moved_dataset(synthetic_dataset, tmpdir):
     copytree(synthetic_dataset.path, a_moved_path)
 
     with Reader('file://{}'.format(a_moved_path), reader_pool=DummyPool()) as reader:
+        _check_simple_reader(reader, synthetic_dataset.data)
+
+
+@pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
+def test_simple_read_pass_in_fs(synthetic_dataset, reader_factory):
+    """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
+    with reader_factory(synthetic_dataset.url, pyarrow_filesystem=pyarrow.localfs) as reader:
         _check_simple_reader(reader, synthetic_dataset.data)
 
 
