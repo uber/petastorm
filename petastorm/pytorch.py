@@ -27,7 +27,7 @@ class DataLoader(object):
     once more at the very end.
     """
 
-    def __init__(self, reader, batch_size=1, collate_fn=default_collate, transform=lambda *args, **kwargs: None):
+    def __init__(self, reader, batch_size=1, collate_fn=default_collate, transform=None):
         """
         Initializes a data loader object, with a default collate and optional transform functions.
 
@@ -54,7 +54,10 @@ class DataLoader(object):
         """
         batch = []
         for row in self.reader:
-            batch.append(self.transform(row))
+            # Default collate does not work nicely on namedtuples and treat them as lists
+            # Using dict will result in the yielded structures being dicts as well
+            row_as_dict = row._asdict()
+            batch.append(self.transform(row_as_dict) if self.transform else row_as_dict)
             if len(batch) == self.batch_size:
                 yield self.collate_fn(batch)
                 batch = []
