@@ -91,7 +91,7 @@ def _transform_row(mnist_row):
     # In addition, the petastorm pytorch DataLoader does not distinguish the notion of
     # data or target transform, but that actually gives the user more flexibility
     # to make the desired partial transform, as shown here.
-    return (transform(mnist_row.image), mnist_row.digit)
+    return (transform(mnist_row['image']), mnist_row['digit'])
 
 def main():
     # Training settings

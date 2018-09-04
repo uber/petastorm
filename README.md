@@ -139,7 +139,7 @@ def _transform_row(mnist_row):
         transforms.ToTensor(),
         transforms.Normalize((0.1307,), (0.3081,))
     ])
-    return (transform(mnist_row.image), mnist_row.digit)
+    return (transform(mnist_row['image']), mnist_row['digit'])
 
 with DataLoader(Reader('file:///localpath/mnist/train', num_epochs=10),
                 batch_size=64, transform=_transform_row) as train_loader:
