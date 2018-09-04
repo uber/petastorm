@@ -18,14 +18,13 @@
 ###
 from __future__ import division, print_function
 import argparse
-import os
-import sys
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import transforms
 
+from examples.mnist import DEFAULT_MNIST_DATA_PATH
 from petastorm.pytorch import DataLoader
 from petastorm.reader import Reader
 
@@ -96,11 +95,11 @@ def _transform_row(mnist_row):
 def main():
     # Training settings
     parser = argparse.ArgumentParser(description='Petastorm MNIST Example')
+    default_dataset_url = 'file://{}'.format(DEFAULT_MNIST_DATA_PATH)
     parser.add_argument('--dataset-url', type=str,
-                        default='file:///{}'.format(os.path.abspath(os.path.join(
-                            os.path.dirname(sys.argv[0]), '..', '..', '..'))),
-                        metavar='S',
-                        help='hdfs:// or file:/// URL to the MNIST petastorm dataset')
+                        default=default_dataset_url, metavar='S',
+                        help='hdfs:// or file:/// URL to the MNIST petastorm dataset '
+                             '(default: %s)' % default_dataset_url)
     parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
