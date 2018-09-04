@@ -32,6 +32,7 @@ import tempfile
 
 from pyspark.sql import SparkSession
 
+from examples.mnist import DEFAULT_MNIST_DATA_PATH
 from examples.mnist.schema import MnistSchema
 from petastorm.etl.dataset_metadata import materialize_dataset
 from petastorm.unischema import dict_to_spark_row
@@ -43,7 +44,8 @@ def _arg_parser():
     parser.add_argument('-d', '--download-dir', type=str, required=False, default=None,
                         help='Directory to where the MNIST data will be downloaded; '
                              'default to a tempdir that gets wiped after generation.')
-    parser.add_argument('-o', '--output-url', type=str, required=True,
+    parser.add_argument('-o', '--output-url', type=str, required=False,
+                        default='file://{}'.format(DEFAULT_MNIST_DATA_PATH),
                         help='hdfs://... or file:/// url where the parquet dataset will be written to.')
     parser.add_argument('-m', '--master', type=str, required=False, default='local[*]',
                         help='Spark master; default is local[*] to run locally.')
