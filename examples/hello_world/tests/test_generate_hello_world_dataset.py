@@ -12,19 +12,39 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
+import unittest
+
+import pytest
 
 from examples.hello_world.hello_world_dataset import generate_hello_world_dataset
+from examples.hello_world.pytorch_hello_world import pytorch_hello_world
 from petastorm.reader import Reader
+from petastorm.tests.conftest import SyntheticDataset
 
 
-def test_generate(tmpdir):
-    temp_url = 'file://' + tmpdir.strpath
+@pytest.fixture(scope="session")
+def hello_world_dataset(tmpdir_factory):
+    path = tmpdir_factory.mktemp("data").strpath
+    url = 'file://' + path
+
+    generate_hello_world_dataset(url)
+
+    dataset = SyntheticDataset(url=url, path=path, data=None)
 
     # Generate a dataset
-    generate_hello_world_dataset(temp_url)
-    assert '_SUCCESS' in os.listdir(tmpdir.strpath)
+    assert os.path.exists(os.path.join(path, '_SUCCESS'))
 
-    # Read from it
-    with Reader(temp_url) as reader:
+    return dataset
+
+
+def test_generate(hello_world_dataset):
+    # Read from it using a plain reader
+    with Reader(hello_world_dataset.url) as reader:
         all_samples = list(reader)
     assert all_samples
+
+
+@unittest.skip('Some conflict between pytorch and parquet shared libraries results in occasional '
+               'segfaults in this case.')
+def test_pytorch_hello_world_example(hello_world_dataset):
+    pytorch_hello_world(hello_world_dataset.url)
