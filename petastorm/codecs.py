@@ -131,6 +131,36 @@ class NdarrayCodec(DataframeColumnCodec):
         return BinaryType()
 
 
+class CompressedNdarrayCodec(DataframeColumnCodec):
+    """Encodes numpy ndarray with compression into a spark dataframe field"""
+
+    def encode(self, unischema_field, array):
+        expected_dtype = unischema_field.numpy_dtype
+        if isinstance(array, np.ndarray):
+            if expected_dtype != array.dtype.type:
+                raise ValueError('Unexpected type of {} feature. '
+                                 'Expected {}. Got {}'.format(unischema_field.name, expected_dtype, array.dtype))
+
+            expected_shape = unischema_field.shape
+            if not _is_compliant_shape(array.shape, expected_shape):
+                raise ValueError('Unexpected dimensions of {} feature. '
+                                 'Expected {}. Got {}'.format(unischema_field.name, expected_shape, array.shape))
+        else:
+            raise ValueError('Unexpected type of {} feature. '
+                             'Expected ndarray of {}. Got {}'.format(unischema_field.name, expected_dtype, type(array)))
+
+        memfile = BytesIO()
+        np.savez_compressed(memfile, arr=array)
+        return bytearray(memfile.getvalue())
+
+    def decode(self, unischema_field, value):
+        memfile = BytesIO(value)
+        return np.load(memfile)['arr']
+
+    def spark_dtype(self):
+        return BinaryType()
+
+
 class ScalarCodec(DataframeColumnCodec):
     """Encodes a scalar into a spark dataframe field."""
 
@@ -178,3 +208,4 @@ def _is_compliant_shape(a, b):
             if a[i] != b[i]:
                 return False
     return True
+

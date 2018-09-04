@@ -20,7 +20,7 @@ import pytest
 from PIL import Image
 from pyspark.sql.types import StringType, ByteType, ShortType, IntegerType, LongType, DecimalType
 
-from petastorm.codecs import NdarrayCodec, ScalarCodec, CompressedImageCodec
+from petastorm.codecs import NdarrayCodec, CompressedNdarrayCodec, ScalarCodec, CompressedImageCodec
 from petastorm.unischema import UnischemaField
 
 
@@ -31,6 +31,16 @@ class NumpyArrayCodecsTest(unittest.TestCase):
         expected = np.random.rand(*SHAPE).astype(dtype=np.int32)
         codec = NdarrayCodec()
         field = UnischemaField(name='test_name', numpy_dtype=np.int32, shape=SHAPE, codec=NdarrayCodec(),
+                               nullable=False)
+        np.testing.assert_equal(codec.decode(field, codec.encode(field, expected)), expected)
+
+class NumpyArrayCompressedCodecsTest(unittest.TestCase):
+
+    def test_numpy_codec(self):
+        SHAPE = (10, 20, 30)
+        expected = np.random.rand(*SHAPE).astype(dtype=np.int32)
+        codec = CompressedNdarrayCodec()
+        field = UnischemaField(name='test_name', numpy_dtype=np.int32, shape=SHAPE, codec=CompressedNdarrayCodec(),
                                nullable=False)
         np.testing.assert_equal(codec.decode(field, codec.encode(field, expected)), expected)
 
