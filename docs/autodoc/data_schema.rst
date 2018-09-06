@@ -1,14 +1,11 @@
-Data Schema
-===========
-
-Codecs
-------
+``codecs``
+==========
 
 .. automodule:: petastorm.codecs
    :private-members:
 
-Unischema
----------
+``unischema``
+=============
 
 .. automodule:: petastorm.unischema
 
