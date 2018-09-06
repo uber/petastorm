@@ -19,7 +19,7 @@ from petastorm import __version__
 
 PACKAGE_NAME = 'petastorm'
 
-with open('README.md') as f:
+with open('README.rst') as f:
     long_description = f.read()
 
 REQUIRED_PACKAGES = [
@@ -55,7 +55,7 @@ setup(
     description='Petastorm is a library enabling the use of Parquet storage from Tensorflow, Pytorch, and'
                 ' other Python-based ML training frameworks.',
     long_description=long_description,
-    long_description_content_type="text/markdown",
+    long_description_content_type="text/x-rst",
     license='Apache License, Version 2.0',
     extras_require=EXTRA_REQUIRE,
     entry_points = {

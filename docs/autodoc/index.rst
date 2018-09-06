@@ -3,20 +3,32 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Petastorm: A Big Data Library
+=============================
+Petastorm: a big-data library
 =============================
 
-Table of Contents:
+Petastorm is a library enabling the use of Parquet storage from Tensorflow, Pytorch, and other Python-based ML training frameworks.
 
 .. toctree::
    :maxdepth: 2
-   :glob:
 
+   readme_include
+   troubleshoot_include
+   development_include
+
+API
+===
+
+For a quick reference to API details, view our auto-generated API documentation:
+
+.. toctree::
+   :maxdepth: 2
+
+   reader
    data_schema
    metadata
-   reader
-   extensions
    workers
+   extensions
    examples
 
 
