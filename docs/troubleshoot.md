@@ -2,6 +2,20 @@
 
 ## Trouble running the pytorch example
 
+### Segmentation fault using pytorch when reading dataset
+
+As reported in uber/petastorm#52, the reader appears haphazardly to dump core
+from segmentation fault.  @selitvin noted that these issues related to memory
+allocation have also been seen with TF.  A temporary workaround is to use a
+different memory allocator, such as `tcmalloc`, per below:
+
+```bash
+sudo apt-get install libtcmalloc-minimal4
+LD_PRELOAD="/usr/lib/libtcmalloc_minimal.so.4" python examples/mnist/pytorch_example.py
+```
+
+### Import error due to dlopen failing to load more object into static thread-local storage (TLS)
+
 If you see the following error while trying to run the pytorch example, you are in luck:
 ```bash
   File "/usr/local/lib/python2.7/dist-packages/torch/__init__.py", line 80, in <module>
@@ -16,7 +30,7 @@ DTV slots, which no longer suffice for modern compute needs.
 Solutions, in increasing order of effort involved:
 1. Do `import torch` as early as possible ([ref](https://github.com/tensorflow/models/issues/523#issuecomment-272754029))
 2. Install `libgomp1` and `export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libgomp.so.1`
-3. Build pytorch from source ([ref](https://github.com/pytorch/pytorch/issues/643))
+3. Build pytorch from source (see below, also [ref](https://github.com/pytorch/pytorch/issues/643))
 4. Patch glibc to increase surplus DTV slots from 14 to 32 or 64.
 
 For background, this issue was reported back in 2013 with pMatlab since 2012](https://stackoverflow.com/a/19468365).
