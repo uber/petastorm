@@ -17,8 +17,10 @@ import os
 import pytest
 import sys
 import torch  # pylint: disable=unused-import
+import tensorflow as tf
 
-import examples.mnist.main as main
+import examples.mnist.pytorch_example as pytorch_example
+import examples.mnist.tf_example as tf_example
 import numpy as np
 
 from examples.mnist.generate_petastorm_mnist import download_mnist_data, \
@@ -140,17 +142,31 @@ def test_full_pytorch_example(large_mock_mnist_data, tmpdir):
                                     spark_master='local[1]', parquet_files_count=1)
 
     # Next, run a round of training using the pytorce adapting data loader
-    import torch
     from petastorm.pytorch import DataLoader
 
     torch.manual_seed(1)
     device = torch.device('cpu')
-    model = main.Net().to(device)
+    model = pytorch_example.Net().to(device)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.5)
 
     with DataLoader(Reader('{}/train'.format(dataset_url), reader_pool=DummyPool(), num_epochs=1),
-                    batch_size=32, transform=main._transform_row) as train_loader:
-        main.train(model, device, train_loader, 10, optimizer, 1)
+                    batch_size=32, transform=pytorch_example._transform_row) as train_loader:
+        pytorch_example.train(model, device, train_loader, 10, optimizer, 1)
     with DataLoader(Reader('{}/test'.format(dataset_url), reader_pool=DummyPool(), num_epochs=1),
-                    batch_size=100, transform=main._transform_row) as test_loader:
-        main.test(model, device, test_loader)
+                    batch_size=100, transform=pytorch_example._transform_row) as test_loader:
+        pytorch_example.test(model, device, test_loader)
+
+
+def test_full_tf_example(large_mock_mnist_data, tmpdir):
+    # First, generate mock dataset
+    dataset_url = 'file://{}'.format(tmpdir)
+    mnist_data_to_petastorm_dataset(tmpdir, dataset_url, mnist_data=large_mock_mnist_data,
+                                    spark_master='local[1]', parquet_files_count=1)
+
+    # Tensorflow train and test
+    tf_example.train_and_test(
+        dataset_url=dataset_url,
+        training_iterations=10,
+        batch_size=10,
+        evaluation_interval=10,
+    )
