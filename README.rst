@@ -97,33 +97,33 @@ Here is a minimalistic example writing out a table with some random data.
                .mode('overwrite') \
                .parquet(output_url)
 
-- :class:`HelloWorldSchema` is an instance of a :class:`Unischema` object.
-  :class:`Unischema` is capable of rendering types of its fields into different
+- ``HelloWorldSchema`` is an instance of a ``Unischema`` object.
+  ``Unischema`` is capable of rendering types of its fields into different
   framework specific formats, such as: Spark’s ``StructType``, Tensorflow’s
   ``tf.DType`` and numpy’s ``numpy.dtype``.
 - To define a dataset field, you need to specify a ``type``, ``shape``, a
   ``codec`` instance and whether the field is nullable for each field of the
-  :class:`Unischema`.
+  ``Unischema``.
 - We use pyspark for writing output Parquet files. In this example, we launch
   pyspark on a local box (``.master('local[2]')``). Of course for a larger
   scale dataset generation we would need a real compute cluster.
-- We wrap spark dataset generation code with the :func:`materialize_dataset`
+- We wrap spark dataset generation code with the ``materialize_dataset``
   context manager.  The context manager is responsible for configuring row
   group size at the beginning and write out petastorm specific metadata at the
   end.
 - The row generating code is expected to return a Python dictionary indexed by
-  a field name. We use :func:`row_generator` function for that. 
-- :func:`dict_to_spark_row` converts the dictionary into a :class:`pyspark.Row`
-  object while ensuring schema :class:`HelloWorldSchema` compliance (shape,
+  a field name. We use ``row_generator`` function for that. 
+- ``dict_to_spark_row`` converts the dictionary into a ``pyspark.Row``
+  object while ensuring schema ``HelloWorldSchema`` compliance (shape,
   type and is-nullable condition are tested).
-- Once we have a :class:`pyspark.DataFrame` we write it out to a parquet
+- Once we have a ``pyspark.DataFrame`` we write it out to a parquet
   storage. The parquet schema is automatically derived from
-  :class:`HelloWorldSchema`.
+  ``HelloWorldSchema``.
 
 Reading a dataset
 ^^^^^^^^^^^^^^^^^
 
-Reading a dataset is simple using the :class:`petastorm.reader.Reader` class:
+Reading a dataset is simple using the ``petastorm.reader.Reader`` class:
 
 .. code-block:: python
 
@@ -131,11 +131,11 @@ Reading a dataset is simple using the :class:`petastorm.reader.Reader` class:
        for row in reader:
            print(row)
 
-:class:`Reader` supports taking either an ``hdfs://...`` or ``file://...``
+``Reader`` supports taking either an ``hdfs://...`` or ``file://...``
 protocol URI.
 
-Once a :class:`Reader` is instantiated, you can use it as an iterator.
-To hookup the reader into a tensorflow graph, you can use the :func:`tf_tensors`
+Once a ``Reader`` is instantiated, you can use it as an iterator.
+To hookup the reader into a tensorflow graph, you can use the ``tf_tensors``
 function:
 
 .. code-block:: python
@@ -146,7 +146,7 @@ function:
            for _ in range(3):
                print(session.run(row_tensors))
 
-The :class:`petastorm.reader.Reader` class is the main entry point for user
+The ``petastorm.reader.Reader`` class is the main entry point for user
 code that accesses the data from an ML framework such as Tensorflow or Pytorch.
 The reader has multiple features such as:
 
@@ -164,7 +164,7 @@ Reading a dataset from pytorch
 As illustrated in
 `pytorch_example.py <https://github.com/uber/petastorm/blob/master/examples/mnist/pytorch_example.py>`_,
 reading a petastorm dataset from pytorch
-can be done via the adapter class :class:`petastorm.pytorch.DataLoader`,
+can be done via the adapter class ``petastorm.pytorch.DataLoader``,
 which allows custom pytorch collating function and transforms to be supplied.
 
 Be sure you have ``torch`` and ``torchvision`` installed:
@@ -173,8 +173,8 @@ Be sure you have ``torch`` and ``torchvision`` installed:
 
     pip install torchvision
 
-The minimalist example below assumes the definition of a :class:`Net` class and
-:func:`train` and :func:`test` functions, included in ``pytorch_example``:
+The minimalist example below assumes the definition of a ``Net`` class and
+``train`` and ``test`` functions, included in ``pytorch_example``:
 
 .. code-block:: python
    :linenos:
@@ -218,6 +218,6 @@ See the Development_ page for instructions on how to develop Petastorm and
 run tests.
 
 
-.. _Troubleshooting: https://github.com/uber/petastorm/blob/master/docs/troubleshoot.rst
+.. _Troubleshooting: docs/troubleshoot.rst
 .. _ticket: https://github.com/uber/petastorm/issues/new
-.. _Development: https://github.com/uber/petastorm/blob/master/docs/development.rst
+.. _Development: docs/development.rst
