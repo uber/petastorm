@@ -30,7 +30,7 @@ from petastorm.tf_utils import tf_tensors
 
 def train_and_test(dataset_url, training_iterations, batch_size, evaluation_interval):
     """
-    Train a model for epochs with a batch size batch_size, printing accuracy every log_interval.
+    Train a model for training iterations with a batch size batch_size, printing accuracy every log_interval.
     :param dataset_url: The MNIST dataset url.
     :param training_iterations: The training iterations to train for.
     :param batch_size: The batch size for training.
