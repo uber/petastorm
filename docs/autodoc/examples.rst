@@ -1,18 +1,20 @@
-Examples
-========
+``examples``
+============
 
-Hello World
------------
+``hello_world``
+---------------
 
 .. automodule:: examples.hello_world.hello_world_dataset
 
-ImageNet
---------
+.. automodule:: examples.hello_world.pytorch_hello_world
+
+``imagenet``
+------------
 
 .. automodule:: examples.imagenet.generate_petastorm_imagenet
 
-MNIST
------
+``mnist``
+---------
 
 .. automodule:: examples.mnist.generate_petastorm_mnist
 
@@ -20,4 +22,4 @@ MNIST
    process limits build machine memory use to 1 GB, insufficient to import
    torch as part of the build process.  Should that ever change, include this:
 
-   automodule:: examples.mnist.main
+   automodule:: examples.mnist.pytorch_example

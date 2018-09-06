@@ -1,51 +1,51 @@
-The Reader API
-==============
+``reader``
+==========
 
 .. automodule:: petastorm.reader
 
-Reader Worker
--------------
+``reader_worker``
+-----------------
 
 .. automodule:: petastorm.reader_worker
 
-Caching
--------
+``cache``
+---------
 
 .. automodule:: petastorm.cache
 
 .. automodule:: petastorm.local_disk_cache
 
-Epoch Support
--------------
+``epochs``
+----------
 
 .. automodule:: petastorm.reader_impl.epochs
 
-N-Gram Support
---------------
+``ngram``
+---------
 
 .. automodule:: petastorm.ngram
 
-Predicates
-----------
+``predicates``
+--------------
 
 .. automodule:: petastorm.predicates
 
-Selectors
----------
+``selectors``
+-------------
 
 .. automodule:: petastorm.selectors
 
-Shuffling Buffers
------------------
+``shuffling_buffer``
+--------------------
 
 .. automodule:: petastorm.reader_impl.shuffling_buffer
 
-Filesystem Utilities
+``filesystem utils``
 --------------------
 
 .. automodule:: petastorm.fs_utils
 
-Reader Utilities
+``reader utils``
 ----------------
 
 .. automodule:: petastorm.utils
