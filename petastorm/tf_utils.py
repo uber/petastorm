@@ -310,3 +310,14 @@ def  tf_tensors(reader, shuffling_queue_capacity=0, min_after_dequeue=0):
         result = _tf_tensors_nonngram(reader, shuffling_queue_capacity, min_after_dequeue)
 
     return result
+
+def shuffle(reader, shuffling_queue_capacity, min_after_dequeue, vals):
+    """ Creates a TensorFlow shuffling queue using the specified capacity and reader.
+    """
+    shuffled_tensors = _shuffling_queue(shuffling_queue_capacity, min_after_dequeue, [v.dtype for v in vals], vals)
+    if reader.ngram:
+        return make_namedtuple_tf_ngram(reader.schema, reader.ngram, *shuffled_tensors)
+    else:
+        as_dict = reader.schema.make_namedtuple_tf(*shuffled_tensors)._asdict()
+        _set_shape(reader.schema, as_dict)
+        return reader.schema.make_namedtuple_tf(**as_dict)
