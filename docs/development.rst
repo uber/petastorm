@@ -49,7 +49,7 @@ To make documents locally:
 .. code-block:: bash
 
     pip install -e .[docs]
-    cd docs
+    cd docs/autodoc
 
     # To nuke all generated HTMLs
     make clean
@@ -107,6 +107,34 @@ Known doc-build caveats and issues
 
 .. _build resource limitations: https://docs.readthedocs.io/en/latest/builds.html
 .. _alabaster Sphinx theme: https://alabaster.readthedocs.io/
+
+Future: auto-generate with ``sphinx-apidoc``
+-------------------------------------------
+
+Sphinx has the ability to auto-generate the entire API, either via the
+autosummary_ extension, or the ``sphinx-apidoc`` tool.
+
+The following ``sphinx-apidoc`` invocation will autogenerate an ``api/``
+subdirectory of rST files for each of the petastorm modules.  Those files can
+then be glob'd into a TOC tree.
+
+.. code-block:: bash
+
+  cd docs/autodocs
+  sphinx-apidoc -fTo api ../.. ../../setup.py
+
+The ``apidoc_experiment`` branch_ and `RTD output`_ demonstrates the outcome of
+vanilla usage.  Actually leveraging this approach to produce uncluttered
+auto-generated API doc will require:
+
+1. Code package reorganization
+2. Experimentation with sphinx settings, if available, to shorten link names
+3. Configuration change to auto-run ``sphinx-apidoc`` in RTD build, as opposed
+   to committing the ``api/*.rst`` files
+
+.. _autosummary: http://www.sphinx-doc.org/en/master/usage/extensions/autosummary.html
+.. _branch: https://github.com/uber/petastorm/compare/apidoc_experiment
+.. _RTD output: https://petastorm.readthedocs.io/en/apidoc_experiment
 
 
 .. inclusion-marker-end-do-not-remove
