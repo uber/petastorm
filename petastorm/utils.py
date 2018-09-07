@@ -13,9 +13,13 @@
 # limitations under the License.
 
 import logging
+import os
+
 import pyarrow
 
 from multiprocessing import Pool
+
+from pyarrow.filesystem import LocalFileSystem
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +75,7 @@ def add_to_dataset_metadata(dataset, key, value):
 
     metadata_file_path = dataset.paths.rstrip('/') + '/_metadata'
     common_metadata_file_path = dataset.paths.rstrip('/') + '/_common_metadata'
+    common_metadata_file_crc_path = dataset.paths.rstrip('/') + '/._common_metadata.crc'
 
     # If the metadata file already exists, add to it.
     # Otherwise fetch the schema from one of the existing parquet files in the dataset
@@ -89,3 +94,12 @@ def add_to_dataset_metadata(dataset, key, value):
 
     with dataset.fs.open(common_metadata_file_path, 'wb') as metadata_file:
         pyarrow.parquet.write_metadata(schema, metadata_file)
+
+    # We have just modified _common_metadata file, but the filesystem implementation used by pyarrow does not
+    # update the .crc value. We better delete the .crc to make sure there is no mismatch between _common_metadata
+    # content and the checksum.
+    if isinstance(dataset.fs, LocalFileSystem) and dataset.fs.exists(common_metadata_file_crc_path):
+        try:
+            dataset.fs.rm(common_metadata_file_crc_path)
+        except NotImplementedError:
+            os.remove(common_metadata_file_crc_path)
