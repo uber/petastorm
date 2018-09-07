@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import os
 import unittest
 from shutil import move, rmtree
 from tempfile import mkdtemp
@@ -46,11 +46,17 @@ class MetadataUnischemaReadTest(unittest.TestCase):
         """ Restore _metadata file for other tests. """
         move('{}{}'.format(self._dataset_dir, filename + '_gone'), '{}/{}'.format(self._dataset_dir, filename))
 
+    def test_no_common_metadata_crc(self):
+        """We add our own entries to the _common_metadata file, unfortunatelly, the .crc file is not updated by
+        current pyarrow implementation, so we delete the .crc to make sure there is no mismatch with the content of
+        _common_metadata file"""
+        self.assertFalse(os.path.exists(os.path.join(MetadataUnischemaReadTest._dataset_dir, '._common_metadata.crc')))
+
     def test_no_metadata(self):
         self.vanish_metadata()
         with self.assertRaises(ValueError) as e:
             Reader(self._dataset_url, reader_pool=DummyPool())
-        self.assertTrue('Could not find _metadata file'in str(e.exception))
+        self.assertTrue('Could not find _metadata file' in str(e.exception))
         self.restore_metadata()
 
     def test_metadata_missing_unischema(self):
@@ -62,7 +68,7 @@ class MetadataUnischemaReadTest(unittest.TestCase):
         # Reader will now just get the metadata file which will not have the unischema information
         with self.assertRaises(ValueError) as e:
             Reader(self._dataset_url, reader_pool=DummyPool())
-        self.assertTrue('Could not find the unischema'in str(e.exception))
+        self.assertTrue('Could not find the unischema' in str(e.exception))
         self.restore_metadata('_common_metadata')
 
 
