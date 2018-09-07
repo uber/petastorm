@@ -125,7 +125,7 @@ def _main(args):
     generate_petastorm_metadata(spark, args.dataset_url, args.unischema_class)
 
     # Shut down the spark sessions and context
-    spark.sparkContext.stop()
+    spark.stop()
 
 
 def main():

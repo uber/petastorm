@@ -120,6 +120,6 @@ def create_test_dataset(tmp_url, rows, num_files=2, spark=None):
     build_rowgroup_index(tmp_url, spark_context, indexers)
 
     if shutdown:
-        spark_context.stop()
+        spark.stop()
 
     return dataset_dicts
