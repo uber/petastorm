@@ -1,8 +1,8 @@
-``workers_pool``
-================
+Workers API
+===========
 
-``workers_base``
-----------------
+Worker base and errors
+----------------------
 
 .. automodule:: petastorm.workers_pool
 
@@ -10,22 +10,22 @@
 
 .. automodule:: petastorm.workers_pool.worker_base
 
-``dummy_pool``
---------------
+Dummy pool
+----------
 
 .. automodule:: petastorm.workers_pool.dummy_pool
 
-``process_pool``
-----------------
+Process pool
+------------
 
 .. automodule:: petastorm.workers_pool.process_pool
 
-``thread_pool``
----------------
+Thread pool
+-----------
 
 .. automodule:: petastorm.workers_pool.thread_pool
 
-``ventilator``
---------------
+Ventilator
+----------
 
 .. automodule:: petastorm.workers_pool.ventilator

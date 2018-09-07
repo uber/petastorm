@@ -1,23 +1,23 @@
-``extensions``
-==============
+Extensions
+==========
 
-``hdfs``
---------
+HDFS
+----
 
 .. automodule:: petastorm.hdfs.namenode
 
-``pytorch``
------------
+Pytorch
+-------
 
 .. automodule:: petastorm.pytorch
 
-``spark``
----------
+Spark
+-----
 
 .. automodule:: petastorm.spark_utils
 
-``tf``
-------
+Tensorflow
+----------
 
 .. automodule:: petastorm.tf_utils
    :private-members:
