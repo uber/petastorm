@@ -1,20 +1,20 @@
-``examples``
-============
+Examples
+========
 
-``hello_world``
----------------
+Hello world
+-----------
 
 .. automodule:: examples.hello_world.hello_world_dataset
 
 .. automodule:: examples.hello_world.pytorch_hello_world
 
-``imagenet``
-------------
+ImageNet
+--------
 
 .. automodule:: examples.imagenet.generate_petastorm_imagenet
 
-``mnist``
----------
+MNist
+-----
 
 .. automodule:: examples.mnist.generate_petastorm_mnist
 
