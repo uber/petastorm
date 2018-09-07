@@ -202,4 +202,3 @@ def _is_compliant_shape(a, b):
             if a[i] != b[i]:
                 return False
     return True
-
