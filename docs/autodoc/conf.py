@@ -39,8 +39,6 @@ needs_sphinx = '1.2'
 extensions = [
     'alabaster',
     'sphinx.ext.autodoc',
-# See http://www.sphinx-doc.org/en/master/usage/extensions/autosummary.html
-#    'sphinx.ext.autosummary',
     'sphinx.ext.coverage',
     'sphinx.ext.doctest',
     'sphinx.ext.todo',
