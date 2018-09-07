@@ -120,7 +120,7 @@ def create_test_dataset(tmp_url, rows, num_files=2, spark=None):
     build_rowgroup_index(tmp_url, spark_context, indexers)
 
     if shutdown:
-        spark_context.stop()
+        spark.stop()
 
     # Reader does not support Decimal fields as return types, so it will be converting all decimals
     # to strings. We replace all decimals in the returned list of dictionaries to match this behavior
