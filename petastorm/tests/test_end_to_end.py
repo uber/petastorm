@@ -392,7 +392,7 @@ def test_materialize_dataset_hadoop_config(synthetic_dataset):
     # Other options should return to being unset
     assert hadoop_config.get('parquet.block.size') is None
     assert hadoop_config.get('parquet.block.size.row.check.min') is None
-    spark.sparkContext.stop()
+    spark.stop()
     rmtree(destination)
 
 
