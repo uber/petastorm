@@ -1,32 +1,32 @@
-``dataset_metadata``
-====================
+Dataset metadata & ETL
+======================
 
-``etl``
--------
+ETL
+---
 
 .. automodule:: petastorm.etl
 
-``dataset_metadata``
---------------------
+Dataset metadata
+----------------
 
 .. automodule:: petastorm.etl.dataset_metadata
 
-``petastorm_generate_metadata``
--------------------------------
+Metadata generator
+------------------
 
 .. automodule:: petastorm.etl.petastorm_generate_metadata
 
-``rowgroup_indexers``
----------------------
+Rowgroup indexers
+-----------------
 
 .. automodule:: petastorm.etl.rowgroup_indexers
 
-``rowgroup_indexing``
----------------------
+Rowgroup indexing
+-----------------
 
 .. automodule:: petastorm.etl.rowgroup_indexing
 
-``metadata_util``
------------------
+Metadata utilities
+------------------
 
 .. automodule:: petastorm.etl.metadata_util
