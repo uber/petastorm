@@ -32,7 +32,13 @@ def pyspark_hello_world(dataset_url='file:///tmp/hello_world_dataset'):
     # dataset_as_rdd creates an rdd of named tuples.
     rdd = dataset_as_rdd(dataset_url, spark,
                          [HelloWorldSchema.image1, HelloWorldSchema.id])
-    print(rdd.first().id)
+    print('An id in the dataset: ', rdd.first().id)
+
+    # This is how you can use a standard SQL to query a dataset. Note that the data is not decoded in this case.
+    number_of_rows = spark.sql(
+        'SELECT count(id) '
+        'from parquet.`{}` '.format(dataset_url)).collect()
+    print('Number of rows in the dataset: {}'.format(number_of_rows[0][0]))
 
 
 if __name__ == '__main__':
