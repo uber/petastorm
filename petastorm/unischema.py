@@ -15,9 +15,9 @@
 """A ``unischema`` is a data structure definition which can be rendered as native schema/data-types objects
 in several different python libraries. Currently supported are pyspark, tensorflow, and numpy.
 """
+import copy
 from collections import namedtuple, OrderedDict
 
-import copy
 from pyspark import Row
 from pyspark.sql.types import StructField, StructType
 
@@ -65,6 +65,28 @@ class UnischemaField(namedtuple('UnischemaField', ['name', 'numpy_dtype', 'shape
         return hash(_fields_as_tuple(self))
 
 
+class _NamedtupleCache(object):
+    """_NamedtupleCache makes sure the same instance of a namedtuple is returned for a given schema and a set of
+     fields. This makes comparison between types possible. For example, `tf.data.Dataset.concatenate` implementation
+     compares types to make sure two datasets can be concatenated."""
+    _store = dict()
+
+    @staticmethod
+    def get(parent_schema_name, field_names):
+        """Creates a nametuple with field_names as values. Returns an existing instance if was already created.
+
+        :param parent_schema_name: Schema name becomes is part of the cache key
+        :param field_names: defines names of the fields in the namedtuple created/returned. Also part of the cache key.
+        :return: A namedtuple with field names defined by `field_names`
+        """
+        # Cache key is a combination of schema name and all field names
+        sorted_names = list(sorted(field_names))
+        key = ' '.join([parent_schema_name] + sorted_names)
+        if key not in _NamedtupleCache._store:
+            _NamedtupleCache._store[key] = namedtuple('{}_view'.format(parent_schema_name), sorted_names)
+        return _NamedtupleCache._store[key]
+
+
 # TODO: Changing fields in this class or the UnischemaField will break reading due to the schema being pickled next to
 # the dataset on disk
 class Unischema(object):
@@ -84,8 +106,6 @@ class Unischema(object):
         # Generates attributes named by the field names as an access syntax sugar.
         for f in fields:
             setattr(self, f.name, f)
-
-        self._namedtuple = None
 
     def create_schema_view(self, fields):
         """Creates a new instance of the schema using a subset of fields.
@@ -111,16 +131,7 @@ class Unischema(object):
         return Unischema('{}_view'.format(self._name), fields)
 
     def _get_namedtuple(self):
-        if not self._namedtuple:
-            self._namedtuple = namedtuple(self._name, sorted(self._fields.keys()))
-
-        return self._namedtuple
-
-    def __getstate__(self):
-        # Exclude self._namedtuple from the serialized data. Loading this namedtuple from a pickle would fail otherwise.
-        state = {k: v for k, v in self.__dict__.items()}
-        state['_namedtuple'] = None
-        return state
+        return _NamedtupleCache.get(self._name, self._fields.keys())
 
     def __str__(self):
         """Represent this as the following form:
