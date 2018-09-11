@@ -49,3 +49,4 @@ Reader utilities
 ----------------
 
 .. automodule:: petastorm.utils
+.. automodule:: petastorm.sampling_mixer
