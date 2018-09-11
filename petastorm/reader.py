@@ -57,7 +57,10 @@ class ShuffleOptions(object):
 
 
 class Reader(object):
-    """Reads a unischema based dataset from a parquet file."""
+    """Reads a dataset from a Petastorm dataset.
+
+    :ivar last_row_consumed: True if the last row was already returned by the Reader.
+    """
 
     def __init__(self, dataset_url, schema_fields=None, shuffle=None, predicate=None, rowgroup_selector=None,
                  reader_pool=None, num_epochs=1, sequence=None, training_partition=None, num_training_partitions=None,
@@ -74,7 +77,7 @@ class Reader(object):
             This pool is a custom implementation used to parallelize reading data from the dataset.
             Any object from workers_pool package can be used
             (e.g. :class:`petastorm.workers_pool.process_pool.ProcessPool`).
-        :param num_epochs: An epoch is a single pass over all samples in the dataset. Setting ``num_epochs`` to
+        :param num_epochs: An epoch is a single pass over all rows in the dataset. Setting ``num_epochs`` to
             ``None`` will result in an infinite number of epochs.
         :param training_partition: An int denoting the partition number used for multi node training. Each node should
             pass in a unique partition number in the range ``[0, num_training_partitions)``.
@@ -169,6 +172,7 @@ class Reader(object):
                                  (dataset_url, self.schema, self.ngram, row_groups, cache, filesystem),
                                  ventilator=ventilator)
         self._read_timeout_s = read_timeout_s
+        self.last_row_consumed = False
 
         # _result
         self._result_buffer = []
@@ -353,6 +357,7 @@ class Reader(object):
             return self._result_buffer.pop()
 
         except EmptyResultError:
+            self.last_row_consumed = True
             raise StopIteration
 
     def next(self):
