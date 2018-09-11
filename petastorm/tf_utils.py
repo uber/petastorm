@@ -13,12 +13,12 @@
 # limitations under the License.
 
 """A set of Tensorflow specific helper functions for the unischema"""
+import sys
 import warnings
 from collections import OrderedDict, namedtuple
 from decimal import Decimal
 
 import numpy as np
-import sys
 import tensorflow as tf
 
 # Mapping of identical datatypes in numpy-ish and tensorflow-ish
@@ -267,7 +267,7 @@ def _tf_tensors_ngram(reader, shuffling_queue_capacity, min_after_dequeue):
     return make_namedtuple_tf_ngram(reader.schema, reader.ngram, **fields_as_dict)
 
 
-def  tf_tensors(reader, shuffling_queue_capacity=0, min_after_dequeue=0):
+def tf_tensors(reader, shuffling_queue_capacity=0, min_after_dequeue=0):
     """Bridges between python-only interface of the Reader (next(Reader)) and tensorflow world.
 
     This function returns a named tuple of tensors from the dataset, e.g.,
@@ -310,3 +310,66 @@ def  tf_tensors(reader, shuffling_queue_capacity=0, min_after_dequeue=0):
         result = _tf_tensors_nonngram(reader, shuffling_queue_capacity, min_after_dequeue)
 
     return result
+
+
+def _set_shape_to_named_tuple(schema, fields):
+    """Assign static shape for all tensors"""
+    fields_as_dict = fields._asdict()
+    _set_shape(schema, fields_as_dict)
+    return schema.make_namedtuple_tf(**fields_as_dict)
+
+
+def make_petastorm_dataset(reader):
+    """Creates a `tensorflow.data.Dataset <https://www.tensorflow.org/api_docs/python/tf/data/Dataset>`_ object from
+    a Petastorm :class:`~petastorm.reader.Reader`.
+
+    The returned object can be used as any ``tf.data.Dataset`` with some limitations described below.
+
+    * ``repeat``: An error will be raised if you call ``repeat`` on the returned dataset. Please use ``num_epochs``
+      argument of the :meth:`~petastorm.reader.Reader` constructor.
+    * ``shard``: Consider using ``training_partition`` and ``num_training_partitions`` arguments of the
+      :class:`~petastorm.reader.Reader` constructor as it will not load any unused shards.
+    * ``filter``: Consider using :class:`~petastorm.reader.Reader` ``predicate`` constructor argument.
+      It will make use of columnar nature of the underlying Apache Parquet store to load only the columns that the
+      predicate operates on prior to loading and decoding other columns. :class:`~petastorm.reader.Reader`'s predicate
+      feature will also make use of Parquet partitioning (if the dataset is partitioned).
+
+    The elements produced by the returned dataset object are namedtuples based on the
+    :class:`~petastorm.unischema.Unischema`.
+
+    >>> import tensorflow as tf
+    >>> from petastorm.reader import Reader
+    >>> from petastorm.tf_utils import make_petastorm_dataset
+    >>>
+    >>> with Reader('file:///some/path') as reader:
+    >>>     dataset = make_petastorm_dataset(reader)
+    >>>     next_sample = dataset.make_one_shot_iterator().get_next()
+    >>>     with tf.Session() as sess:
+    >>>         x = sess.run(next_sample)
+
+
+    NGrams are not yet supported by this function.
+
+    :param reader: An instance of :class:`~petastorm.reader.Reader` object that would serve as a data source.
+    :return: A ``tf.data.Dataset`` instance.
+    """
+
+    if not reader.ngram:
+
+        def dequeue_sample_impl():
+            if reader.last_row_consumed:
+                # This means that Dataset is trying to create a new instance of the generator. Can not do that
+                # (nor want to do that) since this is an expensive operation. num_epochs is a more efficient way
+                # to do this.
+                raise RuntimeError('Multiple iterations over make_petastorm_dataset are not supported. '
+                                   'Multiple iterations can be triggered by calling \'repeat\' method of Datset class.'
+                                   'Use Reader\'s num_epochs contructor arguments to set number of iterations.')
+            return map(_sanitize_field_tf_types, reader)
+
+        flat_dataset = tf.data.Dataset.from_generator(dequeue_sample_impl, tuple(_schema_to_tf_dtypes(reader.schema)))
+        named_tuple_dataset = flat_dataset \
+            .map(reader.schema.make_namedtuple_tf) \
+            .map(lambda row: _set_shape_to_named_tuple(reader.schema, row))
+        return named_tuple_dataset
+    else:
+        raise NotImplementedError('make_petastorm_dataset does not support NGram yet.')
