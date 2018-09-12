@@ -14,33 +14,35 @@ Petastorm
    :target: https://pypi.org/project/petastorm
    :alt: Latest Version
 
+.. _Tensorflow: http://www.tensorflow.org/
+.. _PyTorch: https://pytorch.org/
+.. _PySpark: http://spark.apache.org/docs/latest/api/python/pyspark.html
+
 
 .. inclusion-marker-start-do-not-remove
 
-Petastorm is a library enabling the use of Parquet storage from Tensorflow, Pytorch, and other Python-based ML training frameworks.
-From the perspective of deep-learning training and evaluation procedures, using datasets stored in Parquet bridges a common, big-data storage format with deep-learning frameworks, making it simpler to combine them.
+Petastorm, an open source data access library developed at Uber ATG. This library enables single machine or
+distributed training and evaluation of deep learning models directly from multi-terabyte datasets in Apache Parquet
+format. Petastorm supports popular Python-based machine learning (ML) frameworks such as Tensorflow_,
+Pytorch_, and PySpark_. It can also be used from pure Python code.
 
 
 Install
 -------
 
-Petastorm defines tensorflow or tensorflow-gpu as an *extra* package. That way you can choose to depend on either a CPU or a GPU version of tensorflow, or not to install it at all.
+.. code-block:: bash
 
-Note that although petastorm depends on opencv, it is defined as an extra package to allow opencv
-to be installed by debian package (or source) as opposed to pip. It is recommended to install it when
-testing out petastorm however (and is therefore shown in the examples).  
+    pip install petastorm
 
-Install with tensorflow CPU dependency:
+
+There are several extra dependencies that are defined by the ``petastorm`` package that are not installed automatically.
+The extras are: ``tf``, ``tf_gpu``, ``torch``, ``open_cv``, ``docs``, ``tests``.
+
+For example to trigger installation of GPU version of tensorflow and opencv, use the following pip command:
 
 .. code-block:: bash
 
-    pip install petastorm[opencv, tf]
-
-Install with tensorflow GPU dependency:
-
-.. code-block:: bash
-
-    pip install petastorm[opencv, tf_gpu]
+    pip install petastorm[opencv,tf_gpu]
 
 
 Usage
@@ -49,13 +51,13 @@ Usage
 Generating a dataset
 ^^^^^^^^^^^^^^^^^^^^
 
-A dataset created using petastorm is stored in Parquet format.
+A dataset created using Petastorm is stored in `Apache Parquet <https://parquet.apache.org/>`_ format.
 On top of a Parquet schema, petastorm also stores higher-level schema information that makes multidimensional arrays into a native part of a petastorm dataset. 
 
-Petastorm also supports extensible data codecs. These enable a user to use one of the standard data compressions (jpeg, png) or implement her own.
+Petastorm supports extensible data codecs. These enable a user to use one of the standard data compressions (jpeg, png) or implement her own.
 
-Generating a dataset is done using pyspark.
-Pyspark natively supports Parquet format, making it easy to run on a single machine or on a Spark compute cluster.
+Generating a dataset is done using PySpark.
+PySpark natively supports Parquet format, making it easy to run on a single machine or on a Spark compute cluster.
 Here is a minimalistic example writing out a table with some random data.
 
 
@@ -104,8 +106,8 @@ Here is a minimalistic example writing out a table with some random data.
 - To define a dataset field, you need to specify a ``type``, ``shape``, a
   ``codec`` instance and whether the field is nullable for each field of the
   ``Unischema``.
-- We use pyspark for writing output Parquet files. In this example, we launch
-  pyspark on a local box (``.master('local[2]')``). Of course for a larger
+- We use PySpark for writing output Parquet files. In this example, we launch
+  PySpark on a local box (``.master('local[2]')``). Of course for a larger
   scale dataset generation we would need a real compute cluster.
 - We wrap spark dataset generation code with the ``materialize_dataset``
   context manager.  The context manager is responsible for configuring row
@@ -135,6 +137,9 @@ Reading a dataset is simple using the ``petastorm.reader.Reader`` class:
 protocol URI.
 
 Once a ``Reader`` is instantiated, you can use it as an iterator.
+
+Reading a dataset using Tensorflow_
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 To hookup the reader into a tensorflow graph, you can use the ``tf_tensors``
 function:
 
@@ -158,9 +163,8 @@ The reader has multiple features such as:
 - Partitioning for multi-GPU training
 - Local caching
 
-Reading a dataset from pytorch
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
+Reading a dataset using Pytorch_
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 As illustrated in
 `pytorch_example.py <https://github.com/uber/petastorm/blob/master/examples/mnist/pytorch_example.py>`_,
 reading a petastorm dataset from pytorch
@@ -203,6 +207,40 @@ The minimalist example below assumes the definition of a ``Net`` class and
 
 .. inclusion-marker-end-do-not-remove
 
+Querying a dataset using Spark SQL
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Using the Parquet data format, which is natively supported by Spark, makes it possible to use a wide range of Spark
+tools to analyze and manipulate the dataset. The example below shows how to read a Petastorm dataset
+as a Spark RDD object:
+
+.. code-block:: python
+   # dataset_as_rdd creates an rdd of named tuples.
+   rdd = dataset_as_rdd('hdfs://my-hdfs-store/data/my-dataset', spark,
+   [HelloWorldSchema.image1, HelloWorldSchema.id])
+   plt.imshow(rdd.first().image)
+
+   Standard PySpark tools can be used to work with the Petastorm dataset. Note that the data is not decoded and only values of the fields that have a corresponding native representation in Parquet format (e.g. scalars) are meaningful:
+
+   # Create a dataframe object from a parquet file
+   dataframe = sql_session.parquet.read('hdfs://my-hdfs-store/data/my-dataset')
+   # Show a schema
+   dataframe.printSchema()
+
+   # Count all
+   dataframe.count()
+
+   # Show just some columns
+   dataframe.select('id').show(truncate=False)
+   dataframe.describe('id'')
+
+SQL can be used to query a Petastorm dataset:
+
+.. code-block:: python
+   spark_session.sql(
+      'SELECT count(*) '
+      'from parquet.`hdfs://my-hdfs-store/data/my-dataset`')
+
+You can find a full code sample here: `pyspark_hello_world.py <https://github.com/uber/petastorm/blob/master/examples/hello_world/pyspark_hello_world.py>`_,
 
 Troubleshooting
 ---------------
