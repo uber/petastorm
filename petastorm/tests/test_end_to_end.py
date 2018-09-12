@@ -402,10 +402,3 @@ def test_dataset_path_is_a_unicode(synthetic_dataset):
     unicode_in_p23 = synthetic_dataset.url.encode().decode('utf-8')
     with Reader(unicode_in_p23, reader_pool=DummyPool()) as reader:
         next(reader)
-
-
-def test_reader_len(synthetic_dataset):
-    with Reader(synthetic_dataset.url, reader_pool=DummyPool()) as reader:
-        # multiple access yields the same value
-        assert len(reader) == len(synthetic_dataset.data)
-        assert len(reader) == len(synthetic_dataset.data)

@@ -43,9 +43,6 @@ class DataLoader(object):
         self.collate_fn = collate_fn
         self.transform = transform
 
-    def __len__(self):
-        return (len(self.reader) + self.batch_size - 1) // self.batch_size
-
     def __iter__(self):
         """
         The Data Loader iterator stops the for-loop at the end of each epoch, but a subsequent for-loop

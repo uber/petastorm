@@ -119,7 +119,6 @@ def test_predicate_on_single_column(synthetic_dataset):
                     schema_fields=[TestSchema.id2],
                     predicate=in_lambda(['id2'], lambda id2: True),
                     reader_pool=DummyPool())
-    assert len(reader) == len(synthetic_dataset.data)
     counter = 0
     for row in reader:
         counter += 1

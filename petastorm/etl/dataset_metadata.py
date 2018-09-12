@@ -15,7 +15,6 @@
 import json
 import logging
 import os
-import pickle
 from contextlib import contextmanager
 from operator import attrgetter
 
@@ -32,7 +31,15 @@ ROW_GROUPS_PER_FILE_KEY = b'dataset-toolkit.num_row_groups_per_file.v1'
 UNISCHEMA_KEY = b'dataset-toolkit.unischema.v1'
 
 
-class MetadataGenerationError(Exception):
+class PetastormMetadataError(Exception):
+    """
+    Error to specify when the petastorm metadata does not exist, does not contain the necessary information,
+    or is corrupt/invalid.
+    """
+    pass
+
+
+class PetastormMetadataGenerationError(Exception):
     """
     Error to specify when petastorm could not generate metadata properly.
     This error is usually accompanied with a message to try to regenerate dataset metadata.
@@ -41,7 +48,7 @@ class MetadataGenerationError(Exception):
 
 
 @contextmanager
-def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None):
+def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_summary_metadata=False):
     """
     A Context Manager which handles all the initialization and finalization necessary
     to generate metadata for a petastorm dataset. This should be used around your
@@ -64,9 +71,11 @@ def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None):
     :param dataset_url: The dataset url to output your dataset to (e.g. ``hdfs:///path/to/dataset``)
     :param schema: The :class:`petastorm.unischema.Unischema` definition of your dataset
     :param row_group_size_mb: The parquet row group size to use for your dataset
+    :param use_summary_metadata: Whether to use the parquet summary metadata for row group indexing or a custom
+            indexing method. The custom indexing method is more scalable for very large datasets.
     """
     spark_config = {}
-    _init_spark(spark, spark_config, row_group_size_mb)
+    _init_spark(spark, spark_config, row_group_size_mb, use_summary_metadata)
     yield
 
     # After job completes, add the unischema metadata and check for the metadata summary file
@@ -77,17 +86,29 @@ def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None):
         validate_schema=False)
 
     _generate_unischema_metadata(dataset, schema)
-    if not dataset.metadata_path:
-        raise MetadataGenerationError('Could not find summary metadata file. The dataset will exist but you will need'
-                                      ' to execute petastorm-generate-metadata.py before you can read your dataset '
-                                      ' in order to generate the necessary metadata.'
-                                      ' Try increasing spark driver memory next time and making sure you are'
-                                      ' using parquet-mr >= 1.8.3')
+    if not use_summary_metadata:
+        _generate_num_row_groups_per_file(dataset, spark.sparkContext)
+
+    # Reload the dataset to take into account the new metadata
+    dataset = pq.ParquetDataset(
+        resolver.parsed_dataset_url().path,
+        filesystem=resolver.filesystem(),
+        validate_schema=False)
+    try:
+        # Try to load the row groups, if it fails that means the metadata was not generated properly
+        load_row_groups(dataset)
+    except PetastormMetadataError:
+        raise PetastormMetadataGenerationError(
+            'Could not find summary metadata file. The dataset will exist but you will need'
+            ' to execute petastorm-generate-metadata.py before you can read your dataset '
+            ' in order to generate the necessary metadata.'
+            ' Try increasing spark driver memory next time and making sure you are'
+            ' using parquet-mr >= 1.8.3')
 
     _cleanup_spark(spark, spark_config, row_group_size_mb)
 
 
-def _init_spark(spark, current_spark_config, row_group_size_mb=None):
+def _init_spark(spark, current_spark_config, row_group_size_mb=None, use_summary_metadata=False):
     """
     Initializes spark and hdfs config with necessary options for petastorm datasets
     before running the spark job.
@@ -106,7 +127,7 @@ def _init_spark(spark, current_spark_config, row_group_size_mb=None):
     current_spark_config['parquet.block.size'] = \
         hadoop_config.get('parquet.block.size')
 
-    hadoop_config.setBoolean('parquet.enable.summary-metadata', True)
+    hadoop_config.setBoolean('parquet.enable.summary-metadata', use_summary_metadata)
     # Our atg fork includes https://github.com/apache/parquet-mr/pull/502 which creates this
     # option. This forces a job to fail if the summary metadata files cannot be created
     # instead of just having them fail to be created silently
@@ -146,35 +167,72 @@ def _generate_unischema_metadata(dataset, schema):
     utils.add_to_dataset_metadata(dataset, UNISCHEMA_KEY, serialized_schema)
 
 
+def _generate_num_row_groups_per_file(dataset, spark_context):
+    """
+    Generates the metadata file containing the number of row groups in each file
+    for the parquet dataset located at the dataset_url. It does this in spark by
+    opening all parquet files in the dataset on the executors and collecting the
+    number of row groups in each file back on the driver.
+    :param dataset: :class:`pyarrow.parquet.ParquetDataset`
+    :param spark_context: spark context to use for retrieving the number of row groups
+    in each parquet file in parallel
+    :return: None, upon successful completion the metadata file will exist.
+    """
+    if not isinstance(dataset.paths, str):
+        raise ValueError('Expected dataset.paths to be a single path, not a list of paths')
+
+    # Get the common prefix of all the base path in order to retrieve a relative path
+    paths = [piece.path for piece in dataset.pieces]
+
+    # Needed pieces from the dataset must be extracted for spark because the dataset object is not serializable
+
+    fs = dataset.fs
+    base_path = dataset.paths
+
+    def get_row_group_info(path):
+        relative_path = os.path.relpath(path, base_path)
+        pq_file = fs.open(path)
+        num_row_groups = pq.read_metadata(pq_file).num_row_groups
+        pq_file.close()
+        return relative_path, num_row_groups
+
+    row_groups = spark_context.parallelize(paths, len(paths)) \
+        .map(get_row_group_info) \
+        .collect()
+    num_row_groups_str = json.dumps(dict(row_groups))
+    # Add the dict for the number of row groups in each file to the parquet file metadata footer
+    utils.add_to_dataset_metadata(dataset, ROW_GROUPS_PER_FILE_KEY, num_row_groups_str)
+
+
 def load_row_groups(dataset):
     """
     Load dataset row group pieces from metadata
     :param dataset: parquet dataset object.
     :return: splitted pieces, one piece per row group
     """
-    # Split the dataset pieces by row group
+    # We try to get row group information from metadata file
     metadata = dataset.metadata
-    if not metadata:
-        raise ValueError('Could not find _metadata file.'
-                         ' Use materialize_dataset(..) in petastorm.etl.dataset_metadata.py to generate'
-                         ' this file in your ETL code.'
-                         ' You can generate it on an existing dataset using petastorm-generate-metadata.py')
+    common_metadata = dataset.common_metadata
+    if not metadata and not common_metadata:
+        # If neither the metadata or common metadata file exists, we know there is no row group information
+        raise PetastormMetadataError(
+            'Could not find _common_metadata file.'
+            ' Use materialize_dataset(..) in petastorm.etl.dataset_metadata.py to generate'
+            ' this file in your ETL code.'
+            ' You can generate it on an existing dataset using petastorm-generate-metadata.py')
 
-    num_row_groups = metadata.num_row_groups
-
-    if num_row_groups > 0:
-        # Use the new metadata file
+    if metadata and metadata.num_row_groups > 0:
+        # If the metadata file exists and has row group information we use it to split the dataset pieces
         return _split_row_groups(dataset)
 
     # If we don't have row groups in the common metadata we look for the old way of loading it
-    logger.warning('You are using a deprecated metadata version. Please run petastorm-generate-metadata.py'
-                   ' on spark to update.')
-    dataset_metadata_dict = dataset.common_metadata.metadata
+    dataset_metadata_dict = common_metadata.metadata
     if ROW_GROUPS_PER_FILE_KEY not in dataset_metadata_dict:
-        raise ValueError('Could not find row group metadata in _metadata file.'
-                         ' Use materialize_dataset(..) in petastorm.etl.dataset_metadata.py to generate'
-                         ' this file in your ETL code.'
-                         ' You can generate it on an existing dataset using petastorm-generate-metadata.py')
+        raise PetastormMetadataError(
+            'Could not find row group metadata in _common_metadata file.'
+            ' Use materialize_dataset(..) in petastorm.etl.dataset_metadata.py to generate'
+            ' this file in your ETL code.'
+            ' You can generate it on an existing dataset using petastorm-generate-metadata.py')
     metadata_dict_key = ROW_GROUPS_PER_FILE_KEY
     row_groups_per_file = json.loads(dataset_metadata_dict[metadata_dict_key].decode())
 
@@ -233,27 +291,26 @@ def _split_row_groups(dataset):
 def get_schema(dataset):
     """Retrieves schema object stored as part of dataset methadata.
 
-    :param dataset: an instance of :class:`pyarrow.ParquetDatasetobject`
+    :param dataset: an instance of :class:`pyarrow.parquet.ParquetDataset object`
     :return: A :class:`petastorm.unischema.Unischema` object
     """
-    # Split the dataset pieces by row group using the precomputed index
     if not dataset.common_metadata:
-        raise ValueError('Could not find _common_metadata file. Use materialize_dataset(..) in'
-                         ' petastorm.etl.dataset_metadata.py to generate this file in your '
-                         ' ETL code.'
-                         ' You can generate it on an existing dataset using petastorm-generate-metadata.py')
+        raise PetastormMetadataError(
+            'Could not find _common_metadata file. Use materialize_dataset(..) in'
+            ' petastorm.etl.dataset_metadata.py to generate this file in your ETL code.'
+            ' You can generate it on an existing dataset using petastorm-generate-metadata.py')
 
     dataset_metadata_dict = dataset.common_metadata.metadata
 
     # Read schema
     if UNISCHEMA_KEY not in dataset_metadata_dict:
-        raise ValueError('Could not find the unischema in the dataset common metadata file.'
-                         ' Please provide or generate dataset with the unischema attached.'
-                         ' Common Metadata file might not be generated properly.'
-                         ' Make sure to use materialize_dataset(..) in'
-                         ' petastorm.etl.dataset_metadata to'
-                         ' properly generate this file in your ETL code.'
-                         ' You can generate it on an existing dataset using petastorm-generate-metadata.py')
+        raise PetastormMetadataError(
+            'Could not find the unischema in the dataset common metadata file.'
+            ' Please provide or generate dataset with the unischema attached.'
+            ' Common Metadata file might not be generated properly.'
+            ' Make sure to use materialize_dataset(..) in petastorm.etl.dataset_metadata to'
+            ' properly generate this file in your ETL code.'
+            ' You can generate it on an existing dataset using petastorm-generate-metadata.py')
     ser_schema = dataset_metadata_dict[UNISCHEMA_KEY]
     # Since we have moved the unischema class around few times, unpickling old schemas will not work. In this case we
     # override the old import path to get backwards compatibility
