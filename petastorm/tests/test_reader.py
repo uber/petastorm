@@ -28,6 +28,7 @@ def test_dataset_url_must_be_string():
         Reader(dataset_url=[])
 
 
+@pytest.mark.skip('We no longer know how many rows in each row group')
 def test_normalize_shuffle_partitions(synthetic_dataset):
     dataset = pq.ParquetDataset(synthetic_dataset.path)
     shuffle_options = ShuffleOptions(True, 2)

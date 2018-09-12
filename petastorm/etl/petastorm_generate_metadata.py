@@ -43,7 +43,7 @@ spark-submit \\
 '''
 
 
-def generate_petastorm_metadata(spark, dataset_url, unischema_class=None):
+def generate_petastorm_metadata(spark, dataset_url, unischema_class=None, use_summary_metadata=False):
     """
     Generates metadata necessary to read a petastorm dataset to an existing dataset.
 
@@ -75,18 +75,23 @@ def generate_petastorm_metadata(spark, dataset_url, unischema_class=None):
     # overwriting the metadata to keep row group indexes and the old row group per file index
     arrow_metadata = dataset.common_metadata or None
 
-    with materialize_dataset(spark, dataset_url, schema):
-        # Inside the materialize dataset context we just need to write the metadata file as the schema will
-        # be written by the context manager.
-        # We use the java ParquetOutputCommitter to write the metadata file for the existing dataset
-        # which will read all the footers of the dataset in parallel and merge them.
-        hadoop_config = sc._jsc.hadoopConfiguration()
-        Path = sc._gateway.jvm.org.apache.hadoop.fs.Path
-        parquet_output_committer = sc._gateway.jvm.org.apache.parquet.hadoop.ParquetOutputCommitter
-        parquet_output_committer.writeMetaDataFile(hadoop_config, Path(dataset_url))
+    with materialize_dataset(spark, dataset_url, schema, use_summary_metadata=use_summary_metadata):
+        if use_summary_metadata:
+            # Inside the materialize dataset context we just need to write the metadata file as the schema will
+            # be written by the context manager.
+            # We use the java ParquetOutputCommitter to write the metadata file for the existing dataset
+            # which will read all the footers of the dataset in parallel and merge them.
+            hadoop_config = sc._jsc.hadoopConfiguration()
+            Path = sc._gateway.jvm.org.apache.hadoop.fs.Path
+            parquet_output_committer = sc._gateway.jvm.org.apache.parquet.hadoop.ParquetOutputCommitter
+            parquet_output_committer.writeMetaDataFile(hadoop_config, Path(dataset_url))
 
-    if arrow_metadata:
-        # If there was the old row groups per file key or the row groups index key, add them to the new dataset metadata
+    spark.stop()
+
+    if use_summary_metadata and arrow_metadata:
+        # When calling writeMetaDataFile it will overwrite the _common_metadata file which could have schema information
+        # or row group indexers. Therefore we want to retain this information and will add it to the new
+        # _common_metadata file. If we were using the old legacy metadata method this file wont be deleted
         base_schema = arrow_metadata.schema.to_arrow_schema()
         metadata_dict = base_schema.metadata
         if ROW_GROUPS_PER_FILE_KEY in metadata_dict:
@@ -112,6 +117,9 @@ def _main(args):
                              '"local[W]" (where W is the number of local spark workers, e.g. local[10])')
     parser.add_argument('--spark-driver-memory', type=str, help='The amount of memory the driver process will have',
                         default='4g')
+    parser.add_argument('--use-summary-metadata', action='store_true',
+                        help='Whether to use the parquet summary metadata format.'
+                             ' Not scalable for large amounts of columns and/or row groups.')
     args = parser.parse_args(args)
 
     # Open Spark Session
@@ -124,7 +132,7 @@ def _main(args):
 
     spark = spark_session.getOrCreate()
 
-    generate_petastorm_metadata(spark, args.dataset_url, args.unischema_class)
+    generate_petastorm_metadata(spark, args.dataset_url, args.unischema_class, args.use_summary_metadata)
 
     # Shut down the spark sessions and context
     spark.stop()

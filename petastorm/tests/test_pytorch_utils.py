@@ -24,7 +24,6 @@ def _noop_collate(alist):
 
 def test_basic_pytorch_dataloader(synthetic_dataset):
     loader = DataLoader(Reader(synthetic_dataset.url, reader_pool=DummyPool()), collate_fn=_noop_collate)
-    assert len(loader) == len(synthetic_dataset.data)
     for item in loader:
         assert len(item) == 1
 
@@ -33,7 +32,6 @@ def test_pytorch_dataloader_batched(synthetic_dataset):
     batch_size = 10
     loader = DataLoader(Reader(synthetic_dataset.url, reader_pool=DummyPool()),
                         batch_size=batch_size, collate_fn=_noop_collate)
-    assert len(loader) == len(synthetic_dataset.data) / batch_size
     for item in loader:
         assert len(item) == batch_size
 
@@ -41,6 +39,5 @@ def test_pytorch_dataloader_batched(synthetic_dataset):
 def test_pytorch_dataloader_context(synthetic_dataset):
     with DataLoader(Reader(synthetic_dataset.url, reader_pool=DummyPool()),
                     collate_fn=_noop_collate) as loader:
-        assert len(loader) == len(synthetic_dataset.data)
         for item in loader:
             assert len(item) == 1
