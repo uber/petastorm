@@ -317,13 +317,6 @@ class Reader(object):
         logger.warn(warning_message)
         return self._workers_pool.get_results(timeout=timeout)
 
-    def __len__(self):
-        if not self.dataset.metadata or self.dataset.metadata.num_row_groups == 0:
-            raise NotImplementedError("__len__ is only implemented "
-                                      "if dataset has parquet summary files "
-                                      "with row group information")
-        return self.dataset.metadata.num_rows
-
     def __iter__(self):
         return self
 
