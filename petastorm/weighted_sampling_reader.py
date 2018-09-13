@@ -17,26 +17,26 @@ from __future__ import division
 import numpy as np
 
 
-class SamplingMixer(object):
+class WeightedSamplingReader(object):
     """Allows to combine outputs of two or more Reader objects, sampling them with a configurable probability.
     Complies to the same interfaces as :class:`~petastorm.reader.Reader`, hence
-    :class:`~petastorm.sampling_mixer.SamplingMixer` can be used anywhere the :class:`~petastorm.reader.Reader`
-    can be used."""
+    :class:`~petastorm.weighted_sampling_reader.WeightedSamplingReader` can be used anywhere the
+    :class:`~petastorm.reader.Reader` can be used."""
     def __init__(self, readers, probabilities):
         """The constructor is configured with a list of readers and probabilities. The lists must be the same length.
-        :class:`~petastorm.sampling_mixer.SamplingMixer` implements an iterator interface. Each time a new element
-        is requested, one of the readers is selected, weighted by the matching probability. An element produced by the
-        selected reader is returned.
+        :class:`~petastorm.weighted_sampling_reader.WeightedSamplingReader` implements an iterator interface. Each time
+        a new element is requested, one of the readers is selected, weighted by the matching probability. An element
+        produced by the selected reader is returned.
 
         The iterator raises StopIteration exception once one of the embedded readers has no more data left.
 
-        The following example shows how a :class:`~petastorm.sampling_mixer.SamplingMixer` can be instantiated
-        with two readers which are sampled with 10% and 90% probabilities respectively.
+        The following example shows how a :class:`~petastorm.weighted_sampling_reader.WeightedSamplingReader` can be
+        instantiated with two readers which are sampled with 10% and 90% probabilities respectively.
 
-        >>> from petastorm.sampling_mixer import SamplingMixer
+        >>> from petastorm.weighted_sampling_reader import WeightedSamplingReader
         >>> from petastorm.reader import Reader
         >>>
-        >>> with SamplingMixer([Reader('file:///dataset1'), Reader('file:///dataset1')], [0.1, 0.9]) as reader:
+        >>> with WeightedSamplingReader([Reader('file:///dataset1'), Reader('file:///dataset1')], [0.1, 0.9]) as reader:
         >>>     new_sample = next(reader)
 
 
