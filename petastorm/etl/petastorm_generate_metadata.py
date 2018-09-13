@@ -31,7 +31,7 @@ example_text = '''Example (some replacement required):
 Locally:     
 petastorm-generate-metadata.py \\
     --dataset_url hdfs:///path/to/my/hello_world_dataset \\
-    --unischema_class examples.hello_world.hello_world_dataset.HelloWorldSchema \\
+    --unischema_class examples.hello_world.generate_hello_world_dataset.HelloWorldSchema \\
     --master local[*]
 
 On Spark:    
@@ -39,7 +39,7 @@ spark-submit \\
     --master spark://ip:port \\
     $(which petastorm-generate-metadata.py) \\
     --dataset_url hdfs:///path/to/my/hello_world_dataset \\
-    --unischema_class examples.hello_world.hello_world_dataset.HelloWorldSchema
+    --unischema_class examples.hello_world.generate_hello_world_dataset.HelloWorldSchema
 '''
 
 
@@ -50,7 +50,8 @@ def generate_petastorm_metadata(spark, dataset_url, unischema_class=None):
     :param spark: spark session
     :param dataset_url: url of existing dataset
     :param unischema_class: (optional) fully qualified dataset unischema class. If not specified will attempt
-        to find one already in the dataset. (e.g. :class:`examples.hello_world.hello_world_dataset.HelloWorldSchema`)
+        to find one already in the dataset. (e.g.
+        :class:`examples.hello_world.generate_hello_world_dataset.HelloWorldSchema`)
     """
     sc = spark.sparkContext
 
@@ -104,7 +105,8 @@ def _main(args):
     parser.add_argument('--unischema_class',
                         help='the fully qualified class of the dataset unischema. If not specified will attempt'
                              ' to reuse schema already in dataset. '
-                             '(e.g. examples.hello_world.hello_world_dataset.HelloWorldSchema)', required=False)
+                             '(e.g. examples.hello_world.generate_hello_world_dataset.HelloWorldSchema)',
+                        required=False)
     parser.add_argument('--master', type=str,
                         help='Spark master. Default if not specified. To run on a local machine, specify '
                              '"local[W]" (where W is the number of local spark workers, e.g. local[10])')
