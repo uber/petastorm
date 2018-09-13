@@ -36,9 +36,16 @@ before_script:
 script:
   - pylint --rcfile=.pylintrc petastorm examples -f parseable -r n
   # Ignore two pytorch tests to prevent static-TLS-caused torch-import seg-fault
-  - pytest -v --cov=./ --trace-config
+  # Run first tests that can run in parallel
+  - pytest -nauto -m "not serial" -v --cov=./ --trace-config
     --ignore=examples/mnist/tests/test_generate_mnist_dataset.py
     --ignore=petastorm/tests/test_pytorch_utils.py
+
+  # Now run the tests that require serial run
+  - pytest -m "serial" -v --cov=./ --trace-config
+    --ignore=examples/mnist/tests/test_generate_mnist_dataset.py
+    --ignore=petastorm/tests/test_pytorch_utils.py
+
   # Run the pytorch tests separately, in this order, but accumulate code coverage data
   # Temporary disabled until we figure out (a) segfaults in the first test with `import torch`,
   # and (b) hanging in `test_read_mnist_dataset`

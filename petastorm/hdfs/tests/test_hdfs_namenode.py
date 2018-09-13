@@ -19,6 +19,7 @@ import unittest
 from shutil import rmtree
 from tempfile import mkdtemp
 
+import pytest
 from pyarrow.lib import ArrowIOError
 
 from petastorm.hdfs.namenode import HdfsNamenodeResolver, HdfsConnector, \
@@ -51,6 +52,7 @@ class MockHadoopConfiguration(object):
         self._dict[key] = val
 
 
+@pytest.mark.serial
 class HdfsNamenodeResolverTest(unittest.TestCase):
     def setUp(self):
         """Initializes a mock hadoop config and a namenode resolver instance, for convenience."""
@@ -120,6 +122,7 @@ class HdfsNamenodeResolverTest(unittest.TestCase):
             self.suj.resolve_hdfs_name_service(HC.WARP_TURTLE)
 
 
+@pytest.mark.serial
 class EnvBasedHadoopConfigurationTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -255,6 +258,7 @@ class MockHdfs(object):
         """
         The Mock HDFS simply calls check_failover, regardless of the filesystem operator invoked.
         """
+
         def op(*args, **kwargs):
             """ Mock operator """
             return self._check_failovers()
@@ -330,6 +334,7 @@ class MockHdfsConnector(HdfsConnector):
 
 class HdfsConnectorTest(unittest.TestCase):
     """Check correctness of connecting to a list of namenodes. """
+
     @classmethod
     def setUpClass(cls):
         """Initializes a mock HDFS namenode connector to track connection attempts."""
@@ -380,6 +385,7 @@ class HAHdfsClientTest(unittest.TestCase):
     The HDFS testing functions are enumerated explicitly below for simplicity and clarity, but it
     should impose but a minute maintenance overhead, since MockHdfs class requires no enumeration.
     """
+
     @classmethod
     def setUpClass(cls):
         """Initializes namenodes list and mock HDFS namenode connector."""
