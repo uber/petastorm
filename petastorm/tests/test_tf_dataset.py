@@ -22,9 +22,9 @@ import tensorflow as tf
 
 from petastorm.ngram import NGram
 from petastorm.predicates import in_lambda
-from petastorm.reader import Reader
+from petastorm.reader import Reader, ShuffleOptions
 from petastorm.tests.test_common import TestSchema
-from petastorm.tf_utils import make_petastorm_dataset
+from petastorm.tf_utils import make_petastorm_dataset, make_petastorm_dataset_initializable
 from petastorm.workers_pool.dummy_pool import DummyPool
 from petastorm.workers_pool.process_pool import ProcessPool
 from petastorm.workers_pool.thread_pool import ThreadPool
@@ -150,3 +150,23 @@ def test_dataset_on_ngram_not_supported(synthetic_dataset, reader_factory):
     with reader_factory(synthetic_dataset.url, schema_fields=ngram) as reader:
         with pytest.raises(NotImplementedError):
             make_petastorm_dataset(reader)
+
+
+def test_initializable_iterator(synthetic_dataset):
+    dataset = make_petastorm_dataset_initializable(
+        lambda: Reader(synthetic_dataset.url, reader_pool=DummyPool(),
+                       schema_fields=_NOT_NULL_FIELDS,
+                       shuffle_options=ShuffleOptions(shuffle_row_groups=False)))
+
+    iterator = dataset.make_initializable_iterator()
+
+    # Read a bunch of entries from the dataset and compare the data to reference
+    with tf.Session() as sess:
+        next_sample = iterator.get_next()
+        sess.run(iterator.initializer)
+
+        assert 0 == sess.run(next_sample).id
+        assert 1 == sess.run(next_sample).id
+
+        sess.run(iterator.initializer)
+        assert 0 == sess.run(next_sample).id

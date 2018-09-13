@@ -373,3 +373,17 @@ def make_petastorm_dataset(reader):
         return named_tuple_dataset
     else:
         raise NotImplementedError('make_petastorm_dataset does not support NGram yet.')
+
+
+def make_petastorm_dataset_initializable(reader_factory):
+
+    with reader_factory() as reader:
+
+        def dequeue_sample_impl():
+            return map(_sanitize_field_tf_types, reader_factory())
+
+        flat_dataset = tf.data.Dataset.from_generator(dequeue_sample_impl, tuple(_schema_to_tf_dtypes(reader.schema)))
+        named_tuple_dataset = flat_dataset \
+            .map(reader.schema.make_namedtuple_tf) \
+            .map(lambda row: _set_shape_to_named_tuple(reader.schema, row))
+        return named_tuple_dataset
