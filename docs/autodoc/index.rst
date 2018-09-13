@@ -13,8 +13,10 @@ Petastorm is a library enabling the use of Parquet storage from Tensorflow, Pyto
    :maxdepth: 2
 
    readme_include
-   troubleshoot_include
    development_include
+   troubleshoot_include
+   release_notes_include
+
 
 API
 ===
