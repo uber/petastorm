@@ -62,7 +62,6 @@ Here is a minimalistic example writing out a table with some random data.
 
 
 .. code-block:: python
-   :linenos:
 
     HelloWorldSchema = Unischema('HelloWorldSchema', [
        UnischemaField('id', np.int32, (), ScalarCodec(IntegerType()), False),
@@ -122,8 +121,8 @@ Here is a minimalistic example writing out a table with some random data.
   storage. The parquet schema is automatically derived from
   ``HelloWorldSchema``.
 
-Reading a dataset
-^^^^^^^^^^^^^^^^^
+Reading a dataset from Python
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Reading a dataset is simple using the ``petastorm.reader.Reader`` class:
 
@@ -138,8 +137,8 @@ protocol URI.
 
 Once a ``Reader`` is instantiated, you can use it as an iterator.
 
-Reading a dataset using Tensorflow_
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Reading a dataset using Tensorflow
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 To hookup the reader into a tensorflow graph, you can use the ``tf_tensors``
 function:
 
@@ -163,8 +162,8 @@ The reader has multiple features such as:
 - Partitioning for multi-GPU training
 - Local caching
 
-Reading a dataset using Pytorch_
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Reading a dataset using Pytorch
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 As illustrated in
 `pytorch_example.py <https://github.com/uber/petastorm/blob/master/examples/mnist/pytorch_example.py>`_,
 reading a petastorm dataset from pytorch
@@ -181,7 +180,6 @@ The minimalist example below assumes the definition of a ``Net`` class and
 ``train`` and ``test`` functions, included in ``pytorch_example``:
 
 .. code-block:: python
-   :linenos:
 
     import torch
     from petastorm.pytorch import DataLoader
@@ -214,31 +212,26 @@ tools to analyze and manipulate the dataset. The example below shows how to read
 as a Spark RDD object:
 
 .. code-block:: python
-   # dataset_as_rdd creates an rdd of named tuples.
-   rdd = dataset_as_rdd('hdfs://my-hdfs-store/data/my-dataset', spark,
-   [HelloWorldSchema.image1, HelloWorldSchema.id])
-   plt.imshow(rdd.first().image)
-
-   Standard PySpark tools can be used to work with the Petastorm dataset. Note that the data is not decoded and only values of the fields that have a corresponding native representation in Parquet format (e.g. scalars) are meaningful:
 
    # Create a dataframe object from a parquet file
-   dataframe = sql_session.parquet.read('hdfs://my-hdfs-store/data/my-dataset')
+   dataframe = spark.read.parquet(dataset_url)
+
    # Show a schema
    dataframe.printSchema()
 
    # Count all
    dataframe.count()
 
-   # Show just some columns
-   dataframe.select('id').show(truncate=False)
-   dataframe.describe('id'')
+   # Show a single column
+   dataframe.select('id').show()
 
 SQL can be used to query a Petastorm dataset:
 
 .. code-block:: python
-   spark_session.sql(
-      'SELECT count(*) '
-      'from parquet.`hdfs://my-hdfs-store/data/my-dataset`')
+
+   spark.sql(
+      'SELECT count(id) '
+      'from parquet.`file:///tmp/hello_world_dataset`').collect()
 
 You can find a full code sample here: `pyspark_hello_world.py <https://github.com/uber/petastorm/blob/master/examples/hello_world/pyspark_hello_world.py>`_,
 
