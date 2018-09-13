@@ -23,6 +23,7 @@ from petastorm.reader import Reader
 from petastorm.weighted_sampling_reader import WeightedSamplingReader
 from petastorm.test_util.reader_mock import ReaderMock
 from petastorm.unischema import Unischema, UnischemaField
+from petastorm.workers_pool.dummy_pool import DummyPool
 
 TestSchema = Unischema('TestSchema', [
     UnischemaField('f1', np.int32, (), None, False),
@@ -73,14 +74,19 @@ def test_mixing():
 
 
 def test_real_reader(synthetic_dataset):
-    readers = [Reader(synthetic_dataset.url, predicate=in_lambda(['id'], lambda id: id % 2 == 0), num_epochs=None),
-               Reader(synthetic_dataset.url, predicate=in_lambda(['id'], lambda id: id % 2 == 1), num_epochs=None)]
+    readers = [Reader(synthetic_dataset.url, predicate=in_lambda(['id'], lambda id: id % 2 == 0), num_epochs=None,
+                      reader_pool=DummyPool()),
+               Reader(synthetic_dataset.url, predicate=in_lambda(['id'], lambda id: id % 2 == 1), num_epochs=None,
+                      reader_pool=DummyPool())]
     results = [0, 0]
     num_of_reads = 300
     with WeightedSamplingReader(readers, [0.5, 0.5]) as mixer:
-        for _ in six.moves.xrange(num_of_reads):
-            next_id = next(mixer).id % 2
+        # Piggyback on this test to verify container interface of the WeightedSamplingReader
+        for i, sample in enumerate(mixer):
+            next_id = sample.id % 2
             results[next_id] += 1
+            if i >= num_of_reads:
+                break
 
     np.testing.assert_allclose(results, [num_of_reads * 0.5, num_of_reads * 0.5], atol=num_of_reads / 10)
 
