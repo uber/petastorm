@@ -20,7 +20,7 @@ import six
 
 from petastorm.predicates import in_lambda
 from petastorm.reader import Reader
-from petastorm.sampling_mixer import SamplingMixer
+from petastorm.weighted_sampling_reader import WeightedSamplingReader
 from petastorm.test_util.reader_mock import ReaderMock
 from petastorm.unischema import Unischema, UnischemaField
 
@@ -36,7 +36,7 @@ reader2 = ReaderMock(TestSchema, lambda _: {'f1': 2})
 def _count_mixed(readers, probabilities, num_of_reads):
     result = len(probabilities) * [0]
 
-    with SamplingMixer(readers, probabilities) as mixer:
+    with WeightedSamplingReader(readers, probabilities) as mixer:
         for _ in six.moves.xrange(num_of_reads):
             reader_index = next(mixer).f1
             result[reader_index] += 1
@@ -77,7 +77,7 @@ def test_real_reader(synthetic_dataset):
                Reader(synthetic_dataset.url, predicate=in_lambda(['id'], lambda id: id % 2 == 1), num_epochs=None)]
     results = [0, 0]
     num_of_reads = 300
-    with SamplingMixer(readers, [0.5, 0.5]) as mixer:
+    with WeightedSamplingReader(readers, [0.5, 0.5]) as mixer:
         for _ in six.moves.xrange(num_of_reads):
             next_id = next(mixer).id % 2
             results[next_id] += 1
@@ -87,4 +87,4 @@ def test_real_reader(synthetic_dataset):
 
 def test_bad_arguments():
     with pytest.raises(ValueError):
-        SamplingMixer([reader1], [0.1, 0.9])
+        WeightedSamplingReader([reader1], [0.1, 0.9])
