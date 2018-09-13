@@ -29,7 +29,7 @@ from petastorm.unischema import dict_to_spark_row, Unischema, UnischemaField
 HelloWorldSchema = Unischema('HelloWorldSchema', [
     UnischemaField('id', np.int32, (), ScalarCodec(IntegerType()), False),
     UnischemaField('image1', np.uint8, (128, 256, 3), CompressedImageCodec('png'), False),
-    UnischemaField('other_data', np.uint8, (None, 128, 30, None), NdarrayCodec(), False),
+    UnischemaField('array_4d', np.uint8, (None, 128, 30, None), NdarrayCodec(), False),
 ])
 
 
@@ -37,11 +37,10 @@ def row_generator(x):
     """Returns a single entry in the generated dataset. Return a bunch of random values as an example."""
     return {'id': x,
             'image1': np.random.randint(0, 255, dtype=np.uint8, size=(128, 256, 3)),
-            'other_data': np.random.randint(0, 255, dtype=np.uint8, size=(4, 128, 30, 3))}
+            'array_4d': np.random.randint(0, 255, dtype=np.uint8, size=(4, 128, 30, 3))}
 
 
 def generate_hello_world_dataset(output_url='file:///tmp/hello_world_dataset'):
-    rows_count = 10
     rowgroup_size_mb = 256
 
     spark = SparkSession.builder.config('spark.driver.memory', '2g').master('local[2]').getOrCreate()
@@ -49,6 +48,7 @@ def generate_hello_world_dataset(output_url='file:///tmp/hello_world_dataset'):
 
     # Wrap dataset materialization portion. Will take care of setting up spark environment variables as
     # well as save petastorm specific metadata
+    rows_count = 10
     with materialize_dataset(spark, output_url, HelloWorldSchema, rowgroup_size_mb):
 
         rows_rdd = sc.parallelize(range(rows_count))\

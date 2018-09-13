@@ -16,9 +16,10 @@ import unittest
 
 import pytest
 
-from examples.hello_world.hello_world_dataset import generate_hello_world_dataset
+from examples.hello_world.generate_hello_world_dataset import generate_hello_world_dataset
 from examples.hello_world.pyspark_hello_world import pyspark_hello_world
 from examples.hello_world.pytorch_hello_world import pytorch_hello_world
+from examples.hello_world.tensorflow_hello_world import tensorflow_hello_world
 from petastorm.reader import Reader
 from petastorm.tests.conftest import SyntheticDataset
 
@@ -52,3 +53,9 @@ def test_pytorch_hello_world_example(hello_world_dataset):
 
 def test_pyspark_hello_world_example(hello_world_dataset):
     pyspark_hello_world(hello_world_dataset.url)
+
+def test_python_hello_world_example(hello_world_dataset):
+    pyspark_hello_world(hello_world_dataset.url)
+
+def test_tensorflow_hello_world_example(hello_world_dataset):
+    tensorflow_hello_world(hello_world_dataset.url)
