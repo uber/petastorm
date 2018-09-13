@@ -20,12 +20,22 @@ from __future__ import print_function
 import tensorflow as tf
 
 from petastorm.reader import Reader
-from petastorm.tf_utils import tf_tensors
+from petastorm.tf_utils import tf_tensors, make_petastorm_dataset
 
 
 def tensorflow_hello_world(dataset_url='file:///tmp/hello_world_dataset'):
+    # Example: tf_tensors will return tensors with dataset data
     with Reader(dataset_url) as reader:
         tensor = tf_tensors(reader)
+        with tf.Session() as sess:
+            sample = sess.run(tensor)
+            print(sample.id)
+
+    # Example: use tf.data.Dataset API
+    with Reader(dataset_url) as reader:
+        dataset = make_petastorm_dataset(reader)
+        iterator = dataset.make_one_shot_iterator()
+        tensor = iterator.get_next()
         with tf.Session() as sess:
             sample = sess.run(tensor)
             print(sample.id)
