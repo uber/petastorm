@@ -132,7 +132,9 @@ def test_shuffle(synthetic_dataset, reader_factory):
     assert np.any(np.not_equal(first_readout, shuffled_readout))
 
 
-@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
+@pytest.mark.parametrize('reader_factory', [
+    lambda url, **kwargs: Reader(url, reader_pool=DummyPool(), **kwargs),
+    lambda url, **kwargs: ReaderV2(url, loader_pool=SameThreadExecutor(), decoder_pool=SameThreadExecutor(), **kwargs)])
 def test_shuffle_drop_ratio(synthetic_dataset, reader_factory):
     def readout_all_ids(shuffle, drop_ratio):
         with reader_factory(synthetic_dataset.url,
