@@ -29,7 +29,6 @@ For a quick reference to API details, view our auto-generated API documentation:
    metadata
    workers
    extensions
-   examples
 
 
 Indices and tables
