@@ -23,7 +23,9 @@ class WeightedSamplingReader(object):
     :class:`~petastorm.weighted_sampling_reader.WeightedSamplingReader` can be used anywhere the
     :class:`~petastorm.reader.Reader` can be used."""
     def __init__(self, readers, probabilities):
-        """The constructor is configured with a list of readers and probabilities. The lists must be the same length.
+        """Creates an instance WeightedSamplingReader.
+
+        The constructor gets a list of readers and probabilities as its parameters. The lists must be the same length.
         :class:`~petastorm.weighted_sampling_reader.WeightedSamplingReader` implements an iterator interface. Each time
         a new element is requested, one of the readers is selected, weighted by the matching probability. An element
         produced by the selected reader is returned.
@@ -41,10 +43,11 @@ class WeightedSamplingReader(object):
 
 
         :param readers: A list of readers. The length of the list must be the same as the length of the
-        ``probabilities`` list.
+         ``probabilities`` list.
         :param probabilities: A list of probabilities. The length of the list must be the same as the length
           of ``readers`` argument. If the sum of all probability values is not 1.0, it will be automatically
           normalized.
+
         """
         if len(readers) != len(probabilities):
             raise ValueError('readers and probabilities are expected to be lists of the same length')
