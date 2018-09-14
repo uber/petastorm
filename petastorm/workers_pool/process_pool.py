@@ -21,6 +21,7 @@ from traceback import format_exc
 
 import pyarrow
 import zmq
+from zmq import ZMQBaseError
 from zmq.utils import monitor
 
 from petastorm.workers_pool import EmptyResultError, VentilatedItemProcessedMessage, \
@@ -36,7 +37,7 @@ _SOCKET_LINGER_MS = 1000
 _KEEP_TRYING_WHILE_ZMQ_AGAIN_IS_RAIZED_TIMEOUT_S = 20
 
 
-def _keep_retrying_while_zmq_again(timeout, func):
+def _keep_retrying_while_zmq_again(timeout, func, allowed_failures=3):
     """Will keep executing func() as long as zmq.Again is being thrown.
 
     Usage example:
@@ -53,12 +54,21 @@ def _keep_retrying_while_zmq_again(timeout, func):
     :return: None
     """
     now = time()
+    failures = 0
     while time() < now + timeout:
         try:
             func()
         except zmq.Again:
             sleep(0.1)
             continue
+        except ZMQBaseError:
+            # There are race conditions while setting up the zmq socket so you can get unexpected errors
+            # for the first bit of time. We therefore allow for a few unknown failures while the sockets
+            # are warming up. Before propogating them as a true problem.
+            sleep(0.1)
+            failures += 1
+            if failures > allowed_failures:
+                raise
         return
     raise RuntimeError('Timeout ({} [sec]) has elapsed while keep getting \'zmq.Again\''.format(timeout))
 
