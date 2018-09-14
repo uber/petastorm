@@ -109,7 +109,7 @@ Known doc-build caveats and issues
 .. _alabaster Sphinx theme: https://alabaster.readthedocs.io/
 
 Future: auto-generate with ``sphinx-apidoc``
--------------------------------------------
+--------------------------------------------
 
 Sphinx has the ability to auto-generate the entire API, either via the
 autosummary_ extension, or the ``sphinx-apidoc`` tool.

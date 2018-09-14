@@ -14,17 +14,14 @@ Petastorm
    :target: https://pypi.org/project/petastorm
    :alt: Latest Version
 
-.. _Tensorflow: http://www.tensorflow.org/
-.. _PyTorch: https://pytorch.org/
-.. _PySpark: http://spark.apache.org/docs/latest/api/python/pyspark.html
-
 
 .. inclusion-marker-start-do-not-remove
 
 Petastorm, an open source data access library developed at Uber ATG. This library enables single machine or
 distributed training and evaluation of deep learning models directly from multi-terabyte datasets in Apache Parquet
-format. Petastorm supports popular Python-based machine learning (ML) frameworks such as Tensorflow_,
-Pytorch_, and PySpark_. It can also be used from pure Python code.
+format. Petastorm supports popular Python-based machine learning (ML) frameworks such as
+`Tensorflow <http://www.tensorflow.org/>`_, `PyTorch <https://pytorch.org/>`_, and
+`PySpark <http://spark.apache.org/docs/latest/api/python/pyspark.html>`_. It can also be used from pure Python code.
 
 
 Install
