@@ -97,8 +97,8 @@ Here is a minimalistic example writing out a table with some random data.
 
 - ``HelloWorldSchema`` is an instance of a ``Unischema`` object.
   ``Unischema`` is capable of rendering types of its fields into different
-  framework specific formats, such as: Spark’s ``StructType``, Tensorflow’s
-  ``tf.DType`` and numpy’s ``numpy.dtype``.
+  framework specific formats, such as: Spark ``StructType``, Tensorflow
+  ``tf.DType`` and numpy ``numpy.dtype``.
 - To define a dataset field, you need to specify a ``type``, ``shape``, a
   ``codec`` instance and whether the field is nullable for each field of the
   ``Unischema``.
