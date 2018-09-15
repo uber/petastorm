@@ -46,7 +46,6 @@ class TestWorkersPool(unittest.TestCase):
         pool.stop()
         pool.join()
 
-    @unittest.skip('Temporary disabling ProcessPool tests.')
     def test_passing_args_processes(self):
         self._passing_args_impl(lambda: ProcessPool(10))
 
@@ -56,7 +55,6 @@ class TestWorkersPool(unittest.TestCase):
     def test_passing_args_dummy(self):
         self._passing_args_impl(DummyPool)
 
-    @unittest.skip('Temporary disabling ProcessPool tests.')
     def test_all_workers_are_active_processes(self):
         """Check that the work is distributed among all workers"""
         WORKERS_COUNT = 10
@@ -133,7 +131,6 @@ class TestWorkersPool(unittest.TestCase):
         pool.stop()
         pool.join()
 
-    @unittest.skip('Temporary disabling ProcessPool tests.')
     def test_block_on_get_results_processes(self):
         self.block_on_get_results_impl(ProcessPool)
 
@@ -143,7 +140,6 @@ class TestWorkersPool(unittest.TestCase):
     def test_block_on_get_results_dummy(self):
         self.block_on_get_results_impl(DummyPool)
 
-    @unittest.skip('Temporary disabling ProcessPool tests.')
     def test_return_none_on_get_results_process(self):
         self.raise_empty_result_error_on_get_results_impl(ProcessPool)
 
@@ -156,7 +152,6 @@ class TestWorkersPool(unittest.TestCase):
     def test_timeout_while_waiting_on_results_thread(self):
         self.timeout_while_waiting_on_results_impl(ThreadPool)
 
-    @unittest.skip('Temporary disabling ProcessPool tests.')
     def test_timeout_while_waiting_on_results_process(self):
         self.timeout_while_waiting_on_results_impl(ProcessPool)
 
@@ -222,7 +217,6 @@ class TestWorkersPool(unittest.TestCase):
         QUEUE_SIZE = 100
         self._test_exception_in_worker_impl(ThreadPool(10, results_queue_size=QUEUE_SIZE), QUEUE_SIZE)
 
-    @unittest.skip('Temporary disabling ProcessPool tests.')
     def test_exception_in_worker_process(self):
         """ Test exception handler in process pool """
 
@@ -232,7 +226,6 @@ class TestWorkersPool(unittest.TestCase):
         # sent to a worker before it has exited due to an exception
         self._test_exception_in_worker_impl(ProcessPool(10), 1)
 
-    @unittest.skip('Temporary disabling ProcessPool tests.')
     def test_exception_in_all_worker_process(self):
         """ Tests that when all worker processes have exited, zmq will properly throw an exception
          when trying to ventilate instead of blocking indefinitely"""
