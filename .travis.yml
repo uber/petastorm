@@ -62,6 +62,10 @@ after_failure:
   # If it's possible to run with python2.7-dbg, then gdb hook py-bt will do its magic.
   - if [[ -f "$COREFILE" ]]; then gdb -c "$COREFILE" python -ex "thread apply all bt" -ex "set pagination 0" -batch; fi
 
+before_deploy:
+  # Build a python wheel before deployment
+  - python setup.py bdist_wheel
+
 deploy:
   # Disabling pypi deployment. There is an issue with authentication at the moment
   #  - provider: pypi
