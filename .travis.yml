@@ -14,72 +14,80 @@
 
 dist: trusty
 language: python
-cache: pip
 python:
   - '2.7'
   - '3.6'
-matrix:
-  include:
-    - python: '3.7'
-      sudo: required  # required for Python 3.7 (travis-ci/travis-ci#9069)
-  allow_failures:
-    - python: '3.7'  # Until Python 3.7 support is added to https://pypi.org/project/pyarrow
+services:
+  - docker
 
 install:
-  - jdk_switcher use openjdk8
-  - java -version
-  # Upgrade pip to avoid weird failures, such as failing to install torchvision
-  - pip install --upgrade pip==18.0
-  # This will use requirements from setup.py and install them in the tavis's virtual environment
-  # [tf] chooses to depend on cpu version of tensorflow (alternatively, could do [tf_gpu])
-  - pip install -q -e .[tf,test,torch,docs]
-  # pyarrow was compiled against a newer version of numpy than we require so we need to upgrade it
-  # (or optionally install pyarrow from source instead of through binaries)
-  - pip install --upgrade numpy
-  - pip install pytest-timeout
+  # We will use selitvin/petastorm_ci:latest as docker image for running on travis-ci.
+  # To rebuild the ci image, uncomment the following two lines.
+  # The image contains all petastorm dependencies installed, we do rerun dependencies installation to refresh
+  # versions of the dependencies on each build if needed
+
+  #  - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+  #  - docker build -t selitvin/petastorm_ci:latest -f docker/ubuntu16.04.dockerfile .
+  #  - docker push selitvin/petastorm_ci:latest
+
+  - docker pull selitvin/petastorm_ci:latest
 
 before_script:
-  # enable core dumps
-  - ulimit -c unlimited -S
-  - pip install flake8
+
+  # run docker container for an hour. Will execute all docker commands inside this container
+  - docker run -v `pwd`:/petastorm selitvin/petastorm_ci:latest /bin/sh -c "sleep 3600" &
+
+  # wait for docker to start and get its hash
+  - sleep 5
+  - export CONTAINER=$(docker ps -q | head -n 1)
+
+  - export RUN="docker exec ${CONTAINER} bash /run_in_venv.sh ${TRAVIS_PYTHON_VERSION}"
+  - export PYTEST="pytest --timeout=180 --duration=0 -v --cov=./  --cov-append --color=yes"
+
+  # Refresh our dependencies' versions as in the CI image, they may go stale
+  - $RUN pip install -e /petastorm/[test,tf,torch,docs,opencv]
+
+  # Upgrade pip to avoid weird failures, such as failing to install torchvision
+  # This will use requirements from setup.py and install them in the tavis's virtual environment
+  # [tf] chooses to depend on cpu version of tensorflow (alternatively, could do [tf_gpu])
+  # pyarrow was compiled against a newer version of numpy than we require so we need to upgrade it
+  # (or optionally install pyarrow from source instead of through binaries)
+  - $RUN pip install --upgrade numpy
+
+  - $RUN pip list
 
   # We run a bunch of linting in before_script to fail fast and not run unit tests in case of lint failure.
+  - $RUN flake8 . --count --show-source --statistics
+  - $RUN flake8 . --count --exit-zero --max-complexity=10 --statistics
+  - $RUN pylint --rcfile=.pylintrc petastorm examples -f parseable -r n
 
-  # stop the build if there are Python syntax errors or undefined names
-  - flake8 . --count --show-source --statistics
-  # exit-zero treats all errors as warnings. We can make it a blocking test once issue #178 is addressed.
-  - flake8 . --count --exit-zero --max-complexity=10 --statistics
-
-  - pylint --rcfile=.pylintrc petastorm examples -f parseable -r n
+  # enable core dumps
+  - $RUN ulimit -c unlimited -S
 
 script:
+
   # Build documentation
-  - (cd docs/autodoc && make html)
+  - $RUN bash -c "cd /petastorm/docs/autodoc && pwd && make html"
 
-  # Running pytest twice: first tests that do not have to be forked. Run it with -Y --cache-clear
-  # which will create synthetic datasets that are used by multiple tests and store them in cache.
-  # Next pytest invoke will run boxed tests, but read the synthetic datasets from cache and not
-  # waste time on recreating them
+  # Running pytest twice: first tests that do not have to be forked.
+  # `-Y` will result in datasets generated for testing to be persisted between runs in pytest cache.
 
-  # Tensorflow and pytorch tests confict (segfault). Split into separate runs.
-  - pytest --timeout=180 --duration=0 -v
-    --cov=./ --cov-append
-    examples/mnist/tests/test_pytorch_mnist.py
-    petastorm/tests/test_pytorch_dataloader.py
-
-  # Ignore two pytorch tests to prevent static-TLS-caused torch-import seg-fault
-  - pytest --timeout=180 --duration=0 -Y --cache-clear -m "not forked" -v --cov=./  --cov-append --trace-config
+  - $RUN $PYTEST -m "forked" --forked -Y
     --ignore=examples/mnist/tests/test_pytorch_mnist.py
     --ignore=petastorm/tests/test_pytorch_utils.py
     --ignore=petastorm/tests/test_pytorch_dataloader.py
     petastorm examples
 
-  # We have a separate run for forked: make sure fixtures are reused as much as possible
-  - pytest --timeout=180 --duration=0 -Y -m "forked" --forked -v --cov=./ --cov-append --trace-config
-    --ignore=examples/mnist/tests/test_pytorch_mnist.py
-    --ignore=petastorm/tests/test_pytorch_utils.py
-    --ignore=petastorm/tests/test_pytorch_dataloader.py
-    petastorm examples
+  - $RUN $PYTEST -m "not forked" -v -Y
+      --ignore=examples/mnist/tests/test_pytorch_mnist.py
+      --ignore=petastorm/tests/test_pytorch_utils.py
+      --ignore=petastorm/tests/test_pytorch_dataloader.py
+      petastorm examples
+
+    # Tensorflow and pytorch tests confict (segfault). Split into separate runs.
+  - $RUN $PYTEST
+      examples/mnist/tests/test_pytorch_mnist.py
+      petastorm/tests/test_pytorch_dataloader.py
 
 after_success:
   - codecov
@@ -94,7 +102,7 @@ after_failure:
 
 before_deploy:
   # Build a python wheel before deployment
-  - python setup.py bdist_wheel
+  - $RUN python setup.py bdist_wheel
 
 deploy:
   # Disabling pypi deployment. There is an issue with authentication at the moment
