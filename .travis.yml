@@ -63,14 +63,15 @@ after_failure:
   - if [[ -f "$COREFILE" ]]; then gdb -c "$COREFILE" python -ex "thread apply all bt" -ex "set pagination 0" -batch; fi
 
 deploy:
-  - provider: pypi
-    user: uber
-    password:
-      secure: HYpHU5Gt6PnA/yEEX01zQBtJPwsToOpiL58INePElwUs8JvgniYs51hI19RpZeS7APju+9K6AyVdqW8wqkMrgULBDhIcdM/CI3XIXu6dsoa9MMdlGdtCsbBOXANbHCFuJbCTxkU828lvQsyQ/5y0pzMhC+C5AUV5qcH0zasOmXE7D61DIhnyCAteBAGGZRxR9EMHV6Q7gxG76Qg+4b70eiscK/98EtDVyRySL4J1LgbNsQiWOMu1eQ6Un4fMYsuR51vE7CpLk2ollFcT3Ivpt0LiutPDIJtZcf+VdSX9PFbUhMPHgEdj8LPDJe0/JMMT71/XyUQG2K+Dy2Xvzwt3h3p6UpyCyuPIZI9BngL4qmsyHcANu7q0kaWAUInPfZPtaqtT0qM7f9uyiZDPqHw5GoIGCxbKHiTpV2G8vd/XAU5Lqn386i05MKhR/J5VkQQHV5bmHNYBUXM6DFgeyGOdNHg5M2H+I7dla44VWn2PVJhAmZk0of/Wp8fv7lqe/FyHNyNpjtWa59rtY+4ZXSkpvhwLSaJPPRB93ObRPVw/AooVQtrWr+dgX2YTrzJcB0mvFbZse2vlM9MAoSv6bCiKCKdCEtb53ueGggFokT2LgfNLxuMO9ykuVH0Ko2Nzi/V1gD5sQ3BWlAFykPX3aAnGVvBBdB1WMMY2mO4Z+Wr6Tic=
-    distributions: sdist bdist_wheel
-    on:
-      tags: true
-      python: 3.6
+  # Disabling pypi deployment. There is an issue with authentication at the moment
+  #  - provider: pypi
+  #    user: uber
+  #    password:
+  #      secure: HYpHU5Gt6PnA/yEEX01zQBtJPwsToOpiL58INePElwUs8JvgniYs51hI19RpZeS7APju+9K6AyVdqW8wqkMrgULBDhIcdM/CI3XIXu6dsoa9MMdlGdtCsbBOXANbHCFuJbCTxkU828lvQsyQ/5y0pzMhC+C5AUV5qcH0zasOmXE7D61DIhnyCAteBAGGZRxR9EMHV6Q7gxG76Qg+4b70eiscK/98EtDVyRySL4J1LgbNsQiWOMu1eQ6Un4fMYsuR51vE7CpLk2ollFcT3Ivpt0LiutPDIJtZcf+VdSX9PFbUhMPHgEdj8LPDJe0/JMMT71/XyUQG2K+Dy2Xvzwt3h3p6UpyCyuPIZI9BngL4qmsyHcANu7q0kaWAUInPfZPtaqtT0qM7f9uyiZDPqHw5GoIGCxbKHiTpV2G8vd/XAU5Lqn386i05MKhR/J5VkQQHV5bmHNYBUXM6DFgeyGOdNHg5M2H+I7dla44VWn2PVJhAmZk0of/Wp8fv7lqe/FyHNyNpjtWa59rtY+4ZXSkpvhwLSaJPPRB93ObRPVw/AooVQtrWr+dgX2YTrzJcB0mvFbZse2vlM9MAoSv6bCiKCKdCEtb53ueGggFokT2LgfNLxuMO9ykuVH0Ko2Nzi/V1gD5sQ3BWlAFykPX3aAnGVvBBdB1WMMY2mO4Z+Wr6Tic=
+  #    distributions: sdist bdist_wheel
+  #    on:
+  #      tags: true
+  #      python: 3.6
 
   # Push all python wheels created to Github release
   - provider: releases
