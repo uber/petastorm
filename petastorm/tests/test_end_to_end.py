@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from concurrent.futures.process import ProcessPoolExecutor
 from shutil import rmtree, copytree
 
 import numpy as np
 import pyarrow.hdfs
 import pytest
-from concurrent.futures.process import ProcessPoolExecutor
 from pyspark.sql import SparkSession
 from pyspark.sql.types import LongType, ShortType, StringType
 
@@ -64,7 +64,13 @@ def test_simple_read(synthetic_dataset, reader_factory):
         _check_simple_reader(reader, synthetic_dataset.data)
 
 
-@pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
+# Our LocalDiskCache implementation relies on sqlite3. There is some sort of a race condition
+# within Python3 that would get a newly forked stuck on sqlite3 post-fork state cleanup.
+# Exclude the LocalDiskCache and ProcessPoolExecutor combination from the test as it is broken.
+@pytest.mark.parametrize('reader_factory',
+                         MINIMAL_READER_FLAVOR_FACTORIES +
+                         [lambda url, **kwargs: Reader(url, reader_pool=ThreadPool(10), **kwargs),
+                          lambda url, **kwargs: Reader(url, reader_pool=ProcessPool(10), **kwargs)])
 def test_simple_read_with_disk_cache(synthetic_dataset, reader_factory, tmpdir):
     """Try using the Reader with LocalDiskCache using different flavors of pools"""
     CACHE_SIZE = 10 * 2 ** 30  # 20GB
