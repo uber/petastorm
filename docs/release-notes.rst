@@ -4,8 +4,8 @@
 Release Notes
 =============
 
-Release 0.4.0
-=============
+Release 0.4.0, 0.4.1
+====================
 
 Breaking Changes
 ----------------
