@@ -114,7 +114,7 @@ class Reader(object):
             raise NotImplementedError('Using timestamp_overlap=False is not implemented with'
                                       ' shuffle_options.shuffle_row_drop_partitions > 1')
 
-        cache = cache or NullCache()
+        self._cache = cache or NullCache()
         dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
         self._workers_pool = reader_pool or ThreadPool(10)
 
@@ -158,7 +158,7 @@ class Reader(object):
 
         # 5. Start workers pool
         self._workers_pool.start(ReaderWorker,
-                                 (dataset_url, self.schema, self.ngram, row_groups, cache, filesystem),
+                                 (dataset_url, self.schema, self.ngram, row_groups, self._cache, filesystem),
                                  ventilator=ventilator)
         self._read_timeout_s = read_timeout_s
         self.last_row_consumed = False
@@ -305,6 +305,7 @@ class Reader(object):
     def join(self):
         """Joins all worker threads/processes. Will block until all worker workers have been fully terminated."""
         self._workers_pool.join()
+        self._cache.close()
 
     def fetch(self, timeout=None):
         warning_message = 'fetch is deprecated. Please use iterator api to fetch data instead.'

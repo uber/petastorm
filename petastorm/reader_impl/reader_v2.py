@@ -112,7 +112,7 @@ class ReaderV2(object):
             raise NotImplementedError('Using timestamp_overlap=False is not implemented with'
                                       ' shuffle_options.shuffle_row_drop_partitions > 1')
 
-        cache = cache or NullCache()
+        self._cache = cache or NullCache()
         dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
 
         if shuffle_options is None:
@@ -160,7 +160,7 @@ class ReaderV2(object):
 
         self._results_queue = Queue(_OUTPUT_QUEUE_SIZE)
 
-        loader = RowGroupLoader(dataset_url, self.schema, self.ngram, cache, worker_predicate)
+        loader = RowGroupLoader(dataset_url, self.schema, self.ngram, self._cache, worker_predicate)
         decoder = RowDecoder(self.schema, self.ngram)
         self._loader_pool = loader_pool or ThreadPoolExecutor(5)
         self._decoder_pool = decoder_pool or ThreadPoolExecutor(5)
@@ -313,7 +313,8 @@ class ReaderV2(object):
     def join(self):
         self._flow_manager_thread.join()
         self._loader_pool.shutdown()
-        self._decoder_pool.shutdown(wait=False)
+        self._decoder_pool.shutdown(wait=True)
+        self._cache.close()
 
     def __iter__(self):
         return self

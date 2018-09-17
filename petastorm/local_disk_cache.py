@@ -14,6 +14,7 @@
 from __future__ import division
 
 import shutil
+
 from diskcache import FanoutCache
 
 from petastorm.cache import CacheBase
@@ -58,6 +59,7 @@ class LocalDiskCache(CacheBase):
 
         return value
 
-    def cleanup(self):
+    def close(self):
+        self._cache.close()
         if self._cleanup:
             shutil.rmtree(self._path)

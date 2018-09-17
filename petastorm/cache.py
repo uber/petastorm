@@ -32,9 +32,20 @@ class CacheBase(object):
         """
         pass
 
+    @abc.abstractmethod
+    def close(self):
+        """Deallocates all resources once the cache is not being used.
+
+        :return: None
+        """
+        pass
+
 
 class NullCache(CacheBase):
     """A pass-through cache implementation: value generating function will be called each."""
 
     def get(self, key, fill_cache_func):
         return fill_cache_func()
+
+    def close(self):
+        pass
