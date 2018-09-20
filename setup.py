@@ -11,10 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import sys
 
 import setuptools
 from setuptools import setup
+
 from petastorm import __version__
 
 PACKAGE_NAME = 'petastorm'
@@ -26,6 +26,7 @@ REQUIRED_PACKAGES = [
     'diskcache>=3.0.0',
     'numpy>=1.13.3',
     'pandas>=0.19.0',
+    'psutil>=4.0.0',
     'pyspark>=2.1.0',
     'pyzmq>=14.0.0',
     'pyarrow>=0.10',
@@ -37,12 +38,22 @@ EXTRA_REQUIRE = {
     # `docs` versions are to facilitate local generation of documentation.
     # Sphinx 1.3 would be desirable, but is incompatible with current ATG setup.
     # Thus the pinning of both sphinx and alabaster versions.
-    'docs': ['sphinx==1.2.2', 'alabaster==0.7.11'],
+    'docs': [
+        'sphinx==1.2.2',
+        'alabaster==0.7.11'
+    ],
     'opencv': ['opencv-python>=3.2.0.6'],
     'tf': ['tensorflow>=1.4.0'],
     'tf_gpu': ['tensorflow-gpu>=1.4.0'],
-    'test' : ['opencv-python>=3.2.0.6', 'pytest>=3.0.0', 'pytest-cov>=2.5.1',
-              'Pillow>=3.0', 'pylint>=1.9', 'codecov>=2.0.15'],
+    'test': [
+        'Pillow>=3.0',
+        'codecov>=2.0.15',
+        'mock>=2.0.0; python_version == "2.7"',
+        'opencv-python>=3.2.0.6',
+        'pylint>=1.9',
+        'pytest>=3.0.0',
+        'pytest-cov>=2.5.1',
+    ],
     'torch': ['torchvision>=0.2.1'],
 }
 
@@ -59,8 +70,11 @@ setup(
     long_description_content_type="text/x-rst",
     license='Apache License, Version 2.0',
     extras_require=EXTRA_REQUIRE,
-    entry_points = {
-        'console_scripts': ['petastorm-generate-metadata.py=petastorm.etl.petastorm_generate_metadata:main'],
+    entry_points={
+        'console_scripts': [
+            'petastorm-generate-metadata.py=petastorm.etl.petastorm_generate_metadata:main',
+            'petastorm-throughput.py=petastorm.benchmark.cli:main',
+        ],
     },
     url='https://github.com/uber/petastorm',
     author='Uber Technologies, Inc.',
