@@ -51,6 +51,10 @@ Row-group selectors
 .. automodule:: petastorm.etl.rowgroup_indexers
 .. automodule:: petastorm.etl.rowgroup_indexing
 
+Benchmarks
+----------
+.. automodule:: petastorm.benchmark.throughput
+
 HDFS
 ----
 .. automodule:: petastorm.hdfs.namenode
