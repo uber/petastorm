@@ -35,6 +35,22 @@ def test_dataset_url_must_be_string(reader_factory):
         reader_factory([])
 
 
+def test_diagnostics_reader_v1(synthetic_dataset):
+    with Reader(synthetic_dataset.url) as reader:
+        next(reader)
+        diags = reader.diagnostics
+        # Hard to make a meaningful assert on the content of the diags without potentially introducing a race
+        assert 'output_queue_size' in diags
+
+
+def test_diagnostics_reader_v2(synthetic_dataset):
+    with ReaderV2(synthetic_dataset.url) as reader:
+        next(reader)
+        diags = reader.diagnostics
+        # Hard to make a meaningful assert on the content of the diags without potentially introducing a race
+        assert 'output_queue_size' in diags
+
+
 @pytest.mark.skip('We no longer know how many rows in each row group')
 def test_normalize_shuffle_partitions(synthetic_dataset):
     dataset = pq.ParquetDataset(synthetic_dataset.path)

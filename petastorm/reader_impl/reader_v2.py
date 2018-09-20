@@ -165,7 +165,7 @@ class ReaderV2(object):
         self._loader_pool = loader_pool or ThreadPoolExecutor(5)
         self._decoder_pool = decoder_pool or ThreadPoolExecutor(5)
         self._stop_flow_manager_event = threading.Event()
-        stats = Counter()
+        self._diags = Counter()
 
         if not shuffling_queue:
             shuffling_queue = NoopShufflingBuffer()
@@ -175,7 +175,7 @@ class ReaderV2(object):
                                                            self._decoder_pool,
                                                            decoder,
                                                            shuffling_queue, self._results_queue,
-                                                           self._stop_flow_manager_event, stats))
+                                                           self._stop_flow_manager_event, self._diags))
         self._flow_manager_thread.daemon = True
         self._flow_manager_thread.start()
 
@@ -314,6 +314,10 @@ class ReaderV2(object):
         self._flow_manager_thread.join()
         self._loader_pool.shutdown()
         self._decoder_pool.shutdown(wait=False)
+
+    @property
+    def diagnostics(self):
+        return self._diags
 
     def __iter__(self):
         return self

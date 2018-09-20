@@ -40,7 +40,6 @@ logger = logging.getLogger(__name__)
 # https://github.com/uber/petastorm/issues/134
 ShuffleOptions = petastorm.shuffle_options.ShuffleOptions
 
-
 # Make it easier to import as "from petastorm.reader import ReaderV2"
 ReaderV2 = ReaderV2
 
@@ -312,6 +311,15 @@ class Reader(object):
         # Since warnings are generally ignored in av, print out a logging warning as well
         logger.warn(warning_message)
         return self._workers_pool.get_results(timeout=timeout)
+
+    @property
+    def diagnostics(self):
+        diags = {}
+        if hasattr(self._workers_pool, 'results_qsize'):
+            diags['output_queue_size'] = self._workers_pool.results_qsize()
+        else:
+            diags['output_queue_size'] = None
+        return diags
 
     def __iter__(self):
         return self
