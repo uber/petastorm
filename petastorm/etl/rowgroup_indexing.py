@@ -16,6 +16,7 @@ import logging
 import time
 from collections import namedtuple
 
+import itertools
 from pyarrow import parquet as pq
 from six.moves import cPickle as pickle
 from six.moves import range
@@ -24,6 +25,7 @@ from petastorm import utils
 from petastorm.etl import dataset_metadata
 from petastorm.etl.legacy import depickle_legacy_package_name_compatible
 from petastorm.fs_utils import FilesystemResolver
+from petastorm.reader_impl.row_bundler import RowStorageBundler
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -91,10 +93,10 @@ def _index_columns(piece_info, dataset_url, partitions, indexers, schema):
     # Create pyarrow piece
     piece = pq.ParquetDatasetPiece(piece_info.path, piece_info.row_group, piece_info.partition_keys)
 
-    # Collect column names needed for indexing
-    column_names = set()
-    for indexer in indexers:
-        column_names.update(indexer.column_names)
+    # Create a schema view with the needed fields for indexing
+    field_names = set(itertools.chain.from_iterable(indexer.column_names for indexer in indexers))
+    schema_view = schema.create_schema_view(field_names)
+    column_names = schema_view.get_storage_column_names()
 
     # Read columns needed for indexing
     # Resolver in executor context will get hadoop config from environment
@@ -105,7 +107,9 @@ def _index_columns(piece_info, dataset_url, partitions, indexers, schema):
         partitions=partitions).to_pandas().to_dict('records')
 
     # Decode columns values
-    decoded_rows = [utils.decode_row(row, schema) for row in column_rows]
+    row_bundler = RowStorageBundler(schema_view)
+    decoded_rows = [utils.decode_row(row_bundler.debundle_row(row), schema_view)
+                    for row in column_rows]
     if not decoded_rows:
         raise ValueError('Cannot build index with empty decoded_rows, columns: {}, partitions: {}'
                          .format(column_names, partitions))

@@ -23,6 +23,7 @@ from six.moves.urllib.parse import urlparse, urlunparse
 
 from petastorm.cache import NullCache
 from petastorm.fs_utils import FilesystemResolver
+from petastorm.reader_impl.row_bundler import RowStorageBundler
 
 
 def _merge_two_dicts(a, b):
@@ -34,7 +35,7 @@ def _merge_two_dicts(a, b):
 
 
 def _select_cols(a_dict, keys):
-    """Filteres out entries in a dictionary that have a key which is not part of 'keys' argument. `a_dict` is not
+    """Filters out entries in a dictionary that have a key which is not part of 'keys' argument. `a_dict` is not
     modified and a new dictionary is returned."""
     if keys == list(a_dict.keys()):
         return a_dict
@@ -64,6 +65,8 @@ class RowGroupLoader(object):
             resolver.parsed_dataset_url().path,
             filesystem=resolver.filesystem(),
             validate_schema=False)
+
+        self._row_bundler = RowStorageBundler(schema)
 
     def load(self, rowgroup_spec):
         """Loads data form a single rowgroup from the dataset.
@@ -124,7 +127,7 @@ class RowGroupLoader(object):
         # pyarrow would fail if we request a column names that the dataset is partitioned by, so we strip them from
         # the `columns` argument.
         partitions = self._dataset.partitions
-        column_names = set(field.name for field in self._schema.fields.values()) - partitions.partition_names
+        column_names = self._schema.get_storage_column_names() - partitions.partition_names
 
         all_rows = self._read_with_shuffle_row_drop(piece, parquet_file, column_names, shuffle_row_drop_range)
 
@@ -138,29 +141,31 @@ class RowGroupLoader(object):
         # 3. Read the remaining columns and decode
         # 4. Combine with columns already decoded for the predicate.
 
-        # Split all column names into ones that are needed by predicateand the rest.
-        predicate_column_names = set(worker_predicate.get_fields())
+        # Split all field names into ones that are needed by predicate and the rest.
+        predicate_field_names = set(worker_predicate.get_fields())
 
-        if not predicate_column_names:
+        if not predicate_field_names:
             raise ValueError('At least one field name must be returned by predicate\'s get_field() method')
 
         all_schema_names = set(field.name for field in self._schema.fields.values())
 
-        invalid_column_names = predicate_column_names - all_schema_names
-        if invalid_column_names:
+        invalid_field_names = predicate_field_names - all_schema_names
+        if invalid_field_names:
             raise ValueError('At least some column names requested by the predicate ({}) '
-                             'are not valid schema names: ({})'.format(', '.join(invalid_column_names),
+                             'are not valid schema names: ({})'.format(', '.join(invalid_field_names),
                                                                        ', '.join(all_schema_names)))
 
-        other_column_names = all_schema_names - predicate_column_names - \
+        other_field_names = all_schema_names - predicate_field_names - \
             self._dataset.partitions.partition_names
 
         # Read columns needed for the predicate
-        predicate_rows = self._read_with_shuffle_row_drop(piece, parquet_file, predicate_column_names,
+        predicate_schema = self._schema.create_schema_view(predicate_field_names)
+        predicate_rows = self._read_with_shuffle_row_drop(piece, parquet_file,
+                                                          predicate_schema.get_storage_column_names(),
                                                           shuffle_row_drop_partition)
 
         # Decode values
-        decoded_predicate_rows = [_select_cols(row, predicate_column_names) for row in predicate_rows]
+        decoded_predicate_rows = [_select_cols(row, predicate_field_names) for row in predicate_rows]
 
         # Use the predicate to filter
         match_predicate_mask = [worker_predicate.do_include(row) for row in decoded_predicate_rows]
@@ -173,9 +178,12 @@ class RowGroupLoader(object):
         filtered_decoded_predicate_rows = [row for i, row in enumerate(decoded_predicate_rows) if
                                            match_predicate_mask[i]]
 
-        if other_column_names:
+        if other_field_names:
             # Read remaining columns
-            other_rows = self._read_with_shuffle_row_drop(piece, parquet_file, other_column_names,
+            # Note: If there are bundled fields in the predicate, the bundled column will be re-read.
+            # This will be fixed at a later point.
+            other_schema = self._schema.create_schema_view(other_field_names)
+            other_rows = self._read_with_shuffle_row_drop(piece, parquet_file, other_schema.get_storage_column_names(),
                                                           shuffle_row_drop_partition)
 
             # Remove rows that were filtered out by the predicate
@@ -210,5 +218,5 @@ class RowGroupLoader(object):
                 next_partition_to_add = next_partition_indexes[0][0:self._ngram.length - 1]
                 partition_indexes[next_partition_to_add] = this_partition
 
-        selected_dataframe = data_frame.loc[partition_indexes == this_partition]
-        return selected_dataframe.to_dict('records')
+        selected_dataframe = data_frame.loc[partition_indexes == this_partition].to_dict('records')
+        return [self._row_bundler.debundle_row(row) for row in selected_dataframe]

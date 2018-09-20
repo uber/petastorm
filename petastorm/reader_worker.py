@@ -22,6 +22,7 @@ from six.moves.urllib.parse import urlparse, urlunparse
 
 from petastorm import utils
 from petastorm.cache import NullCache
+from petastorm.reader_impl.row_bundler import RowStorageBundler
 from petastorm.workers_pool.worker_base import WorkerBase
 
 
@@ -31,15 +32,6 @@ def _merge_two_dicts(a, b):
     result = a.copy()
     result.update(b)
     return result
-
-
-def _select_cols(a_dict, keys):
-    """Filteres out entries in a dictionary that have a key which is not part of 'keys' argument. `a_dict` is not
-    modified and a new dictionary is returned."""
-    if keys == list(a_dict.keys()):
-        return a_dict
-    else:
-        return {field_name: a_dict[field_name] for field_name in keys}
 
 
 class ReaderWorker(WorkerBase):
@@ -56,6 +48,7 @@ class ReaderWorker(WorkerBase):
         # We create datasets lazily in the first invocation of 'def process'. This speeds up startup time since
         # all Worker constructors are serialized
         self._dataset = None
+        self._row_bundler = RowStorageBundler(self._schema)
 
     # pylint: disable=arguments-differ
     def process(self, piece_index, worker_predicate, shuffle_row_drop_partition):
@@ -114,7 +107,7 @@ class ReaderWorker(WorkerBase):
         # pyarrow would fail if we request a column names that the dataset is partitioned by, so we strip them from
         # the `columns` argument.
         partitions = self._dataset.partitions
-        column_names = set(field.name for field in self._schema.fields.values()) - partitions.partition_names
+        column_names = self._schema.get_storage_column_names() - partitions.partition_names
 
         all_rows = self._read_with_shuffle_row_drop(piece, pq_file, column_names, shuffle_row_drop_range)
 
@@ -128,30 +121,30 @@ class ReaderWorker(WorkerBase):
         # 3. Read the remaining columns and decode
         # 4. Combine with columns already decoded for the predicate.
 
-        # Split all column names into ones that are needed by predicateand the rest.
-        predicate_column_names = set(worker_predicate.get_fields())
+        # Split all field names into ones that are needed by predicate and the rest.
+        predicate_field_names = set(worker_predicate.get_fields())
 
-        if not predicate_column_names:
+        if not predicate_field_names:
             raise ValueError('At least one field name must be returned by predicate\'s get_field() method')
 
         all_schema_names = set(field.name for field in self._schema.fields.values())
 
-        invalid_column_names = predicate_column_names - all_schema_names
-        if invalid_column_names:
+        invalid_field_names = predicate_field_names - all_schema_names
+        if invalid_field_names:
             raise ValueError('At least some column names requested by the predicate ({}) '
-                             'are not valid schema names: ({})'.format(', '.join(invalid_column_names),
+                             'are not valid schema names: ({})'.format(', '.join(invalid_field_names),
                                                                        ', '.join(all_schema_names)))
 
-        other_column_names = all_schema_names - predicate_column_names - \
+        other_field_names = all_schema_names - predicate_field_names - \
             self._dataset.partitions.partition_names
 
         # Read columns needed for the predicate
-        predicate_rows = self._read_with_shuffle_row_drop(piece, pq_file, predicate_column_names,
+        predicate_schema = self._schema.create_schema_view(predicate_field_names)
+        predicate_rows = self._read_with_shuffle_row_drop(piece, pq_file, predicate_schema.get_storage_column_names(),
                                                           shuffle_row_drop_partition)
 
         # Decode values
-        decoded_predicate_rows = [utils.decode_row(_select_cols(row, predicate_column_names), self._schema)
-                                  for row in predicate_rows]
+        decoded_predicate_rows = [utils.decode_row(row, predicate_schema) for row in predicate_rows]
 
         # Use the predicate to filter
         match_predicate_mask = [worker_predicate.do_include(row) for row in decoded_predicate_rows]
@@ -164,9 +157,10 @@ class ReaderWorker(WorkerBase):
         filtered_decoded_predicate_rows = [row for i, row in enumerate(decoded_predicate_rows) if
                                            match_predicate_mask[i]]
 
-        if other_column_names:
+        if other_field_names:
             # Read remaining columns
-            other_rows = self._read_with_shuffle_row_drop(piece, pq_file, other_column_names,
+            other_schema = self._schema.create_schema_view(other_field_names)
+            other_rows = self._read_with_shuffle_row_drop(piece, pq_file, other_schema.get_storage_column_names(),
                                                           shuffle_row_drop_partition)
 
             # Remove rows that were filtered out by the predicate
@@ -201,5 +195,6 @@ class ReaderWorker(WorkerBase):
                 next_partition_to_add = next_partition_indexes[0][0:self._ngram.length - 1]
                 partition_indexes[next_partition_to_add] = this_partition
 
-        selected_dataframe = data_frame.loc[partition_indexes == this_partition]
-        return selected_dataframe.to_dict('records')
+        selected_dataframe = data_frame.loc[partition_indexes == this_partition].to_dict('records')
+        # For the selected row, we debundle the rows into their actual unischema fields
+        return [self._row_bundler.debundle_row(row) for row in selected_dataframe]

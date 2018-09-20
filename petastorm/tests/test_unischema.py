@@ -19,11 +19,12 @@ from decimal import Decimal
 
 import numpy as np
 from pyspark import Row
-from pyspark.sql.types import StringType, IntegerType, DecimalType, ShortType, LongType
+from pyspark.sql.types import StringType, IntegerType, DecimalType, ShortType, LongType, BinaryType
 
 from petastorm.codecs import ScalarCodec, NdarrayCodec
 from petastorm.unischema import Unischema, UnischemaField, dict_to_spark_row, \
     insert_explicit_nulls, match_unischema_fields
+from petastorm.utils import decode_row
 
 
 class UnischemaTest(unittest.TestCase):
@@ -170,6 +171,47 @@ class UnischemaTest(unittest.TestCase):
         assert match_unischema_fields(TestSchema, ['nomatch']) == []
         assert match_unischema_fields(TestSchema, ['.*']) == list(TestSchema.fields.values())
         assert match_unischema_fields(TestSchema, ['int32', 'uint8']) == [TestSchema.int32, TestSchema.uint8]
+
+    def test_column_bundles_spark_schema(self):
+        fields = [
+            UnischemaField('string_scalar', np.string_, (), ScalarCodec(StringType()), True),
+            UnischemaField('int32_scalar', np.int32, (), ScalarCodec(ShortType()), False),
+            UnischemaField('uint8_scalar', np.uint8, (), ScalarCodec(ShortType()), False),
+            UnischemaField('int32_matrix', np.float32, (10, 20, 3), NdarrayCodec(), True),
+            UnischemaField('decimal_scalar', Decimal, (), ScalarCodec(DecimalType(10, 9)), False),
+        ]
+
+        TestSchema = Unischema('TestSchema', fields,
+                               column_bundles={'numerics': [f.name for f in fields[1:]]})
+
+        self.assertEqual(len(TestSchema.as_spark_schema().fields), 2)
+        self.assertEqual(TestSchema.as_spark_schema().fields[0].name, 'numerics')
+        self.assertEqual(TestSchema.as_spark_schema().fields[0].dataType, BinaryType())
+
+        self.assertEqual(TestSchema.as_spark_schema().fields[1].name, 'string_scalar')
+        self.assertEqual(TestSchema.as_spark_schema().fields[1].dataType, StringType())
+
+    def test_column_bundles_encoding(self):
+        fields = [
+            UnischemaField('string_scalar', np.unicode, (), ScalarCodec(StringType()), True),
+            UnischemaField('int32_scalar', np.int32, (), ScalarCodec(ShortType()), False),
+            UnischemaField('uint8_scalar', np.uint8, (), ScalarCodec(ShortType()), False),
+            UnischemaField('int32_matrix', np.float32, (10, 20, 3), NdarrayCodec(), True),
+        ]
+
+        TestSchema = Unischema('TestSchema', fields,
+                               column_bundles={'numerics': [f.name for f in fields[1:]]})
+
+        decoded_dict = {'string_scalar': 'string', 'int32_scalar': 1, 'uint8_scalar': 10}
+        encoded_dict = dict_to_spark_row(TestSchema, decoded_dict).asDict()
+
+        self.assertEqual(len(encoded_dict), 2)
+        self.assertEqual(encoded_dict['string_scalar'], 'string')
+
+        row = decode_row(encoded_dict, TestSchema)
+        for key in row:
+            if key in decoded_dict:
+                self.assertEqual(decoded_dict[key], row[key])
 
 
 class UnischemaFieldTest(unittest.TestCase):
