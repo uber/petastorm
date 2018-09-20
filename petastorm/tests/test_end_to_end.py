@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from concurrent.futures.process import ProcessPoolExecutor
+from decimal import Decimal
 from shutil import rmtree, copytree
 
 import numpy as np
@@ -52,9 +53,9 @@ ALL_READER_FLAVOR_FACTORIES = MINIMAL_READER_FLAVOR_FACTORIES + [
 def _check_simple_reader(reader, expected_data):
     # Read a bunch of entries from the dataset and compare the data to reference
     for row in reader:
-        actual = dict(row._asdict())
+        actual = row._asdict()
         expected = next(d for d in expected_data if d['id'] == actual['id'])
-        np.testing.assert_equal(expected, actual)
+        np.testing.assert_equal(actual, expected)
 
 
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
@@ -62,6 +63,15 @@ def test_simple_read(synthetic_dataset, reader_factory):
     """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
     with reader_factory(synthetic_dataset.url) as reader:
         _check_simple_reader(reader, synthetic_dataset.data)
+
+
+def test_read_with_pyarrow_serialization(synthetic_dataset):
+    with Reader(synthetic_dataset.url, reader_pool=ProcessPool(1, pyarrow_serialize=True)) as reader:
+        for actual in reader:
+            expected = next(d for d in synthetic_dataset.data if d['id'] == actual.id)
+            assert actual.id == expected['id']
+            assert Decimal(actual.decimal) == expected['decimal']
+            np.testing.assert_equal(actual.matrix, expected['matrix'])
 
 
 # Our LocalDiskCache implementation relies on sqlite3. There is some sort of a race condition

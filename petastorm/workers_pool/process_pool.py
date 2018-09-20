@@ -16,6 +16,7 @@
 without using fork. Some issues with using jvm based HDFS driver were observed when the process was forked
 (could not access HDFS from the forked worker if the driver was already used in the parent process)"""
 import sys
+from decimal import Decimal
 from time import sleep, time
 from traceback import format_exc
 
@@ -74,7 +75,7 @@ def _keep_retrying_while_zmq_again(timeout, func, allowed_failures=3):
 
 
 class ProcessPool(object):
-    def __init__(self, workers_count):
+    def __init__(self, workers_count, pyarrow_serialize=False):
         """Initializes a ProcessPool.
 
         This pool is different from standard Python pool implementations by the fact that the workers are spawned
@@ -82,6 +83,10 @@ class ProcessPool(object):
         (could not access HDFS from the forked worker if the driver was already used in the parent process).
 
         :param workers_count: Number of processes to be spawned
+        :param pyarrow_serialize: Use ``pyarrow.serialize`` serialization if True. ``pyarrow.serialize`` is much faster
+          than pickling, but does not support ``Decimal`` data types, converts int64 into int32 (and probably modifies
+          some other types). We can not use this serialization by default, but would allow to switch it on
+          when a user knows what they are doing.
         """
         self._workers = []
         self._ventilator_send = None
@@ -92,6 +97,7 @@ class ProcessPool(object):
         self._ventilated_items = 0
         self._ventilated_items_processed = 0
         self._ventilator = None
+        self._pyarrow_serialize = pyarrow_serialize
 
     def _create_local_socket_on_random_port(self, context, socket_type):
         """Creates a zmq socket on a random port.
@@ -153,7 +159,7 @@ class ProcessPool(object):
         # Start a bunch of processes
         self._workers = [
             exec_in_new_process(_worker_bootstrap, worker_class, worker_id, control_socket, worker_receiver_socket,
-                                results_sender_socket, worker_setup_args)
+                                results_sender_socket, self._pyarrow_serialize, worker_setup_args)
             for worker_id in range(self._workers_count)]
 
         # Block until we have all workers up. Will raise an error if fails to start in a timely fashion
@@ -221,7 +227,11 @@ class ProcessPool(object):
                 self.join()
                 raise result
             else:
-                deserialized_result = pyarrow.read_serialized(result).deserialize()
+                if self._pyarrow_serialize:
+                    deserialized_result = pyarrow.read_serialized(result).deserialize()
+                else:
+                    deserialized_result = result
+
                 return deserialized_result
 
     def stop(self):
@@ -247,12 +257,40 @@ class ProcessPool(object):
         self._results_receiver.close()
         self._context.destroy()
 
-def _serialize_result_and_send(socket, data):
-    serialized = pyarrow.serialize(data)
-    socket.send_pyobj(serialized.to_buffer())
+
+def _decimal_to_str(data):
+    """Iterates over a nested structure of lists and dictionaries while substituting all Decimal instances with
+    normalized string representation of Decimals.
+
+    Modification is done in-place.
+
+    :param data: A nested structure of lists and dictionaries
+    :return: None
+    """
+    if isinstance(data, list):
+        for row in data:
+            _decimal_to_str(row)
+    elif isinstance(data, dict):
+        for k, v in data.items():
+            if isinstance(v, dict):
+                _decimal_to_str(v)
+            else:
+                if isinstance(v, Decimal):
+                    data[k] = str(v.normalize())
+
+
+def _serialize_result_and_send(socket, pyarrow_serialize, data):
+    if pyarrow_serialize:
+        # pyarrow won't be able to serialize Decimals. Replace all Decimal with strings.
+        _decimal_to_str(data)
+        serialized = pyarrow.serialize(data)
+        socket.send_pyobj(serialized.to_buffer())
+    else:
+        socket.send_pyobj(data)
+
 
 def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_socket, results_sender_socket,
-                      worker_args):
+                      pyarrow_serialize, worker_args):
     """This is the root of the spawned worker processes.
 
     :param worker_class: A class with worker implementation.
@@ -287,7 +325,8 @@ def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_s
     poller.register(control_receiver, zmq.POLLIN)
 
     # Instantiate a worker
-    worker = worker_class(worker_id, lambda data: _serialize_result_and_send(results_sender, data), worker_args)
+    worker = worker_class(worker_id, lambda data: _serialize_result_and_send(results_sender, pyarrow_serialize,
+                                                                             data), worker_args)
 
     # Loop and accept messages from both channels, acting accordingly
     while True:
