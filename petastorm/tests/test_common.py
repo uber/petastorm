@@ -122,11 +122,4 @@ def create_test_dataset(tmp_url, rows, num_files=2, spark=None):
     if shutdown:
         spark.stop()
 
-    # Reader does not support Decimal fields as return types, so it will be converting all decimals
-    # to strings. We replace all decimals in the returned list of dictionaries to match this behavior
-    for row in dataset_dicts:
-        for k, v in row.items():
-            if isinstance(v, Decimal):
-                row[k] = str(v.normalize())
-
     return dataset_dicts
