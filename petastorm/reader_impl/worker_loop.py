@@ -23,8 +23,8 @@ from six.moves import queue
 
 logger = logging.getLogger(__name__)
 
-_MAX_IN_LOADING_QUEUE_SIZE = 20
-_MAX_IN_DECODING_QUEUE_SIZE = 40
+_MAX_IN_LOADING_QUEUE_SIZE = 14
+_MAX_IN_DECODING_QUEUE_SIZE = 14
 _LOOP_IDLE_TIME_SEC = 0.001  # 1 ms
 
 
@@ -87,6 +87,7 @@ def worker_loop(epochs_generator, loading_pool, loader, decoding_pool, decoder, 
             if rowgroup_spec is not None and len(in_loading_futures) < _MAX_IN_LOADING_QUEUE_SIZE:
                 in_loading_futures.append(loading_pool.submit(loader.load, rowgroup_spec))
                 stats['rowgroups_scheduled_for_loading'] += 1
+                stats['in_loading_queue_len'] = len(in_loading_futures)
 
                 try:
                     rowgroup_spec = next(epochs_iterator)
@@ -105,6 +106,7 @@ def worker_loop(epochs_generator, loading_pool, loader, decoding_pool, decoder, 
                     loaded_future = next(loaded_futures)
                     loaded_future_result = loaded_future.result()
                     stats['rows_loaded'] += len(loaded_future_result)
+                    stats['shuffling_buffer_size'] = shuffling_queue.size
                     shuffling_queue.add_many(loaded_future_result)
 
                     # Done processing, remove from the queue. 'remove' on the list is ok since we cap the list
@@ -119,6 +121,7 @@ def worker_loop(epochs_generator, loading_pool, loader, decoding_pool, decoder, 
                 shuffled = shuffling_queue.retrieve()
                 stats['rows_read_from_shuffling_queue'] += 1
                 in_decoding.append(decoding_pool.submit(_decode_row_dispatcher, decoder, shuffled))
+                stats['in_decoding_queue_len'] = len(in_decoding)
 
             # 4. Read completed decoding futures and put the results into the final output queue
             # ---------------------------------------------------------------------------------
@@ -155,7 +158,7 @@ def worker_loop(epochs_generator, loading_pool, loader, decoding_pool, decoder, 
                     updated_in_decoding.append(in_decoding[i])
 
             in_decoding = updated_in_decoding
-
+            stats['output_queue_size'] = output_queue.qsize()
             sleep(_LOOP_IDLE_TIME_SEC)
 
         # If we were ordered to stop, better not write the sentinel out since the queue can be full
