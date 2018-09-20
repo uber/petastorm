@@ -25,6 +25,7 @@ training frameworks.
    reader
 
    development_include
+   benchmarks_tutorial_include
    troubleshoot_include
    release_notes_include
 
