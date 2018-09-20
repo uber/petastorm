@@ -20,18 +20,18 @@ transitively to parquet files.
 NOTE: Due to the way unischema is stored alongside dataset (with pickling), changing any of these codecs class names
 and fields can result in reader breakages.
 """
-import decimal
+
+from abc import abstractmethod
+from io import BytesIO
 
 import cv2
-from io import BytesIO
-from abc import abstractmethod
-
 import numpy as np
 from pyspark.sql.types import BinaryType, LongType, IntegerType, ShortType, ByteType, StringType
 
 
 class DataframeColumnCodec(object):
     """The abstract base class of codecs."""
+
     @abstractmethod
     def encode(self, unischema_field, array):
         raise RuntimeError('Abstract method was called')
@@ -187,10 +187,7 @@ class ScalarCodec(DataframeColumnCodec):
         # Tensorflow does not support Decimal types neither. We convert all decimals to
         # strings hence prevent Decimals from getting into anywhere in the reader. We may
         # choose to resurrect Decimals support in the future.
-        if isinstance(value, decimal.Decimal):
-            return str(value.normalize())
-        else:
-            return unischema_field.numpy_dtype(value)
+        return unischema_field.numpy_dtype(value)
 
     def spark_dtype(self):
         return self._spark_type

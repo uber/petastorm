@@ -29,18 +29,19 @@ from petastorm.workers_pool.dummy_pool import DummyPool
 from petastorm.workers_pool.process_pool import ProcessPool
 from petastorm.workers_pool.thread_pool import ThreadPool
 
-_NOT_NULL_FIELDS = set(TestSchema.fields.values()) - {TestSchema.matrix_nullable, TestSchema.string_array_nullable}
+_EXCLUDE_FIELDS = set(TestSchema.fields.values()) \
+                  - {TestSchema.matrix_nullable, TestSchema.string_array_nullable, TestSchema.decimal}
 
 MINIMAL_READER_FLAVOR_FACTORIES = [
-    lambda url, **kwargs: Reader(url, **_merge_params({'reader_pool': DummyPool(), 'schema_fields': _NOT_NULL_FIELDS},
+    lambda url, **kwargs: Reader(url, **_merge_params({'reader_pool': DummyPool(), 'schema_fields': _EXCLUDE_FIELDS},
                                                       kwargs)),
 ]
 
 ALL_READER_FLAVOR_FACTORIES = MINIMAL_READER_FLAVOR_FACTORIES + [
-    lambda url, **kwargs: Reader(url, **_merge_params({'reader_pool': ThreadPool(1), 'schema_fields': _NOT_NULL_FIELDS},
+    lambda url, **kwargs: Reader(url, **_merge_params({'reader_pool': ThreadPool(1), 'schema_fields': _EXCLUDE_FIELDS},
                                                       kwargs)),
     lambda url, **kwargs: Reader(url,
-                                 **_merge_params({'reader_pool': ProcessPool(1), 'schema_fields': _NOT_NULL_FIELDS},
+                                 **_merge_params({'reader_pool': ProcessPool(1), 'schema_fields': _EXCLUDE_FIELDS},
                                                  kwargs)),
 ]
 
@@ -146,7 +147,7 @@ def test_some_processing_functions(synthetic_dataset, reader_factory):
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
 def test_dataset_on_ngram_not_supported(synthetic_dataset, reader_factory):
-    ngram = NGram({0: list(_NOT_NULL_FIELDS), 1: [TestSchema.id]}, 100, TestSchema.id)
+    ngram = NGram({0: list(_EXCLUDE_FIELDS), 1: [TestSchema.id]}, 100, TestSchema.id)
     with reader_factory(synthetic_dataset.url, schema_fields=ngram) as reader:
         with pytest.raises(NotImplementedError):
             make_petastorm_dataset(reader)

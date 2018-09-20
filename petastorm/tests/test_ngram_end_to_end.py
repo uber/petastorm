@@ -32,8 +32,11 @@ from petastorm.workers_pool.dummy_pool import DummyPool
 
 # Tests in this module will run once for each entry in the READER_FACTORIES
 # pylint: disable=unnecessary-lambda
+from petastorm.workers_pool.process_pool import ProcessPool
+
 READER_FACTORIES = [
     lambda url, **kwargs: Reader(url, reader_pool=DummyPool(), **kwargs),
+    lambda url, **kwargs: Reader(url, reader_pool=ProcessPool(1), **kwargs),
     lambda url, **kwargs: ReaderV2(url, loader_pool=SameThreadExecutor(), decoder_pool=SameThreadExecutor(), **kwargs),
 ]
 
