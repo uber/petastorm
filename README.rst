@@ -219,8 +219,6 @@ The minimalist example below assumes the definition of a ``Net`` class and
                     batch_size=1000, transform=_transform_row) as test_loader:
         test(model, device, test_loader)
 
-.. inclusion-marker-end-do-not-remove
-
 PySpark and SQL
 ---------------
 
@@ -252,6 +250,10 @@ SQL can be used to query a Petastorm dataset:
 
 You can find a full code sample here: `pyspark_hello_world.py <https://github.com/uber/petastorm/blob/master/examples/hello_world/pyspark_hello_world.py>`_,
 
+.. inclusion-marker-end-do-not-remove
+   Place contents above here if they should also appear in read-the-docs.
+   Contents below are already part of the read-the-docs table of contents.
+
 Troubleshooting
 ---------------
 
@@ -264,6 +266,12 @@ Development
 
 See the Development_ page for instructions on how to develop Petastorm and
 run tests.
+
+
+Publications
+------------
+
+1. Gruener, R., Cheng, O., and Litvin, Y. (2018) *Introducing Petastorm: Uber ATG’s Data Access Library for Deep Learning*. URL: https://eng.uber.com/petastorm/
 
 
 .. _Troubleshooting: docs/troubleshoot.rst
