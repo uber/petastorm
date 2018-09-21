@@ -201,6 +201,7 @@ def _test_noncontinuous_ngram(ngram_fields, synthetic_dataset, reader_factory):
             np.testing.assert_equal(actual, expected_ngram)
 
 
+@pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
 def test_ngram_basic_tf(dataset_num_files_1, reader_factory):
     """Tests basic ngram with no delta threshold with no shuffle and in the same partition."""
@@ -221,6 +222,7 @@ def test_ngram_basic(dataset_num_files_1, reader_factory):
     _test_continuous_ngram(fields, dataset_num_files_1, reader_factory)
 
 
+@pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
 def test_ngram_basic_longer_tf(dataset_num_files_1, reader_factory):
     """Tests basic ngram with no delta threshold with no shuffle and in the same partition."""
@@ -247,6 +249,7 @@ def test_ngram_basic_longer(dataset_num_files_1, reader_factory):
     _test_continuous_ngram(fields, dataset_num_files_1, reader_factory)
 
 
+@pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
 def test_ngram_basic_shuffle_multi_partition_tf(synthetic_dataset, reader_factory):
     """Tests basic ngram with no delta threshold with shuffle and in many partitions."""
@@ -267,6 +270,7 @@ def test_ngram_basic_shuffle_multi_partition(synthetic_dataset, reader_factory):
     _test_noncontinuous_ngram(fields, synthetic_dataset, reader_factory)
 
 
+@pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
 def test_ngram_basic_longer_shuffle_multi_partition_tf(synthetic_dataset, reader_factory):
     """Tests basic ngram with no delta threshold with shuffle and in many partitions."""
@@ -317,6 +321,7 @@ def test_ngram_basic_longer_no_overlap(synthetic_dataset, reader_factory):
                 timestamps_seen.add(timestamp)
 
 
+@pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
 def test_ngram_delta_threshold_tf(dataset_0_3_8_10_11_20_23, reader_factory):
     """Test to verify that delta threshold work as expected in one partition in the same ngram
@@ -395,6 +400,7 @@ def test_ngram_delta_threshold(dataset_0_3_8_10_11_20_23, reader_factory):
             next(reader)
 
 
+@pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
 def test_ngram_delta_small_threshold_tf(reader_factory, dataset_range_0_99_5):
     """Test to verify that a small threshold work in ngrams."""
@@ -457,6 +463,7 @@ def test_ngram_validation():
     NGram(fields=fields, delta_threshold=Decimal('0.5'), timestamp_field=TestSchema.id)
 
 
+@pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
 def test_ngram_length_1_tf(synthetic_dataset, reader_factory):
     """Test to verify that ngram generalize to support length 1"""
@@ -487,6 +494,7 @@ def test_ngram_length_1(synthetic_dataset, reader_factory):
             _assert_equal_ngram(actual, expected_ngram)
 
 
+@pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
 def test_non_consecutive_ngram(dataset_num_files_1, reader_factory):
     """Test to verify that non consecutive keys for fields argument in ngrams work."""
@@ -497,6 +505,7 @@ def test_non_consecutive_ngram(dataset_num_files_1, reader_factory):
     _test_continuous_ngram_tf(fields, dataset_num_files_1, reader_factory)
 
 
+@pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
 def test_shuffled_fields(dataset_num_files_1, reader_factory):
     """Test to verify not sorted keys for fields argument in ngrams work."""

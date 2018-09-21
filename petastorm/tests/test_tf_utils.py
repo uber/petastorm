@@ -28,7 +28,6 @@ from petastorm.tf_utils import _sanitize_field_tf_types, _numpy_to_tf_dtypes, \
 from petastorm.unischema import Unischema, UnischemaField
 from petastorm.workers_pool.dummy_pool import DummyPool
 
-
 def test_empty_dict():
     # Check two types that should be promoted/converted (uint16 and Decimal) and one that should not be
     # modified (int32)
@@ -148,7 +147,7 @@ def _assert_expected_rows_data(synthetic_dataset, rows_data):
             else:
                 np.testing.assert_equal(expected_val, actual)
 
-
+@pytest.mark.forked
 def test_simple_read_tensorflow(synthetic_dataset):
     """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
     data"""
@@ -160,6 +159,7 @@ def test_simple_read_tensorflow(synthetic_dataset):
     _assert_expected_rows_data(synthetic_dataset, rows_data)
 
 
+@pytest.mark.forked
 def test_shuffling_queue(synthetic_dataset):
     """Read data without tensorflow shuffling queue and with it. Check the the order is deterministic within
     unshuffled read and is random with shuffled read"""
@@ -182,7 +182,7 @@ def test_shuffling_queue(synthetic_dataset):
     assert [f.id for f in unshuffled_1] != [f.id for f in shuffled_2]
     assert [f.id for f in shuffled_1] != [f.id for f in shuffled_2]
 
-
+@pytest.mark.forked
 def test_simple_ngram_read_tensorflow(synthetic_dataset):
     """Read a single ngram. Make sure all shapes are set and the data read matches reference data"""
     fields = {
@@ -204,6 +204,7 @@ def test_simple_ngram_read_tensorflow(synthetic_dataset):
         _assert_expected_rows_data(synthetic_dataset, one_ngram_dict.values())
 
 
+@pytest.mark.forked
 def test_shuffling_queue_with_ngrams(synthetic_dataset):
     """Read data without tensorflow shuffling queue and with it (no rowgroup shuffling). Read ngrams
     Check the the order is deterministic within unshuffled read and is random with shuffled read"""

@@ -12,13 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from decimal import Decimal
-import tensorflow as tf
 import unittest
+from decimal import Decimal
+
+import pytest
+import tensorflow as tf
 
 from petastorm.test_util.reader_mock import ReaderMock, schema_data_generator_example
-from petastorm.tf_utils import tf_tensors, _numpy_to_tf_dtypes
 from petastorm.tests.test_end_to_end import TestSchema
+from petastorm.tf_utils import tf_tensors, _numpy_to_tf_dtypes
 
 
 class ReaderMockTest(unittest.TestCase):
@@ -42,6 +44,7 @@ class ReaderMockTest(unittest.TestCase):
         self.reader.stop()
         self.reader.join()
 
+    @pytest.mark.forked
     def test_simple_read_tf(self):
         """Just a bunch of read and compares of all values to the expected values for their types
         and shapes"""
