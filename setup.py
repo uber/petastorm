@@ -53,6 +53,7 @@ EXTRA_REQUIRE = {
         'pylint>=1.9',
         'pytest>=3.0.0',
         'pytest-cov>=2.5.1',
+        'pytest-forked>=0.2',
     ],
     'torch': ['torchvision>=0.2.1'],
 }

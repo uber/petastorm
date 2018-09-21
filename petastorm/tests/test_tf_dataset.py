@@ -62,6 +62,7 @@ def _merge_params(base, overwrite):
     return combined
 
 
+@pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
 def test_with_one_shot_iterator(synthetic_dataset, reader_factory):
     """Just a bunch of read and compares of all values to the expected values"""
@@ -96,6 +97,7 @@ def test_with_one_shot_iterator(synthetic_dataset, reader_factory):
                 sess.run(iterator)
 
 
+@pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
 def test_with_dataset_repeat(synthetic_dataset, reader_factory):
     """``tf.data.Dataset``'s ``repeat`` should not be used on ``make_petastorm_dataset`` due to high costs of
@@ -119,6 +121,7 @@ def test_with_dataset_repeat(synthetic_dataset, reader_factory):
                 sess.run(iterator)
 
 
+@pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
 def test_some_processing_functions(synthetic_dataset, reader_factory):
     """Try several ``tf.data.Dataset`` dataset operations on make_petastorm_dataset"""
