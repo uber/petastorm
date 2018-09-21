@@ -1,52 +1,57 @@
-The Reader API
-==============
+API
+===
 
+Unischema
+---------
+.. automodule:: petastorm.unischema
+
+Reader
+------
 .. automodule:: petastorm.reader
-
-Reader worker
--------------
-
-.. automodule:: petastorm.reader_worker
-
-Caching
--------
-
-.. automodule:: petastorm.cache
-
-.. automodule:: petastorm.local_disk_cache
-
-Epoch support
--------------
-
-.. automodule:: petastorm.reader_impl.epochs
-
-N-gram readout support
-----------------------
-
+.. automodule:: petastorm.weighted_sampling_reader
 .. automodule:: petastorm.ngram
 
-Predicate-based filtering
--------------------------
+Tensorflow
+----------
+.. automodule:: petastorm.tf_utils
 
+PyTorch
+-------
+.. automodule:: petastorm.pytorch
+
+PySpark & SQL
+-------------
+.. automodule:: petastorm.spark_utils
+
+
+Row queries
+-----------
 .. automodule:: petastorm.predicates
 
-Selective column readout
-------------------------
+Local cache
+-----------
+.. automodule:: petastorm.cache
+.. automodule:: petastorm.local_disk_cache
 
+Codecs
+------
+.. automodule:: petastorm.codecs
+
+Dataset generation
+------------------
+.. automodule:: petastorm.etl
+.. automodule:: petastorm.etl.dataset_metadata
+   :exclude-members: load_row_groups
+
+.. automodule:: petastorm.etl.petastorm_generate_metadata
+
+Row-group selectors
+-------------------
 .. automodule:: petastorm.selectors
+.. automodule:: petastorm.etl.rowgroup_indexers
+.. automodule:: petastorm.etl.rowgroup_indexing
 
-Shuffling
----------
+HDFS
+----
+.. automodule:: petastorm.hdfs.namenode
 
-.. automodule:: petastorm.reader_impl.shuffling_buffer
-
-Filesystem utilities
---------------------
-
-.. automodule:: petastorm.fs_utils
-
-Reader utilities
-----------------
-
-.. automodule:: petastorm.utils
-.. automodule:: petastorm.weighted_sampling_reader

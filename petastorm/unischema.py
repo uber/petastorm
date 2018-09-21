@@ -115,9 +115,9 @@ class Unischema(object):
 
         The example returns a schema, but with only two fields:
 
-        >>> BBox2dSchema.create_schema_view(
-        >>>     [BBox2dSchema.image_aligned_veh_z_rgb_8,
-        >>>      BBox2dSchema.image_rgb_8])
+        >>> SomeSchema.create_schema_view(
+        >>>     [SomeSchema.field_1,
+        >>>      SomeSchema.field_4])
 
         :param fields: subset of fields from which to create a new schema
         :return: a new view of the original schema containing only the supplied fields
@@ -162,7 +162,7 @@ class Unischema(object):
         Example:
 
         >>> spark.createDataFrame(dataset_rows,
-        >>>                       BBox2dSchema.as_spark_schema())
+        >>>                       SomeSchema.as_spark_schema())
         """
         schema_entries = [
             StructField(
