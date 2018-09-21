@@ -38,18 +38,26 @@ script:
   - (cd docs/autodoc && make html)
 
   - pylint --rcfile=.pylintrc petastorm examples -f parseable -r n
+
+  # Running pytest twice: first tests that do not have to be forked. Run it with -Y --cache-clear
+  # which will create synthetic datasets that are used by multiple tests and store them in cache.
+  # Next pytest invoke will run boxed tests, but read the synthetic datasets from cache and not
+  # waste time on recreating them
+
   # Ignore two pytorch tests to prevent static-TLS-caused torch-import seg-fault
-  - pytest -v --cov=./ --trace-config
+  - pytest -Y --cache-clear -m "not forked" -v --cov=./ --trace-config
     --ignore=examples/mnist/tests/test_generate_mnist_dataset.py
-    --ignore=petastorm/tests/test_pytorch_utils.py
+    --ignore=petastorm/tests/test_pytorch_utils.py petastorm examples
+
+  # We have a separate run for forked: make sure fixtures are reused as much as possible
+  - pytest -Y -m "forked" --forked -v --cov=./ --cov-append --trace-config
+    --ignore=examples/mnist/tests/test_generate_mnist_dataset.py
+    --ignore=petastorm/tests/test_pytorch_utils.py petastorm examples
+
   # Run the pytorch tests separately, in this order, but accumulate code coverage data
   # Temporary disabled until we figure out (a) segfaults in the first test with `import torch`,
   # and (b) hanging in `test_read_mnist_dataset`
   # - pytest -v examples/mnist/tests/test_generate_mnist_dataset.py petastorm/tests/test_pytorch_utils.py --cov=./ --cov-append
-
-  # Verify caching of synthetic dataset is working (at least not failing)
-  - pytest --cache-synthetic-dataset --log-cli-level info petastorm/tests/test_end_to_end.py::test_reading_subset_of_columns
-  - pytest --cache-synthetic-dataset --log-cli-level info petastorm/tests/test_end_to_end.py::test_reading_subset_of_columns
 
 after_success:
   - codecov
