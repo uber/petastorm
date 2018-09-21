@@ -1,12 +1,11 @@
 .. inclusion-marker-start-do-not-remove
 
-====================
-Developing petastorm
-====================
+Developer guide
+===============
 
-Please follow the following instructions to develop Petastorm:
-
-For tensorflow without GPU:
+Setting up development environment (recommendation)
+---------------------------------------------------
+This section shows a way to configure a development environment that allows you to run tests and build documentation.
 
 .. code-block:: bash
 
@@ -15,24 +14,31 @@ For tensorflow without GPU:
     pip install -U pip
     pip install -e .[opencv,tf,test,torch]
 
-For tensorflow with GPU:
+Unit tests
+----------
+To run unit tests:
 
 .. code-block:: bash
 
-    virtualenv env
-    source env/bin/activate
-    pip install -U pip
-    pip install -e .[opencv,tf_gpu,test,torch]
+    pytest -v petastorm
 
-To run tests, please run the following:
+``pytest`` has mulitple useful plugins. Consider installing the following plugins:
 
 .. code-block:: bash
 
-    pytest -v
+    pip install pytest-xdist pytest-repeat pytest-pycharm
 
+which enable you to run tests in parallel (``-n`` switch) and repeat tests multiple times (``--count`` switch)
 
-Petastorm auto-generated documentation
-======================================
+Caching test datasets
+^^^^^^^^^^^^^^^^^^^^^
+Some unit tests rely on mock data. Generating these datasets is not very fast as it spins up local Spark isntance.
+Use ``-Y`` switch to cache these datasets. Be careful, as the dataset generation exercises Petastorm code, hence
+in some cases you would need to invalidate the cache for the test to take all code changes into account.
+Use ``--cache-clear`` switch to do so.
+
+Documentation
+-------------
 
 The petastorm project uses sphinx autodoc capabilities, along with free
 documentation hosting by ReadTheDocs.org (RTD), to serve up auto-generated API
@@ -58,7 +64,7 @@ To make documents locally:
     make html
 
 Once the HTML build process completes successfully, naviate your browser to
-``file:///<petastorm-repo-path>/docs/autodoc/_build/html/index.html``.
+``file:///tmp/autodocs/_build/html/index.html``.
 
 Some changes may require build and deployment to see, including:
 
@@ -78,7 +84,7 @@ To see the above documentation changes:
 .. _built version: https://readthedocs.org/projects/petastorm/versions/
 
 Release versions
-----------------
+^^^^^^^^^^^^^^^^
 
 By default, RTD defines the ``latest`` version, which can be pointed at master
 or another branch.  Additionally, each release may have an associated RTD build
@@ -94,7 +100,7 @@ of maintenance, we've set that to be the same version string as defined in
 ``petastorm/__init__.py``.
 
 Known doc-build caveats and issues
-----------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 * Due to RTD's `build resource limitations`_, we are unable to pip install any
   of the petastorm extra-required library packages.
@@ -109,7 +115,7 @@ Known doc-build caveats and issues
 .. _alabaster Sphinx theme: https://alabaster.readthedocs.io/
 
 Future: auto-generate with ``sphinx-apidoc``
---------------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Sphinx has the ability to auto-generate the entire API, either via the
 autosummary_ extension, or the ``sphinx-apidoc`` tool.
@@ -138,10 +144,3 @@ auto-generated API doc will require:
 
 
 .. inclusion-marker-end-do-not-remove
-
-Need to upgrade from petastorm pre-0.3.0?
-=========================================
-
-.. toctree::
-
-   migrating-0.3.0
