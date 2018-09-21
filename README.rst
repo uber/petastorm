@@ -1,10 +1,18 @@
-=========
+.. raw:: html
+
+    <img src="docs/images/logo-120.png" width="120px">
+    <br/>
+
 Petastorm
 =========
 
 .. image:: https://travis-ci.com/uber/petastorm.svg?branch=master
    :target: https://travis-ci.com/uber/petastorm
    :alt: Build Status (Travis CI)
+
+.. image:: https://codecov.io/gh/uber/petastorm/branch/master/graph/badge.svg
+   :target: https://codecov.io/gh/uber/petastorm/branch/master
+   :alt: Code coverage
 
 .. image:: https://img.shields.io/badge/License-Apache%202.0-blue.svg
    :target: https://img.shields.io/badge/License-Apache%202.0-blue.svg
@@ -14,18 +22,19 @@ Petastorm
    :target: https://pypi.org/project/petastorm
    :alt: Latest Version
 
-
 .. inclusion-marker-start-do-not-remove
 
-Petastorm, an open source data access library developed at Uber ATG. This library enables single machine or
+Petastorm is an open source data access library developed at Uber ATG. This library enables single machine or
 distributed training and evaluation of deep learning models directly from multi-terabyte datasets in Apache Parquet
 format. Petastorm supports popular Python-based machine learning (ML) frameworks such as
 `Tensorflow <http://www.tensorflow.org/>`_, `PyTorch <https://pytorch.org/>`_, and
 `PySpark <http://spark.apache.org/docs/latest/api/python/pyspark.html>`_. It can also be used from pure Python code.
 
+Project web site: `<https://petastorm.readthedocs.io>`_
 
-Install
--------
+
+Installation
+------------
 
 .. code-block:: bash
 
@@ -33,7 +42,7 @@ Install
 
 
 There are several extra dependencies that are defined by the ``petastorm`` package that are not installed automatically.
-The extras are: ``tf``, ``tf_gpu``, ``torch``, ``open_cv``, ``docs``, ``tests``.
+The extras are: ``tf``, ``tf_gpu``, ``torch``, ``opencv``, ``docs``, ``test``.
 
 For example to trigger installation of GPU version of tensorflow and opencv, use the following pip command:
 
@@ -42,11 +51,9 @@ For example to trigger installation of GPU version of tensorflow and opencv, use
     pip install petastorm[opencv,tf_gpu]
 
 
-Usage
------
 
 Generating a dataset
-^^^^^^^^^^^^^^^^^^^^
+--------------------
 
 A dataset created using Petastorm is stored in `Apache Parquet <https://parquet.apache.org/>`_ format.
 On top of a Parquet schema, petastorm also stores higher-level schema information that makes multidimensional arrays into a native part of a petastorm dataset. 
@@ -118,8 +125,8 @@ Here is a minimalistic example writing out a table with some random data.
   storage. The parquet schema is automatically derived from
   ``HelloWorldSchema``.
 
-Reading a dataset from Python
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Plain Python API
+----------------
 
 Reading a dataset is simple using the ``petastorm.reader.Reader`` class:
 
@@ -134,8 +141,9 @@ protocol URI.
 
 Once a ``Reader`` is instantiated, you can use it as an iterator.
 
-Reading a dataset using Tensorflow
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Tensorflow API
+--------------
+
 To hookup the reader into a tensorflow graph, you can use the ``tf_tensors``
 function:
 
@@ -159,8 +167,9 @@ The reader has multiple features such as:
 - Partitioning for multi-GPU training
 - Local caching
 
-Reading a dataset using Pytorch
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Pytorch API
+-----------
+
 As illustrated in
 `pytorch_example.py <https://github.com/uber/petastorm/blob/master/examples/mnist/pytorch_example.py>`_,
 reading a petastorm dataset from pytorch
@@ -202,8 +211,9 @@ The minimalist example below assumes the definition of a ``Net`` class and
 
 .. inclusion-marker-end-do-not-remove
 
-Querying a dataset using Spark SQL
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PySpark and SQL
+---------------
+
 Using the Parquet data format, which is natively supported by Spark, makes it possible to use a wide range of Spark
 tools to analyze and manipulate the dataset. The example below shows how to read a Petastorm dataset
 as a Spark RDD object:

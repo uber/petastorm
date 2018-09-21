@@ -1,19 +1,19 @@
 .. inclusion-marker-start-do-not-remove
 
 =============
-Release Notes
+Release notes
 =============
 
 Release 0.4.0, 0.4.1
 ====================
 
-Breaking Changes
+Breaking changes
 ----------------
 - All ``decimal.Decimal`` fields are now decoded as strings
 - ``PredicateBase`` moved from ``petastorm`` package to ``petastorm.predicates``
 - ``RowGroupSelectorBase`` moved from ``petastorm`` package to ``petastorm.selectors``
 
-New Features and Bug Fixes
+New features and bug fixes
 --------------------------
 - Added ``WeightedSamplingReader``: aggregates multiple ``Reader`` output by sampling them with a specified probabilityWeightedSamplingReader `see documentation <https://petastorm.readthedocs.io/en/v0.4.0/reader.html#petastorm.weighted_sampling_reader.WeightedSamplingReader>`_.
 - Add option for driver memory in regenerating metadata

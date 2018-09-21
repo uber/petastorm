@@ -132,7 +132,6 @@ html_theme = 'alabaster'
 # For alabaster: https://alabaster.readthedocs.io/en/latest/customization.html
 #
 html_theme_options = {
-  'description': 'A library for big datasets, fast',
   'github_user': 'uber',
   'github_repo': 'petastorm',
   'github_button': True,

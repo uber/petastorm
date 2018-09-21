@@ -156,7 +156,7 @@ class in_pseudorandom_split(PredicateBase):
 
     def __init__(self, fraction_list, subset_index, predicate_field):
         """ split_list: a list of log fractions (real numbers in range [0:1])
-            subset_index: define which subset will be used by bbox2d_reader
+            subset_index: define which subset will be used by the Reader
         """
         if subset_index >= len(fraction_list):
             raise ValueError('subset_index is out of range')
