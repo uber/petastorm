@@ -3,10 +3,6 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-.. image:: ../images/logo.png
-   :scale: 50 %
-   :align: center
-   :alt: logo
 
 Petastorm
 =========
@@ -22,7 +18,7 @@ training frameworks.
 
    readme_include
 
-   reader
+   api
 
    development_include
    benchmarks_tutorial_include
