@@ -25,12 +25,12 @@ Petastorm
 .. inclusion-marker-start-do-not-remove
 
 Petastorm is an open source data access library developed at Uber ATG. This library enables single machine or
-distributed training and evaluation of deep learning models directly from multi-terabyte datasets in Apache Parquet
+distributed training and evaluation of deep learning models directly from datasets in Apache Parquet
 format. Petastorm supports popular Python-based machine learning (ML) frameworks such as
 `Tensorflow <http://www.tensorflow.org/>`_, `PyTorch <https://pytorch.org/>`_, and
 `PySpark <http://spark.apache.org/docs/latest/api/python/pyspark.html>`_. It can also be used from pure Python code.
 
-Project web site: `<https://petastorm.readthedocs.io>`_
+Documentation web site: `<https://petastorm.readthedocs.io>`_
 
 
 Installation
@@ -127,6 +127,17 @@ Here is a minimalistic example writing out a table with some random data.
 
 Plain Python API
 ----------------
+The ``petastorm.reader.Reader`` class is the main entry point for user
+code that accesses the data from an ML framework such as Tensorflow or Pytorch.
+The reader has multiple features such as:
+
+- Selective column readout
+- Multiple parallelism strategies: thread, process, single-threaded (for debug)
+- N-grams readout support
+- Row filtering (row predicates)
+- Shuffling
+- Partitioning for multi-GPU training
+- Local caching
 
 Reading a dataset is simple using the ``petastorm.reader.Reader`` class:
 
@@ -136,8 +147,7 @@ Reading a dataset is simple using the ``petastorm.reader.Reader`` class:
        for row in reader:
            print(row)
 
-``Reader`` supports taking either an ``hdfs://...`` or ``file://...``
-protocol URI.
+``hdfs://...`` and ``file://...`` are supported URL protocols.
 
 Once a ``Reader`` is instantiated, you can use it as an iterator.
 
@@ -155,17 +165,17 @@ function:
            for _ in range(3):
                print(session.run(row_tensors))
 
-The ``petastorm.reader.Reader`` class is the main entry point for user
-code that accesses the data from an ML framework such as Tensorflow or Pytorch.
-The reader has multiple features such as:
+Alternatively, you can use new ``tf.data.Dataset`` API;
 
-- Selective column readout
-- Multiple parallelism strategies: thread, process, single-threaded (for debug)
-- N-grams readout support
-- Row filtering (row predicates)
-- Shuffling
-- Partitioning for multi-GPU training
-- Local caching
+.. code-block:: python
+
+    with Reader('file:///some/localpath/a_dataset') as reader:
+        dataset = make_petastorm_dataset(reader)
+        iterator = dataset.make_one_shot_iterator()
+        tensor = iterator.get_next()
+        with tf.Session() as sess:
+            sample = sess.run(tensor)
+            print(sample.id)
 
 Pytorch API
 -----------
