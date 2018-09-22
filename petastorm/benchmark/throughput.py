@@ -262,7 +262,7 @@ def _create_worker_pool(pool_type, workers_count, profiling_enabled):
     elif pool_type == WorkerPoolType.NONE:
         worker_pool = DummyPool()
     else:
-        raise ValueError('Supported pool types are thread, process or dummy. Got {}.'.format(args.pool_type))
+        raise ValueError('Supported pool types are thread, process or dummy. Got {}.'.format(pool_type))
     return worker_pool
 
 
