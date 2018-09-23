@@ -34,6 +34,7 @@ class NumpyArrayCodecsTest(unittest.TestCase):
                                nullable=False)
         np.testing.assert_equal(codec.decode(field, codec.encode(field, expected)), expected)
 
+
 class NumpyArrayCompressedCodecsTest(unittest.TestCase):
 
     def test_numpy_codec(self):

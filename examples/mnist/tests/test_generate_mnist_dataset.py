@@ -64,8 +64,8 @@ def _mock_mnist_data(mock_spec):
 
     for dset, data in bogus_data.items():
         for _ in range(mock_spec[dset]):
-            pair = (
-            MockDataObj(np.random.randint(0, 255, size=MOCK_IMAGE_SIZE, dtype=np.uint8)), np.random.randint(0, 9))
+            pair = (MockDataObj(np.random.randint(0, 255, size=MOCK_IMAGE_SIZE, dtype=np.uint8)),
+                    np.random.randint(0, 9))
             data.append(pair)
 
     return bogus_data

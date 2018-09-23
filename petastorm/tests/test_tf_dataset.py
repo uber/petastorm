@@ -30,7 +30,7 @@ from petastorm.workers_pool.process_pool import ProcessPool
 from petastorm.workers_pool.thread_pool import ThreadPool
 
 _EXCLUDE_FIELDS = set(TestSchema.fields.values()) \
-                  - {TestSchema.matrix_nullable, TestSchema.string_array_nullable, TestSchema.decimal}
+    - {TestSchema.matrix_nullable, TestSchema.string_array_nullable, TestSchema.decimal}
 
 MINIMAL_READER_FLAVOR_FACTORIES = [
     lambda url, **kwargs: Reader(url, **_merge_params({'reader_pool': DummyPool(), 'schema_fields': _EXCLUDE_FIELDS},

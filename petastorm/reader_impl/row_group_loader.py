@@ -153,7 +153,7 @@ class RowGroupLoader(object):
                                                                        ', '.join(all_schema_names)))
 
         other_column_names = all_schema_names - predicate_column_names - \
-                             self._dataset.partitions.partition_names
+            self._dataset.partitions.partition_names
 
         # Read columns needed for the predicate
         predicate_rows = self._read_with_shuffle_row_drop(piece, parquet_file, predicate_column_names,

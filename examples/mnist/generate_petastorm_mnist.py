@@ -113,7 +113,7 @@ def mnist_data_to_petastorm_dataset(download_dir, output_url, spark_master=None,
                 MnistSchema.idx.name: idx_image_digit[0],
                 MnistSchema.digit.name: idx_image_digit[1][1],
                 MnistSchema.image.name: np.array(list(idx_image_digit[1][0].getdata()), dtype=np.uint8).reshape(28, 28)
-                }, enumerate(data))
+            }, enumerate(data))
 
             # Convert to pyspark.sql.Row
             sql_rows = map(lambda r: dict_to_spark_row(MnistSchema, r), idx_image_digit_list)

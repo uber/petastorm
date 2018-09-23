@@ -75,10 +75,12 @@ class ShufflingBufferBase(object):
         """
         pass
 
+
 class NoopShufflingBuffer(ShufflingBufferBase):
     """A 'no-operation' (noop) implementation of a shuffling buffer. Useful in cases where no shuffling is desired, such
     as test scenarios or iterating over a dataset in a predeterministic order.
     """
+
     def __init__(self):
         self.store = []
 
@@ -101,10 +103,12 @@ class NoopShufflingBuffer(ShufflingBufferBase):
     def finish(self):
         pass
 
+
 class RandomShufflingBuffer(ShufflingBufferBase):
     """
     A random shuffling buffer implementation. Items can be added to the buffer and retrieved in a random order.
     """
+
     def __init__(self, shuffling_buffer_capacity, min_after_retrieve, extra_capacity=1000):
         """Initializes a new ShufflingBuffer instance.
 
