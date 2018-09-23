@@ -39,16 +39,19 @@ before_script:
   # enable core dumps
   - ulimit -c unlimited -S
   - pip install flake8
+
+  # We run a bunch of linting in before_script to fail fast and not run unit tests in case of lint failure.
+
   # stop the build if there are Python syntax errors or undefined names
-  - flake8 . --count --select=E901,E999,F821,F822,F823 --show-source --statistics
-  # exit-zero treats all errors as warnings.  The GitHub editor is 127 chars wide
-  - flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+  - flake8 . --count --show-source --statistics
+  # exit-zero treats all errors as warnings. We can make it a blocking test once issue #178 is addressed.
+  - flake8 . --count --exit-zero --max-complexity=10 --statistics
+
+  - pylint --rcfile=.pylintrc petastorm examples -f parseable -r n
 
 script:
   # Build documentation
   - (cd docs/autodoc && make html)
-
-  - pylint --rcfile=.pylintrc petastorm examples -f parseable -r n
 
   # Running pytest twice: first tests that do not have to be forked. Run it with -Y --cache-clear
   # which will create synthetic datasets that are used by multiple tests and store them in cache.
