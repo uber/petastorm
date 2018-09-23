@@ -48,6 +48,7 @@ class Net(nn.Module):
         x = self.fc2(x)
         return F.log_softmax(x, dim=1)
 
+
 def train(model, device, train_loader, log_interval, optimizer, epoch):
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
@@ -62,6 +63,7 @@ def train(model, device, train_loader, log_interval, optimizer, epoch):
                 epoch, batch_idx * len(data), len(train_loader.reader),
                 100. * batch_idx / len(train_loader), loss.item()))
 
+
 def test(model, device, test_loader):
     model.eval()
     test_loss = 0
@@ -70,14 +72,15 @@ def test(model, device, test_loader):
         for data, target in test_loader:
             data, target = data.to(device), target.to(device)
             output = model(data)
-            test_loss += F.nll_loss(output, target, reduction='sum').item() # sum up batch loss
-            pred = output.max(1, keepdim=True)[1] # get the index of the max log-probability
+            test_loss += F.nll_loss(output, target, reduction='sum').item()  # sum up batch loss
+            pred = output.max(1, keepdim=True)[1]  # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
 
     test_loss /= len(test_loader.reader)
     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
         test_loss, correct, len(test_loader.reader),
         100. * correct / len(test_loader.reader)))
+
 
 def _transform_row(mnist_row):
     # For this example, the images are stored as simpler ndarray (28,28), but the
@@ -91,6 +94,7 @@ def _transform_row(mnist_row):
     # data or target transform, but that actually gives the user more flexibility
     # to make the desired partial transform, as shown here.
     return (transform(mnist_row['image']), mnist_row['digit'])
+
 
 def main():
     # Training settings

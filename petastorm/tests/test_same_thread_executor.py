@@ -21,6 +21,7 @@ def test_single_future_submit():
     e = SameThreadExecutor()
     assert 10 == e.submit(lambda: 10).result()
 
+
 def test_many_future_submit():
     e = SameThreadExecutor()
     futures = []

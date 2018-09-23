@@ -51,11 +51,14 @@ def test_generate(hello_world_dataset):
 def test_pytorch_hello_world_example(hello_world_dataset):
     pytorch_hello_world(hello_world_dataset.url)
 
+
 def test_pyspark_hello_world_example(hello_world_dataset):
     pyspark_hello_world(hello_world_dataset.url)
 
+
 def test_python_hello_world_example(hello_world_dataset):
     pyspark_hello_world(hello_world_dataset.url)
+
 
 def test_tensorflow_hello_world_example(hello_world_dataset):
     tensorflow_hello_world(hello_world_dataset.url)

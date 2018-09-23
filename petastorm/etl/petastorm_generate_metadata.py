@@ -28,13 +28,13 @@ from petastorm.utils import add_to_dataset_metadata
 
 example_text = '''Example (some replacement required):
 
-Locally:     
+Locally:
 petastorm-generate-metadata.py \\
     --dataset_url hdfs:///path/to/my/hello_world_dataset \\
     --unischema_class examples.hello_world.generate_hello_world_dataset.HelloWorldSchema \\
     --master local[*]
 
-On Spark:    
+On Spark:
 spark-submit \\
     --master spark://ip:port \\
     $(which petastorm-generate-metadata.py) \\

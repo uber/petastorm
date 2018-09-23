@@ -17,6 +17,7 @@ import shutil
 import tempfile
 import unittest
 
+import cv2
 import numpy as np
 
 from examples.imagenet.generate_petastorm_imagenet import download_nouns_mapping, \
@@ -36,13 +37,13 @@ def _mock_imagenet_dir(temp_dir):
         noun_id = 'n0000000{}'.format(i)
         noun_id_to_text[noun_id] = 'text for {}'.format(noun_id)
         noun_dir = os.path.join(temp_dir, noun_id)
-        # os.mkdir(noun_dir)
+        os.mkdir(noun_dir)
 
         # Create 3 noun image variants (e.g n00000001_0001.JPEG)
         for variant_id in range(MOCK_VARIANTS_COUNT):
             jpeg_path = os.path.join(noun_dir, '{}_000{}.JPEG'.format(noun_id, variant_id))
             dummy_image = np.random.randint(0, 255, size=MOCK_IMAGE_SIZE, dtype=np.uint8)
-            # cv2.imwrite(jpeg_path, dummy_image)
+            cv2.imwrite(jpeg_path, dummy_image)
     return noun_id_to_text
 
 

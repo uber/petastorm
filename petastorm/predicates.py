@@ -22,6 +22,7 @@ import numpy as np
 import six
 import sys
 
+
 @six.add_metaclass(abc.ABCMeta)
 class PredicateBase(object):
     """ Base class for row predicates """
