@@ -21,7 +21,7 @@ python:
 matrix:
   include:
     - python: '3.7'
-      sudo: required  # equired for Python 3.7 (travis-ci/travis-ci#9069)
+      sudo: required  # required for Python 3.7 (travis-ci/travis-ci#9069)
   allow_failures:
     - python: '3.7'  # Until Python 3.7 support is added to https://pypi.org/project/pyarrow
 
