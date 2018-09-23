@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 class EmptyResultError(RuntimeError):
     """Exception used to signal that there are no new elements in the queue and no new elements are expected, unless
     ventilate is called again"""

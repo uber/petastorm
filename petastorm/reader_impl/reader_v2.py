@@ -156,7 +156,7 @@ class ReaderV2(object):
         epoch_items = self._apply_row_drop_partition(filtered_row_groups, shuffle_options)
 
         # 4. Launch a new thread running `worker_loop` function.
-        epochs_iterator = lambda: epoch_generator(epoch_items, num_epochs, shuffle_options.shuffle_row_groups)
+        def epochs_iterator(): return epoch_generator(epoch_items, num_epochs, shuffle_options.shuffle_row_groups)
 
         self._results_queue = Queue(_OUTPUT_QUEUE_SIZE)
 

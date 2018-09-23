@@ -22,6 +22,7 @@ class WeightedSamplingReader(object):
     Complies to the same interfaces as :class:`~petastorm.reader.Reader`, hence
     :class:`~petastorm.weighted_sampling_reader.WeightedSamplingReader` can be used anywhere the
     :class:`~petastorm.reader.Reader` can be used."""
+
     def __init__(self, readers, probabilities):
         """Creates an instance WeightedSamplingReader.
 

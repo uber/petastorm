@@ -62,9 +62,9 @@ def _randomize_row(id_num):
         TestSchema.empty_matrix_string.name: np.asarray([], dtype=np.string_),
         TestSchema.matrix_nullable.name: None,
         TestSchema.sensor_name.name: np.asarray(['test_sensor'], dtype=np.unicode_),
-        TestSchema.string_array_nullable.name: None if id_num % 5 == 0 else
-                                               np.asarray([], dtype=np.unicode_) if id_num % 4 == 0 else
-                                               np.asarray([str(i + id_num) for i in range(2)], dtype=np.unicode_),
+        TestSchema.string_array_nullable.name:
+            None if id_num % 5 == 0 else np.asarray([], dtype=np.unicode_)
+            if id_num % 4 == 0 else np.asarray([str(i + id_num) for i in range(2)], dtype=np.unicode_),
     }
     return row_dict
 

@@ -195,8 +195,8 @@ def failover_all_class_methods(decorator):
     @functools.wraps(decorator)
     def decorate(cls):
         all_methods = inspect.getmembers(cls, inspect.isbuiltin) \
-                      + inspect.getmembers(cls, inspect.ismethod) \
-                      + inspect.getmembers(cls, inspect.isroutine)
+            + inspect.getmembers(cls, inspect.ismethod) \
+            + inspect.getmembers(cls, inspect.isroutine)
         for name, method in all_methods:
             if not name.startswith('_'):
                 # It's safer to exclude all protected/private method from decoration
@@ -262,7 +262,7 @@ class HdfsConnector(object):
         """
         assert list_of_namenodes is not None and len(list_of_namenodes) <= cls.MAX_NAMENODES, \
             "Must supply a list of namenodes, but HDFS only supports up to {} namenode URLs" \
-                .format(cls.MAX_NAMENODES)
+            .format(cls.MAX_NAMENODES)
         return HAHdfsClient(cls, list_of_namenodes)
 
     @classmethod
@@ -285,7 +285,7 @@ class HdfsConnector(object):
                 host = list_of_namenodes[idx]
                 try:
                     return idx, \
-                           cls.hdfs_connect_namenode(urlparse('hdfs://' + str(host or 'default')))
+                        cls.hdfs_connect_namenode(urlparse('hdfs://' + str(host or 'default')))
                 except ArrowIOError:
                     # This is an expected error if the namenode we are trying to connect to is
                     # not the active one

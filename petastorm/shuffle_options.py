@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 class ShuffleOptions(object):
     shuffle_row_groups = None
     shuffle_row_drop_partitions = None

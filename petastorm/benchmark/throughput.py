@@ -50,7 +50,6 @@ class WorkerPoolType(Enum):
     NONE = 'none'
     """IO and loading will be done on a single thread. No parallelism."""
 
-
     def __str__(self):
         return self.value
 
@@ -70,7 +69,7 @@ class ReadMethod(Enum):
 def _time_warmup_and_work(reader, warmup_cycles_count, measure_cycles_count, do_work_func=None):
 
     if not do_work_func:
-        do_work_func = lambda: next(reader)
+        do_work_func = lambda: next(reader)  # noqa
 
     _time_multiple_iterations(warmup_cycles_count, do_work_func, lambda: reader.diagnostics)
 
