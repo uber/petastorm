@@ -4,6 +4,14 @@
 Release notes
 =============
 
+Release 0.4.2
+=============
+
+New features and bug fixes
+--------------------------
+- Making ``decimal.Decimal`` to be decoded as ``decimal``, as in before 0.4.0.
+- Adding a ``benchmark`` module with a ``petastorm-throughput.py`` command line utility.
+
 Release 0.4.0, 0.4.1
 ====================
 
