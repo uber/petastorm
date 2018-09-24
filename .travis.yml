@@ -90,14 +90,14 @@ before_deploy:
 
 deploy:
   # Disabling pypi deployment. There is an issue with authentication at the moment
-  #  - provider: pypi
-  #    user: uber
-  #    password:
-  #      secure: HYpHU5Gt6PnA/yEEX01zQBtJPwsToOpiL58INePElwUs8JvgniYs51hI19RpZeS7APju+9K6AyVdqW8wqkMrgULBDhIcdM/CI3XIXu6dsoa9MMdlGdtCsbBOXANbHCFuJbCTxkU828lvQsyQ/5y0pzMhC+C5AUV5qcH0zasOmXE7D61DIhnyCAteBAGGZRxR9EMHV6Q7gxG76Qg+4b70eiscK/98EtDVyRySL4J1LgbNsQiWOMu1eQ6Un4fMYsuR51vE7CpLk2ollFcT3Ivpt0LiutPDIJtZcf+VdSX9PFbUhMPHgEdj8LPDJe0/JMMT71/XyUQG2K+Dy2Xvzwt3h3p6UpyCyuPIZI9BngL4qmsyHcANu7q0kaWAUInPfZPtaqtT0qM7f9uyiZDPqHw5GoIGCxbKHiTpV2G8vd/XAU5Lqn386i05MKhR/J5VkQQHV5bmHNYBUXM6DFgeyGOdNHg5M2H+I7dla44VWn2PVJhAmZk0of/Wp8fv7lqe/FyHNyNpjtWa59rtY+4ZXSkpvhwLSaJPPRB93ObRPVw/AooVQtrWr+dgX2YTrzJcB0mvFbZse2vlM9MAoSv6bCiKCKdCEtb53ueGggFokT2LgfNLxuMO9ykuVH0Ko2Nzi/V1gD5sQ3BWlAFykPX3aAnGVvBBdB1WMMY2mO4Z+Wr6Tic=
-  #    distributions: sdist bdist_wheel
-  #    on:
-  #      tags: true
-  #      python: 3.6
+  - provider: pypi
+    user: uber
+    password:
+      secure: o+zkax7TWQAr3kfR1lyVX6z2aB2//45t4ghdrPe/R6h6EhpM8JaQMpr5VFnC2TOBEenXjQWkaKl0wsKNleEX3fshzlR60jHw82afe/KhRVQrIN0dq7UuqCvxPfWROO8IN3SC2Giuw9qTm6cYsvVCD9QlU53HqNVDgavZQFTA0FiZbUrGdJwQeOIYdf8qX/ahv0ybZ3YUKJ5JDm36RAMcIwOoieF+hE1jKxPSmeS4THx47Eq740P9pROklyT75hZz2iYyZ4ZMJUasbhO2Iy1s1Bud9LX+WCj0CaTsgn2ZsgtRdhOksD0d9wZkDf7euSr434aX83+WnZKt5ZLjQgchCH813tbelL9//d1SWzpKq2bPVipOcgAQJx/Y6IrYeOdSOxAbDgI60iHG8wp/CjVhp1XqEAOd3sFv/SPdk1lhWJwguGo10uNHxNiBommhO//HgT99JoLF1lyN3E78iNdtBFSv5kSYi5jnUExjxu9NZ9ppUlqQI3+dtIIwdaX0eYuth/Fh0c/cW7Q6UnV+xtc9MldstdHhpquY+0+CVfzMDKKhfV7+q1yLH4IxwKv64CApzi77zDoD4X665mpOY4fT/dTRcmCl5ncb0VTCgQE88gJb1A2SezSRdXp3yp78Ug91z6RlEU42H5qpkDD97b65VGV3Oc4XD7c9k8CUiycizkM=
+    distributions: sdist bdist_wheel
+    on:
+      tags: true
+      python: 3.6
 
   # Push all python wheels created to Github release
   - provider: releases
