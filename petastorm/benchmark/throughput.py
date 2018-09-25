@@ -15,7 +15,6 @@ from __future__ import division
 
 import copy
 import logging
-import re
 import time
 from collections import namedtuple
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
@@ -30,6 +29,7 @@ from petastorm.reader import Reader, ReaderV2
 from petastorm.reader_impl.same_thread_executor import SameThreadExecutor
 from petastorm.reader_impl.shuffling_buffer import RandomShufflingBuffer
 from petastorm.tf_utils import tf_tensors
+from petastorm.unischema import match_unischema_fields
 from petastorm.workers_pool.dummy_pool import DummyPool
 from petastorm.workers_pool.process_pool import ProcessPool
 from petastorm.workers_pool.thread_pool import ThreadPool
@@ -153,7 +153,7 @@ def reader_throughput(dataset_url, field_regex=None, warmup_cycles_count=300, me
     logger.info('Arguments: %s', locals())
 
     if 'schema_fields' not in reader_extra_args:
-        unischema_fields = _filter_schema_fields(get_schema_from_dataset_url(dataset_url), field_regex)
+        unischema_fields = match_unischema_fields(get_schema_from_dataset_url(dataset_url), field_regex)
         reader_extra_args['schema_fields'] = unischema_fields
 
     logger.info('Fields used in the benchmark: %s', str(reader_extra_args['schema_fields']))
@@ -217,7 +217,7 @@ def reader_v2_throughput(dataset_url, field_regex=None, warmup_cycles_count=300,
     logger.info('Arguments: %s', locals())
 
     if 'schema_fields' not in reader_extra_args:
-        unischema_fields = _filter_schema_fields(get_schema_from_dataset_url(dataset_url), field_regex)
+        unischema_fields = match_unischema_fields(get_schema_from_dataset_url(dataset_url), field_regex)
         reader_extra_args['schema_fields'] = unischema_fields
 
     logger.info('Fields used in the benchmark: %s', str(reader_extra_args['schema_fields']))
@@ -263,17 +263,6 @@ def _create_worker_pool(pool_type, workers_count, profiling_enabled):
     else:
         raise ValueError('Supported pool types are thread, process or dummy. Got {}.'.format(pool_type))
     return worker_pool
-
-
-def _filter_schema_fields(schema, field_regex):
-    if field_regex:
-        unischema_fields = []
-        for pattern in field_regex:
-            unischema_fields.extend(
-                [field for field_name, field in schema.fields.items() if re.match(pattern, field_name)])
-    else:
-        unischema_fields = field_regex
-    return unischema_fields
 
 
 def _time_multiple_iterations(iterations, work_func, diags_info_func=None, report_period=1.0):

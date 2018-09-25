@@ -23,7 +23,7 @@ from pyspark.sql.types import StringType, IntegerType, DecimalType, ShortType, L
 
 from petastorm.codecs import ScalarCodec, NdarrayCodec
 from petastorm.unischema import Unischema, UnischemaField, dict_to_spark_row, \
-    insert_explicit_nulls
+    insert_explicit_nulls, match_unischema_fields
 
 
 class UnischemaTest(unittest.TestCase):
@@ -158,6 +158,18 @@ class UnischemaTest(unittest.TestCase):
         ])
 
         self.assertEqual('TestSchema', TestSchema.name)
+
+    def test_filter_schema_fields_from_url(self):
+        TestSchema = Unischema('TestSchema', [
+            UnischemaField('int32', np.int32, (), None, False),
+            UnischemaField('uint8', np.uint8, (), None, False),
+            UnischemaField('uint16', np.uint16, (), None, False),
+        ])
+
+        assert match_unischema_fields(TestSchema, ['.*nt.*6']) == [TestSchema.uint16]
+        assert match_unischema_fields(TestSchema, ['nomatch']) == []
+        assert match_unischema_fields(TestSchema, ['.*']) == list(TestSchema.fields.values())
+        assert match_unischema_fields(TestSchema, ['int32', 'uint8']) == [TestSchema.int32, TestSchema.uint8]
 
 
 class UnischemaFieldTest(unittest.TestCase):

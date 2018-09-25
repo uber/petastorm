@@ -16,6 +16,7 @@
 in several different python libraries. Currently supported are pyspark, tensorflow, and numpy.
 """
 import copy
+import re
 from collections import namedtuple, OrderedDict
 
 from pyspark import Row
@@ -239,3 +240,21 @@ def insert_explicit_nulls(unischema, row_dict):
                 row_dict[field_name] = None
             else:
                 raise ValueError('Field {} is not found in the row_dict, but is not nullable.'.format(field_name))
+
+
+def match_unischema_fields(schema, field_regex):
+    """Returns a list of :class:`~petastorm.unischema.UnischemaField` objects that match a regular expression.
+
+    :param schema: An instance of a :class:`~petastorm.unischema.Unischema` object.
+    :param field_regex: A list of regular expression patterns.
+    :return: A list of :class:`~petastorm.unischema.UnischemaField` instances matching at least one of the regular
+      expression patterns given by ``field_regex``.
+    """
+    if field_regex:
+        unischema_fields = []
+        for pattern in field_regex:
+            unischema_fields.extend(
+                [field for field_name, field in schema.fields.items() if re.match(pattern, field_name)])
+    else:
+        unischema_fields = field_regex
+    return unischema_fields

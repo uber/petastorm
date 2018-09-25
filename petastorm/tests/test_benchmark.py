@@ -13,7 +13,6 @@
 # limitations under the License.
 from time import sleep
 
-import numpy as np
 import six
 
 try:
@@ -22,8 +21,7 @@ except ImportError:
     from mock import mock
 
 from petastorm.benchmark.throughput import reader_throughput, reader_v2_throughput, \
-    _filter_schema_fields, _time_warmup_and_work, WorkerPoolType, ReadMethod
-from petastorm.unischema import Unischema, UnischemaField
+    _time_warmup_and_work, WorkerPoolType, ReadMethod
 
 
 def test_pure_python_process_pool_run(synthetic_dataset):
@@ -63,19 +61,6 @@ def test_tf_thread_pool_run_experimental(synthetic_dataset):
     reader_v2_throughput(synthetic_dataset.url, field_regex=[r'\bid\b', r'\bmatrix\b'], warmup_cycles_count=5,
                          measure_cycles_count=5, pool_type=WorkerPoolType.THREAD, loaders_count=1,
                          read_method=ReadMethod.TF)
-
-
-def test_filter_schema_fields_from_url():
-    TestSchema = Unischema('TestSchema', [
-        UnischemaField('int32', np.int32, (), None, False),
-        UnischemaField('uint8', np.uint8, (), None, False),
-        UnischemaField('uint16', np.uint16, (), None, False),
-    ])
-
-    assert _filter_schema_fields(TestSchema, ['.*nt.*6']) == [TestSchema.uint16]
-    assert _filter_schema_fields(TestSchema, ['nomatch']) == []
-    assert _filter_schema_fields(TestSchema, ['.*']) == list(TestSchema.fields.values())
-    assert _filter_schema_fields(TestSchema, ['int32', 'uint8']) == [TestSchema.int32, TestSchema.uint8]
 
 
 def test_run_benchmark_cycle_length_of_warmup_and_measure_cycles():
