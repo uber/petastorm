@@ -73,6 +73,7 @@ setup(
     extras_require=EXTRA_REQUIRE,
     entry_points={
         'console_scripts': [
+            'petastorm-copy-dataset.py=petastorm.tools.copy_dataset:main',
             'petastorm-generate-metadata.py=petastorm.etl.petastorm_generate_metadata:main',
             'petastorm-throughput.py=petastorm.benchmark.cli:main',
         ],
