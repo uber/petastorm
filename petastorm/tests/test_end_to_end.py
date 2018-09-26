@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import os
 from concurrent.futures.process import ProcessPoolExecutor
 from decimal import Decimal
 from shutil import rmtree, copytree
@@ -23,6 +23,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.types import LongType, ShortType, StringType
 
 from petastorm.codecs import ScalarCodec
+from petastorm.etl.dataset_metadata import materialize_dataset
 from petastorm.local_disk_cache import LocalDiskCache
 from petastorm.reader import Reader, ReaderV2
 from petastorm.reader_impl.same_thread_executor import SameThreadExecutor
@@ -105,6 +106,8 @@ def test_simple_read_moved_dataset(synthetic_dataset, tmpdir, reader_factory):
 
     with reader_factory('file://{}'.format(a_moved_path)) as reader:
         _check_simple_reader(reader, synthetic_dataset.data)
+
+    rmtree(a_moved_path)
 
 
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
@@ -427,6 +430,25 @@ def test_materialize_dataset_hadoop_config(synthetic_dataset):
     assert hadoop_config.get('parquet.block.size.row.check.min') is None
     spark.stop()
     rmtree(destination)
+
+
+def test_pass_in_pyarrow_filesystem_to_materialize_dataset(synthetic_dataset, tmpdir):
+    a_moved_path = tmpdir.join('moved').strpath
+    copytree(synthetic_dataset.path, a_moved_path)
+
+    local_fs = pyarrow.LocalFileSystem()
+    os.remove(a_moved_path + '/_common_metadata')
+
+    spark = SparkSession.builder.getOrCreate()
+
+    with materialize_dataset(spark, a_moved_path, TestSchema, pyarrow_filesystem=local_fs):
+        pass
+
+    with Reader('file://{}'.format(a_moved_path), reader_pool=DummyPool()) as reader:
+        _check_simple_reader(reader, synthetic_dataset.data)
+
+    spark.stop()
+    rmtree(a_moved_path)
 
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
