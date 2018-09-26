@@ -18,19 +18,18 @@ import threading
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
-import pyarrow
 import six
 from pyarrow import parquet as pq
 from six.moves.queue import Queue
 from six.moves.urllib.parse import urlparse
 
 from petastorm.cache import NullCache
-from petastorm.codecs import decimal_to_str
 from petastorm.etl import dataset_metadata, rowgroup_indexing
 from petastorm.fs_utils import FilesystemResolver
 from petastorm.ngram import NGram
 from petastorm.predicates import PredicateBase
 from petastorm.reader_impl.epochs import epoch_generator
+from petastorm.reader_impl.pyarrow_serializer import PyArrowSerializer
 from petastorm.reader_impl.row_group_decoder import RowDecoder
 from petastorm.reader_impl.row_group_loader import RowGroupLoader
 from petastorm.reader_impl.shuffling_buffer import NoopShufflingBuffer
@@ -41,26 +40,13 @@ from petastorm.shuffle_options import ShuffleOptions
 logger = logging.getLogger(__name__)
 
 
-class PyArrowSerializeRowGroupSerializer(object):
-
-    @staticmethod
-    def serialize(rows):
-        # pyarrow.serialize does not support decimals.
-        decimal_to_str(rows)
-        return pyarrow.serialize(rows).to_buffer()
-
-    @staticmethod
-    def deserialize(serialized_rows):
-        return pyarrow.read_serialized(serialized_rows).deserialize()
-
-
 class ReaderV2(object):
     """Reads a unischema based dataset from a parquet file."""
 
     def __init__(self, dataset_url, schema_fields=None, shuffle=None, predicate=None, rowgroup_selector=None,
                  num_epochs=1, sequence=None, training_partition=None, num_training_partitions=None,
                  read_timeout_s=None, cache=None, loader_pool=None, decoder_pool=None, shuffling_queue=None,
-                 shuffle_options=None, pyarrow_filesystem=None, pyarrow_serialize=False):
+                 shuffle_options=None, pyarrow_filesystem=None, pyarrow_serialize=False, target_output_queue_size=100):
         """Initializes a reader object.
 
         :param dataset_url: an filepath or a url to a parquet directory,
@@ -95,6 +81,7 @@ class ReaderV2(object):
                        defaults to shuffling row groups but not to drop rows based on partitions.
         :param shuffle: DEPRECATED boolean whether to shuffle the row group order. Use shuffle_row_groups in
                        ShuffleOptions instead.
+        :param target_output_queue_size: Best effort target size of the output queue.
 
         By default, `NullCache` implementation
         """
@@ -175,7 +162,7 @@ class ReaderV2(object):
         self._results_queue = Queue()
 
         loader = RowGroupLoader(dataset_url, self.schema, self.ngram, cache, worker_predicate)
-        row_serializer = PyArrowSerializeRowGroupSerializer if pyarrow_serialize else None
+        row_serializer = PyArrowSerializer() if pyarrow_serialize else None
         decoder = RowDecoder(self.schema, self.ngram)
         self._loader_pool = loader_pool or ThreadPoolExecutor(5)
         self._decoder_pool = decoder_pool or ThreadPoolExecutor(5)
@@ -186,16 +173,18 @@ class ReaderV2(object):
             shuffling_queue = NoopShufflingBuffer()
 
         self._flow_manager_thread = threading.Thread(target=worker_loop,
-                                                     args=(epochs_iterator, self._loader_pool, loader,
+                                                     args=(epochs_iterator, self.schema, self._loader_pool, loader,
                                                            self._decoder_pool,
                                                            decoder,
                                                            shuffling_queue, self._results_queue,
-                                                           self._stop_flow_manager_event, row_serializer, self._diags))
+                                                           self._stop_flow_manager_event, row_serializer,
+                                                           target_output_queue_size, self._diags))
         self._flow_manager_thread.daemon = True
         self._flow_manager_thread.start()
 
         self._read_timeout_s = read_timeout_s
         self._result_buffer = []
+        self.last_row_consumed = False
 
     def _apply_row_drop_partition(self, row_groups, shuffle_options):
         items_to_ventilate = []

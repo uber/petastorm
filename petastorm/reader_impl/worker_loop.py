@@ -21,23 +21,19 @@ from collections import Counter
 from time import sleep, time
 from traceback import format_exception
 
-from six.moves import queue
-
 logger = logging.getLogger(__name__)
 
 CHUNK_DECODING_SIZE = 10
 
 _MAX_IN_LOADING_QUEUE_SIZE = 14
 _MAX_IN_DECODING_QUEUE_SIZE = 14
-_LOOP_IDLE_TIME_SEC = 0.001  # 10 ms
-
-_OUTPUT_QUEUE_SIZE = 30
+_LOOP_IDLE_TIME_SEC = 0.01  # 10 ms
 
 
 class RateCalculator(object):
     def __init__(self, name):
         self._name = name
-        self.rate = None
+        self.rate = -1
         self._last_measured_time = None
         self._last_count = 0
 
@@ -63,12 +59,12 @@ class EOFSentinel(object):
     pass
 
 
-def _decode_row_dispatcher(decoder, row, row_serializer):
-    decoded_row = decoder.decode(row)
+def _decode_rows_dispatcher(decoder, rows, row_serializer):
+    decoded_rows = decoder.decode(rows)
     if row_serializer:
-        return row_serializer.serialize(decoded_row)
+        return row_serializer.serialize(decoded_rows)
     else:
-        return decoded_row
+        return decoded_rows
 
 
 class WorkerLoopError(Exception):
@@ -86,8 +82,39 @@ def dispatch_decode(decoder, shuffled):
     return decoder.decode(shuffled)
 
 
-def worker_loop(epochs_generator, loading_pool, loader, decoding_pool, decoder, shuffling_queue, output_queue,
-                stop_event, row_serializer, stats):
+def _x(blocking):
+    return 'X' if blocking else '-'
+
+
+def _render_stats(stats):
+    now = time()
+
+    last_report = _render_stats.last_report if hasattr(_render_stats, 'last_report') else 0
+    # print(hasattr(_render_stats, 'last_report'), last_report)
+
+    if last_report + 1.0 < now:
+        stats_string = \
+            ('E{} ' +
+             'L:{}|{} ' +
+             'S:{}|{}|{}|{} ' +
+             'D:{}|{}|{}|{} ' +
+             'O:{}|{}|{}|{}').format(_x(stats['epochs_ended']),
+                                     _x(stats['loader_full']), stats['loader_rate'],
+                                     _x(stats['shuffling_can_add']), stats['shuffling_size'],
+                                     stats['shuffling_rows_retrieved_rate'], _x(stats['shuffling_can_retrieve']),
+                                     _x(stats['decoding_full']), stats['chunk_decoding_size'],
+                                     stats['decoding_in_process'], stats['decoder_batches_read'],
+                                     _x(stats['output_full']), stats['output_queue_size'],
+                                     stats['output_rows_put_rate'], stats['output_rows_put'])
+
+        logger.debug(stats_string)
+
+        _render_stats.last_report = now
+    # print('2', hasattr(_render_stats, 'last_report'), last_report)
+
+
+def worker_loop(epochs_generator, schema, loading_pool, loader, decoding_pool, decoder, shuffling_queue, output_queue,
+                stop_event, row_serializer, target_output_queue_size, stats):
     # Possibly infinite loop driven by row-group ventilation logic (infinite if epochs=inf)
     in_loading_futures = []
     in_decoding = []
@@ -95,7 +122,9 @@ def worker_loop(epochs_generator, loading_pool, loader, decoding_pool, decoder, 
     if not isinstance(stats, Counter):
         raise ValueError('stats argument is expected to be a collections.Counter')
 
-    chunk_decoding_size = max(1, decoding_pool._max_workers / _OUTPUT_QUEUE_SIZE)
+    # This is the size of the group that would be sent to the decoder. We update it later, when we know the
+    # row-group size
+    chunk_decoding_size = 50
 
     try:
         epochs_iterator = iter(epochs_generator())
@@ -129,12 +158,15 @@ def worker_loop(epochs_generator, loading_pool, loader, decoding_pool, decoder, 
             # infinite epochs.
             if rowgroup_spec is not None and len(in_loading_futures) < _MAX_IN_LOADING_QUEUE_SIZE:
                 in_loading_futures.append(loading_pool.submit(loader.load, rowgroup_spec))
-                stats['0_rowgroups_scheduled_for_loading'] += 1
+                stats['loader_total_rowgroup_scheduled'] += 1
 
                 try:
                     rowgroup_spec = next(epochs_iterator)
+                    stats['epochs_ended'] = False
                 except StopIteration:
+                    stats['epochs_ended'] = True
                     rowgroup_spec = None
+            stats['loader_full'] = len(in_loading_futures) >= _MAX_IN_LOADING_QUEUE_SIZE
 
             # 2. Readout what was already loaded and enqueue loaded rows into a shuffling queue
             # ---------------------------------------------------------------------------------
@@ -147,8 +179,13 @@ def worker_loop(epochs_generator, loading_pool, loader, decoding_pool, decoder, 
                 try:
                     loaded_future = next(loaded_futures)
                     loaded_future_result = loaded_future.result()
-                    stats['rows_loaded'] += len(loaded_future_result)
-                    load_rate.update(stats['rows_loaded'])
+
+                    # Not necessary an optimal choice of chunk_decoding_size, but should handle the cases of
+                    # large rowgroups with many small records
+                    stats['chunk_decoding_size'] = chunk_decoding_size
+
+                    stats['loader_rows_loaded'] += len(loaded_future_result)
+                    load_rate.update(stats['loader_rows_loaded'])
                     shuffling_queue.add_many(loaded_future_result)
 
                     # Done processing, remove from the queue. 'remove' on the list is ok since we cap the list
@@ -157,13 +194,19 @@ def worker_loop(epochs_generator, loading_pool, loader, decoding_pool, decoder, 
                 except (concurrent.futures.TimeoutError, StopIteration):
                     break
 
+            stats['shuffling_can_add'] = shuffling_queue.can_add()
+
             # 3. Read from the shuffling queue and submit decoding tasks to decoding executor
             # ---------------------------------------------------------------------------------
             while shuffling_queue.can_retrieve() and len(in_decoding) < _MAX_IN_DECODING_QUEUE_SIZE:
                 shuffled = shuffling_queue.retrieve_many(chunk_decoding_size)
-                stats['rows_read_from_shuffling_queue'] += len(shuffled)
-                from_shuffling.update(stats['rows_read_from_shuffling_queue'])
-                in_decoding.append(decoding_pool.submit(_decode_row_dispatcher, decoder, shuffled, row_serializer))
+                stats['shuffling_rows_retrieved'] += len(shuffled)
+                stats['shuffling_size'] = shuffling_queue.size
+                from_shuffling.update(stats['shuffling_rows_retrieved'])
+                in_decoding.append(decoding_pool.submit(_decode_rows_dispatcher, decoder, shuffled, row_serializer))
+
+            stats['shuffling_can_retrieve'] = shuffling_queue.can_retrieve()
+            stats['decoding_full'] = len(in_decoding) >= _MAX_IN_DECODING_QUEUE_SIZE
 
             # 4. Read completed decoding futures and put the results into the final output queue
             # ---------------------------------------------------------------------------------
@@ -180,34 +223,42 @@ def worker_loop(epochs_generator, loading_pool, loader, decoding_pool, decoder, 
             while True:
                 try:
                     next_decoded = next(decoded)
-                    stats['row_batches_read_from_decoder'] += 1
+                    stats['decoder_batches_read'] += 1
                     already_decoded.add(next_decoded)
                 except (concurrent.futures.TimeoutError, StopIteration):
                     break
 
-            stats['in_decoding_size'] = len(in_decoding)
+            stats['decoding_batches_in_process'] = len(in_decoding)
+            stats['decoding_results_ready'] = len(already_decoded) > 0
 
             updated_in_decoding = []
-            for i, was_decoding in enumerate(in_decoding):
-                if was_decoding in already_decoded:
-                    stats['rows_written_to_output_queue'] += 1
-                    while not stop_event.is_set():
-                        try:
-                            buffer = was_decoding.result()
-                            was_decoding_result = row_serializer.deserialize(buffer) if row_serializer else buffer
+            if len(already_decoded) > 0:
+                for i, was_decoding in enumerate(in_decoding):
+                    if output_queue.qsize() * chunk_decoding_size < target_output_queue_size:
+                        stats['output_full'] = False
+                        if was_decoding in already_decoded:
+                            result_buffer = was_decoding.result()
+                            if row_serializer:
+                                was_decoding_result = row_serializer.deserialize(result_buffer)
+                            else:
+                                was_decoding_result = result_buffer
+                            stats['output_batches_put'] += 1
+                            stats['output_rows_put'] += len(was_decoding_result)
                             output_queue.put(was_decoding_result, block=False)
-                            stats['rows_written_to_output_queue'] += len(was_decoding_result)
-                            from_decoding.update(stats['rows_written_to_output_queue'])
-                            break
-                        except queue.Full:
-                            raise RuntimeError('Do not set Queue\'s maxsize. The size of the queue is managed by '
-                                               'worker_loop by design')
-                else:
-                    updated_in_decoding.append(in_decoding[i])
+                            from_decoding.update(stats['output_rows_put'])
+                        else:
+                            updated_in_decoding.append(in_decoding[i])
+                    else:
+                        stats['output_full'] = True
+                        updated_in_decoding.append(in_decoding[i])
 
-            in_decoding = updated_in_decoding
-            stats['output_queue_size'] = output_queue.qsize()
-            stats['in_decoding_size'] = len(in_decoding)
+                in_decoding = updated_in_decoding
+                stats['output_queue_size'] = output_queue.qsize()
+                stats['decoding_in_process'] = len(in_decoding)
+            stats['loader_rate'] = load_rate.rate
+            stats['shuffling_rows_retrieved_rate'] = from_shuffling.rate
+            stats['output_rows_put_rate'] = from_decoding.rate
+            _render_stats(stats)
             sleep(_LOOP_IDLE_TIME_SEC)
 
         # If we were ordered to stop, better not write the sentinel out since the queue can be full
