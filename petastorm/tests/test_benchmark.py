@@ -30,6 +30,12 @@ def test_pure_python_process_pool_run(synthetic_dataset):
                       spawn_new_process=False)
 
 
+def test_pure_python_process_pool_run_with_pyarrow_serialize(synthetic_dataset):
+    reader_throughput(synthetic_dataset.url, ['id'], warmup_cycles_count=5, measure_cycles_count=5,
+                      pool_type=WorkerPoolType.PROCESS, loaders_count=1, read_method=ReadMethod.PYTHON,
+                      spawn_new_process=False, pyarrow_serialize=True)
+
+
 def test_tf_thread_pool_run(synthetic_dataset):
     reader_throughput(synthetic_dataset.url, ['id', 'id2'], warmup_cycles_count=5, measure_cycles_count=5,
                       pool_type=WorkerPoolType.THREAD, loaders_count=1, read_method=ReadMethod.TF)
@@ -61,6 +67,12 @@ def test_tf_thread_pool_run_experimental(synthetic_dataset):
     reader_v2_throughput(synthetic_dataset.url, field_regex=[r'\bid\b', r'\bmatrix\b'], warmup_cycles_count=5,
                          measure_cycles_count=5, pool_type=WorkerPoolType.THREAD, loaders_count=1,
                          read_method=ReadMethod.TF)
+
+
+def test_tf_thread_pool_run_experimental_with_pyarrow_serialize(synthetic_dataset):
+    reader_v2_throughput(synthetic_dataset.url, field_regex=[r'\bid\b', r'\bmatrix\b'], warmup_cycles_count=5,
+                         measure_cycles_count=5, pool_type=WorkerPoolType.PROCESS, loaders_count=1,
+                         read_method=ReadMethod.TF, pyarrow_serialize=True)
 
 
 def test_run_benchmark_cycle_length_of_warmup_and_measure_cycles():
