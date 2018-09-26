@@ -25,9 +25,8 @@ class RowDecoder(object):
         self._schema = schema
         self._ngram = ngram
 
-    def decode(self, row):
-        """Decodes each value in the dictionary as defined by Unischema (passed to the constructor). Returns a
-        namedtuple
+    def decode(self, rows):
+        """Decodes all value fields of elements in the list.
 
         Example (ngram is None):
 
@@ -61,14 +60,17 @@ class RowDecoder(object):
         }
 
 
-        :param row: A dictionary of fields
-        :return: A named tuple (or a dictionary of namedtuples in case of a non None ngram)
+        :param row: A list of dictionaries (non-ngram case), or a list of ngrams (where ngram is a dictionary).
+        :return: A list of dictionaries, or a list of ngrams.
         """
 
+        # TODO(yevgeni): should consider creating two different versions of decoder: for an ngram and a non-ngram case.
         if self._ngram:
-            for key in row.keys():
-                current_schema = self._ngram.get_schema_at_timestep(self._schema, key)
-                row[key] = current_schema.make_namedtuple(**utils.decode_row(row[key], current_schema))
-            return row
+            for row in rows:
+                for key in row.keys():
+                    current_schema = self._ngram.get_schema_at_timestep(self._schema, key)
+                    row[key] = utils.decode_row(row[key], current_schema)
         else:
-            return self._schema.make_namedtuple(**utils.decode_row(row, self._schema))
+            rows = [utils.decode_row(row, self._schema) for row in rows]
+
+        return rows

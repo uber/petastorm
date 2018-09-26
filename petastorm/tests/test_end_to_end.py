@@ -72,8 +72,16 @@ def test_simple_read(synthetic_dataset, reader_factory):
         _check_simple_reader(reader, synthetic_dataset.data)
 
 
-def test_read_with_pyarrow_serialization(synthetic_dataset):
-    with Reader(synthetic_dataset.url, reader_pool=ProcessPool(1, pyarrow_serialize=True)) as reader:
+@pytest.mark.parametrize('reader_factory',
+                         [
+                             lambda url, **kwargs: Reader(url, reader_pool=ProcessPool(1, pyarrow_serialize=True)),
+                             lambda url, **kwargs: ReaderV2(url, pyarrow_serialize=True,
+                                                            decoder_pool=SameThreadExecutor()),
+                             lambda url, **kwargs: ReaderV2(url, pyarrow_serialize=True,
+                                                            decoder_pool=ProcessPoolExecutor(1)),
+                         ])
+def test_read_with_pyarrow_serialization(synthetic_dataset, reader_factory):
+    with reader_factory(synthetic_dataset.url) as reader:
         for actual in reader:
             expected = next(d for d in synthetic_dataset.data if d['id'] == actual.id)
             assert actual.id == expected['id']

@@ -16,14 +16,16 @@ import logging
 import os
 import threading
 from collections import Counter
-
-import six
 from concurrent.futures import ThreadPoolExecutor
+
+import pyarrow
+import six
 from pyarrow import parquet as pq
 from six.moves.queue import Queue
 from six.moves.urllib.parse import urlparse
 
 from petastorm.cache import NullCache
+from petastorm.codecs import decimal_to_str
 from petastorm.etl import dataset_metadata, rowgroup_indexing
 from petastorm.fs_utils import FilesystemResolver
 from petastorm.ngram import NGram
@@ -38,7 +40,18 @@ from petastorm.shuffle_options import ShuffleOptions
 
 logger = logging.getLogger(__name__)
 
-_OUTPUT_QUEUE_SIZE = 30
+
+class PyArrowSerializeRowGroupSerializer(object):
+
+    @staticmethod
+    def serialize(rows):
+        # pyarrow.serialize does not support decimals.
+        decimal_to_str(rows)
+        return pyarrow.serialize(rows).to_buffer()
+
+    @staticmethod
+    def deserialize(serialized_rows):
+        return pyarrow.read_serialized(serialized_rows).deserialize()
 
 
 class ReaderV2(object):
@@ -47,7 +60,7 @@ class ReaderV2(object):
     def __init__(self, dataset_url, schema_fields=None, shuffle=None, predicate=None, rowgroup_selector=None,
                  num_epochs=1, sequence=None, training_partition=None, num_training_partitions=None,
                  read_timeout_s=None, cache=None, loader_pool=None, decoder_pool=None, shuffling_queue=None,
-                 shuffle_options=None, pyarrow_filesystem=None):
+                 shuffle_options=None, pyarrow_filesystem=None, pyarrow_serialize=False):
         """Initializes a reader object.
 
         :param dataset_url: an filepath or a url to a parquet directory,
@@ -156,11 +169,13 @@ class ReaderV2(object):
         epoch_items = self._apply_row_drop_partition(filtered_row_groups, shuffle_options)
 
         # 4. Launch a new thread running `worker_loop` function.
-        def epochs_iterator(): return epoch_generator(epoch_items, num_epochs, shuffle_options.shuffle_row_groups)
+        def epochs_iterator():
+            return epoch_generator(epoch_items, num_epochs, shuffle_options.shuffle_row_groups)
 
-        self._results_queue = Queue(_OUTPUT_QUEUE_SIZE)
+        self._results_queue = Queue()
 
         loader = RowGroupLoader(dataset_url, self.schema, self.ngram, cache, worker_predicate)
+        row_serializer = PyArrowSerializeRowGroupSerializer if pyarrow_serialize else None
         decoder = RowDecoder(self.schema, self.ngram)
         self._loader_pool = loader_pool or ThreadPoolExecutor(5)
         self._decoder_pool = decoder_pool or ThreadPoolExecutor(5)
@@ -175,11 +190,12 @@ class ReaderV2(object):
                                                            self._decoder_pool,
                                                            decoder,
                                                            shuffling_queue, self._results_queue,
-                                                           self._stop_flow_manager_event, self._diags))
+                                                           self._stop_flow_manager_event, row_serializer, self._diags))
         self._flow_manager_thread.daemon = True
         self._flow_manager_thread.start()
 
         self._read_timeout_s = read_timeout_s
+        self._result_buffer = []
 
     def _apply_row_drop_partition(self, row_groups, shuffle_options):
         items_to_ventilate = []
@@ -323,13 +339,33 @@ class ReaderV2(object):
         return self
 
     def __next__(self):
-        result = self._results_queue.get(timeout=self._read_timeout_s)
-        if isinstance(result, EOFSentinel):
-            raise StopIteration
-        elif isinstance(result, WorkerLoopError):
-            logger.error('An unhandled exception was raised in worker_loop: %s', str(result))
-            raise result.inner_error
-        return result
+        # We are receiving decoded rows from the worker in chunks. We store the list internally
+        # and return a single item upon each consequent call to __next__
+        if not self._result_buffer:
+            # Reverse order, so we can pop from the end of the list in O(1) while maintaining
+            # order the items are returned from the worker
+            result = self._results_queue.get(timeout=self._read_timeout_s)
+
+            if isinstance(result, EOFSentinel):
+                raise StopIteration
+            elif isinstance(result, WorkerLoopError):
+                logger.error('An unhandled exception was raised in worker_loop: %s', str(result))
+                raise result.inner_error
+
+            rows_as_dict = list(reversed(result))
+
+            if self.ngram:
+                for ngram_row in rows_as_dict:
+                    for timestamp in ngram_row.keys():
+                        row = ngram_row[timestamp]
+                        schema_at_timestamp = self.ngram.get_schema_at_timestep(self.schema, timestamp)
+
+                        ngram_row[timestamp] = schema_at_timestamp.make_namedtuple(**row)
+                self._result_buffer = rows_as_dict
+            else:
+                self._result_buffer = [self.schema.make_namedtuple(**row) for row in rows_as_dict]
+
+        return self._result_buffer.pop()
 
     def next(self):
         return self.__next__()

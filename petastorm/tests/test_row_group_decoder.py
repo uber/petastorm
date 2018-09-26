@@ -38,14 +38,15 @@ def _rand_row(some_number=np.random.randint(0, 255)):
 
 
 def test_row_decoding():
-    expected_row = _rand_row()
-    encoded_row = dict_to_spark_row(TestSchema, expected_row).asDict()
+    rows_to_process = 3
+    expected_rows = [_rand_row() for _ in range(rows_to_process)]
+    encoded_rows = [dict_to_spark_row(TestSchema, expected_row).asDict() for expected_row in expected_rows]
 
     decoder = RowDecoder(TestSchema, None)
-    actual_row = decoder.decode(encoded_row)._asdict()
+    actual_rows = decoder.decode(encoded_rows)
 
-    # Out-of-the-box pytest `assert actual_row == expected_row` can not compare dictionaries properly
-    np.testing.assert_equal(actual_row, expected_row)
+    # Out-of-the-box pytest `assert actual_rows == expected_row` can not compare dictionaries properly
+    np.testing.assert_equal(actual_rows, expected_rows)
 
 
 def test_ngram_decoding():
@@ -63,7 +64,7 @@ def test_ngram_decoding():
     decoder = RowDecoder(TestSchema, ngram_spec)
 
     # decoded_ngrams is a list of 3 dictionaries, each have -1, 0, 1 keys.
-    decoded_ngrams = [decoder.decode(encoded) for encoded in encoded_ngrams]
+    decoded_ngrams = [decoder.decode([encoded])[0] for encoded in encoded_ngrams]
 
     # Verify we got 3 dictionaries
     assert 3 == len(decoded_ngrams)
@@ -75,10 +76,10 @@ def test_ngram_decoding():
     #    0: some_number
     #    1: some_number, some_matrix
     assert 2 == len(single_sample[-1])
-    assert 0 == single_sample[-1].some_number
+    assert 0 == single_sample[-1]['some_number']
 
     assert 1 == len(single_sample[0])
-    assert 1 == single_sample[0].some_number
+    assert 1 == single_sample[0]['some_number']
 
     assert 2 == len(single_sample[1])
-    assert 2 == single_sample[1].some_number
+    assert 2 == single_sample[1]['some_number']
