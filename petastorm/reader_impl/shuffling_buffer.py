@@ -41,6 +41,19 @@ class ShufflingBufferBase(object):
         pass
 
     @abc.abstractmethod
+    def retrieve_many(self, up_to_count):
+        """Selects multiple items from the buffer and returns them to the caller. The items are removed from the buffer.
+
+        The function will raise a RuntimeError if the items could not be retrieved. Check `can_retrieve` before calling
+        this function.
+
+        :param up_to_count: Number of items to return.
+
+        :return: A list with selected items.
+        """
+        pass
+
+    @abc.abstractmethod
     def can_add(self):
         """Checks the state of the buffer and returns whether a new item can be added to the buffer at the time.
 
@@ -103,6 +116,11 @@ class NoopShufflingBuffer(ShufflingBufferBase):
     def finish(self):
         pass
 
+    def retrieve_many(self, up_to_count):
+        result = self.store[:up_to_count]
+        del self.store[:up_to_count]
+        return result
+
 
 class RandomShufflingBuffer(ShufflingBufferBase):
     """
@@ -135,7 +153,7 @@ class RandomShufflingBuffer(ShufflingBufferBase):
         """
         self._extra_capacity = extra_capacity
         # Preallocate the shuffling buffer.
-        self._items = [None] * (shuffling_buffer_capacity + self._extra_capacity)
+        self._items = np.empty(shuffling_buffer_capacity + self._extra_capacity, dtype=np.object_)
         self._shuffling_queue_capacity = shuffling_buffer_capacity
         self._min_after_dequeue = min_after_retrieve
         self._size = 0
@@ -160,8 +178,8 @@ class RandomShufflingBuffer(ShufflingBufferBase):
         self._size = expected_size
 
     def retrieve(self):
-        if not self._done_adding and not self.can_retrieve():
-            raise RuntimeError('Can not dequeue. Check the return value of "can_dequeue()" to check if any '
+        if not self._done_adding and not self.can_retrieve() or self._size <= 0:
+            raise RuntimeError('Can not retrieve. Check the return value of "can_retrieve()" to check if any '
                                'items are available.')
         random_index = np.random.randint(0, self._size)
         return_value = self._items[random_index]
@@ -174,7 +192,27 @@ class RandomShufflingBuffer(ShufflingBufferBase):
         return self._size < self._shuffling_queue_capacity and not self._done_adding
 
     def can_retrieve(self):
-        return self._size >= self._min_after_dequeue or (self._done_adding and self._size > 0)
+        return self._size > self._min_after_dequeue or (self._done_adding and self._size > 0)
+
+    def retrieve_many(self, up_to_count):
+        if self._done_adding:
+            up_to_count = int(min(up_to_count, self._size))
+        else:
+            up_to_count = int(min(up_to_count, self._size - self._min_after_dequeue))
+
+        random_index = np.random.choice(self._size, up_to_count, replace=False)
+        sorted_random_index = sorted(random_index)
+        result = self._items[random_index]
+
+        stuff_to_keep_set = set(range(self._size - up_to_count, self._size))
+        random_index_set = set(random_index)
+        stuff_to_keep_set = stuff_to_keep_set - random_index_set
+
+        self._items[sorted_random_index[:len(stuff_to_keep_set)]] = self._items[list(stuff_to_keep_set)]
+        self._items[self._size - up_to_count:self._size] = None
+        self._size -= up_to_count
+
+        return result
 
     @property
     def size(self):

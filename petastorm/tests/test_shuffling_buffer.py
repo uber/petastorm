@@ -49,7 +49,7 @@ def test_noop_shuffling_buffer():
 
 def test_random_shuffling_buffer_can_add_retrieve_flags():
     """Check can_add/can_retrieve flags at all possible states"""
-    q = RandomShufflingBuffer(5, 3)
+    q = RandomShufflingBuffer(6, 3)
 
     # Empty buffer. Can start adding, nothing to retrieve yet
     assert q.size == 0
@@ -63,20 +63,20 @@ def test_random_shuffling_buffer_can_add_retrieve_flags():
     assert q.size == 2
 
     # Got to min_after_retrieve elements, can start retrieving
-    q.add_many([3])
+    q.add_many([3, 4])
     assert q.can_retrieve()
-    assert q.size == 3
+    assert q.size == 4
 
     # But when we retrieve we are again under min_after_retrieve, so can not retrieve again
     q.retrieve()
     assert not q.can_retrieve()
-    assert q.size == 2
+    assert q.size == 3
 
     # Getting back to the retrievable state with enough items in the buffer
     q.add_many([4, 5])
     assert q.can_add()
     assert q.can_retrieve()
-    assert q.size == 4
+    assert q.size == 5
 
     # Can overrun the capacity (as long as below extra_capacity), but can not add if we are above
     # shuffling_buffer_capacity
@@ -85,19 +85,19 @@ def test_random_shuffling_buffer_can_add_retrieve_flags():
     with pytest.raises(RuntimeError):
         q.add_many([1])
     assert q.can_retrieve()
-    assert q.size == 8
+    assert q.size == 9
 
     # Getting one out. Still have more than shuffling_buffer_capacity
     q.retrieve()
     assert not q.can_add()
     assert q.can_retrieve()
-    assert q.size == 7
+    assert q.size == 8
 
     # Retrieve enough to get back to addable state
     [q.retrieve() for _ in range(4)]
     assert q.can_add()
     assert q.can_retrieve()
-    assert q.size == 3
+    assert q.size == 4
 
     # Retrieve the last element so we go under min_after_retrieve and can not retrieve any more
     q.retrieve()
@@ -106,10 +106,15 @@ def test_random_shuffling_buffer_can_add_retrieve_flags():
     with pytest.raises(RuntimeError):
         q.retrieve()
 
-    assert q.size == 2
+    assert q.size == 3
 
     # finish() will allow us to deplete the buffer completely
     q.finish()
+    assert not q.can_add()
+    assert q.can_retrieve()
+    assert q.size == 3
+
+    q.retrieve()
     assert not q.can_add()
     assert q.can_retrieve()
     assert q.size == 2
@@ -123,6 +128,9 @@ def test_random_shuffling_buffer_can_add_retrieve_flags():
     assert not q.can_add()
     assert not q.can_retrieve()
     assert q.size == 0
+
+    with pytest.raises(RuntimeError):
+        q.retrieve()
 
 
 def _feed_a_sequence_through_the_queue(shuffling_buffer, input_sequence):
@@ -184,3 +192,55 @@ def test_longer_random_sequence_of_queue_ops():
             # Make sure never get to less than `min_after_retrieve` elements
             assert 80 <= q.size
             q.retrieve()
+
+
+def test_retrieve_many():
+    for seed in range(10):
+        a_buffer = RandomShufflingBuffer(10, 6)
+        np.random.seed(seed=seed)
+        an_input = range(10)
+        a_buffer.add_many(an_input)
+        many = a_buffer.retrieve_many(4)
+        a_buffer.finish()
+        the_rest = a_buffer.retrieve_many(6)
+        assert set(many) | set(the_rest) == set(an_input)
+
+
+def test_retrieve_many_up_to_min_after_retrieve():
+    for seed in range(10):
+        a_buffer = RandomShufflingBuffer(10, 6)
+        np.random.seed(seed=seed)
+        a_buffer.add_many(range(8))
+        many = a_buffer.retrieve_many(4)
+        assert len(many) == 2
+
+
+def test_retrieve_many_up_after_overfill():
+    a_buffer = RandomShufflingBuffer(10, 6)
+    a_buffer.add_many(range(18))
+
+    assert 4 == len(a_buffer.retrieve_many(4))
+    # Now at 14
+
+    assert 7 == len(a_buffer.retrieve_many(7))
+    # Now at 7
+
+    assert 1 == len(a_buffer.retrieve_many(4))
+
+    assert not a_buffer.can_retrieve()
+
+
+@pytest.mark.parametrize('a_buffer', [NoopShufflingBuffer(), RandomShufflingBuffer(10, 0)])
+def test_retrieve_many_all_at_once(a_buffer):
+    an_input = range(10)
+    a_buffer.add_many(an_input)
+    many = a_buffer.retrieve_many(10)
+    assert set(many) == set(an_input)
+
+
+@pytest.mark.parametrize('a_buffer', [NoopShufflingBuffer(), RandomShufflingBuffer(10, 0)])
+def test_retrieve_many_one_by_one(a_buffer):
+    an_input = range(10)
+    a_buffer.add_many(an_input)
+    many = set(a_buffer.retrieve_many(1)[0] for _ in range(10))
+    assert many == set(an_input)
