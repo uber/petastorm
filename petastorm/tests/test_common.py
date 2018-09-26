@@ -55,7 +55,7 @@ def _randomize_row(id_num):
         TestSchema.partition_key.name: 'p_{}'.format(int(id_num / 10)),
         TestSchema.python_primitive_uint8.name: np.random.randint(0, 255),
         TestSchema.image_png.name: np.random.randint(0, 255, _DEFAULT_IMAGE_SIZE).astype(np.uint8),
-        TestSchema.matrix.name: np.random.randint(0, 255, _DEFAULT_IMAGE_SIZE).astype(np.float32),
+        TestSchema.matrix.name: np.random.random(size=_DEFAULT_IMAGE_SIZE).astype(np.float32),
         TestSchema.decimal.name: Decimal(np.random.randint(0, 255) / Decimal(100)),
         TestSchema.matrix_uint16.name: np.random.randint(0, 255, _DEFAULT_IMAGE_SIZE).astype(np.uint16),
         TestSchema.matrix_string.name: np.random.randint(0, 100, (4,)).astype(np.string_),
