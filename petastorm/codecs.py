@@ -20,7 +20,7 @@ transitively to parquet files.
 NOTE: Due to the way unischema is stored alongside dataset (with pickling), changing any of these codecs class names
 and fields can result in reader breakages.
 """
-
+from decimal import Decimal
 from abc import abstractmethod
 from io import BytesIO
 
@@ -214,3 +214,24 @@ def _is_compliant_shape(a, b):
             if a[i] != b[i]:
                 return False
     return True
+
+
+def decimal_to_str(data):
+    """Iterates over a nested structure of lists and dictionaries while substituting all Decimal instances with
+    normalized string representation of Decimals.
+
+    Modification is done in-place.
+
+    :param data: A nested structure of lists and dictionaries
+    :return: None
+    """
+    if isinstance(data, list):
+        for row in data:
+            decimal_to_str(row)
+    elif isinstance(data, dict):
+        for k, v in data.items():
+            if isinstance(v, dict):
+                decimal_to_str(v)
+            else:
+                if isinstance(v, Decimal):
+                    data[k] = str(v.normalize())

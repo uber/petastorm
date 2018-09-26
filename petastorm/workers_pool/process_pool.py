@@ -16,7 +16,6 @@
 without using fork. Some issues with using jvm based HDFS driver were observed when the process was forked
 (could not access HDFS from the forked worker if the driver was already used in the parent process)"""
 import sys
-from decimal import Decimal
 from time import sleep, time
 from traceback import format_exc
 
@@ -25,6 +24,7 @@ import zmq
 from zmq import ZMQBaseError
 from zmq.utils import monitor
 
+from petastorm.codecs import decimal_to_str
 from petastorm.workers_pool import EmptyResultError, VentilatedItemProcessedMessage, \
     TimeoutWaitingForResultError
 from petastorm.workers_pool.exec_in_new_process import exec_in_new_process
@@ -258,31 +258,10 @@ class ProcessPool(object):
         self._context.destroy()
 
 
-def _decimal_to_str(data):
-    """Iterates over a nested structure of lists and dictionaries while substituting all Decimal instances with
-    normalized string representation of Decimals.
-
-    Modification is done in-place.
-
-    :param data: A nested structure of lists and dictionaries
-    :return: None
-    """
-    if isinstance(data, list):
-        for row in data:
-            _decimal_to_str(row)
-    elif isinstance(data, dict):
-        for k, v in data.items():
-            if isinstance(v, dict):
-                _decimal_to_str(v)
-            else:
-                if isinstance(v, Decimal):
-                    data[k] = str(v.normalize())
-
-
 def _serialize_result_and_send(socket, pyarrow_serialize, data):
     if pyarrow_serialize:
         # pyarrow won't be able to serialize Decimals. Replace all Decimal with strings.
-        _decimal_to_str(data)
+        decimal_to_str(data)
         serialized = pyarrow.serialize(data)
         socket.send_pyobj(serialized.to_buffer())
     else:
