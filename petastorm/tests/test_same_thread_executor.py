@@ -31,3 +31,7 @@ def test_many_future_submit():
     completed = as_completed(futures)
     results = [f.result() for f in completed]
     assert list(range(10)) == sorted(results)
+
+
+def test_max_workers():
+    assert SameThreadExecutor()._max_workers == 1
