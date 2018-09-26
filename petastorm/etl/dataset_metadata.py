@@ -20,6 +20,7 @@ from operator import attrgetter
 
 from pyarrow import parquet as pq
 from six.moves import cPickle as pickle
+from six.moves.urllib.parse import urlparse
 
 from petastorm import utils
 from petastorm.etl.legacy import depickle_legacy_package_name_compatible
@@ -48,7 +49,8 @@ class PetastormMetadataGenerationError(Exception):
 
 
 @contextmanager
-def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_summary_metadata=False):
+def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_summary_metadata=False,
+                        pyarrow_filesystem=None):
     """
     A Context Manager which handles all the initialization and finalization necessary
     to generate metadata for a petastorm dataset. This should be used around your
@@ -79,10 +81,17 @@ def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_
     yield
 
     # After job completes, add the unischema metadata and check for the metadata summary file
-    resolver = FilesystemResolver(dataset_url, spark.sparkContext._jsc.hadoopConfiguration())
+    if pyarrow_filesystem is None:
+        resolver = FilesystemResolver(dataset_url, spark.sparkContext._jsc.hadoopConfiguration())
+        filesystem = resolver.filesystem()
+        dataset_path = resolver.parsed_dataset_url().path
+    else:
+        filesystem = pyarrow_filesystem
+        dataset_path = urlparse(dataset_url).path
+
     dataset = pq.ParquetDataset(
-        resolver.parsed_dataset_url().path,
-        filesystem=resolver.filesystem(),
+        dataset_path,
+        filesystem=filesystem,
         validate_schema=False)
 
     _generate_unischema_metadata(dataset, schema)
@@ -91,8 +100,8 @@ def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_
 
     # Reload the dataset to take into account the new metadata
     dataset = pq.ParquetDataset(
-        resolver.parsed_dataset_url().path,
-        filesystem=resolver.filesystem(),
+        dataset_path,
+        filesystem=filesystem,
         validate_schema=False)
     try:
         # Try to load the row groups, if it fails that means the metadata was not generated properly
