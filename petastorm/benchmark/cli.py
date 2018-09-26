@@ -75,6 +75,11 @@ def _parse_args(args):
     parser.add_argument('--experimental-decoders-count', type=int, default=3, required=False,
                         help='Number of decoder threads/processes. Used only if --experimental-reader is set.')
 
+    parser.add_argument('--pyarrow-serialize', action='store_true', required=False,
+                        help='When specified, faster pyarrow.serialize library is used. However, it does not support '
+                             'all data types and implicitly converts some datatypes (e.g. int64->int32) which may'
+                             'trigger errors when reading the data from Tensorflow.')
+
     parser.add_argument('-vv', action='store_true', default=False, help='Sets logging level to DEBUG.')
     parser.add_argument('-v', action='store_true', default=False, help='Sets logging level to INFO.')
 
@@ -101,14 +106,15 @@ def _main(args):
                                        loaders_count=args.workers_count,
                                        decoders_count=args.experimental_decoders_count, read_method=args.read_method,
                                        shuffling_queue_size=args.shuffling_queue_size,
-                                       min_after_dequeue=args.min_after_dequeue)
+                                       min_after_dequeue=args.min_after_dequeue,
+                                       pyarrow_serialize=args.pyarrow_serialize)
 
     else:
         results = reader_throughput(args.dataset_path, args.field_regex, warmup_cycles_count=args.warmup_cycles,
                                     measure_cycles_count=args.measure_cycles, pool_type=args.pool_type,
                                     loaders_count=args.workers_count, profile_threads=args.profile_threads,
                                     read_method=args.read_method, shuffling_queue_size=args.shuffling_queue_size,
-                                    min_after_dequeue=args.min_after_dequeue)
+                                    min_after_dequeue=args.min_after_dequeue, pyarrow_serialize=args.pyarrow_serialize)
 
     logger.info('Done')
     print('Average sample read rate: {:1.2f} samples/sec; RAM {:1.2f} MB (rss); '
