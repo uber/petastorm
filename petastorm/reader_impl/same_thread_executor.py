@@ -23,6 +23,15 @@ class SameThreadExecutor(Executor):
     """A mock executor. Guarantees stable order of future evaluations: a submitted future is
     evaluated immediately as part of submit implementation."""
 
+    def __init__(self):
+        super(SameThreadExecutor, self).__init__()
+
+        # For now we define _max_workers and polymorphically with ThreadPoolExecutor and ProcessPoolExecutor in
+        # worker_loop. We should not rely on private _max_workers for that, but first we need to refactor
+        # ReaderV2 so we would know during construction of the reader what is the number of workers. Currently we
+        # just get an *PoolExecutor instance which don't have a public API for that.
+        self._max_workers = 1
+
     def submit(self, fn, *args, **kwargs):
         future = Future()
         future.set_result(fn(*args, **kwargs))
