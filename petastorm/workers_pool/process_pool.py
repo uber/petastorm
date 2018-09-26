@@ -19,12 +19,11 @@ import sys
 from time import sleep, time
 from traceback import format_exc
 
-import pyarrow
 import zmq
 from zmq import ZMQBaseError
 from zmq.utils import monitor
 
-from petastorm.codecs import decimal_to_str
+from petastorm.reader_impl.pyarrow_serializer import PyArrowSerializer
 from petastorm.workers_pool import EmptyResultError, VentilatedItemProcessedMessage, \
     TimeoutWaitingForResultError
 from petastorm.workers_pool.exec_in_new_process import exec_in_new_process
@@ -97,7 +96,7 @@ class ProcessPool(object):
         self._ventilated_items = 0
         self._ventilated_items_processed = 0
         self._ventilator = None
-        self._pyarrow_serialize = pyarrow_serialize
+        self._serializer = PyArrowSerializer() if pyarrow_serialize else None
 
     def _create_local_socket_on_random_port(self, context, socket_type):
         """Creates a zmq socket on a random port.
@@ -159,7 +158,7 @@ class ProcessPool(object):
         # Start a bunch of processes
         self._workers = [
             exec_in_new_process(_worker_bootstrap, worker_class, worker_id, control_socket, worker_receiver_socket,
-                                results_sender_socket, self._pyarrow_serialize, worker_setup_args)
+                                results_sender_socket, self._serializer, worker_setup_args)
             for worker_id in range(self._workers_count)]
 
         # Block until we have all workers up. Will raise an error if fails to start in a timely fashion
@@ -227,8 +226,8 @@ class ProcessPool(object):
                 self.join()
                 raise result
             else:
-                if self._pyarrow_serialize:
-                    deserialized_result = pyarrow.read_serialized(result).deserialize()
+                if self._serializer:
+                    deserialized_result = self._serializer.deserialize(result)
                 else:
                     deserialized_result = result
 
@@ -258,18 +257,15 @@ class ProcessPool(object):
         self._context.destroy()
 
 
-def _serialize_result_and_send(socket, pyarrow_serialize, data):
-    if pyarrow_serialize:
-        # pyarrow won't be able to serialize Decimals. Replace all Decimal with strings.
-        decimal_to_str(data)
-        serialized = pyarrow.serialize(data)
-        socket.send_pyobj(serialized.to_buffer())
+def _serialize_result_and_send(socket, serializer, data):
+    if serializer:
+        socket.send_pyobj(serializer.serialize(data))
     else:
         socket.send_pyobj(data)
 
 
 def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_socket, results_sender_socket,
-                      pyarrow_serialize, worker_args):
+                      serializer, worker_args):
     """This is the root of the spawned worker processes.
 
     :param worker_class: A class with worker implementation.
@@ -277,6 +273,7 @@ def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_s
     :param control_socket: zmq socket used to control the worker (currently supports only :class:`zmq.FINISHED` signal)
     :param worker_receiver_socket: A zmq socket used to deliver tasks to the worker
     :param results_sender_socket: A zmq socket used to deliver the work products to the consumer
+    :param serializer: A serializer object (with serialize/deserialize methods) or None.
     :param worker_args: Application specific parameter passed to worker constructor
     :return: ``None``
     """
@@ -304,8 +301,8 @@ def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_s
     poller.register(control_receiver, zmq.POLLIN)
 
     # Instantiate a worker
-    worker = worker_class(worker_id, lambda data: _serialize_result_and_send(results_sender, pyarrow_serialize,
-                                                                             data), worker_args)
+    worker = worker_class(worker_id, lambda data: _serialize_result_and_send(results_sender, serializer, data),
+                          worker_args)
 
     # Loop and accept messages from both channels, acting accordingly
     while True:
