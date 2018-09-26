@@ -53,10 +53,16 @@ ALL_READER_FLAVOR_FACTORIES = MINIMAL_READER_FLAVOR_FACTORIES + [
 
 def _check_simple_reader(reader, expected_data):
     # Read a bunch of entries from the dataset and compare the data to reference
+    def _type(v):
+        return v.dtype if isinstance(v, np.ndarray) else type(v)
+
     for row in reader:
         actual = row._asdict()
         expected = next(d for d in expected_data if d['id'] == actual['id'])
         np.testing.assert_equal(actual, expected)
+        actual_types = [_type(v) for v in actual.values()]
+        expected_types = [_type(v) for v in actual.values()]
+        assert actual_types == expected_types
 
 
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
