@@ -57,7 +57,7 @@ class CompressedImageCodec(DataframeColumnCodec):
         :param image_codec: any format string supported by opencv. e.g. ``png``, ``jpeg``
         :param quality: used when using ``jpeg`` lossy compression
         """
-        assert OPENCV_AVAILABLE, "{} requires opencv-python to be installed"
+        assert OPENCV_AVAILABLE, "{} requires opencv-python to be installed".format(type(self).__name__)
 
         self._image_codec = '.' + image_codec
         self._quality = quality
