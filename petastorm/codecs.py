@@ -20,14 +20,14 @@ transitively to parquet files.
 NOTE: Due to the way unischema is stored alongside dataset (with pickling), changing any of these codecs class names
 and fields can result in reader breakages.
 """
-import sys
 from abc import abstractmethod
 from io import BytesIO
 
 try:
     import cv2
+    OPENCV_AVAILABLE = True
 except ImportError:
-    pass
+    OPENCV_AVAILABLE = False
 
 import numpy as np
 from pyspark.sql.types import BinaryType, LongType, IntegerType, ShortType, ByteType, StringType
@@ -57,7 +57,7 @@ class CompressedImageCodec(DataframeColumnCodec):
         :param image_codec: any format string supported by opencv. e.g. ``png``, ``jpeg``
         :param quality: used when using ``jpeg`` lossy compression
         """
-        assert 'cv2' in sys.modules, "{} requires opencv-python to be installed"
+        assert OPENCV_AVAILABLE, "{} requires opencv-python to be installed"
 
         self._image_codec = '.' + image_codec
         self._quality = quality
