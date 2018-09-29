@@ -153,7 +153,7 @@ class RandomShufflingBuffer(ShufflingBufferBase):
         expected_size = self._size + len(items)
         maximal_capacity = self._shuffling_queue_capacity + self._extra_capacity
         if expected_size > maximal_capacity:
-            raise RuntimeError('Attempt to enqueue more elements that the capacity allows. '
+            raise RuntimeError('Attempt to enqueue more elements than the capacity allows. '
                                'Current size: {}, new size {}, maximum allowed: {}'.format(self._size, expected_size,
                                                                                            maximal_capacity))
         self._items[self._size:self._size + len(items)] = items
