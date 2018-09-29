@@ -28,7 +28,7 @@ from petastorm.etl.dataset_metadata import get_schema_from_dataset_url
 from petastorm.reader import Reader, ReaderV2
 from petastorm.reader_impl.same_thread_executor import SameThreadExecutor
 from petastorm.reader_impl.shuffling_buffer import RandomShufflingBuffer
-from petastorm.tf_utils import tf_tensors
+from petastorm.tf_utils import tf_tensors, make_petastorm_dataset
 from petastorm.unischema import match_unischema_fields
 from petastorm.workers_pool.dummy_pool import DummyPool
 from petastorm.workers_pool.process_pool import ProcessPool
@@ -59,6 +59,8 @@ class ReadMethod(Enum):
     TF = 'tf'
     """Tensorflow reading method will be used during the benchmark (``tf_tensor`` method)"""
 
+    TF_DATASET = 'tf_dataset'
+
     PYTHON = 'python'
     """Pure python reading method will be used during the benchmark (``next(reader)``)"""
 
@@ -67,6 +69,8 @@ class ReadMethod(Enum):
 
 
 def _time_warmup_and_work(reader, warmup_cycles_count, measure_cycles_count, do_work_func=None):
+    logging.basicConfig()
+    logging.getLogger().setLevel(logging.DEBUG)
 
     if not do_work_func:
         do_work_func = lambda: next(reader)  # noqa
@@ -104,6 +108,30 @@ def _time_warmup_and_work_tf(reader, warmup_cycles_count, measure_cycles_count, 
 
         result = _time_warmup_and_work(reader, warmup_cycles_count, measure_cycles_count,
                                        lambda: sess.run(readout_tensors))
+
+        coord.request_stop()
+        coord.join(threads)
+
+    return result
+
+
+def _time_warmup_and_work_tf_dataset(reader, warmup_cycles_count, measure_cycles_count):
+    with tf.Session() as sess:
+        sess.run([tf.global_variables_initializer(), tf.local_variables_initializer()])
+
+        dataset = make_petastorm_dataset(reader)
+        iterator = dataset.make_one_shot_iterator()
+        sample = iterator.get_next()
+
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(coord=coord, start=True, sess=sess)
+
+        # result = sess.run(sample)
+        # print(type(result), result, type(result))
+        # exit(1)
+        #
+        result = _time_warmup_and_work(reader, warmup_cycles_count, measure_cycles_count,
+                                       lambda: sess.run(sample))
 
         coord.request_stop()
         coord.join(threads)
@@ -169,6 +197,8 @@ def reader_throughput(dataset_url, field_regex=None, warmup_cycles_count=300, me
         elif read_method == ReadMethod.TF:
             result = _time_warmup_and_work_tf(reader, warmup_cycles_count, measure_cycles_count,
                                               shuffling_queue_size, min_after_dequeue)
+        elif read_method == ReadMethod.TF_DATASET:
+            result = _time_warmup_and_work_tf_dataset(reader, warmup_cycles_count, measure_cycles_count)
         else:
             raise RuntimeError('Unexpected reader_type value: %s', str(read_method))
 
@@ -237,6 +267,8 @@ def reader_v2_throughput(dataset_url, field_regex=None, warmup_cycles_count=300,
             result = _time_warmup_and_work(reader, warmup_cycles_count, measure_cycles_count)
         elif read_method == ReadMethod.TF:
             result = _time_warmup_and_work_tf(reader, warmup_cycles_count, measure_cycles_count, 0, 0)
+        elif read_method == ReadMethod.TF_DATASET:
+            result = _time_warmup_and_work_tf_dataset(reader, warmup_cycles_count, measure_cycles_count)
         else:
             raise RuntimeError('Unexpected reader_type value: %s', str(read_method))
 
