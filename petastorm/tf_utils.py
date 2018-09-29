@@ -57,7 +57,7 @@ def _sanitize_field_tf_types(sample):
       - Decimal to string
       - uint16 to int32
 
-    :param sample: named tuple or a dictoinary
+    :param sample: named tuple or a dictionary
     :return: same type as the input with values casted to types supported by Tensorflow
     """
     next_sample_dict = sample._asdict()
