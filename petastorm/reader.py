@@ -81,6 +81,10 @@ class Reader(object):
             By default, use the :class:`.NullCache` implementation.
         :param shuffle_options: ShuffleOptions object to describe how to shuffle dataset (supercedes shuffle parameter)
             defaults to shuffling row groups but not to drop rows based on partitions.
+        :param pyarrow_filesystem: An instance of ``pyarrow.FileSystem`` instance that will be use. If not specified,
+            then a default one will be selected based on the url. The default hdfs driver is ``libhdfs3``. If you want
+            to to use ``libhdfs``, use
+            ``pyarrow_filesystem=pyarrow.hdfs.connect('hdfs:///some/path', driver='libhdfs')``.
         :param sequence: *DEPRECATED* To use sequence/ngram, please supply the argument in
             ``schema_fields`` instead.
         :param shuffle: *DEPRECATED* Boolean whether to shuffle the row group order.
