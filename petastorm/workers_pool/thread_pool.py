@@ -92,7 +92,7 @@ class ThreadPool(object):
         self._seed = random.randint(0, 100000)
         self._workers = []
         self._ventilator_queue = None
-        self._workers_count = workers_count
+        self.workers_count = workers_count
         self._results_queue_size = results_queue_size
         # Worker threads will watch this event and gracefully shutdown when the event is set
         self._stop_event = Event()
@@ -120,7 +120,7 @@ class ThreadPool(object):
         self._ventilator_queue = queue.Queue()
         self._results_queue = queue.Queue(self._results_queue_size)
         self._workers = []
-        for worker_id in range(self._workers_count):
+        for worker_id in range(self.workers_count):
             worker_impl = worker_class(worker_id, self._stop_aware_put, worker_args)
             new_thread = WorkerThread(worker_impl, self._stop_event, self._ventilator_queue,
                                       self._results_queue, self._profiling_enabled)

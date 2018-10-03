@@ -98,7 +98,7 @@ class ProcessPool(object):
         self._workers = []
         self._ventilator_send = None
         self._control_sender = None
-        self._workers_count = workers_count
+        self.workers_count = workers_count
         self._results_receiver_poller = None
 
         self._ventilated_items = 0
@@ -167,7 +167,7 @@ class ProcessPool(object):
         self._workers = [
             exec_in_new_process(_worker_bootstrap, worker_class, worker_id, control_socket, worker_receiver_socket,
                                 results_sender_socket, self._serializer, worker_setup_args)
-            for worker_id in range(self._workers_count)]
+            for worker_id in range(self.workers_count)]
 
         # Block until we have all workers up. Will raise an error if fails to start in a timely fashion
         self._wait_for_workers_to_start(monitor_sockets)
@@ -181,13 +181,13 @@ class ProcessPool(object):
         now = time()
         for monitor_socket in monitor_sockets:
             started_count = 0
-            while started_count < self._workers_count and time() < now + _WORKERS_STARTED_TIMEOUT_S:
+            while started_count < self.workers_count and time() < now + _WORKERS_STARTED_TIMEOUT_S:
                 _keep_retrying_while_zmq_again(_KEEP_TRYING_WHILE_ZMQ_AGAIN_IS_RAIZED_TIMEOUT_S,
                                                lambda sock=monitor_socket: monitor.recv_monitor_message(
                                                    sock, flags=zmq.constants.NOBLOCK))
                 started_count += 1
 
-            if started_count < self._workers_count:
+            if started_count < self.workers_count:
                 raise RuntimeError(
                     'Workers were not able to start within timeout {} s ({} has started)'.format(
                         _WORKERS_STARTED_TIMEOUT_S,
