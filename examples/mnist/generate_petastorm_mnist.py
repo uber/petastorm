@@ -61,6 +61,9 @@ def download_mnist_data(download_dir, train=True):
     Each label is a long integer representing the digit 0..9.
     """
     # This is the only function requiring torch in this module.
+
+    # Must import pyarrow before torch. See: https://github.com/uber/petastorm/blob/master/docs/troubleshoot.rst
+    import pyarrow  # noqa: F401 pylint: disable=W0611,W0612
     from torchvision import datasets
 
     return datasets.MNIST('{}/{}'.format(download_dir, 'data'), train=train, download=True)
