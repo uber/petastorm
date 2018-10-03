@@ -15,9 +15,9 @@
 """This pool is different from standard Python pool implementations by the fact that the workers are spawned
 without using fork. Some issues with using jvm based HDFS driver were observed when the process was forked
 (could not access HDFS from the forked worker if the driver was already used in the parent process)"""
+import pickle
 import logging
 import sys
-from decimal import Decimal
 from time import sleep, time
 from traceback import format_exc
 
@@ -42,7 +42,6 @@ _KEEP_TRYING_WHILE_ZMQ_AGAIN_IS_RAIZED_TIMEOUT_S = 20
 # recheck if no more items are expected to be ventilated
 _VERIFY_END_OF_VENTILATION_PERIOD = 0.1
 
-logger = logging.getLogger(__name__)
 
 
 def _keep_retrying_while_zmq_again(timeout, func, allowed_failures=3):
@@ -69,7 +68,7 @@ def _keep_retrying_while_zmq_again(timeout, func, allowed_failures=3):
         except zmq.Again:
             sleep(0.1)
             continue
-        except ZMQBaseError:
+        except ZMQBaseError as e:
             # There are race conditions while setting up the zmq socket so you can get unexpected errors
             # for the first bit of time. We therefore allow for a few unknown failures while the sockets
             # are warming up. Before propogating them as a true problem.
@@ -104,7 +103,7 @@ class ProcessPool(object):
         self._ventilated_items = 0
         self._ventilated_items_processed = 0
         self._ventilator = None
-        self._serializer = PyArrowSerializer() if pyarrow_serialize else None
+        self._serializer = PyArrowSerializer() if pyarrow_serialize else PickleSerializer()
 
     def _create_local_socket_on_random_port(self, context, socket_type):
         """Creates a zmq socket on a random port.
@@ -266,14 +265,19 @@ class ProcessPool(object):
 
     @property
     def diagnostics(self):
+        # items_produced is updated only when VentilatedItemProcessedMessage is received. This will happen only on the
+        # next call to get_results, so it's value may lag.
         return {
-            'ventilated_count': self._ventilated_items,
-            'delivered_count': self._ventilated_items_processed,
-            'in_processing_count': self._ventilated_items - self._ventilated_items_processed,
+            'items_consumed': self._ventilated_items,
+            'items_produced': self._ventilated_items_processed,
+            'items_inprocess': self._ventilated_items - self._ventilated_items_processed,
         }
 
 
 def _serialize_result_and_send(socket, serializer, data):
+    # Result message is a tuple containing data payload and possible exception (or None).
+    # By specifying pyarrow_serialize=True, we may choose to use pyarrow serializer which is faster, but
+    # does not support all data types correctly.
     socket.send_multipart([serializer.serialize(data), pickle.dumps(None)])
 
 
@@ -330,9 +334,8 @@ def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_s
             except Exception as e:  # pylint: disable=broad-except
                 stderr_message = 'Worker %d terminated: unexpected exception:\n' % worker_id
                 stderr_message += format_exc()
-                logger.error('Worker raised an exception: %s', stderr_message)
                 sys.stderr.write(stderr_message)
-                results_sender.send_pyobj(e)
+                results_sender.send_multipart([serializer.serialize(None), pickle.dumps(e)])
                 return
 
         # If the message came over the control channel, shut down the worker.
