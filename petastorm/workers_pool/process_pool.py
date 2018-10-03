@@ -264,36 +264,17 @@ class ProcessPool(object):
         self._results_receiver.close()
         self._context.destroy()
 
-
-def _decimal_to_str(data):
-    """Iterates over a nested structure of lists and dictionaries while substituting all Decimal instances with
-    normalized string representation of Decimals.
-
-    Modification is done in-place.
-
-    :param data: A nested structure of lists and dictionaries
-    :return: None
-    """
-    if isinstance(data, list):
-        for row in data:
-            _decimal_to_str(row)
-    elif isinstance(data, dict):
-        for k, v in data.items():
-            if isinstance(v, dict):
-                _decimal_to_str(v)
-            else:
-                if isinstance(v, Decimal):
-                    data[k] = str(v.normalize())
+    @property
+    def diagnostics(self):
+        return {
+            'ventilated_count': self._ventilated_items,
+            'delivered_count': self._ventilated_items_processed,
+            'in_processing_count': self._ventilated_items - self._ventilated_items_processed,
+        }
 
 
-def _serialize_result_and_send(socket, pyarrow_serialize, data):
-    if pyarrow_serialize:
-        # pyarrow won't be able to serialize Decimals. Replace all Decimal with strings.
-        _decimal_to_str(data)
-        serialized = pyarrow.serialize(data)
-        socket.send_pyobj(serialized.to_buffer())
-    else:
-        socket.send_pyobj(data)
+def _serialize_result_and_send(socket, serializer, data):
+    socket.send_multipart([serializer.serialize(data), pickle.dumps(None)])
 
 
 def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_socket, results_sender_socket,
