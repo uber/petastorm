@@ -18,6 +18,7 @@ from six.moves.urllib.parse import urlparse
 from petastorm import utils
 from petastorm.etl.dataset_metadata import get_schema_from_dataset_url
 from petastorm.fs_utils import FilesystemResolver
+from petastorm.reader_impl.row_bundler import RowStorageBundler
 
 
 def dataset_as_rdd(dataset_url, spark_session, schema_fields=None):
@@ -39,11 +40,11 @@ def dataset_as_rdd(dataset_url, spark_session, schema_fields=None):
     if schema_fields is not None:
         # If wanting a subset of fields, create the schema view and run a select on those fields
         schema = schema.create_schema_view(schema_fields)
-        field_names = [field.name for field in schema_fields]
-        dataset_df = dataset_df.select(*field_names)
+        dataset_df = dataset_df.select(*schema.get_storage_column_names())
 
+    row_bundler = RowStorageBundler(schema)
     dataset_rows = dataset_df.rdd \
-        .map(lambda row: utils.decode_row(row.asDict(), schema)) \
+        .map(lambda row: utils.decode_row(row_bundler.debundle_row(row.asDict()), schema)) \
         .map(lambda record: schema.make_namedtuple(**record))
 
     return dataset_rows

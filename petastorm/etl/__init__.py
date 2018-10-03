@@ -32,7 +32,7 @@ class RowGroupIndexerBase(object):
 
     @abc.abstractproperty
     def column_names(self):
-        """ Return list of column(s) reuired to build index."""
+        """ Return list of fields required to build index. This refers to unischema field names"""
         return None
 
     @abc.abstractproperty

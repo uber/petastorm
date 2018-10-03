@@ -44,7 +44,7 @@ TestSchema = Unischema('TestSchema', [
     UnischemaField('matrix_nullable', np.uint16, _DEFAULT_IMAGE_SIZE, NdarrayCodec(), True),
     UnischemaField('sensor_name', np.unicode_, (1,), NdarrayCodec(), False),
     UnischemaField('string_array_nullable', np.unicode_, (None,), NdarrayCodec(), True),
-])
+], column_bundles={'images': ['id2', 'image_png'], 'sensor': ['id2', 'sensor_name']})
 
 
 def _randomize_row(id_num):

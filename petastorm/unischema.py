@@ -16,11 +16,14 @@
 in several different python libraries. Currently supported are pyspark, tensorflow, and numpy.
 """
 import copy
+import itertools
 import re
 from collections import namedtuple, OrderedDict
 
 from pyspark import Row
-from pyspark.sql.types import StructField, StructType
+from pyspark.sql.types import StructField, StructType, BinaryType
+
+from petastorm.reader_impl.row_bundler import RowStorageBundler
 
 
 def _fields_as_tuple(field):
@@ -95,18 +98,30 @@ class Unischema(object):
     in several different python libraries. Currently supported are pyspark, tensorflow, and numpy.
     """
 
-    def __init__(self, name, fields):
+    def __init__(self, name, fields, column_bundles=None):
         """Creates an instance of a Unischema object.
 
         :param name: name of the schema
         :param fields: a list of ``UnischemaField`` instances describing the fields. The order of the fields is
             not important - they are stored sorted by name internally.
+        :param column_bundles: an optional dictionary of a column name to a list of ``UnischemaField`` names to specify
+            that a list of fields should be bundled together for storage within a single parquet column. This can be
+            used to optimize how data is stored to reduce round trips to remote storage and limit the column index
+            overhead if you have small row groups and a large number of columns.
         """
+        if column_bundles is None:
+            column_bundles = {}
         self._name = name
         self._fields = OrderedDict([(f.name, f) for f in sorted(fields, key=lambda t: t.name)])
         # Generates attributes named by the field names as an access syntax sugar.
         for f in fields:
             setattr(self, f.name, f)
+        if column_bundles and not isinstance(column_bundles, dict):
+            raise ValueError('column_bundles must be a dictionary of bundle name to list of field names')
+        # We cannot verify that all fields specified in bundles actually exist as fields because of schema views
+        # If we create a schema view of a field in a bundle, we need to always keep the full bundle in order to
+        # know where the field we want is for decoding.
+        self._column_bundles = column_bundles
 
     def create_schema_view(self, fields):
         """Creates a new instance of the schema using a subset of fields.
@@ -123,13 +138,16 @@ class Unischema(object):
         :param fields: subset of fields from which to create a new schema
         :return: a new view of the original schema containing only the supplied fields
         """
+        view_fields = []
         for field in fields:
             # Comparing by field names. Prevoiusly was looking for `field not in self._fields.values()`, but it breaks
             # due to faulty pickling: T223683
-            if field.name not in self._fields:
+            field_name = field if isinstance(field, str) else field.name
+            if field_name not in self._fields:
                 raise ValueError('field {} does not belong to the schema {}'.format(field, self))
+            view_fields.append(self._fields[field_name])
         # TODO(yevgeni): what happens when we have several views? Is it ok to have multiple namedtuples named similarly?
-        return Unischema('{}_view'.format(self._name), fields)
+        return Unischema('{}_view'.format(self._name), view_fields, self.column_bundles)
 
     def _get_namedtuple(self):
         return _NamedtupleCache.get(self._name, self._fields.keys())
@@ -157,6 +175,14 @@ class Unischema(object):
     def name(self):
         return self._name
 
+    @property
+    def column_bundles(self):
+        # Since the column bundles is new, it might not be included in previously pickled
+        # unischema objects so we need to do this to protect against that.
+        if not hasattr(self, '_column_bundles'):
+            self._column_bundles = {}
+        return self._column_bundles
+
     def as_spark_schema(self):
         """Returns an object derived from the unischema as spark schema.
 
@@ -165,12 +191,35 @@ class Unischema(object):
         >>> spark.createDataFrame(dataset_rows,
         >>>                       SomeSchema.as_spark_schema())
         """
-        schema_entries = [
+        schema_entries = []
+        in_bundles = set()
+        # If we are using column bundles, we add a schema entry for each bundle and keep track
+        # of which columns are in bundles to add them individually
+        for bundle_name, bundle_columns in self.column_bundles.items():
+            schema_entries.append(StructField(bundle_name, BinaryType(), False))
+            in_bundles.update(bundle_columns)
+
+        # We add schema entries for each field that is not already in a bundle
+        schema_entries.extend([
             StructField(
                 f.name,
                 f.codec.spark_dtype(),
-                f.nullable) for f in self._fields.values()]
+                f.nullable) for f in self._fields.values() if f.name not in in_bundles])
         return StructType(schema_entries)
+
+    def get_storage_column_names(self):
+        """
+        Gets a set of column names used in storage, taking into account column bundles.
+
+        A column is a storage structure while a field means a unischema field which is what
+        a user will interact with. A column may therefore physically store multiple fields.
+        In general a user should only worry about field names unless they are interacting
+        with the underlying storage directly.
+        """
+        fields_in_a_bundle = set(itertools.chain(*self.column_bundles.values()))
+        bundle_names = set(self.column_bundles.keys())
+        fields_not_in_a_bundle = (set(self.fields.keys()) - fields_in_a_bundle)
+        return bundle_names | fields_not_in_a_bundle
 
     def make_namedtuple(self, **kargs):
         """Returns schema as a namedtuple type intialized with arguments passed to this method.
@@ -221,7 +270,8 @@ def dict_to_spark_row(unischema, row_dict):
                 raise ValueError('Field {} is not "nullable", but got passes a None value')
         encoded_dict[field_name] = schema_field.codec.encode(schema_field, value) if value is not None else None
 
-    return Row(**encoded_dict)
+    bundled_dict = RowStorageBundler(unischema).bundle_row(encoded_dict)
+    return Row(**bundled_dict)
 
 
 def insert_explicit_nulls(unischema, row_dict):

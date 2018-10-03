@@ -14,11 +14,9 @@
 
 import logging
 import os
-
-import pyarrow
-
 from multiprocessing import Pool
 
+import pyarrow
 from pyarrow.filesystem import LocalFileSystem
 
 logger = logging.getLogger(__name__)
