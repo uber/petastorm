@@ -13,7 +13,6 @@
 # limitations under the License.
 import os
 from concurrent.futures.process import ProcessPoolExecutor
-from decimal import Decimal
 from shutil import rmtree, copytree
 
 import numpy as np
@@ -46,8 +45,9 @@ MINIMAL_READER_FLAVOR_FACTORIES = [
 # pylint: disable=unnecessary-lambda
 ALL_READER_FLAVOR_FACTORIES = MINIMAL_READER_FLAVOR_FACTORIES + [
     lambda url, **kwargs: Reader(url, reader_pool=ThreadPool(10), **kwargs),
-    lambda url, **kwargs: Reader(url, reader_pool=ProcessPool(10), **kwargs),
-    lambda url, **kwargs: ReaderV2(url, decoder_pool=ProcessPoolExecutor(10), **kwargs)
+    lambda url, **kwargs: Reader(url, reader_pool=ProcessPool(10, pyarrow_serialize=False), **kwargs),
+    lambda url, **kwargs: Reader(url, reader_pool=ProcessPool(1, pyarrow_serialize=True), **kwargs),
+    lambda url, **kwargs: ReaderV2(url, decoder_pool=ProcessPoolExecutor(10), **kwargs),
 ]
 
 
@@ -70,15 +70,6 @@ def test_simple_read(synthetic_dataset, reader_factory):
     """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
     with reader_factory(synthetic_dataset.url) as reader:
         _check_simple_reader(reader, synthetic_dataset.data)
-
-
-def test_read_with_pyarrow_serialization(synthetic_dataset):
-    with Reader(synthetic_dataset.url, reader_pool=ProcessPool(1, pyarrow_serialize=True)) as reader:
-        for actual in reader:
-            expected = next(d for d in synthetic_dataset.data if d['id'] == actual.id)
-            assert actual.id == expected['id']
-            assert Decimal(actual.decimal) == expected['decimal']
-            np.testing.assert_equal(actual.matrix, expected['matrix'])
 
 
 # Our LocalDiskCache implementation relies on sqlite3. There is some sort of a race condition
