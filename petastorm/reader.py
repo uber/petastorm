@@ -43,6 +43,10 @@ ShuffleOptions = petastorm.shuffle_options.ShuffleOptions
 # Make it easier to import as "from petastorm.reader import ReaderV2"
 ReaderV2 = ReaderV2
 
+# Ventilator guarantees that no more than workers + _VENTILATE_EXTRA_ROWGROUPS are processed at a moment by a
+# worker pool. This guarantees that we don't run out of memory if data consumer is slower than the Reader.
+_VENTILATE_EXTRA_ROWGROUPS = 2
+
 
 class Reader(object):
     """Reads a dataset from a Petastorm dataset.
@@ -155,7 +159,8 @@ class Reader(object):
                 logger.warning('shuffle option is deprecated. Please use shuffle_options instead')
             shuffle_options = petastorm.shuffle_options.ShuffleOptions(shuffle)
         self._normalize_shuffle_options(shuffle_options, self.dataset)
-        ventilator = self._create_ventilator(filtered_row_group_indexes, shuffle_options, num_epochs, worker_predicate)
+        ventilator = self._create_ventilator(filtered_row_group_indexes, shuffle_options, num_epochs, worker_predicate,
+                                             self._workers_pool.workers_count + _VENTILATE_EXTRA_ROWGROUPS)
 
         # 5. Start workers pool
         self._workers_pool.start(ReaderWorker,
@@ -283,7 +288,8 @@ class Reader(object):
             shuffle_options.shuffle_row_drop_partitions = min(shuffle_options.shuffle_row_drop_partitions,
                                                               max_rows_in_row_group)
 
-    def _create_ventilator(self, row_group_indexes, shuffle_options, num_epochs, worker_predicate):
+    def _create_ventilator(self, row_group_indexes, shuffle_options, num_epochs, worker_predicate,
+                           max_ventilation_queue_size):
         items_to_ventilate = []
         for piece_index in row_group_indexes:
             for shuffle_row_drop_partition in range(shuffle_options.shuffle_row_drop_partitions):
@@ -296,6 +302,7 @@ class Reader(object):
         return ConcurrentVentilator(self._workers_pool.ventilate,
                                     items_to_ventilate,
                                     iterations=num_epochs,
+                                    max_ventilation_queue_size=max_ventilation_queue_size,
                                     randomize_item_order=shuffle_options.shuffle_row_groups)
 
     def stop(self):
