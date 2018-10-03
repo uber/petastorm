@@ -15,8 +15,10 @@
 import logging
 import os
 
+import pyarrow  # noqa: F401 pylint: disable=W0611
+import torch
+
 import pytest
-import torch  # pylint: disable=unused-import
 
 import examples.mnist.pytorch_example as pytorch_example
 from examples.mnist.generate_petastorm_mnist import mnist_data_to_petastorm_dataset, download_mnist_data
@@ -25,6 +27,7 @@ from petastorm.reader import Reader
 from petastorm.workers_pool.dummy_pool import DummyPool
 
 logging.basicConfig(level=logging.INFO)
+
 
 # Set test image sizes and number of mock nouns/variants
 

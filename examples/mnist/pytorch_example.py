@@ -18,6 +18,9 @@
 ###
 from __future__ import division, print_function
 import argparse
+
+# Must import pyarrow before torch. See: https://github.com/uber/petastorm/blob/master/docs/troubleshoot.rst
+import pyarrow  # noqa: F401 pylint: disable=W0611
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -116,7 +119,7 @@ def main():
                         help='learning rate (default: 0.01)')
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M',
                         help='SGD momentum (default: 0.5)')
-    parser.add_argument('--no-cuda', action='store_true', default=True,
+    parser.add_argument('--no-cuda', action='store_true', default=False,
                         help='disables CUDA training')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                         help='random seed (default: 1)')
