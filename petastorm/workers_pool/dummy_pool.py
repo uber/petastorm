@@ -33,6 +33,7 @@ class DummyPool(object):
         self._results_queue = []
         self._worker = None
         self._ventilator = None
+        self.workers_count = 1
 
     def start(self, worker_class, worker_args=None, ventilator=None):
         # Instantiate a single worker with all the args
