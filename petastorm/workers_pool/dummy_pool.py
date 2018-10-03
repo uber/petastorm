@@ -84,3 +84,7 @@ class DummyPool(object):
 
     def join(self):
         pass
+
+    @property
+    def diagnostics(self):
+        return dict()
