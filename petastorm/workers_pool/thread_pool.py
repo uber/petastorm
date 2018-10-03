@@ -216,3 +216,7 @@ class ThreadPool(object):
 
     def results_qsize(self):
         return self._results_queue.qsize()
+
+    @property
+    def diagnostics(self):
+        return {'output_queue_size': self.results_qsize()}

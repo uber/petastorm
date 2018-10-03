@@ -315,12 +315,7 @@ class Reader(object):
 
     @property
     def diagnostics(self):
-        diags = {}
-        if hasattr(self._workers_pool, 'results_qsize'):
-            diags['output_queue_size'] = self._workers_pool.results_qsize()
-        else:
-            diags['output_queue_size'] = None
-        return diags
+        return self._workers_pool.diagnostics
 
     def __iter__(self):
         return self
