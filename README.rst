@@ -271,7 +271,7 @@ run tests.
 Publications
 ------------
 
-1. Gruener, R., Cheng, O., and Litvin, Y. (2018) *Introducing Petastorm: Uber ATG’s Data Access Library for Deep Learning*. URL: https://eng.uber.com/petastorm/
+1. Gruener, R., Cheng, O., and Litvin, Y. (2018) *Introducing Petastorm: Uber ATG's Data Access Library for Deep Learning*. URL: https://eng.uber.com/petastorm/
 
 
 .. _Troubleshooting: docs/troubleshoot.rst
