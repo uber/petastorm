@@ -10,11 +10,22 @@ Trouble running the pytorch example
 Segmentation fault using pytorch when reading dataset
 -----------------------------------------------------
 
-As reported in `petastorm issue 52`_, the :class:`Reader` appears haphazardly
-to dump core from segmentation fault.  `@selitvin <https://github.com/selitvin>`_
-noted that these memory-allocation issues have also been observed with TF.
-A temporary workaround is to use a different memory allocator, such as
-``tcmalloc``, per below:
+Segfault when reading parquet files if pytorch is imported before pyarrow (
+`github issue <https://github.com/apache/arrow/issues/2637>`_,
+`ARROW-3346 <https://jira.apache.org/jira/browse/ARROW-3346>`_).
+
+A workaround: always ``import pyarrow`` before ``import torch``.
+
+More details
+^^^^^^^^^^^^
+
+``torch/_C.so`` is `loaded <https://github.com/pytorch/pytorch/blob/bcc2a0599beb7eebd3222cce394cc986f529f5ad/torch/__init__.py#L34>`_
+using ``RTLD_GLOBAL`` flag. As a result, dynamic linker places all the symbols exported by ``_C.so``
+into the global scope. When pyarrow shared libraries are loaded they will be resolved using ``_C.so``'s symbols.
+``_C.so`` exports some of the standard c++ library symbols. A crash may occur if the versions of the standard C++ libraries
+are incompatible.
+
+Loading in reverse order is fine since pyarrow libraries are not exposing their symbols in the linkers' global namespace.
 
 .. code-block:: bash
 
