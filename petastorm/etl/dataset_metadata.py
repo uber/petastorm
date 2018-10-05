@@ -172,6 +172,7 @@ def _generate_unischema_metadata(dataset, schema):
     """
     # TODO(robbieg): Simply pickling unischema will break if the UnischemaField class is changed,
     #  or the codec classes are changed. We likely need something more robust.
+    assert schema
     serialized_schema = pickle.dumps(schema)
     utils.add_to_dataset_metadata(dataset, UNISCHEMA_KEY, serialized_schema)
 
