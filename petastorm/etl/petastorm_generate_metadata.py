@@ -24,6 +24,7 @@ from pyspark.sql import SparkSession
 from petastorm.etl.dataset_metadata import materialize_dataset, get_schema, ROW_GROUPS_PER_FILE_KEY
 from petastorm.etl.rowgroup_indexing import ROWGROUPS_INDEX_KEY
 from petastorm.fs_utils import FilesystemResolver
+from petastorm.unischema import Unischema
 from petastorm.utils import add_to_dataset_metadata
 
 example_text = '''Example (some replacement required):
@@ -63,6 +64,9 @@ def generate_petastorm_metadata(spark, dataset_url, unischema_class=None, use_su
 
     if unischema_class:
         schema = locate(unischema_class)
+        if not isinstance(schema, Unischema):
+            raise ValueError('The specified class %s is not an instance of a petastorm.Unischema object.',
+                             unischema_class)
     else:
 
         try:
