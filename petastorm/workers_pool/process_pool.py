@@ -25,8 +25,7 @@ import zmq
 from zmq import ZMQBaseError
 from zmq.utils import monitor
 
-from petastorm.workers_pool import EmptyResultError, VentilatedItemProcessedMessage, \
-    TimeoutWaitingForResultError
+from petastorm.workers_pool import EmptyResultError, VentilatedItemProcessedMessage
 from petastorm.workers_pool.exec_in_new_process import exec_in_new_process
 
 # When _CONTROL_FINISHED is passed via control socket to a worker, the worker will terminate
@@ -36,6 +35,10 @@ _CONTROL_FINISHED = "FINISHED"
 _WORKERS_STARTED_TIMEOUT_S = 20
 _SOCKET_LINGER_MS = 1000
 _KEEP_TRYING_WHILE_ZMQ_AGAIN_IS_RAIZED_TIMEOUT_S = 20
+
+# Amount of time we will wait on a the queue to get the next result. If no results received until then, we will
+# recheck if no more items are expected to be ventilated
+_VERIFY_END_OF_VENTILATION_PERIOD = 0.1
 
 
 def _keep_retrying_while_zmq_again(timeout, func, allowed_failures=3):
@@ -197,7 +200,7 @@ class ProcessPool(object):
                                        lambda: self._ventilator_send.send_pyobj((args, kargs),
                                                                                 flags=zmq.constants.NOBLOCK))
 
-    def get_results(self, timeout=None):
+    def get_results(self):
         """Returns results from worker pool
 
         :param timeout: If None, will block forever, otherwise will raise :class:`.TimeoutWaitingForResultError`
@@ -213,9 +216,9 @@ class ProcessPool(object):
                 if not self._ventilator or self._ventilator.completed():
                     raise EmptyResultError()
 
-            socks = self._results_receiver_poller.poll(timeout * 1e3 if timeout else None)
+            socks = self._results_receiver_poller.poll(_VERIFY_END_OF_VENTILATION_PERIOD * 1e3)
             if not socks:
-                raise TimeoutWaitingForResultError()
+                continue
             result = self._results_receiver.recv_pyobj(0)
             if isinstance(result, VentilatedItemProcessedMessage):
                 self._ventilated_items_processed += 1

@@ -46,7 +46,7 @@ class DummyPool(object):
         """Send a work item to a worker process."""
         self._ventilator_queue.append((args, kargs))
 
-    def get_results(self, timeout=None):
+    def get_results(self):
         """Returns results
 
         The processing is done on the get_results caller thread if the results queue is empty
