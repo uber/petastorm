@@ -15,19 +15,20 @@
 """This pool is different from standard Python pool implementations by the fact that the workers are spawned
 without using fork. Some issues with using jvm based HDFS driver were observed when the process was forked
 (could not access HDFS from the forked worker if the driver was already used in the parent process)"""
-import pickle
 import logging
+import pickle
 import sys
 from time import sleep, time
 from traceback import format_exc
 
-import pyarrow
 import zmq
 from zmq import ZMQBaseError
 from zmq.utils import monitor
 
+from petastorm.reader_impl.pickle_serializer import PickleSerializer
 from petastorm.reader_impl.pyarrow_serializer import PyArrowSerializer
-from petastorm.workers_pool import EmptyResultError, VentilatedItemProcessedMessage
+from petastorm.workers_pool import EmptyResultError, VentilatedItemProcessedMessage, \
+    TimeoutWaitingForResultError
 from petastorm.workers_pool.exec_in_new_process import exec_in_new_process
 
 # When _CONTROL_FINISHED is passed via control socket to a worker, the worker will terminate
@@ -42,6 +43,7 @@ _KEEP_TRYING_WHILE_ZMQ_AGAIN_IS_RAIZED_TIMEOUT_S = 20
 # recheck if no more items are expected to be ventilated
 _VERIFY_END_OF_VENTILATION_PERIOD = 0.1
 
+logger = logging.getLogger(__name__)
 
 
 def _keep_retrying_while_zmq_again(timeout, func, allowed_failures=3):
@@ -66,6 +68,7 @@ def _keep_retrying_while_zmq_again(timeout, func, allowed_failures=3):
         try:
             func()
         except zmq.Again:
+            logger.debug('zmq.Again exception caught. Will try again')
             sleep(0.1)
             continue
         except ZMQBaseError as e:
@@ -74,6 +77,7 @@ def _keep_retrying_while_zmq_again(timeout, func, allowed_failures=3):
             # are warming up. Before propogating them as a true problem.
             sleep(0.1)
             failures += 1
+            logger.debug('Unexpected ZMQ error %s received. Failures %d/%d', str(e), failures, allowed_failures)
             if failures > allowed_failures:
                 raise
         return
@@ -90,9 +94,8 @@ class ProcessPool(object):
 
         :param workers_count: Number of processes to be spawned
         :param pyarrow_serialize: Use ``pyarrow.serialize`` serialization if True. ``pyarrow.serialize`` is much faster
-          than pickling, but does not support ``Decimal`` data types, converts int64 into int32 (and probably modifies
-          some other types). We can not use this serialization by default, but would allow to switch it on
-          when a user knows what they are doing.
+          than pickling. Integer types (int8, uint8 etc...) is not done yet in pyarrow, so all integer types are
+          currently converted to 'int'
         """
         self._workers = []
         self._ventilator_send = None
@@ -195,7 +198,7 @@ class ProcessPool(object):
     def ventilate(self, *args, **kargs):
         """Sends a work item to a worker process. Will result in worker.process(...) call with arbitrary arguments."""
         self._ventilated_items += 1
-
+        logger.debug('ventilate called. total ventilated items count %d', self._ventilated_items)
         # There is a race condition when sending objects to zmq that if all workers have been killed, sending objects
         # can block indefinitely. By using NOBLOCK, an exception is thrown stating that all resources have been
         # exhausted which the user can decide how to handle instead of just having the process hang.
@@ -214,40 +217,51 @@ class ProcessPool(object):
 
         while True:
             # If there is no more work to do, raise an EmptyResultError
+            logger.debug('ventilated_items=%d ventilated_items_processed=%d ventilator.completed=%s',
+                         self._ventilated_items, self._ventilated_items_processed,
+                         str(self._ventilator.completed()) if self._ventilator else 'N/A')
             if self._ventilated_items == self._ventilated_items_processed:
                 # We also need to check if we are using a ventilator and if it is completed
                 if not self._ventilator or self._ventilator.completed():
+                    logger.debug('ventilator reported it has completed. Reporting end of results')
                     raise EmptyResultError()
 
+            logger.debug('get_results polling on the next result')
             socks = self._results_receiver_poller.poll(_VERIFY_END_OF_VENTILATION_PERIOD * 1e3)
             if not socks:
                 continue
-            result = self._results_receiver.recv_pyobj(0)
-            if isinstance(result, VentilatedItemProcessedMessage):
-                self._ventilated_items_processed += 1
-                if self._ventilator:
-                    self._ventilator.processed_item()
-                continue
-            if isinstance(result, Exception):
-                self.stop()
-                self.join()
-                raise result
-            else:
-                if self._serializer:
-                    deserialized_result = self._serializer.deserialize(result)
-                else:
-                    deserialized_result = result
+            # Result message is a tuple containing data payload and possible exception (or None).
+            # By specifying pyarrow_serialize=True, we may choose to use pyarrow serializer which is faster, but
+            # does not support all data types correctly.
+            fast_serialized, pickle_serialized = self._results_receiver.recv_multipart(copy=False)
+            pickle_serialized = pickle.loads(pickle_serialized)
 
+            if pickle_serialized:
+                logger.debug('get_results a pickled message %s', type(pickle_serialized))
+                if isinstance(pickle_serialized, VentilatedItemProcessedMessage):
+                    self._ventilated_items_processed += 1
+                    if self._ventilator:
+                        self._ventilator.processed_item()
+                elif isinstance(pickle_serialized, Exception):
+                    self.stop()
+                    self.join()
+                    raise pickle_serialized
+            else:
+                logger.debug('get_results received new results')
+                deserialized_result = self._serializer.deserialize(fast_serialized.buffer)
                 return deserialized_result
 
     def stop(self):
         """Stops all workers (non-blocking)"""
+        logger.debug('stopping')
         if self._ventilator:
             self._ventilator.stop()
         self._control_sender.send_string(_CONTROL_FINISHED)
 
     def join(self):
         """Blocks until all workers are terminated."""
+
+        logger.debug('joining')
 
         # Slow joiner problem with zeromq means that not all workers are guaranteed to have gotten
         # the stop event. Therefore we will keep sending it until all workers are stopped to prevent
@@ -322,18 +336,25 @@ def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_s
                           worker_args)
 
     # Loop and accept messages from both channels, acting accordingly
+    logger.debug('Entering worker loop')
     while True:
+        logger.debug('Polling new message')
         socks = dict(poller.poll())
 
         # If the message came from work_receiver channel
         if socks.get(work_receiver) == zmq.POLLIN:
             try:
                 args, kargs = work_receiver.recv_pyobj()
+                logger.debug('Starting worker.process')
                 worker.process(*args, **kargs)
-                results_sender.send_pyobj(VentilatedItemProcessedMessage())
+                logger.debug('Finished worker.process')
+                results_sender.send_multipart([serializer.serialize(None),
+                                               pickle.dumps(VentilatedItemProcessedMessage())])
+                logger.debug('Sending result')
             except Exception as e:  # pylint: disable=broad-except
                 stderr_message = 'Worker %d terminated: unexpected exception:\n' % worker_id
                 stderr_message += format_exc()
+                logger.debug('worker.process failed with exception %s', stderr_message)
                 sys.stderr.write(stderr_message)
                 results_sender.send_multipart([serializer.serialize(None), pickle.dumps(e)])
                 return
@@ -341,6 +362,7 @@ def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_s
         # If the message came over the control channel, shut down the worker.
         if socks.get(control_receiver) == zmq.POLLIN:
             control_message = control_receiver.recv_string()
+            logger.debug('Received control message %s', control_message)
             if control_message == _CONTROL_FINISHED:
                 worker.shutdown()
                 break
