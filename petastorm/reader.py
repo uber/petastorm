@@ -52,7 +52,7 @@ class Reader(object):
 
     def __init__(self, dataset_url, schema_fields=None, shuffle=None, predicate=None, rowgroup_selector=None,
                  reader_pool=None, num_epochs=1, sequence=None, training_partition=None, num_training_partitions=None,
-                 read_timeout_s=None, cache=None, shuffle_options=None, pyarrow_filesystem=None):
+                 cache=None, shuffle_options=None, pyarrow_filesystem=None):
         """Initializes a reader object.
 
         :param dataset_url: an filepath or a url to a parquet directory,
@@ -72,8 +72,6 @@ class Reader(object):
             ``num_training_partitions`` must be supplied as well.
         :param num_training_partitions: An int denoting the number of training partitions (how many nodes are performing
             the multi node training).
-        :param read_timeout_s: A numeric with the amount of time in seconds you would like to give a read before it
-            times out and raises an EmptyResultError. Pass in None for an infinite timeout.
         :param cache: An object conforming to :class:`.CacheBase` interface. Before loading row groups from a parquet
             file the Reader will attempt to load these values from cache. Caching is useful when communication
             to the main data store is either slow or expensive and the local machine has large enough storage
@@ -163,7 +161,6 @@ class Reader(object):
         self._workers_pool.start(ReaderWorker,
                                  (dataset_url, self.schema, self.ngram, row_groups, cache, filesystem),
                                  ventilator=ventilator)
-        self._read_timeout_s = read_timeout_s
         self.last_row_consumed = False
 
         # _result
@@ -314,7 +311,7 @@ class Reader(object):
         warnings.warn(warning_message, DeprecationWarning)
         # Since warnings are generally ignored in av, print out a logging warning as well
         logger.warn(warning_message)
-        return self._workers_pool.get_results(timeout=timeout)
+        return self._workers_pool.get_results()
 
     @property
     def diagnostics(self):
@@ -335,7 +332,7 @@ class Reader(object):
             if not self._result_buffer:
                 # Reverse order, so we can pop from the end of the list in O(1) while maintaining
                 # order the items are returned from the worker
-                rows_as_dict = list(reversed(self._workers_pool.get_results(timeout=self._read_timeout_s)))
+                rows_as_dict = list(reversed(self._workers_pool.get_results()))
 
                 if self.ngram:
                     for ngram_row in rows_as_dict:

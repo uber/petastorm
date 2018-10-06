@@ -18,12 +18,12 @@ import unittest
 
 import numpy as np
 
-from petastorm.workers_pool import EmptyResultError, TimeoutWaitingForResultError
+from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.dummy_pool import DummyPool
 from petastorm.workers_pool.process_pool import ProcessPool
 from petastorm.workers_pool.tests.stub_workers import CoeffMultiplierWorker, \
     WorkerIdGeneratingWorker, WorkerMultiIdGeneratingWorker, SleepyWorkerIdGeneratingWorker, \
-    ExceptionGeneratingWorker_5, SleepyDoingNothingWorker, PreprogrammedReturnValueWorker
+    ExceptionGeneratingWorker_5, PreprogrammedReturnValueWorker
 from petastorm.workers_pool.thread_pool import ThreadPool
 
 
@@ -92,22 +92,6 @@ class TestWorkersPool(unittest.TestCase):
         pool.stop()
         pool.join()
 
-    def timeout_while_waiting_on_results_impl(self, pool_class):
-        """Check that timeout error would occur worker don't write results to the results queue in time"""
-
-        # COULD BECOME A FLAKY TEST SINCE RELIES ON TIME
-        WORKERS_COUNT = 5
-        pool = pool_class(WORKERS_COUNT)
-
-        pool.start(SleepyDoingNothingWorker, 3)
-
-        pool.ventilate()
-        with self.assertRaises(TimeoutWaitingForResultError):
-            pool.get_results(timeout=0.1)
-
-        pool.stop()
-        pool.join()
-
     def raise_empty_result_error_on_get_results_impl(self, pool_class):
         """Check that the get_results returns None when there is no work left to do"""
 
@@ -147,12 +131,6 @@ class TestWorkersPool(unittest.TestCase):
 
     def test_return_none_on_get_results_dummy(self):
         self.raise_empty_result_error_on_get_results_impl(DummyPool)
-
-    def test_timeout_while_waiting_on_results_thread(self):
-        self.timeout_while_waiting_on_results_impl(ThreadPool)
-
-    def test_timeout_while_waiting_on_results_process(self):
-        self.timeout_while_waiting_on_results_impl(ProcessPool)
 
     def test_stop_when_result_queue_is_full(self):
         """Makes sure we don't block indefinitely on ventilator queue"""

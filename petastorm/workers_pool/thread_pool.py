@@ -21,11 +21,13 @@ from traceback import format_exc
 
 from six.moves import queue
 
-from petastorm.workers_pool import EmptyResultError, VentilatedItemProcessedMessage, \
-    TimeoutWaitingForResultError
+from petastorm.workers_pool import EmptyResultError, VentilatedItemProcessedMessage
 
 # Defines how frequently will we check the stop event while waiting on a blocking queue
 IO_TIMEOUT_INTERVAL_S = 0.001
+# Amount of time we will wait on a the queue to get the next result. If no results received until then, we will
+# recheck if no more items are expected to be ventilated
+_VERIFY_END_OF_VENTILATION_PERIOD = 0.1
 
 
 class WorkerTerminationRequested(Exception):
@@ -141,7 +143,7 @@ class ThreadPool(object):
         self._ventilated_items += 1
         self._ventilator_queue.put((args, kargs))
 
-    def get_results(self, timeout=None):
+    def get_results(self):
         """Returns results from worker pool or re-raise worker's exception if any happen in worker thread.
 
         :param timeout: If None, will block forever, otherwise will raise :class:`.TimeoutWaitingForResultError`
@@ -159,7 +161,7 @@ class ThreadPool(object):
                     raise EmptyResultError()
 
             try:
-                result = self._results_queue.get(timeout=timeout)
+                result = self._results_queue.get(timeout=_VERIFY_END_OF_VENTILATION_PERIOD)
                 if isinstance(result, VentilatedItemProcessedMessage):
                     self._ventilated_items_processed += 1
                     if self._ventilator:
@@ -172,7 +174,7 @@ class ThreadPool(object):
                 else:
                     return result
             except queue.Empty:
-                raise TimeoutWaitingForResultError()
+                continue
 
     def stop(self):
         """Stops all workers (non-blocking)."""
