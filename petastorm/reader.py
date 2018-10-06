@@ -166,6 +166,8 @@ class Reader(object):
         self._workers_pool.start(ReaderWorker,
                                  (dataset_url, self.schema, self.ngram, row_groups, cache, filesystem),
                                  ventilator=ventilator)
+        logger.debug('Workers pool started')
+
         self.last_row_consumed = False
 
         # _result
