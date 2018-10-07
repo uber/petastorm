@@ -27,8 +27,7 @@ from zmq.utils import monitor
 
 from petastorm.reader_impl.pickle_serializer import PickleSerializer
 from petastorm.reader_impl.pyarrow_serializer import PyArrowSerializer
-from petastorm.workers_pool import EmptyResultError, VentilatedItemProcessedMessage, \
-    TimeoutWaitingForResultError
+from petastorm.workers_pool import EmptyResultError, VentilatedItemProcessedMessage
 from petastorm.workers_pool.exec_in_new_process import exec_in_new_process
 
 # When _CONTROL_FINISHED is passed via control socket to a worker, the worker will terminate
