@@ -17,6 +17,7 @@
 # https://github.com/pytorch/examples/mnist/main.py .
 ###
 from __future__ import division, print_function
+
 import argparse
 
 # Must import pyarrow before torch. See: https://github.com/uber/petastorm/blob/master/docs/troubleshoot.rst
@@ -28,8 +29,8 @@ import torch.optim as optim
 from torchvision import transforms
 
 from examples.mnist import DEFAULT_MNIST_DATA_PATH
+from petastorm import make_reader
 from petastorm.pytorch import DataLoader
-from petastorm.reader import Reader
 
 
 class Net(nn.Module):
@@ -149,10 +150,10 @@ def main():
 
     # Instantiate each petastorm Reader with a single thread, shuffle enabled, and appropriate epoch setting
     for epoch in range(1, loop_epochs + 1):
-        with DataLoader(Reader('{}/train'.format(args.dataset_url), num_epochs=reader_epochs),
+        with DataLoader(make_reader('{}/train'.format(args.dataset_url), num_epochs=reader_epochs),
                         batch_size=args.batch_size, transform=_transform_row) as train_loader:
             train(model, device, train_loader, args.log_interval, optimizer, epoch)
-        with DataLoader(Reader('{}/test'.format(args.dataset_url), num_epochs=reader_epochs),
+        with DataLoader(make_reader('{}/test'.format(args.dataset_url), num_epochs=reader_epochs),
                         batch_size=args.test_batch_size, transform=_transform_row) as test_loader:
             test(model, device, test_loader)
 

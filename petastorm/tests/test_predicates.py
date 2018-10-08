@@ -14,11 +14,10 @@
 
 import pytest
 
+from petastorm import make_reader
 from petastorm.predicates import in_set, in_intersection, \
     in_negate, in_reduce, in_pseudorandom_split, in_lambda
-from petastorm.reader import Reader
 from petastorm.tests.test_common import TestSchema
-from petastorm.workers_pool.dummy_pool import DummyPool
 
 
 @pytest.fixture(scope="session")
@@ -115,10 +114,10 @@ def test_pseudorandom_split(all_values):
 
 
 def test_predicate_on_single_column(synthetic_dataset):
-    reader = Reader(synthetic_dataset.url,
-                    schema_fields=[TestSchema.id2],
-                    predicate=in_lambda(['id2'], lambda id2: True),
-                    reader_pool=DummyPool())
+    reader = make_reader(synthetic_dataset.url,
+                         schema_fields=[TestSchema.id2],
+                         predicate=in_lambda(['id2'], lambda id2: True),
+                         reader_pool_type='dummy')
     counter = 0
     for row in reader:
         counter += 1

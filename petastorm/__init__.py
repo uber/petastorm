@@ -12,4 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import petastorm.reader
+
 __version__ = '0.4.2'
+
+make_reader = petastorm.reader.make_reader

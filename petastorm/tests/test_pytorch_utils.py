@@ -13,9 +13,8 @@
 # limitations under the License.
 from __future__ import division
 
+from petastorm import make_reader
 from petastorm.pytorch import DataLoader
-from petastorm.reader import Reader
-from petastorm.workers_pool.dummy_pool import DummyPool
 
 
 def _noop_collate(alist):
@@ -23,21 +22,21 @@ def _noop_collate(alist):
 
 
 def test_basic_pytorch_dataloader(synthetic_dataset):
-    loader = DataLoader(Reader(synthetic_dataset.url, reader_pool=DummyPool()), collate_fn=_noop_collate)
+    loader = DataLoader(make_reader(synthetic_dataset.url, reader_pool_type='dummy'), collate_fn=_noop_collate)
     for item in loader:
         assert len(item) == 1
 
 
 def test_pytorch_dataloader_batched(synthetic_dataset):
     batch_size = 10
-    loader = DataLoader(Reader(synthetic_dataset.url, reader_pool=DummyPool()),
+    loader = DataLoader(make_reader(synthetic_dataset.url, reader_pool_type='dummy'),
                         batch_size=batch_size, collate_fn=_noop_collate)
     for item in loader:
         assert len(item) == batch_size
 
 
 def test_pytorch_dataloader_context(synthetic_dataset):
-    with DataLoader(Reader(synthetic_dataset.url, reader_pool=DummyPool()),
+    with DataLoader(make_reader(synthetic_dataset.url, reader_pool_type='dummy'),
                     collate_fn=_noop_collate) as loader:
         for item in loader:
             assert len(item) == 1
