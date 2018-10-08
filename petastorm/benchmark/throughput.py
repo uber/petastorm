@@ -24,8 +24,9 @@ import psutil
 import six
 import tensorflow as tf
 
+from petastorm import make_reader
 from petastorm.etl.dataset_metadata import get_schema_from_dataset_url
-from petastorm.reader import Reader, ReaderV2
+from petastorm.reader import ReaderV2
 from petastorm.reader_impl.same_thread_executor import SameThreadExecutor
 from petastorm.reader_impl.shuffling_buffer import RandomShufflingBuffer
 from petastorm.tf_utils import tf_tensors
@@ -47,7 +48,7 @@ class WorkerPoolType(Enum):
     PROCESS = 'process'
     """A process pool is used by the benchmark"""
 
-    NONE = 'none'
+    NONE = 'dummy'
     """IO and loading will be done on a single thread. No parallelism."""
 
     def __str__(self):
@@ -159,10 +160,10 @@ def reader_throughput(dataset_url, field_regex=None, warmup_cycles_count=300, me
 
     logger.info('Fields used in the benchmark: %s', str(reader_extra_args['schema_fields']))
 
-    with Reader(dataset_url,
-                num_epochs=None,
-                reader_pool=_create_worker_pool(pool_type, loaders_count, profile_threads, pyarrow_serialize),
-                **reader_extra_args) as reader:
+    with make_reader(dataset_url,
+                     num_epochs=None,
+                     reader_pool_type=str(pool_type), workers_count=loaders_count, pyarrow_serialize=pyarrow_serialize,
+                     **reader_extra_args) as reader:
 
         if read_method == ReadMethod.PYTHON:
             result = _time_warmup_and_work(reader, warmup_cycles_count, measure_cycles_count)

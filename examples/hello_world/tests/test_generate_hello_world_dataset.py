@@ -20,7 +20,7 @@ from examples.hello_world.generate_hello_world_dataset import generate_hello_wor
 from examples.hello_world.pyspark_hello_world import pyspark_hello_world
 from examples.hello_world.pytorch_hello_world import pytorch_hello_world
 from examples.hello_world.tensorflow_hello_world import tensorflow_hello_world
-from petastorm.reader import Reader
+from petastorm import make_reader
 from petastorm.tests.conftest import SyntheticDataset
 
 
@@ -41,7 +41,7 @@ def hello_world_dataset(tmpdir_factory):
 
 def test_generate(hello_world_dataset):
     # Read from it using a plain reader
-    with Reader(hello_world_dataset.url) as reader:
+    with make_reader(hello_world_dataset.url) as reader:
         all_samples = list(reader)
     assert all_samples
 

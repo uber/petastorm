@@ -21,10 +21,11 @@ from __future__ import division, print_function
 
 import argparse
 import os
+
 import tensorflow as tf
 
 from examples.mnist import DEFAULT_MNIST_DATA_PATH
-from petastorm.reader import Reader
+from petastorm import make_reader
 from petastorm.tf_utils import tf_tensors
 
 
@@ -37,8 +38,8 @@ def train_and_test(dataset_url, training_iterations, batch_size, evaluation_inte
     :param evaluation_interval: The interval used to print the accuracy.
     :return:
     """
-    with Reader(os.path.join(dataset_url, 'train'), num_epochs=None) as train_reader:
-        with Reader(os.path.join(dataset_url, 'test'), num_epochs=None) as test_reader:
+    with make_reader(os.path.join(dataset_url, 'train'), num_epochs=None) as train_reader:
+        with make_reader(os.path.join(dataset_url, 'test'), num_epochs=None) as test_reader:
             train_readout = tf_tensors(train_reader)
             train_image = tf.cast(tf.reshape(train_readout.image, [784]), tf.float32)
             train_label = train_readout.digit

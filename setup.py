@@ -12,15 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+import io
+import re
+
 import setuptools
 from setuptools import setup
-
-from petastorm import __version__
 
 PACKAGE_NAME = 'petastorm'
 
 with open('README.rst') as f:
     long_description = f.read()
+
+with io.open('petastorm/__init__.py', 'rt', encoding='utf8') as f:
+    version = re.search(r'__version__ = \'(.*?)\'', f.read()).group(1)
+    if version is None:
+        raise ImportError('Could not find __version__ in petastorm/__init__.py')
 
 REQUIRED_PACKAGES = [
     'diskcache>=3.0.0',
@@ -62,7 +69,7 @@ packages = setuptools.find_packages()
 
 setup(
     name=PACKAGE_NAME,
-    version=__version__,
+    version=version,
     install_requires=REQUIRED_PACKAGES,
     packages=packages,
     description='Petastorm is a library enabling the use of Parquet storage from Tensorflow, Pytorch, and'

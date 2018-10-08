@@ -2,16 +2,14 @@ import os
 from collections import namedtuple
 from shutil import copytree
 
+import pyarrow.parquet as pq
 import pytest
 
-import pyarrow.parquet as pq
-
+from petastorm import make_reader
+from petastorm.etl import petastorm_generate_metadata
 from petastorm.etl.dataset_metadata import PetastormMetadataError
-from petastorm.reader import Reader
 from petastorm.selectors import SingleIndexSelector
 from petastorm.tests.test_common import create_test_dataset, TestSchema
-from petastorm.workers_pool.dummy_pool import DummyPool
-from petastorm.etl import petastorm_generate_metadata
 
 ROWS_COUNT = 1000
 
@@ -28,7 +26,7 @@ def synthetic_dataset(tmpdir_factory):
 
 def _check_reader(path, rowgroup_selector=None):
     # Just check that you can open and read from a reader successfully
-    with Reader('file://{}'.format(path), reader_pool=DummyPool(), rowgroup_selector=rowgroup_selector) as reader:
+    with make_reader('file://{}'.format(path), reader_pool_type='dummy', rowgroup_selector=rowgroup_selector) as reader:
         [next(reader) for _ in range(10)]
 
 

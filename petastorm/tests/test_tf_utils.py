@@ -20,13 +20,12 @@ import numpy as np
 import pytest
 import tensorflow as tf
 
+from petastorm import make_reader
 from petastorm.ngram import NGram
-from petastorm.reader import Reader
 from petastorm.tests.test_common import TestSchema
 from petastorm.tf_utils import _sanitize_field_tf_types, _numpy_to_tf_dtypes, \
     _schema_to_tf_dtypes, tf_tensors
 from petastorm.unischema import Unischema, UnischemaField
-from petastorm.workers_pool.dummy_pool import DummyPool
 
 
 def test_empty_dict():
@@ -93,8 +92,8 @@ def _read_from_tf_tensors(synthetic_dataset, count, shuffling_queue_capacity, mi
     fields = set(TestSchema.fields.values()) - {TestSchema.matrix_nullable, TestSchema.string_array_nullable}
     schema_fields = (fields if ngram is None else ngram)
 
-    reader = Reader(schema_fields=schema_fields, dataset_url=synthetic_dataset.url, reader_pool=DummyPool(),
-                    shuffle=False)
+    reader = make_reader(schema_fields=schema_fields, dataset_url=synthetic_dataset.url, reader_pool_type='dummy',
+                         shuffle_row_groups=False)
 
     row_tensors = tf_tensors(reader, shuffling_queue_capacity=shuffling_queue_capacity,
                              min_after_dequeue=min_after_dequeue)

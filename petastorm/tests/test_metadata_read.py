@@ -16,10 +16,9 @@ import unittest
 from shutil import move, rmtree
 from tempfile import mkdtemp
 
+from petastorm import make_reader
 from petastorm.etl.dataset_metadata import PetastormMetadataError
-from petastorm.reader import Reader
 from petastorm.tests.test_common import create_test_dataset
-from petastorm.workers_pool.dummy_pool import DummyPool
 
 # Tiny count of rows in a fake dataset
 ROWS_COUNT = 10
@@ -56,7 +55,7 @@ class MetadataUnischemaReadTest(unittest.TestCase):
     def test_no_metadata(self):
         self.vanish_metadata()
         with self.assertRaises(PetastormMetadataError) as e:
-            Reader(self._dataset_url, reader_pool=DummyPool())
+            make_reader(self._dataset_url, reader_pool_type='dummy')
         self.assertTrue('Could not find _common_metadata file' in str(e.exception))
         self.restore_metadata()
 

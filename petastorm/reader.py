@@ -19,26 +19,23 @@ import warnings
 
 import six
 from pyarrow import parquet as pq
-from six.moves.urllib.parse import urlparse
 
-import petastorm.shuffle_options
 from petastorm.cache import NullCache
 from petastorm.etl import dataset_metadata, rowgroup_indexing
 from petastorm.fs_utils import FilesystemResolver
+from petastorm.local_disk_cache import LocalDiskCache
 from petastorm.ngram import NGram
 from petastorm.predicates import PredicateBase
 from petastorm.reader_impl.reader_v2 import ReaderV2
 from petastorm.reader_worker import ReaderWorker
 from petastorm.selectors import RowGroupSelectorBase
 from petastorm.workers_pool import EmptyResultError
+from petastorm.workers_pool.dummy_pool import DummyPool
+from petastorm.workers_pool.process_pool import ProcessPool
 from petastorm.workers_pool.thread_pool import ThreadPool
 from petastorm.workers_pool.ventilator import ConcurrentVentilator
 
 logger = logging.getLogger(__name__)
-
-# For backward compatibility. Would clean this up with package reorganization in the future
-# https://github.com/uber/petastorm/issues/134
-ShuffleOptions = petastorm.shuffle_options.ShuffleOptions
 
 # Make it easier to import as "from petastorm.reader import ReaderV2"
 ReaderV2 = ReaderV2
@@ -48,21 +45,122 @@ ReaderV2 = ReaderV2
 _VENTILATE_EXTRA_ROWGROUPS = 2
 
 
+def make_reader(dataset_url,
+                schema_fields=None,
+                reader_pool_type='thread', workers_count=10, pyarrow_serialize=False,
+                shuffle_row_groups=True, shuffle_row_drop_partitions=1,
+                predicate=None,
+                rowgroup_selector=None,
+                num_epochs=1,
+                cur_shard=None, shard_count=None,
+                cache_type='null', cache_location=None, cache_size_limit=None,
+                cache_row_size_estimate=None, cache_extra_settings=None,
+                hdfs_driver='libhdfs3'):
+    """
+    Factory convenience method for :class:`Reader`.
+
+    :param dataset_url: an filepath or a url to a parquet directory,
+        e.g. ``'hdfs://some_hdfs_cluster/user/yevgeni/parquet8'``, or ``'/tmp/mydataset'``.
+    :param schema_fields: Either list of unischema fields to subset, or ``None`` to read all fields.
+            OR an NGram object, then it will return an NGram of the specified properties.
+    :param reader_pool_type: A string denoting the reader pool type. Should be one of ['thread', 'process', 'dummy']
+        denoting a thread pool, process pool, or running everything in the master thread. Defaults to 'thread'
+    :param workers_count: An int for the number of workers to use in the reader pool. This only is used for the
+        thread or process pool. Defaults to 10
+    :param pyarrow_serialize: Whether to use pyarrow for serialization. Currently only applicable to process pool.
+        Defaults to False.
+    :param shuffle_row_groups: Whether to shuffle row groups (the order in which full row groups are read)
+    :param shuffle_row_drop_partitions: This is is a positive integer which determines how many partitions to
+        break up a row group into for increased shuffling in exchange for worse performance (extra reads).
+        For example if you specify 2 each row group read will drop half of the rows within every row group and
+        read the remaining rows in separate reads. It is recommended to keep this number below the regular row
+        group size in order to not waste reads which drop all rows.
+    :param predicate: instance of :class:`.PredicateBase` object to filter rows to be returned by reader.
+    :param rowgroup_selector: instance of row group selector object to select row groups to be read
+    :param num_epochs: An epoch is a single pass over all rows in the dataset. Setting ``num_epochs`` to
+        ``None`` will result in an infinite number of epochs.
+    :param cur_shard: An int denoting the current shard number. Each node reading a shard should
+        pass in a unique shard number in the range [0, shard_count). shard_count must be supplied as well.
+        Defaults to None
+    :param shard_count: An int denoting the number of shards to break this dataset into. Defaults to None
+    :param cache_type: A string denoting the cache type, if desired. Options are [None, 'null', 'local-disk'] to
+        either have a null/noop cache or a cache implemented using diskcache. Caching is useful when communication
+        to the main data store is either slow or expensive and the local machine has large enough storage
+        to store entire dataset (or a partition of a dataset if shard_count is used). By default will be a null cache.
+    :param cache_location: A string denoting the location or path of the cache.
+    :param cache_size_limit: An int specifying the size limit of the cache in bytes
+    :param cache_row_size_estimate: An int specifying the estimated size of a row in the dataset
+    :param cache_extra_settings: A dictionary of extra settings to pass to the cache implementation,
+    :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
+        libhdfs (java through JNI) or libhdfs3 (C++)
+    :return: A :class:`Reader` object
+    """
+
+    if dataset_url is None or not isinstance(dataset_url, six.string_types):
+        raise ValueError("""dataset_url must be a string""")
+
+    dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
+    logger.debug('dataset_url: %s', dataset_url)
+
+    resolver = FilesystemResolver(dataset_url, hdfs_driver=hdfs_driver)
+    filesystem = resolver.filesystem()
+    dataset_path = resolver.parsed_dataset_url().path
+
+    if reader_pool_type == 'thread':
+        reader_pool = ThreadPool(workers_count)
+    elif reader_pool_type == 'process':
+        reader_pool = ProcessPool(workers_count, pyarrow_serialize=pyarrow_serialize)
+    elif reader_pool_type == 'dummy':
+        reader_pool = DummyPool()
+    else:
+        raise ValueError('Unknown reader_pool_type: {}'.format(reader_pool_type))
+
+    if cache_type is None or cache_type == 'null':
+        cache = NullCache()
+    elif cache_type == 'local-disk':
+        cache = LocalDiskCache(cache_location, cache_size_limit, cache_row_size_estimate, **cache_extra_settings or {})
+    else:
+        raise ValueError('Unknown cache_type: {}'.format(cache_type))
+
+    return Reader(filesystem, dataset_path,
+                  schema_fields=schema_fields,
+                  reader_pool=reader_pool,
+                  shuffle_row_groups=shuffle_row_groups,
+                  shuffle_row_drop_partitions=shuffle_row_drop_partitions,
+                  predicate=predicate,
+                  rowgroup_selector=rowgroup_selector,
+                  num_epochs=num_epochs,
+                  cur_shard=cur_shard,
+                  shard_count=shard_count,
+                  cache=cache)
+
+
 class Reader(object):
     """Reads a dataset from a Petastorm dataset.
 
     :ivar last_row_consumed: True if the last row was already returned by the Reader.
     """
 
-    def __init__(self, dataset_url, schema_fields=None, shuffle=None, predicate=None, rowgroup_selector=None,
-                 reader_pool=None, num_epochs=1, sequence=None, training_partition=None, num_training_partitions=None,
-                 cache=None, shuffle_options=None, pyarrow_filesystem=None):
+    def __init__(self, pyarrow_filesystem, dataset_path, schema_fields=None,
+                 shuffle_row_groups=True, shuffle_row_drop_partitions=1,
+                 predicate=None, rowgroup_selector=None, reader_pool=None, num_epochs=1,
+                 cur_shard=None, shard_count=None, cache=None):
         """Initializes a reader object.
 
-        :param dataset_url: an filepath or a url to a parquet directory,
-            e.g. ``'hdfs://some_hdfs_cluster/user/yevgeni/parquet8'``, or ``'/tmp/mydataset'``.
+        :param pyarrow_filesystem: An instance of ``pyarrow.FileSystem`` instance that will be use. If not specified,
+            then a default one will be selected based on the url. The default hdfs driver is ``libhdfs3``. If you want
+            to to use ``libhdfs``, use
+            ``pyarrow_filesystem=pyarrow.hdfs.connect('hdfs:///some/path', driver='libhdfs')``.
+        :param dataset_path: filepath to a parquet directory on the specified filesystem,
+            e.g. ``'/user/yevgeni/parquet8'``, or ``'/tmp/mydataset'``.
         :param schema_fields: Either list of unischema fields to subset, or ``None`` to read all fields.
             OR an NGram object, then it will return an NGram of the specified properties.
+        :param shuffle_row_groups: Whether to shuffle row groups (the order in which full row groups are read)
+        :param shuffle_row_drop_partitions: This is is a positive integer which determines how many partitions to
+            break up a row group into for increased shuffling in exchange for worse performance (extra reads).
+            For example if you specify 2 each row group read will drop half of the rows within every row group and
+            read the remaining rows in separate reads. It is recommended to keep this number below the regular row
+            group size in order to not waste reads which drop all rows.
         :param predicate: instance of predicate object to filter rows to be returned by reader.
         :param rowgroup_selector: instance of row group selector object to select row groups to be read
         :param reader_pool: parallelization pool. ``ThreadPool(10)`` (10 threads) is used by default.
@@ -71,29 +169,18 @@ class Reader(object):
             (e.g. :class:`petastorm.workers_pool.process_pool.ProcessPool`).
         :param num_epochs: An epoch is a single pass over all rows in the dataset. Setting ``num_epochs`` to
             ``None`` will result in an infinite number of epochs.
-        :param training_partition: An int denoting the partition number used for multi node training. Each node should
-            pass in a unique partition number in the range ``[0, num_training_partitions)``.
-            ``num_training_partitions`` must be supplied as well.
-        :param num_training_partitions: An int denoting the number of training partitions (how many nodes are performing
-            the multi node training).
+        :param cur_shard: An int denoting the current shard number used. Each reader instance should
+            pass in a unique shard number in the range ``[0, shard_count)``.
+            ``shard_count`` must be supplied as well. Defaults to None
+        :param shard_count: An int denoting the number of shard partitions there are. Defaults to None
         :param cache: An object conforming to :class:`.CacheBase` interface. Before loading row groups from a parquet
             file the Reader will attempt to load these values from cache. Caching is useful when communication
             to the main data store is either slow or expensive and the local machine has large enough storage
-            to store entire dataset (or a partition of a dataset if num_training_partitions is used).
+            to store entire dataset (or a partition of a dataset if shards are used).
             By default, use the :class:`.NullCache` implementation.
-        :param shuffle_options: ShuffleOptions object to describe how to shuffle dataset (supercedes shuffle parameter)
-            defaults to shuffling row groups but not to drop rows based on partitions.
-        :param pyarrow_filesystem: An instance of ``pyarrow.FileSystem`` instance that will be use. If not specified,
-            then a default one will be selected based on the url. The default hdfs driver is ``libhdfs3``. If you want
-            to to use ``libhdfs``, use
-            ``pyarrow_filesystem=pyarrow.hdfs.connect('hdfs:///some/path', driver='libhdfs')``.
-        :param sequence: *DEPRECATED* To use sequence/ngram, please supply the argument in
-            ``schema_fields`` instead.
-        :param shuffle: *DEPRECATED* Boolean whether to shuffle the row group order.
-            Use ``shuffle_row_groups`` in :class:`.ShuffleOptions` instead.
         """
 
-        # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
+        # 1. Open the parquet storage (dataset)
         # 2. Get a list of all groups
         # 3. Filter rowgroups
         #    a. predicates
@@ -101,39 +188,22 @@ class Reader(object):
         #    c. partition: used to get a subset of data for distributed training
         # 4. Create a rowgroup ventilator object
         # 5. Start workers pool
-        if dataset_url is None or not isinstance(dataset_url, six.string_types):
-            raise ValueError("""dataset_url must be a string""")
-
         if not (isinstance(schema_fields, collections.Iterable) or isinstance(schema_fields, NGram)
                 or schema_fields is None):
             raise ValueError("""Fields must be either None, an iterable collection of Unischema fields or an NGram
             object.""")
 
-        if sequence is not None:
-            raise ValueError("""'sequence' argument of Reader object is deprecated. Please pass an NGram instance to
-            'schema_fields' argument instead.""")
-
         self.ngram = schema_fields if isinstance(schema_fields, NGram) else None
 
-        if self.ngram and not self.ngram.timestamp_overlap and shuffle_options.shuffle_row_drop_partitions > 1:
+        if self.ngram and not self.ngram.timestamp_overlap and shuffle_row_drop_partitions > 1:
             raise NotImplementedError('Using timestamp_overlap=False is not implemented with'
                                       ' shuffle_options.shuffle_row_drop_partitions > 1')
 
         cache = cache or NullCache()
-        dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
+
         self._workers_pool = reader_pool or ThreadPool(10)
-
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
-        logger.debug('dataset_url: %s', dataset_url)
-
-        if pyarrow_filesystem is not None:
-            filesystem = pyarrow_filesystem
-            dataset_path = urlparse(dataset_url).path
-        else:
-            resolver = FilesystemResolver(dataset_url)
-            filesystem = resolver.filesystem()
-            dataset_path = resolver.parsed_dataset_url().path
-        self.dataset = pq.ParquetDataset(dataset_path, filesystem=filesystem,
+        self.dataset = pq.ParquetDataset(dataset_path, filesystem=pyarrow_filesystem,
                                          validate_schema=False)
 
         # Get a unischema stored in the dataset metadata.
@@ -149,22 +219,18 @@ class Reader(object):
 
         # 3. Filter rowgroups
         filtered_row_group_indexes, worker_predicate = self._filter_row_groups(self.dataset, row_groups, predicate,
-                                                                               rowgroup_selector, training_partition,
-                                                                               num_training_partitions)
+                                                                               rowgroup_selector, cur_shard,
+                                                                               shard_count)
         # 4. Create a rowgroup ventilator object
-        if shuffle_options is None:
-            if shuffle is None:
-                shuffle = True
-            else:
-                logger.warning('shuffle option is deprecated. Please use shuffle_options instead')
-            shuffle_options = petastorm.shuffle_options.ShuffleOptions(shuffle)
-        self._normalize_shuffle_options(shuffle_options, self.dataset)
-        ventilator = self._create_ventilator(filtered_row_group_indexes, shuffle_options, num_epochs, worker_predicate,
+        normalized_shuffle_row_drop_partitions = \
+            self._normalize_shuffle_options(shuffle_row_drop_partitions, self.dataset)
+        ventilator = self._create_ventilator(filtered_row_group_indexes, shuffle_row_groups,
+                                             normalized_shuffle_row_drop_partitions, num_epochs, worker_predicate,
                                              self._workers_pool.workers_count + _VENTILATE_EXTRA_ROWGROUPS)
 
         # 5. Start workers pool
         self._workers_pool.start(ReaderWorker,
-                                 (dataset_url, self.schema, self.ngram, row_groups, cache, filesystem),
+                                 (pyarrow_filesystem, dataset_path, self.schema, self.ngram, row_groups, cache),
                                  ventilator=ventilator)
         logger.debug('Workers pool started')
 
@@ -173,8 +239,8 @@ class Reader(object):
         # _result
         self._result_buffer = []
 
-    def _filter_row_groups(self, dataset, row_groups, predicate, rowgroup_selector, training_partition,
-                           num_training_partitions):
+    def _filter_row_groups(self, dataset, row_groups, predicate, rowgroup_selector, cur_shard,
+                           shard_count):
         """Calculates which rowgroups will be read during.
 
         The following filters are applied:
@@ -186,11 +252,9 @@ class Reader(object):
         :param row_groups: a list of row groups (a list of ParquetDatasetPiece objects)
         :param predicate: instance of predicate object to filter rows to be returned by reader.
         :param rowgroup_selector: instance of row group selector object to select row groups to be read
-        :param training_partition: An int denoting the partition number used for multi node training. Each node should
-                       pass in a unique partition number in the range [0, num_training_partitions).
-                       num_training_partitions must be supplied as well.
-        :param num_training_partitions An int denoting the number of training partitions (how many nodes are performing
-                       the multi node training)
+        :param cur_shard: An int denoting the current shard number used. Each node should
+                       pass in a unique partition number in the range [0, shard_count).
+        :param shard_count An int denoting the number of reader shards
         :return: (filtered_row_group_indexes, worker_predicate): filtered_row_group_indexes an integer index into
         row_groups array. worker_predicate contains only predicates that could not be resolved on the partitioned fields
         and need to be evaluated by workers.
@@ -203,27 +267,27 @@ class Reader(object):
             filtered_row_group_indexes = self._apply_row_group_selector(dataset, rowgroup_selector,
                                                                         filtered_row_group_indexes)
 
-        if training_partition is not None or num_training_partitions is not None:
-            filtered_row_group_indexes = self._partition_row_groups(dataset, row_groups, num_training_partitions,
-                                                                    training_partition,
+        if cur_shard is not None or shard_count is not None:
+            filtered_row_group_indexes = self._partition_row_groups(dataset, row_groups, shard_count,
+                                                                    cur_shard,
                                                                     filtered_row_group_indexes)
         return filtered_row_group_indexes, worker_predicate
 
-    def _partition_row_groups(self, dataset, row_groups, num_training_partitions, training_partition,
+    def _partition_row_groups(self, dataset, row_groups, shard_count, cur_shard,
                               filtered_row_group_indexes):
         """Filters the list of row group indexes based on the requested training partitions. Returns
         a modified list of rowgroup indexes."""
 
-        if not num_training_partitions \
-                or not isinstance(training_partition, int) \
-                or not isinstance(num_training_partitions, int):
+        if not shard_count \
+                or not isinstance(cur_shard, int) \
+                or not isinstance(shard_count, int):
             raise ValueError('partition and num_partitions must be ints and both specified to use partitioning')
 
         # We hash on the relative path of each parquet file to guarantee consistency between different reader
         # constructions even after moving the dataset
         filtered_row_group_indexes = [index for index in filtered_row_group_indexes
                                       if hash(os.path.relpath(row_groups[index].path, dataset.paths)) %
-                                      num_training_partitions == training_partition]
+                                      shard_count == cur_shard]
         return filtered_row_group_indexes
 
     def _apply_row_group_selector(self, dataset, rowgroup_selector, filtered_row_group_indexes):
@@ -279,33 +343,33 @@ class Reader(object):
         return filtered_row_group_indexes, worker_predicate
 
     @staticmethod
-    def _normalize_shuffle_options(shuffle_options, dataset):
+    def _normalize_shuffle_options(shuffle_row_drop_partitions, dataset):
         """Checks that shuffle_options doesnt ask for more patitions than rows in a row group.
         This prevents sending partitions to workers which will result in not reading anything."""
-        if shuffle_options.shuffle_row_drop_partitions > 1 and dataset.metadata and dataset.metadata.num_row_groups:
+        if shuffle_row_drop_partitions > 1 and dataset.metadata and dataset.metadata.num_row_groups:
             max_rows_in_row_group = 1
             for i in six.moves.xrange(dataset.metadata.num_row_groups):
                 max_rows_in_row_group = max(max_rows_in_row_group, dataset.metadata.row_group(i).num_rows)
 
-            shuffle_options.shuffle_row_drop_partitions = min(shuffle_options.shuffle_row_drop_partitions,
-                                                              max_rows_in_row_group)
+            return min(shuffle_row_drop_partitions, max_rows_in_row_group)
+        return shuffle_row_drop_partitions
 
-    def _create_ventilator(self, row_group_indexes, shuffle_options, num_epochs, worker_predicate,
-                           max_ventilation_queue_size):
+    def _create_ventilator(self, row_group_indexes, shuffle_row_groups, shuffle_row_drop_partitions,
+                           num_epochs, worker_predicate, max_ventilation_queue_size):
         items_to_ventilate = []
         for piece_index in row_group_indexes:
-            for shuffle_row_drop_partition in range(shuffle_options.shuffle_row_drop_partitions):
+            for shuffle_row_drop_partition in range(shuffle_row_drop_partitions):
                 items_to_ventilate.append(
                     {'piece_index': piece_index,
                      'worker_predicate': worker_predicate,
                      'shuffle_row_drop_partition': (shuffle_row_drop_partition,
-                                                    shuffle_options.shuffle_row_drop_partitions)})
+                                                    shuffle_row_drop_partitions)})
 
         return ConcurrentVentilator(self._workers_pool.ventilate,
                                     items_to_ventilate,
                                     iterations=num_epochs,
                                     max_ventilation_queue_size=max_ventilation_queue_size,
-                                    randomize_item_order=shuffle_options.shuffle_row_groups)
+                                    randomize_item_order=shuffle_row_groups)
 
     def stop(self):
         """Stops all worker threads/processes."""
