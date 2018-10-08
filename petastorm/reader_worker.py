@@ -18,7 +18,6 @@ import hashlib
 import numpy as np
 from pyarrow import parquet as pq
 from pyarrow.parquet import ParquetFile
-from six.moves.urllib.parse import urlparse, urlunparse
 
 from petastorm import utils
 from petastorm.cache import NullCache
@@ -46,12 +45,12 @@ class ReaderWorker(WorkerBase):
     def __init__(self, worker_id, publish_func, args):
         super(ReaderWorker, self).__init__(worker_id, publish_func, args)
 
-        self._dataset_url_parsed = urlparse(args[0])
-        self._schema = args[1]
-        self._ngram = args[2]
-        self._split_pieces = args[3]
-        self._local_cache = args[4]
-        self._filesystem = args[5]
+        self._filesystem = args[0]
+        self._dataset_path = args[1]
+        self._schema = args[2]
+        self._ngram = args[3]
+        self._split_pieces = args[4]
+        self._local_cache = args[5]
 
         # We create datasets lazily in the first invocation of 'def process'. This speeds up startup time since
         # all Worker constructors are serialized
@@ -73,7 +72,7 @@ class ReaderWorker(WorkerBase):
 
         if not self._dataset:
             self._dataset = pq.ParquetDataset(
-                self._dataset_url_parsed.path,
+                self._dataset_path,
                 filesystem=self._filesystem,
                 validate_schema=False)
 
@@ -92,12 +91,12 @@ class ReaderWorker(WorkerBase):
         if worker_predicate:
             all_cols = self._load_rows_with_predicate(parquet_file, piece, worker_predicate, shuffle_row_drop_partition)
         else:
-            # Using hash of the dataset url with the relative path in order to:
+            # Using hash of the dataset path with the relative path in order to:
             #  1. Make sure if a common cache serves multiple processes (e.g. redis), we don't have conflicts
-            #  2. Dataset url is hashed, to make sure we don't create too long keys, which maybe incompatible with
+            #  2. Dataset path is hashed, to make sure we don't create too long keys, which maybe incompatible with
             #     some cache implementations
             #  3. Still leave relative path and the piece_index in plain text to make it easier to debug
-            cache_key = '{}:{}:{}'.format(hashlib.md5(urlunparse(self._dataset_url_parsed).encode('utf-8')).hexdigest(),
+            cache_key = '{}:{}:{}'.format(hashlib.md5(self._dataset_path.encode('utf-8')).hexdigest(),
                                           piece.path, piece_index)
             all_cols = self._local_cache.get(cache_key,
                                              lambda: self._load_rows(parquet_file, piece, shuffle_row_drop_partition))

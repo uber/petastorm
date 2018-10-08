@@ -139,11 +139,14 @@ The reader has multiple features such as:
 - Partitioning for multi-GPU training
 - Local caching
 
-Reading a dataset is simple using the ``petastorm.reader.Reader`` class:
+Reading a dataset is simple using the ``petastorm.reader.Reader`` class which can be created using the
+``petastorm.make_reader`` factory method:
 
 .. code-block:: python
 
-    with Reader('hdfs://myhadoop/some_dataset') as reader:
+   from petastorm import make_reader
+
+    with make_reader('hdfs://myhadoop/some_dataset') as reader:
        for row in reader:
            print(row)
 
@@ -159,7 +162,7 @@ function:
 
 .. code-block:: python
 
-    with Reader('file:///some/localpath/a_dataset') as reader:
+    with make_reader('file:///some/localpath/a_dataset') as reader:
        row_tensors = tf_tensors(reader)
        with tf.Session() as session:
            for _ in range(3):
@@ -169,7 +172,7 @@ Alternatively, you can use new ``tf.data.Dataset`` API;
 
 .. code-block:: python
 
-    with Reader('file:///some/localpath/a_dataset') as reader:
+    with make_reader('file:///some/localpath/a_dataset') as reader:
         dataset = make_petastorm_dataset(reader)
         iterator = dataset.make_one_shot_iterator()
         tensor = iterator.get_next()
@@ -212,10 +215,10 @@ The minimalist example below assumes the definition of a ``Net`` class and
         ])
         return (transform(mnist_row['image']), mnist_row['digit'])
 
-    with DataLoader(Reader('file:///localpath/mnist/train', num_epochs=10),
+    with DataLoader(make_reader('file:///localpath/mnist/train', num_epochs=10),
                     batch_size=64, transform=_transform_row) as train_loader:
         train(model, device, train_loader, 10, optimizer, 1)
-    with DataLoader(Reader('file:///localpath/mnist/test', num_epochs=10),
+    with DataLoader(make_reader('file:///localpath/mnist/test', num_epochs=10),
                     batch_size=1000, transform=_transform_row) as test_loader:
         test(model, device, test_loader)
 

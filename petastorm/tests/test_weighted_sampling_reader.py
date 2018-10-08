@@ -18,12 +18,11 @@ import numpy as np
 import pytest
 import six
 
+from petastorm import make_reader
 from petastorm.predicates import in_lambda
-from petastorm.reader import Reader
-from petastorm.weighted_sampling_reader import WeightedSamplingReader
 from petastorm.test_util.reader_mock import ReaderMock
 from petastorm.unischema import Unischema, UnischemaField
-from petastorm.workers_pool.dummy_pool import DummyPool
+from petastorm.weighted_sampling_reader import WeightedSamplingReader
 
 TestSchema = Unischema('TestSchema', [
     UnischemaField('f1', np.int32, (), None, False),
@@ -74,10 +73,10 @@ def test_mixing():
 
 
 def test_real_reader(synthetic_dataset):
-    readers = [Reader(synthetic_dataset.url, predicate=in_lambda(['id'], lambda id: id % 2 == 0), num_epochs=None,
-                      reader_pool=DummyPool()),
-               Reader(synthetic_dataset.url, predicate=in_lambda(['id'], lambda id: id % 2 == 1), num_epochs=None,
-                      reader_pool=DummyPool())]
+    readers = [make_reader(synthetic_dataset.url, predicate=in_lambda(['id'], lambda id: id % 2 == 0), num_epochs=None,
+                           reader_pool_type='dummy'),
+               make_reader(synthetic_dataset.url, predicate=in_lambda(['id'], lambda id: id % 2 == 1), num_epochs=None,
+                           reader_pool_type='dummy')]
     results = [0, 0]
     num_of_reads = 300
     with WeightedSamplingReader(readers, [0.5, 0.5]) as mixer:

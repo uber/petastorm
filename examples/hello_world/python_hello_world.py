@@ -17,11 +17,11 @@ using plain Python"""
 
 from __future__ import print_function
 
-from petastorm.reader import Reader
+from petastorm import make_reader
 
 
 def python_hello_world(dataset_url='file:///tmp/hello_world_dataset'):
-    with Reader(dataset_url) as reader:
+    with make_reader(dataset_url) as reader:
         # Pure python
         for sample in reader:
             print(sample.id)

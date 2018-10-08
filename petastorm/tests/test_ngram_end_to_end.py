@@ -22,21 +22,19 @@ import pytest
 import tensorflow as tf
 from tensorflow.python.framework.errors_impl import OutOfRangeError
 
+from petastorm import make_reader
 from petastorm.ngram import NGram
-from petastorm.reader import Reader, ShuffleOptions, ReaderV2
+from petastorm.reader import ReaderV2
 from petastorm.reader_impl.same_thread_executor import SameThreadExecutor
 from petastorm.tests.conftest import SyntheticDataset, maybe_cached_dataset
 from petastorm.tests.test_common import create_test_dataset, TestSchema
 from petastorm.tf_utils import tf_tensors
-from petastorm.workers_pool.dummy_pool import DummyPool
 
 # Tests in this module will run once for each entry in the READER_FACTORIES
 # pylint: disable=unnecessary-lambda
-from petastorm.workers_pool.process_pool import ProcessPool
-
 READER_FACTORIES = [
-    lambda url, **kwargs: Reader(url, reader_pool=DummyPool(), **kwargs),
-    lambda url, **kwargs: Reader(url, reader_pool=ProcessPool(1), **kwargs),
+    lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
+    lambda url, **kwargs: make_reader(url, reader_pool_type='process', workers_count=1, **kwargs),
     lambda url, **kwargs: ReaderV2(url, loader_pool=SameThreadExecutor(), decoder_pool=SameThreadExecutor(), **kwargs),
 ]
 
@@ -123,7 +121,7 @@ def _test_continuous_ngram_tf(ngram_fields, dataset_num_files_1, reader_factory)
     ngram = NGram(fields=ngram_fields, delta_threshold=10, timestamp_field=TestSchema.id)
     with reader_factory(dataset_num_files_1.url,
                         schema_fields=ngram,
-                        shuffle_options=ShuffleOptions(False)) as reader:
+                        shuffle_row_groups=False) as reader:
 
         readout_examples = tf_tensors(reader)
 
@@ -148,7 +146,7 @@ def _test_continuous_ngram(ngram_fields, dataset_num_files_1, reader_factory):
     and partition being 1."""
 
     ngram = NGram(fields=ngram_fields, delta_threshold=10, timestamp_field=TestSchema.id)
-    with reader_factory(dataset_num_files_1.url, schema_fields=ngram, shuffle_options=ShuffleOptions(False)) as reader:
+    with reader_factory(dataset_num_files_1.url, schema_fields=ngram, shuffle_row_groups=False) as reader:
         expected_id = 0
 
         for _ in range(ngram.length):
@@ -194,7 +192,8 @@ def _test_noncontinuous_ngram(ngram_fields, synthetic_dataset, reader_factory):
     ngram = NGram(fields=ngram_fields, delta_threshold=10, timestamp_field=TestSchema.id)
     with reader_factory(synthetic_dataset.url,
                         schema_fields=ngram,
-                        shuffle_options=ShuffleOptions(True, 5)) as reader:
+                        shuffle_row_groups=True,
+                        shuffle_row_drop_partitions=5) as reader:
         for _ in range(10):
             actual = next(reader)
             expected_ngram = _get_named_tuple_from_ngram(ngram, dataset_dicts, actual[min(actual.keys())].id)
@@ -310,7 +309,7 @@ def test_ngram_basic_longer_no_overlap(synthetic_dataset, reader_factory):
 
     dataset_dicts = synthetic_dataset.data
     ngram = NGram(fields=fields, delta_threshold=10, timestamp_field=TestSchema.id, timestamp_overlap=False)
-    with reader_factory(synthetic_dataset.url, schema_fields=ngram, shuffle_options=ShuffleOptions(False)) as reader:
+    with reader_factory(synthetic_dataset.url, schema_fields=ngram, shuffle_row_groups=False) as reader:
         timestamps_seen = set()
         for actual in reader:
             expected_ngram = _get_named_tuple_from_ngram(ngram, dataset_dicts, actual[min(actual.keys())].id)
@@ -336,7 +335,7 @@ def test_ngram_delta_threshold_tf(dataset_0_3_8_10_11_20_23, reader_factory):
     with reader_factory(
             dataset_0_3_8_10_11_20_23.url,
             schema_fields=ngram,
-            shuffle_options=ShuffleOptions(False)) as reader:
+            shuffle_row_groups=False) as reader:
 
         # Ngrams expected: (0, 3), (8, 10), (10, 11)
 
@@ -381,7 +380,7 @@ def test_ngram_delta_threshold(dataset_0_3_8_10_11_20_23, reader_factory):
     }
     ngram = NGram(fields=fields, delta_threshold=4, timestamp_field=TestSchema.id)
     with reader_factory(dataset_0_3_8_10_11_20_23.url, schema_fields=ngram,
-                        shuffle_options=ShuffleOptions(False)) as reader:
+                        shuffle_row_groups=False) as reader:
         # NGrams expected: (0, 3), (8, 10), (10, 11)
 
         first_item = next(reader)
@@ -470,7 +469,8 @@ def test_ngram_length_1_tf(synthetic_dataset, reader_factory):
     dataset_dicts = synthetic_dataset.data
     fields = {0: [TestSchema.id, TestSchema.id2]}
     ngram = NGram(fields=fields, delta_threshold=0.012, timestamp_field=TestSchema.id)
-    reader = reader_factory(synthetic_dataset.url, schema_fields=ngram, shuffle_options=ShuffleOptions(True, 5))
+    reader = reader_factory(synthetic_dataset.url, schema_fields=ngram,
+                            shuffle_row_groups=True, shuffle_row_drop_partitions=5)
     with tf.Session() as sess:
         for _ in range(10):
             actual = sess.run(tf_tensors(reader))
@@ -487,7 +487,8 @@ def test_ngram_length_1(synthetic_dataset, reader_factory):
     dataset_dicts = synthetic_dataset.data
     fields = {0: [TestSchema.id, TestSchema.id2]}
     ngram = NGram(fields=fields, delta_threshold=0.012, timestamp_field=TestSchema.id)
-    with reader_factory(synthetic_dataset.url, schema_fields=ngram, shuffle_options=ShuffleOptions(True, 3)) as reader:
+    with reader_factory(synthetic_dataset.url, schema_fields=ngram,
+                        shuffle_row_groups=True, shuffle_row_drop_partitions=3) as reader:
         for _ in range(10):
             actual = next(reader)
             expected_ngram = _get_named_tuple_from_ngram(ngram, dataset_dicts, actual[min(actual.keys())].id)
@@ -529,11 +530,12 @@ def test_ngram_shuffle_drop_ratio(synthetic_dataset, reader_factory):
     ngram = NGram(fields=fields, delta_threshold=10, timestamp_field=TestSchema.id)
     with reader_factory(synthetic_dataset.url,
                         schema_fields=ngram,
-                        shuffle_options=ShuffleOptions(False)) as reader:
+                        shuffle_row_groups=False) as reader:
         unshuffled = [row[0].id for row in reader]
     with reader_factory(synthetic_dataset.url,
                         schema_fields=ngram,
-                        shuffle_options=ShuffleOptions(True, 6)) as reader:
+                        shuffle_row_groups=True,
+                        shuffle_row_drop_partitions=6) as reader:
         shuffled = [row[0].id for row in reader]
     assert len(unshuffled) == len(shuffled)
     assert unshuffled != shuffled

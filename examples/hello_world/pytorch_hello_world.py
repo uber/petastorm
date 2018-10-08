@@ -17,12 +17,12 @@ using pytorch."""
 
 from __future__ import print_function
 
+from petastorm import make_reader
 from petastorm.pytorch import DataLoader
-from petastorm.reader import Reader
 
 
 def pytorch_hello_world(dataset_url='file:///tmp/hello_world_dataset'):
-    with DataLoader(Reader(dataset_url)) as train_loader:
+    with DataLoader(make_reader(dataset_url)) as train_loader:
         sample = next(iter(train_loader))
         print(sample['id'])
 

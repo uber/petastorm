@@ -20,29 +20,25 @@ import numpy as np
 import pytest
 import tensorflow as tf
 
+from petastorm import make_reader
 from petastorm.ngram import NGram
 from petastorm.predicates import in_lambda
-from petastorm.reader import Reader
 from petastorm.tests.test_common import TestSchema
 from petastorm.tf_utils import make_petastorm_dataset
-from petastorm.workers_pool.dummy_pool import DummyPool
-from petastorm.workers_pool.process_pool import ProcessPool
-from petastorm.workers_pool.thread_pool import ThreadPool
 
 _EXCLUDE_FIELDS = set(TestSchema.fields.values()) \
     - {TestSchema.matrix_nullable, TestSchema.string_array_nullable, TestSchema.decimal}
 
 MINIMAL_READER_FLAVOR_FACTORIES = [
-    lambda url, **kwargs: Reader(url, **_merge_params({'reader_pool': DummyPool(), 'schema_fields': _EXCLUDE_FIELDS},
-                                                      kwargs)),
+    lambda url, **kwargs: make_reader(url, **_merge_params({'reader_pool_type': 'dummy',
+                                                            'schema_fields': _EXCLUDE_FIELDS}, kwargs)),
 ]
 
 ALL_READER_FLAVOR_FACTORIES = MINIMAL_READER_FLAVOR_FACTORIES + [
-    lambda url, **kwargs: Reader(url, **_merge_params({'reader_pool': ThreadPool(1), 'schema_fields': _EXCLUDE_FIELDS},
-                                                      kwargs)),
-    lambda url, **kwargs: Reader(url,
-                                 **_merge_params({'reader_pool': ProcessPool(1), 'schema_fields': _EXCLUDE_FIELDS},
-                                                 kwargs)),
+    lambda url, **kwargs: make_reader(url, **_merge_params({'reader_pool_type': 'thread', 'workers_count': 1,
+                                                            'schema_fields': _EXCLUDE_FIELDS}, kwargs)),
+    lambda url, **kwargs: make_reader(url, **_merge_params({'reader_pool_type': 'process', 'workers_count': 1,
+                                                            'schema_fields': _EXCLUDE_FIELDS}, kwargs)),
 ]
 
 

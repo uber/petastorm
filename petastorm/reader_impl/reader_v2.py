@@ -34,7 +34,6 @@ from petastorm.reader_impl.row_group_loader import RowGroupLoader
 from petastorm.reader_impl.shuffling_buffer import NoopShufflingBuffer
 from petastorm.reader_impl.worker_loop import worker_loop, EOFSentinel, WorkerLoopError
 from petastorm.selectors import RowGroupSelectorBase
-from petastorm.shuffle_options import ShuffleOptions
 
 logger = logging.getLogger(__name__)
 
@@ -44,10 +43,10 @@ _OUTPUT_QUEUE_SIZE = 30
 class ReaderV2(object):
     """Reads a unischema based dataset from a parquet file."""
 
-    def __init__(self, dataset_url, schema_fields=None, shuffle=None, predicate=None, rowgroup_selector=None,
-                 num_epochs=1, sequence=None, training_partition=None, num_training_partitions=None,
+    def __init__(self, dataset_url, schema_fields=None, predicate=None, rowgroup_selector=None,
+                 num_epochs=1, sequence=None, cur_shard=None, shard_count=None,
                  read_timeout_s=None, cache=None, loader_pool=None, decoder_pool=None, shuffling_queue=None,
-                 shuffle_options=None, pyarrow_filesystem=None):
+                 shuffle_row_groups=True, shuffle_row_drop_partitions=1, pyarrow_filesystem=None):
         """Initializes a reader object.
 
         :param dataset_url: an filepath or a url to a parquet directory,
@@ -63,11 +62,10 @@ class ReaderV2(object):
         :param num_epochs: An epoch is a single pass over all samples in the dataset. Setting num_epochs to 'None' will
                        result in an infinite number of epochs.
         :param sequence: This is deprecated. To use sequence/ngram, please supply the argument in schema_fields instead.
-        :param training_partition: An int denoting the partition number used for multi node training. Each node should
-                       pass in a unique partition number in the range [0, num_training_partitions).
-                       num_training_partitions must be supplied as well.
-        :param num_training_partitions An int denoting the number of training partitions (how many nodes are performing
-                       the multi node training)
+        :param cur_shard: An int denoting the current shard number. Each node reading a shard should
+                       pass in a unique shard number in the range [0, shard_count).
+                       shard count must be supplied as well.
+        :param shard_count An int denoting the number of shards to break this dataset into.
         :param read_timeout_s: A numeric with the amount of time in seconds you would like to give a read before it
                        times out and raises an EmptyResultError. Pass in None for an infinite timeout
         :param cache: An object conforming to `cache.CacheBase` interface. Before loading row groups from a parquet file
@@ -78,10 +76,6 @@ class ReaderV2(object):
           a default ThreadPoolExecutor(5) will be used.
         :param loader_pool: An instance of a concurrent.futures pool executor used for decoding. If None,
           a default ThreadPoolExecutor(5) will be used.
-        :param shuffle_options : ShuffleOptions object to describe how to shuffle dataset (supercedes shuffle parameter)
-                       defaults to shuffling row groups but not to drop rows based on partitions.
-        :param shuffle: DEPRECATED boolean whether to shuffle the row group order. Use shuffle_row_groups in
-                       ShuffleOptions instead.
 
         By default, `NullCache` implementation
         """
@@ -108,19 +102,12 @@ class ReaderV2(object):
 
         self.ngram = schema_fields if isinstance(schema_fields, NGram) else None
 
-        if self.ngram and not self.ngram.timestamp_overlap and shuffle_options.shuffle_row_drop_partitions > 1:
+        if self.ngram and not self.ngram.timestamp_overlap and shuffle_row_drop_partitions > 1:
             raise NotImplementedError('Using timestamp_overlap=False is not implemented with'
                                       ' shuffle_options.shuffle_row_drop_partitions > 1')
 
         cache = cache or NullCache()
         dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
-
-        if shuffle_options is None:
-            if shuffle is None:
-                shuffle = True
-            else:
-                logger.warning('shuffle option is deprecated. Please use shuffle_options instead')
-            shuffle_options = ShuffleOptions(shuffle)
 
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
         logger.debug('dataset_url: %s', dataset_url)
@@ -135,7 +122,7 @@ class ReaderV2(object):
 
         self._dataset = pq.ParquetDataset(dataset_path, filesystem=filesystem, validate_schema=False)
 
-        self._normalize_shuffle_options(shuffle_options, self._dataset)
+        shuffle_row_drop_partitions = self._normalize_shuffle_options(shuffle_row_drop_partitions, self._dataset)
 
         # Get a unischema stored in the dataset metadata.
         stored_schema = dataset_metadata.get_schema(self._dataset)
@@ -150,13 +137,13 @@ class ReaderV2(object):
 
         # 3. Filter rowgroups
         filtered_row_groups, worker_predicate = self._filter_row_groups(self._dataset, row_groups, predicate,
-                                                                        rowgroup_selector, training_partition,
-                                                                        num_training_partitions)
+                                                                        rowgroup_selector, cur_shard,
+                                                                        shard_count)
 
-        epoch_items = self._apply_row_drop_partition(filtered_row_groups, shuffle_options)
+        epoch_items = self._apply_row_drop_partition(filtered_row_groups, shuffle_row_drop_partitions)
 
         # 4. Launch a new thread running `worker_loop` function.
-        def epochs_iterator(): return epoch_generator(epoch_items, num_epochs, shuffle_options.shuffle_row_groups)
+        def epochs_iterator(): return epoch_generator(epoch_items, num_epochs, shuffle_row_groups)
 
         self._results_queue = Queue(_OUTPUT_QUEUE_SIZE)
 
@@ -181,14 +168,14 @@ class ReaderV2(object):
 
         self._read_timeout_s = read_timeout_s
 
-    def _apply_row_drop_partition(self, row_groups, shuffle_options):
+    def _apply_row_drop_partition(self, row_groups, shuffle_row_drop_partitions):
         items_to_ventilate = []
         for row_group in row_groups:
-            for shuffle_row_drop_partition in range(shuffle_options.shuffle_row_drop_partitions):
+            for shuffle_row_drop_partition in range(shuffle_row_drop_partitions):
                 items_to_ventilate.append(
                     {'row_group': row_group,
                      'shuffle_row_drop_partition': (shuffle_row_drop_partition,
-                                                    shuffle_options.shuffle_row_drop_partitions)})
+                                                    shuffle_row_drop_partitions)})
 
         return items_to_ventilate
 
@@ -295,16 +282,16 @@ class ReaderV2(object):
         return filtered_row_group_indexes, worker_predicate
 
     @staticmethod
-    def _normalize_shuffle_options(shuffle_options, dataset):
+    def _normalize_shuffle_options(shuffle_row_drop_partitions, dataset):
         """Checks that shuffle_options doesnt ask for more patitions than rows in a row group.
         This prevents sending partitions to workers which will result in not reading anything."""
-        if shuffle_options.shuffle_row_drop_partitions > 1 and dataset.metadata and dataset.metadata.num_row_groups:
+        if shuffle_row_drop_partitions > 1 and dataset.metadata and dataset.metadata.num_row_groups:
             max_rows_in_row_group = 1
             for i in six.moves.xrange(dataset.metadata.num_row_groups):
                 max_rows_in_row_group = max(max_rows_in_row_group, dataset.metadata.row_group(i).num_rows)
 
-            shuffle_options.shuffle_row_drop_partitions = min(shuffle_options.shuffle_row_drop_partitions,
-                                                              max_rows_in_row_group)
+            return min(shuffle_row_drop_partitions, max_rows_in_row_group)
+        return shuffle_row_drop_partitions
 
     def stop(self):
         """Stops all worker threads/processes"""
