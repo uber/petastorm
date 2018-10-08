@@ -106,6 +106,7 @@ class ConcurrentVentilator(Ventilator):
         self._ventilation_thread = None
         self._ventilated_items_count = 0
         self._processed_items_count = 0
+        self._stop_requested = False
 
     def start(self):
         # Start the ventilation thread
@@ -117,7 +118,8 @@ class ConcurrentVentilator(Ventilator):
         self._processed_items_count += 1
 
     def completed(self):
-        return self._iterations_remaining == 0 or not self._items_to_ventilate
+        assert self._iterations_remaining is None or self._iterations_remaining >= 0
+        return self._stop_requested or self._iterations_remaining == 0 or not self._items_to_ventilate
 
     def _ventilate(self):
         while True:
@@ -146,7 +148,7 @@ class ConcurrentVentilator(Ventilator):
                     self._iterations_remaining -= 1
 
     def stop(self):
-        self._iterations_remaining = 0
+        self._stop_requested = True
         if self._ventilation_thread:
             self._ventilation_thread.join()
             self._ventilation_thread = None
