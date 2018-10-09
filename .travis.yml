@@ -52,10 +52,10 @@ before_script:
 
   - pylint --rcfile=.pylintrc petastorm examples -f parseable -r n
 
-#jobs:
-#  include:
-#    - stage: Build a cache with datasets
-#      script: script: pytest --timeout=180 --duration=0 -Y --cache-clear petastorm/tests/test_reader.py -v
+jobs:
+  include:
+    - stage: Build a cache with datasets
+      script: pytest --timeout=180 --duration=0 -Y --cache-clear petastorm/tests/test_reader.py -v
 
 #    - stage: Tests
 #      script: (cd docs/autodoc && make html)
