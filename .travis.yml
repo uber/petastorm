@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-dist: xenial
+dist: trusty
 language: python
 cache: pip
 python:
@@ -26,6 +26,8 @@ matrix:
     - python: '3.7'  # Until Python 3.7 support is added to https://pypi.org/project/pyarrow
 
 install:
+  - jdk_switcher use openjdk8
+  - java -version
   # Upgrade pip to avoid weird failures, such as failing to install torchvision
   - pip install --upgrade pip==18.0
   # This will use requirements from setup.py and install them in the tavis's virtual environment
