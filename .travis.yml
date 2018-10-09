@@ -32,7 +32,7 @@ install:
   - pip install --upgrade pip==18.0
   # This will use requirements from setup.py and install them in the tavis's virtual environment
   # [tf] chooses to depend on cpu version of tensorflow (alternatively, could do [tf_gpu])
-  - pip install -q -e .[tf,test,torch,docs]
+  - pip install -q -e .[tf,test,docs,torch]
   # pyarrow was compiled against a newer version of numpy than we require so we need to upgrade it
   # (or optionally install pyarrow from source instead of through binaries)
   - pip install --upgrade numpy
@@ -52,27 +52,31 @@ before_script:
 
   - pylint --rcfile=.pylintrc petastorm examples -f parseable -r n
 
-script:
-  # Build documentation
-  - (cd docs/autodoc && make html)
+jobs:
+  include:
+    - stage: Build a cache with datasets
+      script: pytest --timeout=180 --duration=0 -Y --cache-clear petastorm/tests/test_reader.py -v
 
-  # Running pytest twice: first tests that do not have to be forked. Run it with -Y --cache-clear
-  # which will create synthetic datasets that are used by multiple tests and store them in cache.
-  # Next pytest invoke will run boxed tests, but read the synthetic datasets from cache and not
-  # waste time on recreating them
+    - stage: Tests
+      script: (cd docs/autodoc && make html)
+    -
+      script:
+        - pytest --timeout=180 --duration=0 -v examples/mnist/tests/test_pytorch_mnist.py --cov=./ --cov-append
 
-  # Tensorflow and pytorch tests confict (segfault). Split into separate runs.
-  - pytest --timeout=180 --duration=0 -v examples/mnist/tests/test_pytorch_mnist.py --cov=./ --cov-append
+    # Ignore two pytorch tests to prevent static-TLS-caused torch-import seg-fault
+    - # stage: Non-boxed tests
+      script: pytest --timeout=180 --duration=0 -Y -m "not forked" -v --cov=./  --cov-append --trace-config
+        --ignore=examples/mnist/tests/test_pytorch_mnist.py
+        --ignore=petastorm/tests/test_pytorch_utils.py petastorm examples
 
-  # Ignore two pytorch tests to prevent static-TLS-caused torch-import seg-fault
-  - pytest --timeout=180 --duration=0 -Y --cache-clear -m "not forked" -v --cov=./  --cov-append --trace-config
-    --ignore=examples/mnist/tests/test_pytorch_mnist.py
-    --ignore=petastorm/tests/test_pytorch_utils.py petastorm examples
+    # We have a separate run for forked: make sure fixtures are reused as much as possible
+    - # stage: Boxed tests
+      script: pytest --timeout=180 --duration=0 -Y -m "forked" --forked -v --cov=./ --cov-append --trace-config
+        --ignore=examples/mnist/tests/test_pytorch_mnist.py
+        --ignore=petastorm/tests/test_pytorch_utils.py petastorm examples
 
-  # We have a separate run for forked: make sure fixtures are reused as much as possible
-  - pytest --timeout=180 --duration=0 -Y -m "forked" --forked -v --cov=./ --cov-append --trace-config
-    --ignore=examples/mnist/tests/test_pytorch_mnist.py
-    --ignore=petastorm/tests/test_pytorch_utils.py petastorm examples
+
+script: echo "Running tests"
 
 after_success:
   - codecov
