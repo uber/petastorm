@@ -57,24 +57,24 @@ jobs:
     - stage: Build a cache with datasets
       script: script: pytest --timeout=180 --duration=0 -Y --cache-clear petastorm/tests/test_reader.py -v
 
-    - stage: Tests
-      script: (cd docs/autodoc && make html)
-    -
-      script:
-        - pip install -e .[torch]
-        - pytest --timeout=180 --duration=0 -v examples/mnist/tests/test_pytorch_mnist.py --cov=./ --cov-append
-
-    # Ignore two pytorch tests to prevent static-TLS-caused torch-import seg-fault
-    - # stage: Non-boxed tests
-      script: pytest --timeout=180 --duration=0 -Y -m "not forked" -v --cov=./  --cov-append --trace-config
-        --ignore=examples/mnist/tests/test_pytorch_mnist.py
-        --ignore=petastorm/tests/test_pytorch_utils.py petastorm examples
-
-    # We have a separate run for forked: make sure fixtures are reused as much as possible
-    - # stage: Boxed tests
-      script: pytest --timeout=180 --duration=0 -Y -m "forked" --forked -v --cov=./ --cov-append --trace-config
-        --ignore=examples/mnist/tests/test_pytorch_mnist.py
-        --ignore=petastorm/tests/test_pytorch_utils.py petastorm examples
+#    - stage: Tests
+#      script: (cd docs/autodoc && make html)
+#    -
+#      script:
+#        - pip install -e .[torch]
+#        - pytest --timeout=180 --duration=0 -v examples/mnist/tests/test_pytorch_mnist.py --cov=./ --cov-append
+#
+#    # Ignore two pytorch tests to prevent static-TLS-caused torch-import seg-fault
+#    - # stage: Non-boxed tests
+#      script: pytest --timeout=180 --duration=0 -Y -m "not forked" -v --cov=./  --cov-append --trace-config
+#        --ignore=examples/mnist/tests/test_pytorch_mnist.py
+#        --ignore=petastorm/tests/test_pytorch_utils.py petastorm examples
+#
+#    # We have a separate run for forked: make sure fixtures are reused as much as possible
+#    - # stage: Boxed tests
+#      script: pytest --timeout=180 --duration=0 -Y -m "forked" --forked -v --cov=./ --cov-append --trace-config
+#        --ignore=examples/mnist/tests/test_pytorch_mnist.py
+#        --ignore=petastorm/tests/test_pytorch_utils.py petastorm examples
 
 
 script: echo "Running tests"
