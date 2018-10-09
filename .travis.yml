@@ -77,12 +77,7 @@ jobs:
         --ignore=petastorm/tests/test_pytorch_utils.py petastorm examples
 
 
-  # Running pytest twice: first tests that do not have to be forked. Run it with -Y --cache-clear
-  # which will create synthetic datasets that are used by multiple tests and store them in cache.
-  # Next pytest invoke will run boxed tests, but read the synthetic datasets from cache and not
-  # waste time on recreating them
-
-  -
+script: echo "Running tests"
 
 after_success:
   - codecov
