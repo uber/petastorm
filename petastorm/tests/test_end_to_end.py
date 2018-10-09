@@ -79,6 +79,7 @@ def test_simple_read(synthetic_dataset, reader_factory):
                          MINIMAL_READER_FLAVOR_FACTORIES +
                          [lambda url, **kwargs: Reader(url, reader_pool=ThreadPool(10), **kwargs),
                           lambda url, **kwargs: Reader(url, reader_pool=ProcessPool(10), **kwargs)])
+@pytest.mark.forked
 def test_simple_read_with_disk_cache(synthetic_dataset, reader_factory, tmpdir):
     """Try using the Reader with LocalDiskCache using different flavors of pools"""
     CACHE_SIZE = 10 * 2 ** 30  # 20GB
