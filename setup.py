@@ -54,6 +54,7 @@ EXTRA_REQUIRE = {
         'pytest>=3.0.0',
         'pytest-cov>=2.5.1',
         'pytest-forked>=0.2',
+        'pytest-logger>=0.4.0',
     ],
     'torch': ['torchvision>=0.2.1'],
 }

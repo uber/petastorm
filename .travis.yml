@@ -36,7 +36,7 @@ install:
   # pyarrow was compiled against a newer version of numpy than we require so we need to upgrade it
   # (or optionally install pyarrow from source instead of through binaries)
   - pip install --upgrade numpy
-  - pip install pytest-timeout pytest-logger
+  - pip install pytest-timeout
 
 before_script:
   # enable core dumps
