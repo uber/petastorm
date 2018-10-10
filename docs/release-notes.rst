@@ -4,6 +4,25 @@
 Release notes
 =============
 
+Release 0.4.3
+=============
+
+New features and bug fixes
+--------------------------
+- A command line utility ``petastorm-copy-dataset.py``. Makes it easier to create subsets (columns/rows) of existing petastorm datasets.
+- Add option to use custom pyarrow filesystem when materializing datasets.
+- Limit memory usage correctly when using ``Reader`` with ``ProcessPool``.
+- Added ``--pyarrow-serialize`` switch to ``petastorm-throughput.py`` benchmarking command line utility.
+- Faster serialization (using ``pyarrow.serialize``) in ``ProcessPool`` implementation. Now decimal types are supported.
+- More information in reader.diagnostics property.
+- Check if a --unischema string passed to petastorm-generate-metadata is actually a ``Unischema`` instance.
+- Fixed race condition in ``ProcessPool`` resulting in indefinite wait on ``ProcessPool`` shutdown.
+- Force loading ``pyarrow`` before ``torch``. Helps to avoid a segfault (documented in ``docs/toubleshoot.rst``)
+- Fixed mnist training examples.
+- Make dependency on opencv optional in ``codecs.py``
+
+
+
 Release 0.4.2
 =============
 
