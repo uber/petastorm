@@ -62,17 +62,24 @@ script:
   # waste time on recreating them
 
   # Tensorflow and pytorch tests confict (segfault). Split into separate runs.
-  - pytest --timeout=180 --duration=0 -v examples/mnist/tests/test_pytorch_mnist.py --cov=./ --cov-append
+  - pytest --timeout=180 --duration=0 -v
+    --cov=./ --cov-append
+    examples/mnist/tests/test_pytorch_mnist.py
+    petastorm/tests/test_pytorch_dataloader.py
 
   # Ignore two pytorch tests to prevent static-TLS-caused torch-import seg-fault
   - pytest --timeout=180 --duration=0 -Y --cache-clear -m "not forked" -v --cov=./  --cov-append --trace-config
     --ignore=examples/mnist/tests/test_pytorch_mnist.py
-    --ignore=petastorm/tests/test_pytorch_utils.py petastorm examples
+    --ignore=petastorm/tests/test_pytorch_utils.py
+    --ignore=petastorm/tests/test_pytorch_dataloader.py
+    petastorm examples
 
   # We have a separate run for forked: make sure fixtures are reused as much as possible
   - pytest --timeout=180 --duration=0 -Y -m "forked" --forked -v --cov=./ --cov-append --trace-config
     --ignore=examples/mnist/tests/test_pytorch_mnist.py
-    --ignore=petastorm/tests/test_pytorch_utils.py petastorm examples
+    --ignore=petastorm/tests/test_pytorch_utils.py
+    --ignore=petastorm/tests/test_pytorch_dataloader.py
+    petastorm examples
 
 after_success:
   - codecov
