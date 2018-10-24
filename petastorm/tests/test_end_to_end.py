@@ -78,6 +78,7 @@ def test_simple_read(synthetic_dataset, reader_factory):
 
 
 @pytest.mark.parametrize('reader_factory', [ALL_READER_FLAVOR_FACTORIES[i] for i in [0, 2, 3, 4]])
+@pytest.mark.forked
 def test_simple_read_with_disk_cache(synthetic_dataset, reader_factory, tmpdir):
     """Try using the Reader with LocalDiskCache using different flavors of pools"""
     CACHE_SIZE = 10 * 2 ** 30  # 20GB
@@ -89,6 +90,7 @@ def test_simple_read_with_disk_cache(synthetic_dataset, reader_factory, tmpdir):
 
 
 @pytest.mark.parametrize('reader_factory', [ALL_READER_FLAVOR_FACTORIES[i] for i in [1, 5]])
+@pytest.mark.forked
 def test_simple_read_with_disk_cache_reader_v2(synthetic_dataset, reader_factory, tmpdir):
     """Try using the Reader with LocalDiskCache using different flavors of pools"""
     CACHE_SIZE = 10 * 2 ** 30  # 20GB
