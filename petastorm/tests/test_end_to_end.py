@@ -49,10 +49,13 @@ ALL_READER_FLAVOR_FACTORIES = MINIMAL_READER_FLAVOR_FACTORIES + [
 ]
 
 
-def _check_simple_reader(reader, expected_data):
+def _check_simple_reader(reader, expected_data, expected_rows_count=None):
     # Read a bunch of entries from the dataset and compare the data to reference
     def _type(v):
         return v.dtype if isinstance(v, np.ndarray) else type(v)
+
+    expected_rows_count = expected_rows_count or len(expected_data)
+    count = 0
 
     for row in reader:
         actual = row._asdict()
@@ -61,6 +64,9 @@ def _check_simple_reader(reader, expected_data):
         actual_types = [_type(v) for v in actual.values()]
         expected_types = [_type(v) for v in actual.values()]
         assert actual_types == expected_types
+        count += 1
+
+    assert count == expected_rows_count
 
 
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
@@ -70,29 +76,27 @@ def test_simple_read(synthetic_dataset, reader_factory):
         _check_simple_reader(reader, synthetic_dataset.data)
 
 
-# Our LocalDiskCache implementation relies on sqlite3. There is some sort of a race condition
-# within Python3 that would get a newly forked stuck on sqlite3 post-fork state cleanup.
-# Exclude the LocalDiskCache and ProcessPoolExecutor combination from the test as it is broken.
-@pytest.mark.parametrize('reader_factory',
-                         MINIMAL_READER_FLAVOR_FACTORIES +
-                         [lambda url, **kwargs: make_reader(url, reader_pool_type='thread', **kwargs),
-                          lambda url, **kwargs: make_reader(url, reader_pool_type='process', **kwargs)])
-@pytest.mark.forked
+@pytest.mark.parametrize('reader_factory', [ALL_READER_FLAVOR_FACTORIES[i] for i in [0, 2, 3, 4]])
 def test_simple_read_with_disk_cache(synthetic_dataset, reader_factory, tmpdir):
     """Try using the Reader with LocalDiskCache using different flavors of pools"""
     CACHE_SIZE = 10 * 2 ** 30  # 20GB
     ROW_SIZE_BYTES = 100  # not really important for this test
-    try:
-        with reader_factory(synthetic_dataset.url, num_epochs=2,
-                            cache_type='local-disk', cache_location=tmpdir.strpath,
-                            cache_size_limit=CACHE_SIZE, cache_row_size_estimate=ROW_SIZE_BYTES) as reader:
-            _check_simple_reader(reader, synthetic_dataset.data)
-    except TypeError:
-        # Temporary catch a type error until we have a similar factory for readerV2 which doesnt
-        # leak cache implementation
-        with reader_factory(synthetic_dataset.url, num_epochs=2,
-                            cache=LocalDiskCache(tmpdir.strpath, CACHE_SIZE, ROW_SIZE_BYTES)) as reader:
-            _check_simple_reader(reader, synthetic_dataset.data)
+    with reader_factory(synthetic_dataset.url, num_epochs=2,
+                        cache_type='local-disk', cache_location=tmpdir.strpath,
+                        cache_size_limit=CACHE_SIZE, cache_row_size_estimate=ROW_SIZE_BYTES) as reader:
+        _check_simple_reader(reader, synthetic_dataset.data, 200)
+
+
+@pytest.mark.parametrize('reader_factory', [ALL_READER_FLAVOR_FACTORIES[i] for i in [1, 5]])
+def test_simple_read_with_disk_cache_reader_v2(synthetic_dataset, reader_factory, tmpdir):
+    """Try using the Reader with LocalDiskCache using different flavors of pools"""
+    CACHE_SIZE = 10 * 2 ** 30  # 20GB
+    ROW_SIZE_BYTES = 100  # not really important for this test
+    # Temporary catch a type error until we have a similar factory for readerV2 which doesnt
+    # leak cache implementation
+    with reader_factory(synthetic_dataset.url, num_epochs=2,
+                        cache=LocalDiskCache(tmpdir.strpath, CACHE_SIZE, ROW_SIZE_BYTES)) as reader:
+        _check_simple_reader(reader, synthetic_dataset.data, 200)
 
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
