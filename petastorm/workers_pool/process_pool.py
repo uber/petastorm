@@ -23,7 +23,6 @@ from traceback import format_exc
 
 import zmq
 from zmq import ZMQBaseError
-from zmq.utils import monitor
 
 from petastorm.reader_impl.pickle_serializer import PickleSerializer
 from petastorm.reader_impl.pyarrow_serializer import PyArrowSerializer
@@ -42,7 +41,34 @@ _KEEP_TRYING_WHILE_ZMQ_AGAIN_IS_RAIZED_TIMEOUT_S = 20
 # recheck if no more items are expected to be ventilated
 _VERIFY_END_OF_VENTILATION_PERIOD = 0.1
 
+_WORKER_STARTED_INDICATOR = 'worker started indicator'
+
 logger = logging.getLogger(__name__)
+
+
+#
+# ----------------                                    ------------------
+# |              |  --- _ventilator_send  (push) -->  |                |
+# | main process |  --- _control_sender   (pub)  -->  | worker process |
+# |              |  <-- _results_receiver (pull)  --  |                |
+# ----------------                                    ------------------
+#
+# 1. When ProcessPool start is called, it creates _ventilator_send, _control_sender and _result_receiver
+#    sockets.
+# 2. After initialization is done, worker process sends _WORKER_STARTED_INDICATOR
+# 3. Once ProcessPool receives _WORKER_STARTED_INDICATOR from all workers, the ProcessPool
+#    is ready to start ventilating.
+#
+# 4. Each ventilated message is picked up by one of the workers.
+# 5. Worker process would send 0..n responses for each ventilated message. Each response
+#    is a tuple of (data payload, control). Data payload is serialized using
+#    _serializer instance. Control is always pickled.
+# 6. After the last response to a single ventilated item is transmitted, an instance of VentilatedItemProcessedMessage
+#    is transmitted as a control. This control message is needed to count how many ventilated
+#    items are being processed at each time.
+#
+# 7. Workers are terminated by broadcasting _CONTROL_FINISHED message.
+#
 
 
 def _keep_retrying_while_zmq_again(timeout, func, allowed_failures=3):
@@ -65,7 +91,7 @@ def _keep_retrying_while_zmq_again(timeout, func, allowed_failures=3):
     failures = 0
     while time() < now + timeout:
         try:
-            func()
+            return func()
         except zmq.Again:
             logger.debug('zmq.Again exception caught. Will try again')
             sleep(0.1)
@@ -76,10 +102,9 @@ def _keep_retrying_while_zmq_again(timeout, func, allowed_failures=3):
             # are warming up. Before propogating them as a true problem.
             sleep(0.1)
             failures += 1
-            logger.debug('Unexpected ZMQ error %s received. Failures %d/%d', str(e), failures, allowed_failures)
+            logger.debug('Unexpected ZMQ error \'%s\' received. Failures %d/%d', str(e), failures, allowed_failures)
             if failures > allowed_failures:
                 raise
-        return
     raise RuntimeError('Timeout ({} [sec]) has elapsed while keep getting \'zmq.Again\''.format(timeout))
 
 
@@ -101,6 +126,7 @@ class ProcessPool(object):
         self._control_sender = None
         self.workers_count = workers_count
         self._results_receiver_poller = None
+        self._results_receiver = None
 
         self._ventilated_items = 0
         self._ventilated_items_processed = 0
@@ -156,43 +182,26 @@ class ProcessPool(object):
         self._results_receiver_poller = zmq.Poller()
         self._results_receiver_poller.register(self._results_receiver, zmq.POLLIN)
 
-        # Monitors will be used to count number of workers created.
-        # We will block till all of them are ready to accept messages
-        monitor_sockets = [
-            self._ventilator_send.get_monitor_socket(zmq.constants.EVENT_ACCEPTED),
-            self._control_sender.get_monitor_socket(zmq.constants.EVENT_ACCEPTED),
-            self._results_receiver.get_monitor_socket(zmq.constants.EVENT_ACCEPTED),
-        ]
-
         # Start a bunch of processes
         self._workers = [
             exec_in_new_process(_worker_bootstrap, worker_class, worker_id, control_socket, worker_receiver_socket,
                                 results_sender_socket, self._serializer, worker_setup_args)
             for worker_id in range(self.workers_count)]
 
-        # Block until we have all workers up. Will raise an error if fails to start in a timely fashion
-        self._wait_for_workers_to_start(monitor_sockets)
+        # Block until we have get a _WORKER_STARTED_INDICATOR from all our workers
+        self._wait_for_workers_to_start()
 
         if ventilator:
             self._ventilator = ventilator
             self._ventilator.start()
 
-    def _wait_for_workers_to_start(self, monitor_sockets):
+    def _wait_for_workers_to_start(self):
         """Waits for all workers to start."""
-        now = time()
-        for monitor_socket in monitor_sockets:
-            started_count = 0
-            while started_count < self.workers_count and time() < now + _WORKERS_STARTED_TIMEOUT_S:
-                _keep_retrying_while_zmq_again(_KEEP_TRYING_WHILE_ZMQ_AGAIN_IS_RAIZED_TIMEOUT_S,
-                                               lambda sock=monitor_socket: monitor.recv_monitor_message(
-                                                   sock, flags=zmq.constants.NOBLOCK))
-                started_count += 1
-
-            if started_count < self.workers_count:
-                raise RuntimeError(
-                    'Workers were not able to start within timeout {} s ({} has started)'.format(
-                        _WORKERS_STARTED_TIMEOUT_S,
-                        started_count))
+        for _ in range(self.workers_count):
+            started_indicator = _keep_retrying_while_zmq_again(
+                _KEEP_TRYING_WHILE_ZMQ_AGAIN_IS_RAIZED_TIMEOUT_S,
+                lambda: self._results_receiver.recv_pyobj(flags=zmq.constants.NOBLOCK))
+            assert _WORKER_STARTED_INDICATOR == started_indicator
 
     def ventilate(self, *args, **kargs):
         """Sends a work item to a worker process. Will result in worker.process(...) call with arbitrary arguments."""
@@ -307,8 +316,10 @@ def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_s
     :param worker_args: Application specific parameter passed to worker constructor
     :return: ``None``
     """
+    logger.debug('Starting _worker_bootstrap')
     context = zmq.Context()
 
+    logger.debug('Connecting sockets')
     # Set up a channel to receive work from the ventilator
     work_receiver = context.socket(zmq.PULL)
     work_receiver.linger = 0
@@ -325,11 +336,15 @@ def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_s
     control_receiver.connect(control_socket)
     _setsockopt(control_receiver, zmq.SUBSCRIBE, b"")
 
+    logger.debug('Setting up poller')
     # Set up a poller to multiplex the work receiver and control receiver channels
     poller = zmq.Poller()
     poller.register(work_receiver, zmq.POLLIN)
     poller.register(control_receiver, zmq.POLLIN)
 
+    results_sender.send_pyobj(_WORKER_STARTED_INDICATOR)
+
+    logger.debug('Instantiating a worker')
     # Instantiate a worker
     worker = worker_class(worker_id, lambda data: _serialize_result_and_send(results_sender, serializer, data),
                           worker_args)
