@@ -164,7 +164,7 @@ def test_shuffle_drop_ratio(synthetic_dataset, reader_factory):
 
     # Test that the ids are increasingly not consecutive numbers as we increase the shuffle dropout
     prev_jumps_not_1 = 0
-    for shuffle_dropout in [2, 5, 8, 111]:
+    for shuffle_dropout in [2, 5, 8]:
         readout = readout_all_ids(True, shuffle_dropout)
         assert len(first_readout) == len(readout)
         jumps_not_1 = np.sum(np.diff(readout) != 1)
