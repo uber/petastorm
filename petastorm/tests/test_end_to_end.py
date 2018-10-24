@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import operator
 import os
 from concurrent.futures.process import ProcessPoolExecutor
 from shutil import rmtree, copytree
@@ -311,6 +312,19 @@ def test_single_column_predicate(synthetic_dataset, reader_factory):
             actual = dict(row._asdict())
             expected = next(d for d in synthetic_dataset.data if d['id'] == actual['id'])
             np.testing.assert_equal(expected['id'], actual['id'])
+
+
+@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
+def test_two_column_predicate(synthetic_dataset, reader_factory):
+    """Test quering a single column with a predicate on multiple columns, one of them is a partitioning key"""
+    with reader_factory(synthetic_dataset.url, schema_fields=[TestSchema.id, TestSchema.id2, TestSchema.partition_key],
+                        predicate=EqualPredicate({'id2': 1, 'partition_key': 'p_2'})) as reader:
+        all_rows = list(reader)
+        all_id2 = np.array(list(map(operator.attrgetter('id2'), all_rows)))
+        all_partition_key = np.array(list(map(operator.attrgetter('partition_key'), all_rows)))
+        assert len(all_rows) == 5
+        assert (all_id2 == 1).all()
+        assert (all_partition_key == 'p_2').all()
 
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
