@@ -89,8 +89,11 @@ def add_to_dataset_metadata(dataset, key, value):
             arrow_metadata = pyarrow.parquet.read_metadata(f)
     else:
         arrow_metadata = dataset.pieces[0].get_metadata(dataset.fs.open)
+
     base_schema = arrow_metadata.schema.to_arrow_schema()
-    metadata_dict = base_schema.metadata
+
+    # base_schema.metadata may be None, e.g.
+    metadata_dict = base_schema.metadata or dict()
     metadata_dict[key] = value
     schema = base_schema.add_metadata(metadata_dict)
 
