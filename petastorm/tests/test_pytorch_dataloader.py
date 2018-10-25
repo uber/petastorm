@@ -1,4 +1,3 @@
-from concurrent.futures import ProcessPoolExecutor
 from decimal import Decimal
 
 import numpy as np
@@ -9,7 +8,6 @@ import torch
 
 from petastorm import make_reader
 from petastorm.pytorch import _sanitize_pytorch_types, DataLoader, decimal_friendly_collate
-from petastorm.reader import ReaderV2
 from petastorm.tests.test_common import TestSchema
 
 BATCHABLE_FIELDS = set(TestSchema.fields.values()) - \
@@ -19,16 +17,16 @@ BATCHABLE_FIELDS = set(TestSchema.fields.values()) - \
 # pylint: disable=unnecessary-lambda
 MINIMAL_READER_FLAVOR_FACTORIES = [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
-    lambda url, **kwargs: ReaderV2(url, **kwargs)
+    lambda url, **kwargs: make_reader(url, reader_engine='experimental_reader_v2', **kwargs)
 ]
 
 # pylint: disable=unnecessary-lambda
 ALL_READER_FLAVOR_FACTORIES = MINIMAL_READER_FLAVOR_FACTORIES + [
     lambda url, **kwargs: make_reader(url, reader_pool_type='thread', **kwargs),
     lambda url, **kwargs: make_reader(url, reader_pool_type='process', pyarrow_serialize=False, **kwargs),
-    lambda url, **kwargs: make_reader(url, reader_pool_type='process', workers_count=1,
-                                      pyarrow_serialize=True, **kwargs),
-    lambda url, **kwargs: ReaderV2(url, decoder_pool=ProcessPoolExecutor(10), **kwargs)
+    lambda url, **kwargs: make_reader(url, reader_pool_type='process', workers_count=1, pyarrow_serialize=True,
+                                      **kwargs),
+    lambda url, **kwargs: make_reader(url, reader_engine='experimental_reader_v2', reader_pool_type='process', **kwargs)
 ]
 
 

@@ -16,6 +16,7 @@ import collections
 import logging
 import os
 import warnings
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 import six
 from pyarrow import parquet as pq
@@ -27,6 +28,8 @@ from petastorm.local_disk_cache import LocalDiskCache
 from petastorm.ngram import NGram
 from petastorm.predicates import PredicateBase
 from petastorm.reader_impl.reader_v2 import ReaderV2
+from petastorm.reader_impl.same_thread_executor import SameThreadExecutor
+from petastorm.reader_impl.shuffling_buffer import NoopShufflingBuffer, RandomShufflingBuffer
 from petastorm.reader_worker import ReaderWorker
 from petastorm.selectors import RowGroupSelectorBase
 from petastorm.workers_pool import EmptyResultError
@@ -55,7 +58,8 @@ def make_reader(dataset_url,
                 cur_shard=None, shard_count=None,
                 cache_type='null', cache_location=None, cache_size_limit=None,
                 cache_row_size_estimate=None, cache_extra_settings=None,
-                hdfs_driver='libhdfs3'):
+                hdfs_driver='libhdfs3',
+                reader_engine='reader_v1', reader_engine_params=None):
     """
     Factory convenience method for :class:`Reader`.
 
@@ -94,6 +98,11 @@ def make_reader(dataset_url,
     :param cache_extra_settings: A dictionary of extra settings to pass to the cache implementation,
     :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
         libhdfs (java through JNI) or libhdfs3 (C++)
+    :param reader_engine: Multiple engine implementations exist ('reader_v1' and 'experimental_reader_v2'). 'reader_v1'
+        (the default value) selects a stable reader implementation.
+    :param reader_engine_params: For advanced usage: a dictionary with arguments passed directly to a reader
+        implementation constructor chosen by ``reader_engine`` argument.  You should not use this parameter, unless you
+        fine-tuning of a reader.
     :return: A :class:`Reader` object
     """
 
@@ -107,15 +116,6 @@ def make_reader(dataset_url,
     filesystem = resolver.filesystem()
     dataset_path = resolver.get_dataset_path()
 
-    if reader_pool_type == 'thread':
-        reader_pool = ThreadPool(workers_count)
-    elif reader_pool_type == 'process':
-        reader_pool = ProcessPool(workers_count, pyarrow_serialize=pyarrow_serialize)
-    elif reader_pool_type == 'dummy':
-        reader_pool = DummyPool()
-    else:
-        raise ValueError('Unknown reader_pool_type: {}'.format(reader_pool_type))
-
     if cache_type is None or cache_type == 'null':
         cache = NullCache()
     elif cache_type == 'local-disk':
@@ -123,17 +123,72 @@ def make_reader(dataset_url,
     else:
         raise ValueError('Unknown cache_type: {}'.format(cache_type))
 
-    return Reader(filesystem, dataset_path,
-                  schema_fields=schema_fields,
-                  reader_pool=reader_pool,
-                  shuffle_row_groups=shuffle_row_groups,
-                  shuffle_row_drop_partitions=shuffle_row_drop_partitions,
-                  predicate=predicate,
-                  rowgroup_selector=rowgroup_selector,
-                  num_epochs=num_epochs,
-                  cur_shard=cur_shard,
-                  shard_count=shard_count,
-                  cache=cache)
+    if reader_engine == 'reader_v1':
+        if reader_pool_type == 'thread':
+            reader_pool = ThreadPool(workers_count)
+        elif reader_pool_type == 'process':
+            reader_pool = ProcessPool(workers_count, pyarrow_serialize=pyarrow_serialize)
+        elif reader_pool_type == 'dummy':
+            reader_pool = DummyPool()
+        else:
+            raise ValueError('Unknown reader_pool_type: {}'.format(reader_pool_type))
+
+        # Create a dictionary with all ReaderV2 parameters, so we can merge with reader_engine_params if specified
+        kwargs = {
+            'schema_fields': schema_fields,
+            'reader_pool': reader_pool,
+            'shuffle_row_groups': shuffle_row_groups,
+            'shuffle_row_drop_partitions': shuffle_row_drop_partitions,
+            'predicate': predicate,
+            'rowgroup_selector': rowgroup_selector,
+            'num_epochs': num_epochs,
+            'cur_shard': cur_shard,
+            'shard_count': shard_count,
+            'cache': cache
+        }
+
+        if reader_engine_params:
+            kwargs.update(reader_engine_params)
+
+        return Reader(filesystem, dataset_path, **kwargs)
+    elif reader_engine == 'experimental_reader_v2':
+        if reader_pool_type == 'thread':
+            decoder_pool = ThreadPoolExecutor(workers_count)
+        elif reader_pool_type == 'process':
+            decoder_pool = ProcessPoolExecutor(workers_count)
+        elif reader_pool_type == 'dummy':
+            decoder_pool = SameThreadExecutor()
+        else:
+            raise ValueError('Unknown reader_pool_type: {}'.format(reader_pool_type))
+
+        # TODO(yevgeni): once ReaderV2 is ready to be out of experimental status, we should extend
+        # the make_reader interfaces to take shuffling buffer parameters explicitly
+        shuffling_queue = RandomShufflingBuffer(1000, 800) if shuffle_row_groups else NoopShufflingBuffer()
+
+        # Create a dictionary with all ReaderV2 parameters, so we can merge with reader_engine_params if specified
+        kwargs = {
+            'schema_fields': schema_fields,
+            'predicate': predicate,
+            'rowgroup_selector': rowgroup_selector,
+            'num_epochs': num_epochs,
+            'cur_shard': cur_shard,
+            'shard_count': shard_count,
+            'cache': cache,
+            'decoder_pool': decoder_pool,
+            'shuffling_queue': shuffling_queue,
+            'shuffle_row_groups': shuffle_row_groups,
+            'shuffle_row_drop_partitions': shuffle_row_drop_partitions
+        }
+
+        if reader_engine_params:
+            kwargs.update(reader_engine_params)
+
+        return ReaderV2(dataset_url, **kwargs)
+
+    else:
+        raise ValueError('Unexpected value of reader_engine argument \'%s\'. '
+                         'Supported reader_engine values are \'reader_v1\' and \'experimental_reader_v2\'',
+                         reader_engine)
 
 
 class Reader(object):
