@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import concurrent.futures
 import logging
 import sys
 import traceback
@@ -18,7 +19,6 @@ from collections import Counter
 from time import sleep
 from traceback import format_exception
 
-import concurrent.futures
 from six.moves import queue
 
 logger = logging.getLogger(__name__)
@@ -99,6 +99,12 @@ def worker_loop(epochs_generator, loading_pool, loader, decoding_pool, decoder, 
 
             # Futures that have completed will be placed first in the returned list
             loaded_futures = concurrent.futures.as_completed(in_loading_futures, timeout=0)
+
+            # If no more data is ever expected from the loading, we should let shuffling buffer
+            # deplete itself. Otherwise, decoding will wait forever for data from shuffling that
+            # will never come.
+            if not in_loading_futures and not rowgroup_spec:
+                shuffling_queue.finish()
 
             # Push all loaded_futures and partially decoded data into shuffling queue
             while shuffling_queue.can_add():
