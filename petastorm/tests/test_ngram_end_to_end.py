@@ -24,7 +24,6 @@ from tensorflow.python.framework.errors_impl import OutOfRangeError
 
 from petastorm import make_reader
 from petastorm.ngram import NGram
-from petastorm.reader import ReaderV2
 from petastorm.reader_impl.same_thread_executor import SameThreadExecutor
 from petastorm.tests.conftest import SyntheticDataset, maybe_cached_dataset
 from petastorm.tests.test_common import create_test_dataset, TestSchema
@@ -35,7 +34,8 @@ from petastorm.tf_utils import tf_tensors
 READER_FACTORIES = [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
     lambda url, **kwargs: make_reader(url, reader_pool_type='process', workers_count=1, **kwargs),
-    lambda url, **kwargs: ReaderV2(url, loader_pool=SameThreadExecutor(), decoder_pool=SameThreadExecutor(), **kwargs),
+    lambda url, **kwargs: make_reader(url, reader_engine='experimental_reader_v2', reader_pool_type='dummy',
+                                      reader_engine_params={'loader_pool': SameThreadExecutor()}, **kwargs),
 ]
 
 

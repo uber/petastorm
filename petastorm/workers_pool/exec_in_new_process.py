@@ -51,7 +51,7 @@ if __name__ == '__main__':
     # An entry point to the newely executed process.
     # Will unpickle function handle and arguments and call the function.
     try:
-        logging.basicConfig(level=logging.DEBUG)
+        logging.basicConfig()
         if len(sys.argv) != 2:
             raise RuntimeError('Expected a single command line argument')
         new_process_runnable_file = sys.argv[1]

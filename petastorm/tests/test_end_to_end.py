@@ -13,7 +13,6 @@
 # limitations under the License.
 import operator
 import os
-from concurrent.futures.process import ProcessPoolExecutor
 from shutil import rmtree, copytree
 
 import numpy as np
@@ -25,7 +24,6 @@ from pyspark.sql.types import LongType, ShortType, StringType
 from petastorm import make_reader
 from petastorm.codecs import ScalarCodec
 from petastorm.etl.dataset_metadata import materialize_dataset
-from petastorm.local_disk_cache import LocalDiskCache
 from petastorm.reader import ReaderV2
 from petastorm.reader_impl.same_thread_executor import SameThreadExecutor
 from petastorm.selectors import SingleIndexSelector
@@ -37,16 +35,16 @@ from petastorm.unischema import UnischemaField, Unischema
 # pylint: disable=unnecessary-lambda
 MINIMAL_READER_FLAVOR_FACTORIES = [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
-    lambda url, **kwargs: ReaderV2(url, **kwargs)
+    lambda url, **kwargs: make_reader(url, reader_engine='experimental_reader_v2', **kwargs),
 ]
 
 # pylint: disable=unnecessary-lambda
 ALL_READER_FLAVOR_FACTORIES = MINIMAL_READER_FLAVOR_FACTORIES + [
     lambda url, **kwargs: make_reader(url, reader_pool_type='thread', **kwargs),
     lambda url, **kwargs: make_reader(url, reader_pool_type='process', pyarrow_serialize=False, **kwargs),
-    lambda url, **kwargs: make_reader(url, reader_pool_type='process', workers_count=1,
-                                      pyarrow_serialize=True, **kwargs),
-    lambda url, **kwargs: ReaderV2(url, decoder_pool=ProcessPoolExecutor(10), **kwargs)
+    lambda url, **kwargs: make_reader(url, reader_pool_type='process', workers_count=1, pyarrow_serialize=True,
+                                      **kwargs),
+    lambda url, **kwargs: make_reader(url, workers_count=10, reader_engine='experimental_reader_v2', **kwargs)
 ]
 
 
@@ -77,7 +75,7 @@ def test_simple_read(synthetic_dataset, reader_factory):
         _check_simple_reader(reader, synthetic_dataset.data)
 
 
-@pytest.mark.parametrize('reader_factory', [ALL_READER_FLAVOR_FACTORIES[i] for i in [0, 2, 3, 4]])
+@pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
 @pytest.mark.forked
 def test_simple_read_with_disk_cache(synthetic_dataset, reader_factory, tmpdir):
     """Try using the Reader with LocalDiskCache using different flavors of pools"""
@@ -86,19 +84,6 @@ def test_simple_read_with_disk_cache(synthetic_dataset, reader_factory, tmpdir):
     with reader_factory(synthetic_dataset.url, num_epochs=2,
                         cache_type='local-disk', cache_location=tmpdir.strpath,
                         cache_size_limit=CACHE_SIZE, cache_row_size_estimate=ROW_SIZE_BYTES) as reader:
-        _check_simple_reader(reader, synthetic_dataset.data, 200)
-
-
-@pytest.mark.parametrize('reader_factory', [ALL_READER_FLAVOR_FACTORIES[i] for i in [1, 5]])
-@pytest.mark.forked
-def test_simple_read_with_disk_cache_reader_v2(synthetic_dataset, reader_factory, tmpdir):
-    """Try using the Reader with LocalDiskCache using different flavors of pools"""
-    CACHE_SIZE = 10 * 2 ** 30  # 20GB
-    ROW_SIZE_BYTES = 100  # not really important for this test
-    # Temporary catch a type error until we have a similar factory for readerV2 which doesnt
-    # leak cache implementation
-    with reader_factory(synthetic_dataset.url, num_epochs=2,
-                        cache=LocalDiskCache(tmpdir.strpath, CACHE_SIZE, ROW_SIZE_BYTES)) as reader:
         _check_simple_reader(reader, synthetic_dataset.data, 200)
 
 

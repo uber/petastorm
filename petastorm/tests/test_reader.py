@@ -18,11 +18,11 @@ import pytest
 
 from petastorm import make_reader
 from petastorm.reader import Reader
-from petastorm.reader_impl.reader_v2 import ReaderV2
 
+# pylint: disable=unnecessary-lambda
 READER_FACTORIES = [
     make_reader,
-    ReaderV2,
+    lambda url, **kwargs: make_reader(url, reader_engine='experimental_reader_v2', **kwargs),
 ]
 
 
@@ -47,7 +47,7 @@ def test_diagnostics_reader_v1(synthetic_dataset):
 
 
 def test_diagnostics_reader_v2(synthetic_dataset):
-    with ReaderV2(synthetic_dataset.url) as reader:
+    with make_reader(synthetic_dataset.url, reader_engine='experimental_reader_v2') as reader:
         next(reader)
         diags = reader.diagnostics
         # Hard to make a meaningful assert on the content of the diags without potentially introducing a race
@@ -76,3 +76,21 @@ def test_bound_size_of_output_queue_size_reader(synthetic_dataset):
         sleep(TIME_TO_GET_TO_STATIONARY_STATE)
         assert reader.diagnostics['items_consumed'] < 5
         assert reader.diagnostics['items_inprocess'] < 5
+
+
+@pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+def test_invalid_cache_type(synthetic_dataset, reader_factory):
+    with pytest.raises(ValueError, match='Unknown cache_type'):
+        reader_factory(synthetic_dataset.url, cache_type='bogus_cache_type')
+
+
+@pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+def test_invalid_reader_pool_type(synthetic_dataset, reader_factory):
+    with pytest.raises(ValueError, match='Unknown reader_pool_type'):
+        reader_factory(synthetic_dataset.url, reader_pool_type='bogus_pool_type')
+
+
+@pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+def test_invalid_reader_engine(synthetic_dataset, reader_factory):
+    with pytest.raises(ValueError, match='Supported reader_engine values'):
+        make_reader(synthetic_dataset.url, reader_engine='bogus reader engine')

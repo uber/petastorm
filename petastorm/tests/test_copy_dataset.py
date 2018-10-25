@@ -21,7 +21,7 @@ import pytest
 from pyspark.sql import SparkSession
 from pyspark.sql.utils import AnalysisException
 
-from petastorm.reader import ReaderV2
+from petastorm.reader import make_reader
 from petastorm.tools.copy_dataset import _main, copy_dataset
 
 
@@ -34,7 +34,7 @@ def test_copy_and_overwrite_cli(tmpdir, synthetic_dataset):
     target_url = 'file:///' + os.path.join(tmpdir.strpath, 'copied_data')
     _main([synthetic_dataset.url, target_url])
 
-    with ReaderV2(target_url, num_epochs=1) as reader:
+    with make_reader(target_url, num_epochs=1) as reader:
         for row in reader:
             actual = row._asdict()
             expected = next(d for d in synthetic_dataset.data if d['id'] == actual['id'])
@@ -55,7 +55,7 @@ def test_copy_some_fields_with_repartition_cli(tmpdir, synthetic_dataset):
     assert 1 == len(glob.glob(os.path.join(target_path, 'part-*')))
 
     # Check we the regex filter worked
-    with ReaderV2(target_url, num_epochs=1) as reader:
+    with make_reader(target_url, num_epochs=1) as reader:
         assert list(reader.schema.fields.keys()) == ['id']
 
 
@@ -63,7 +63,7 @@ def test_copy_not_null_rows_cli(tmpdir, synthetic_dataset):
     target_url = 'file://' + os.path.join(tmpdir.strpath, 'copied_data')
 
     _main([synthetic_dataset.url, target_url, '--not-null-fields', 'string_array_nullable'])
-    with ReaderV2(target_url, num_epochs=1) as reader:
+    with make_reader(target_url, num_epochs=1) as reader:
         not_null_data = list(reader)
     assert len(not_null_data) < len(synthetic_dataset.data)
 
