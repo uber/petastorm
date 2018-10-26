@@ -51,6 +51,7 @@ class ReaderV2(object):
 
         :param dataset_url: an filepath or a url to a parquet directory,
                        e.g. 'hdfs://some_hdfs_cluster/user/yevgeni/parquet8', or '/tmp/mydataset'
+                       or ``'s3://bucket/mydataset'``.
         :param schema_fields:
             Either list of unischema fields to subset, or None to read all fields.
             OR an NGram object, then it will return an NGram of the specified properties.
@@ -118,7 +119,7 @@ class ReaderV2(object):
         else:
             resolver = FilesystemResolver(dataset_url)
             filesystem = resolver.filesystem()
-            dataset_path = resolver.parsed_dataset_url().path
+            dataset_path = resolver.get_dataset_path()
 
         self._dataset = pq.ParquetDataset(dataset_path, filesystem=filesystem, validate_schema=False)
 

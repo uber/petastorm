@@ -61,7 +61,7 @@ class RowGroupLoader(object):
 
         resolver = FilesystemResolver(self._dataset_url_parsed)
         self._dataset = pq.ParquetDataset(
-            resolver.parsed_dataset_url().path,
+            resolver.get_dataset_path(),
             filesystem=resolver.filesystem(),
             validate_schema=False)
 

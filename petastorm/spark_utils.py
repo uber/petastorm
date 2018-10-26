@@ -35,7 +35,7 @@ def dataset_as_rdd(dataset_url, spark_session, schema_fields=None):
 
     resolver = FilesystemResolver(dataset_url_parsed, spark_session.sparkContext._jsc.hadoopConfiguration())
 
-    dataset_df = spark_session.read.parquet(resolver.parsed_dataset_url().path)
+    dataset_df = spark_session.read.parquet(resolver.get_dataset_path())
     if schema_fields is not None:
         # If wanting a subset of fields, create the schema view and run a select on those fields
         schema = schema.create_schema_view(schema_fields)

@@ -33,9 +33,10 @@ class FilesystemResolver(object):
         2. If ``scheme`` is ``file``, use local filesystem path.
         3. If ``scheme`` is ``hdfs``:
            a. Try the ``hostname`` as a namespace and attempt to connect to a name node.
+              1. If that doesn't work, try connecting directly to namenode ``hostname:port``.
            b. If no host, connect to the default name node.
-        4. Next, try connecting directly to namenode ``hostname:port``.
-        5. Fail otherwise.
+        5. If ``scheme`` is ``s3``, use s3fs. The user must manually install s3fs before using s3
+        6. Fail otherwise.
 
         :param dataset_url: The hdfs URL or absolute path to the dataset
         :param hadoop_configuration: an optional hadoop configuration
@@ -78,7 +79,7 @@ class FilesystemResolver(object):
                     if namenodes:
                         self._filesystem = connector.connect_to_either_namenode(namenodes)
                     if self._filesystem is None:
-                        # Case 5: That didn't work; try the URL as a namenode host
+                        # Case 3a1: That didn't work; try the URL as a namenode host
                         self._filesystem = connector.hdfs_connect_namenode(self._parsed_dataset_url)
                 else:
                     # Case 3b: No netloc, so let's try to connect to default namenode
@@ -93,8 +94,23 @@ class FilesystemResolver(object):
             else:
                 self._filesystem = connector.hdfs_connect_namenode(self._parsed_dataset_url, hdfs_driver)
 
-        else:
+        elif self._parsed_dataset_url.scheme == 's3':
             # Case 5
+            # S3 support requires s3fs to be installed
+            try:
+                import s3fs
+            except ImportError:
+                raise ValueError('Must have s3fs installed in order to use datasets on s3. '
+                                 'Please install s3fs and try again.')
+
+            if not self._parsed_dataset_url.netloc:
+                raise ValueError('URLs must be of the form s3://bucket/path')
+
+            fs = s3fs.S3FileSystem()
+            self._filesystem = pyarrow.filesystem.S3FSWrapper(fs)
+
+        else:
+            # Case 6
             raise ValueError('Unsupported scheme in dataset url {}. '
                              'Currently, only "file" and "hdfs" are supported.'.format(self._parsed_dataset_url.scheme))
 
@@ -103,6 +119,18 @@ class FilesystemResolver(object):
         :return: The urlparse'd dataset_url
         """
         return self._parsed_dataset_url
+
+    def get_dataset_path(self):
+        """
+        The dataset path is different than the one in `_parsed_dataset_url` for some filesystems.
+        For example s3fs expects the bucket name to be included in the path and doesn't support
+        paths that start with a `/`
+        """
+        if isinstance(self._filesystem, pyarrow.filesystem.S3FSWrapper):
+            # s3fs expects paths of the form `bucket/path`
+            return self._parsed_dataset_url.netloc + self._parsed_dataset_url.path
+
+        return self._parsed_dataset_url.path
 
     def filesystem(self):
         """
