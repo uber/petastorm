@@ -11,7 +11,7 @@ This section shows a way to configure a development environment that allows you 
 
     virtualenv env
     source env/bin/activate
-    pip install -U pip
+    pip install -U pip setuptools
     pip install -e .[opencv,tf,test,torch]
 
 Unit tests
