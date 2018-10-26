@@ -34,6 +34,7 @@ from petastorm.reader_impl.row_group_loader import RowGroupLoader
 from petastorm.reader_impl.shuffling_buffer import NoopShufflingBuffer
 from petastorm.reader_impl.worker_loop import worker_loop, EOFSentinel, WorkerLoopError
 from petastorm.selectors import RowGroupSelectorBase
+from petastorm.unischema import Unischema
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ class ReaderV2(object):
     def __init__(self, dataset_url, schema_fields=None, predicate=None, rowgroup_selector=None,
                  num_epochs=1, sequence=None, cur_shard=None, shard_count=None,
                  read_timeout_s=None, cache=None, loader_pool=None, decoder_pool=None, shuffling_queue=None,
-                 shuffle_row_groups=True, shuffle_row_drop_partitions=1, pyarrow_filesystem=None):
+                 shuffle_row_groups=True, shuffle_row_drop_partitions=1, pyarrow_filesystem=None, infer_schema=False):
         """Initializes a reader object.
 
         :param dataset_url: an filepath or a url to a parquet directory,
@@ -125,8 +126,14 @@ class ReaderV2(object):
 
         shuffle_row_drop_partitions = self._normalize_shuffle_options(shuffle_row_drop_partitions, self._dataset)
 
-        # Get a unischema stored in the dataset metadata.
-        stored_schema = dataset_metadata.get_schema(self._dataset)
+        if infer_schema:
+            # If inferring schema, just retrieve the schema from a file of the dataset
+            meta = self._dataset.pieces[0].get_metadata(self._dataset.fs.open)
+            arrow_schema = meta.schema.to_arrow_schema()
+            stored_schema = Unischema.from_arrow_schema(arrow_schema)
+        else:
+            # Otherwise, get the stored schema
+            stored_schema = dataset_metadata.get_schema(self._dataset)
 
         # Make a schema view (a view is a Unischema containing only a subset of fields
         # Will raise an exception if invalid schema fields are in schema_fields

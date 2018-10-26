@@ -18,6 +18,7 @@ import unittest
 from decimal import Decimal
 
 import numpy as np
+import pyarrow as pa
 from pyspark import Row
 from pyspark.sql.types import StringType, IntegerType, DecimalType, ShortType, LongType
 
@@ -170,6 +171,35 @@ class UnischemaTest(unittest.TestCase):
         assert match_unischema_fields(TestSchema, ['nomatch']) == []
         assert match_unischema_fields(TestSchema, ['.*']) == list(TestSchema.fields.values())
         assert match_unischema_fields(TestSchema, ['int32', 'uint8']) == [TestSchema.int32, TestSchema.uint8]
+
+    def test_arrow_schema_convertion(self):
+        arrow_schema = pa.schema([
+            pa.field('string', pa.string()),
+            pa.field('int8', pa.int8()),
+            pa.field('int16', pa.int16()),
+            pa.field('int32', pa.int32()),
+            pa.field('int64', pa.int64()),
+            pa.field('float', pa.float32()),
+            pa.field('double', pa.float64()),
+            pa.field('bool', pa.bool_(), False),
+        ])
+        unischema = Unischema.from_arrow_schema(arrow_schema)
+        for name in arrow_schema.names:
+            assert getattr(unischema, name).name == name
+            assert isinstance(getattr(unischema, name).codec, ScalarCodec)
+            if name == 'bool':
+                assert not getattr(unischema, name).nullable
+            else:
+                assert getattr(unischema, name).nullable
+
+    def test_arrow_schema_convertion_fail(self):
+        arrow_schema = pa.schema([
+            pa.field('string', pa.string()),
+            pa.field('binary', pa.binary(10)),
+        ])
+        with self.assertRaises(ValueError) as ex:
+            Unischema.from_arrow_schema(arrow_schema)
+            assert 'Cannot auto-create unischema due to unsupported column type' in str(ex.exception)
 
 
 class UnischemaFieldTest(unittest.TestCase):
