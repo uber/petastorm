@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import mock
 import unittest
 
-from pyarrow.filesystem import LocalFileSystem
+from pyarrow.filesystem import LocalFileSystem, S3FSWrapper
 from pyarrow.lib import ArrowIOError
 from six.moves.urllib.parse import urlparse
 
@@ -64,16 +65,18 @@ class FilesystemResolverTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             FilesystemResolver(urlparse('ftp://foo/bar'), {})
         with self.assertRaises(ValueError):
-            FilesystemResolver(urlparse('s3://foo/bar'), {})
-        with self.assertRaises(ValueError):
             FilesystemResolver(urlparse('ssh://foo/bar'), {})
+
+        # s3 paths must have the bucket as the netloc
+        with self.assertRaises(ValueError):
+            FilesystemResolver(urlparse('s3:///foo/bar'), {})
 
     def test_file_url(self):
         """ Case 2: File path, agnostic to content of hadoop configuration."""
         suj = FilesystemResolver('file://{}'.format(ABS_PATH), self._hadoop_configuration, connector=self.mock)
         self.assertTrue(isinstance(suj.filesystem(), LocalFileSystem))
         self.assertEqual('', suj.parsed_dataset_url().netloc)
-        self.assertEqual(ABS_PATH, suj.parsed_dataset_url().path)
+        self.assertEqual(ABS_PATH, suj.get_dataset_path())
 
     def test_hdfs_url_with_nameservice(self):
         """ Case 3a: HDFS nameservice."""
@@ -90,7 +93,7 @@ class FilesystemResolverTest(unittest.TestCase):
         self.assertEqual(MockHdfs, type(suj.filesystem()._hdfs))
         self.assertEqual(HC.WARP_TURTLE, suj.parsed_dataset_url().netloc)
         # ensure path is preserved in parsed URL
-        self.assertEqual('/some/path', suj.parsed_dataset_url().path)
+        self.assertEqual('/some/path', suj.get_dataset_path())
         self.assertEqual(1, self.mock.connect_attempted(HC.WARP_TURTLE_NN2))
         self.assertEqual(0, self.mock.connect_attempted(HC.WARP_TURTLE_NN1))
         self.assertEqual(0, self.mock.connect_attempted(HC.DEFAULT_NN))
@@ -132,6 +135,18 @@ class FilesystemResolverTest(unittest.TestCase):
         self.assertEqual(3, self.mock.connect_attempted(HC.WARP_TURTLE_NN2))
         self.assertEqual(0, self.mock.connect_attempted(HC.WARP_TURTLE_NN1))
         self.assertEqual(0, self.mock.connect_attempted(HC.DEFAULT_NN))
+
+    def test_s3_without_s3fs(self):
+        with mock.patch.dict('sys.modules', s3fs=None):
+            # `import s3fs` will fail in this context
+            with self.assertRaises(ValueError):
+                FilesystemResolver(urlparse('s3://foo/bar'), {})
+
+    def test_s3_url(self):
+        suj = FilesystemResolver('s3://bucket{}'.format(ABS_PATH), self._hadoop_configuration, connector=self.mock)
+        self.assertTrue(isinstance(suj.filesystem(), S3FSWrapper))
+        self.assertEqual('bucket', suj.parsed_dataset_url().netloc)
+        self.assertEqual('bucket' + ABS_PATH, suj.get_dataset_path())
 
 
 if __name__ == '__main__':

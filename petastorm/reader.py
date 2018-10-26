@@ -60,7 +60,8 @@ def make_reader(dataset_url,
     Factory convenience method for :class:`Reader`.
 
     :param dataset_url: an filepath or a url to a parquet directory,
-        e.g. ``'hdfs://some_hdfs_cluster/user/yevgeni/parquet8'``, or ``'/tmp/mydataset'``.
+        e.g. ``'hdfs://some_hdfs_cluster/user/yevgeni/parquet8'``, or ``'file:///tmp/mydataset'``
+        or ``'s3://bucket/mydataset'``.
     :param schema_fields: Either list of unischema fields to subset, or ``None`` to read all fields.
             OR an NGram object, then it will return an NGram of the specified properties.
     :param reader_pool_type: A string denoting the reader pool type. Should be one of ['thread', 'process', 'dummy']
@@ -104,7 +105,7 @@ def make_reader(dataset_url,
 
     resolver = FilesystemResolver(dataset_url, hdfs_driver=hdfs_driver)
     filesystem = resolver.filesystem()
-    dataset_path = resolver.parsed_dataset_url().path
+    dataset_path = resolver.get_dataset_path()
 
     if reader_pool_type == 'thread':
         reader_pool = ThreadPool(workers_count)
@@ -147,11 +148,12 @@ class Reader(object):
                  cur_shard=None, shard_count=None, cache=None):
         """Initializes a reader object.
 
-        :param pyarrow_filesystem: An instance of ``pyarrow.FileSystem`` instance that will be use. If not specified,
-            then a default one will be selected based on the url. The default hdfs driver is ``libhdfs3``. If you want
+        :param pyarrow_filesystem: An instance of ``pyarrow.FileSystem`` that will be used. If not specified,
+            then a default one will be selected based on the url (only for ``hdfs://`` or ``file://``; for
+            ``s3://`` support, use ``make_reader``). The default hdfs driver is ``libhdfs3``. If you want
             to to use ``libhdfs``, use
             ``pyarrow_filesystem=pyarrow.hdfs.connect('hdfs:///some/path', driver='libhdfs')``.
-        :param dataset_path: filepath to a parquet directory on the specified filesystem,
+        :param dataset_path: filepath to a parquet directory on the specified filesystem.
             e.g. ``'/user/yevgeni/parquet8'``, or ``'/tmp/mydataset'``.
         :param schema_fields: Either list of unischema fields to subset, or ``None`` to read all fields.
             OR an NGram object, then it will return an NGram of the specified properties.

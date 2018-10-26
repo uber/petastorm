@@ -62,6 +62,7 @@ EXTRA_REQUIRE = {
         'pytest-cov>=2.5.1',
         'pytest-forked>=0.2',
         'pytest-logger>=0.4.0',
+        's3fs>=0.0.1',
     ],
     'torch': ['torchvision>=0.2.1'],
 }

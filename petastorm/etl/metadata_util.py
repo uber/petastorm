@@ -44,7 +44,7 @@ if __name__ == "__main__":
 
     # Create pyarrow file system
     resolver = FilesystemResolver(args.dataset_url)
-    dataset = pq.ParquetDataset(resolver.parsed_dataset_url().path, filesystem=resolver.filesystem(),
+    dataset = pq.ParquetDataset(resolver.get_dataset_path(), filesystem=resolver.filesystem(),
                                 validate_schema=False)
 
     print_all = not args.schema and not args.index
