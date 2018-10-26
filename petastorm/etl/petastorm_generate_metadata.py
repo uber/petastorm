@@ -58,7 +58,7 @@ def generate_petastorm_metadata(spark, dataset_url, unischema_class=None, use_su
 
     resolver = FilesystemResolver(dataset_url, sc._jsc.hadoopConfiguration())
     dataset = pq.ParquetDataset(
-        resolver.parsed_dataset_url().path,
+        resolver.get_dataset_path(),
         filesystem=resolver.filesystem(),
         validate_schema=False)
 

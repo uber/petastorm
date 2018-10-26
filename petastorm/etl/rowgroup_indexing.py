@@ -49,7 +49,7 @@ def build_rowgroup_index(dataset_url, spark_context, indexers):
 
     # Create pyarrow file system
     resolver = FilesystemResolver(dataset_url, spark_context._jsc.hadoopConfiguration())
-    dataset = pq.ParquetDataset(resolver.parsed_dataset_url().path, filesystem=resolver.filesystem(),
+    dataset = pq.ParquetDataset(resolver.get_dataset_path(), filesystem=resolver.filesystem(),
                                 validate_schema=False)
 
     split_pieces = dataset_metadata.load_row_groups(dataset)

@@ -84,7 +84,7 @@ def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_
     if pyarrow_filesystem is None:
         resolver = FilesystemResolver(dataset_url, spark.sparkContext._jsc.hadoopConfiguration())
         filesystem = resolver.filesystem()
-        dataset_path = resolver.parsed_dataset_url().path
+        dataset_path = resolver.get_dataset_path()
     else:
         filesystem = pyarrow_filesystem
         dataset_path = urlparse(dataset_url).path
@@ -337,7 +337,7 @@ def get_schema_from_dataset_url(dataset_url):
     :return: A :class:`petastorm.unischema.Unischema` object
     """
     resolver = FilesystemResolver(dataset_url)
-    dataset = pq.ParquetDataset(resolver.parsed_dataset_url().path, filesystem=resolver.filesystem(),
+    dataset = pq.ParquetDataset(resolver.get_dataset_path(), filesystem=resolver.filesystem(),
                                 validate_schema=False)
 
     # Get a unischema stored in the dataset metadata.
