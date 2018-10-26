@@ -32,6 +32,7 @@ from petastorm.reader_impl.same_thread_executor import SameThreadExecutor
 from petastorm.reader_impl.shuffling_buffer import NoopShufflingBuffer, RandomShufflingBuffer
 from petastorm.reader_worker import ReaderWorker
 from petastorm.selectors import RowGroupSelectorBase
+from petastorm.unischema import Unischema
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.dummy_pool import DummyPool
 from petastorm.workers_pool.process_pool import ProcessPool
@@ -59,6 +60,7 @@ def make_reader(dataset_url,
                 cache_type='null', cache_location=None, cache_size_limit=None,
                 cache_row_size_estimate=None, cache_extra_settings=None,
                 hdfs_driver='libhdfs3',
+                infer_schema=False,
                 reader_engine='reader_v1', reader_engine_params=None):
     """
     Factory convenience method for :class:`Reader`.
@@ -98,6 +100,8 @@ def make_reader(dataset_url,
     :param cache_extra_settings: A dictionary of extra settings to pass to the cache implementation,
     :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
         libhdfs (java through JNI) or libhdfs3 (C++)
+    :param infer_schema: Whether to infer the unischema object from the parquet schema.
+            Only works for schemas containing certain scalar type.
     :param reader_engine: Multiple engine implementations exist ('reader_v1' and 'experimental_reader_v2'). 'reader_v1'
         (the default value) selects a stable reader implementation.
     :param reader_engine_params: For advanced usage: a dictionary with arguments passed directly to a reader
@@ -144,7 +148,8 @@ def make_reader(dataset_url,
             'num_epochs': num_epochs,
             'cur_shard': cur_shard,
             'shard_count': shard_count,
-            'cache': cache
+            'cache': cache,
+            'infer_schema': infer_schema,
         }
 
         if reader_engine_params:
@@ -200,7 +205,7 @@ class Reader(object):
     def __init__(self, pyarrow_filesystem, dataset_path, schema_fields=None,
                  shuffle_row_groups=True, shuffle_row_drop_partitions=1,
                  predicate=None, rowgroup_selector=None, reader_pool=None, num_epochs=1,
-                 cur_shard=None, shard_count=None, cache=None):
+                 cur_shard=None, shard_count=None, cache=None, infer_schema=False):
         """Initializes a reader object.
 
         :param pyarrow_filesystem: An instance of ``pyarrow.FileSystem`` that will be used. If not specified,
@@ -263,8 +268,14 @@ class Reader(object):
         self.dataset = pq.ParquetDataset(dataset_path, filesystem=pyarrow_filesystem,
                                          validate_schema=False)
 
-        # Get a unischema stored in the dataset metadata.
-        stored_schema = dataset_metadata.get_schema(self.dataset)
+        if infer_schema:
+            # If inferring schema, just retrieve the schema from a file of the dataset
+            meta = self.dataset.pieces[0].get_metadata(self.dataset.fs.open)
+            arrow_schema = meta.schema.to_arrow_schema()
+            stored_schema = Unischema.from_arrow_schema(arrow_schema)
+        else:
+            # Otherwise, get the stored schema
+            stored_schema = dataset_metadata.get_schema(self.dataset)
 
         # Make a schema view (a view is a Unischema containing only a subset of fields
         # Will raise an exception if invalid schema fields are in schema_fields
