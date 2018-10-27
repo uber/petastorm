@@ -48,7 +48,7 @@ class TestSparkUtils(unittest.TestCase):
         return SparkSession \
             .builder \
             .appName('petastorm_spark_utils_test') \
-            .master('local[8]')\
+            .master('local[*]')\
             .getOrCreate()
 
     def test_simple_read_rdd(self):
