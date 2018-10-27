@@ -84,7 +84,7 @@ def create_test_dataset(tmp_url, rows, num_files=2, spark=None):
         spark_session = SparkSession \
             .builder \
             .appName('petastorm_end_to_end_test') \
-            .master('local[8]')
+            .master('local[*]')
 
         spark = spark_session.getOrCreate()
         shutdown = True
