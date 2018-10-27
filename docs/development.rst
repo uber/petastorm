@@ -22,6 +22,8 @@ To run unit tests:
 
     pytest -v petastorm
 
+NOTE: you need to have Java 1.8 to be installed for the test to pass (it's a dependency of Spark)
+
 ``pytest`` has mulitple useful plugins. Consider installing the following plugins:
 
 .. code-block:: bash
