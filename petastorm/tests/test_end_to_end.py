@@ -41,10 +41,11 @@ MINIMAL_READER_FLAVOR_FACTORIES = [
 # pylint: disable=unnecessary-lambda
 ALL_READER_FLAVOR_FACTORIES = MINIMAL_READER_FLAVOR_FACTORIES + [
     lambda url, **kwargs: make_reader(url, reader_pool_type='thread', **kwargs),
-    lambda url, **kwargs: make_reader(url, reader_pool_type='process', pyarrow_serialize=False, **kwargs),
-    lambda url, **kwargs: make_reader(url, reader_pool_type='process', workers_count=1, pyarrow_serialize=True,
+    lambda url, **kwargs: make_reader(url, reader_pool_type='process', workers_count=2, pyarrow_serialize=False,
                                       **kwargs),
-    lambda url, **kwargs: make_reader(url, workers_count=10, reader_engine='experimental_reader_v2', **kwargs)
+    lambda url, **kwargs: make_reader(url, reader_pool_type='process', workers_count=1,
+                                      pyarrow_serialize=True, **kwargs),
+    lambda url, **kwargs: make_reader(url, workers_count=2, reader_engine='experimental_reader_v2', **kwargs)
 ]
 
 
