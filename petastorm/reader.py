@@ -15,7 +15,6 @@
 import collections
 import logging
 import os
-import warnings
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 import six
@@ -446,13 +445,6 @@ class Reader(object):
     def join(self):
         """Joins all worker threads/processes. Will block until all worker workers have been fully terminated."""
         self._workers_pool.join()
-
-    def fetch(self, timeout=None):
-        warning_message = 'fetch is deprecated. Please use iterator api to fetch data instead.'
-        warnings.warn(warning_message, DeprecationWarning)
-        # Since warnings are generally ignored in av, print out a logging warning as well
-        logger.warn(warning_message)
-        return self._workers_pool.get_results()
 
     @property
     def diagnostics(self):
