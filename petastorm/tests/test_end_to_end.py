@@ -27,6 +27,7 @@ from petastorm.etl.dataset_metadata import materialize_dataset
 from petastorm.reader import ReaderV2
 from petastorm.reader_impl.same_thread_executor import SameThreadExecutor
 from petastorm.selectors import SingleIndexSelector
+from petastorm.tests import test_common
 from petastorm.tests.test_common import create_test_dataset, TestSchema
 from petastorm.tests.test_end_to_end_predicates_impl import \
     PartitionKeyInSetPredicate, EqualPredicate
@@ -460,3 +461,12 @@ def test_dataset_path_is_a_unicode(synthetic_dataset, reader_factory):
     unicode_in_p23 = synthetic_dataset.url.encode().decode('utf-8')
     with reader_factory(unicode_in_p23) as reader:
         next(reader)
+
+
+@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
+def test_reader_inferring_schema(tmpdir_factory, reader_factory):
+    """Read a scalar dataset and infer the unischema and the number of row groups per file"""
+    dataset_url = 'file://' + tmpdir_factory.mktemp("data").strpath
+    data = test_common.create_test_scalar_dataset(dataset_url, 100)
+    with reader_factory(dataset_url, infer_schema=True) as reader:
+        _check_simple_reader(reader, data)
