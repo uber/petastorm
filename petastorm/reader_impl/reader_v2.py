@@ -141,7 +141,7 @@ class ReaderV2(object):
         self.schema = stored_schema.create_schema_view(fields) if fields else stored_schema
 
         # 2. Get a list of all groups
-        row_groups = dataset_metadata.load_row_groups(self._dataset)
+        row_groups = dataset_metadata.load_row_groups(self._dataset, infer_schema)
 
         # 3. Filter rowgroups
         filtered_row_groups, worker_predicate = self._filter_row_groups(self._dataset, row_groups, predicate,
