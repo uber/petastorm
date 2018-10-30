@@ -15,6 +15,7 @@
 import json
 import logging
 import os
+from concurrent import futures
 from contextlib import contextmanager
 from operator import attrgetter
 
@@ -214,16 +215,23 @@ def _generate_num_row_groups_per_file(dataset, spark_context):
     utils.add_to_dataset_metadata(dataset, ROW_GROUPS_PER_FILE_KEY, num_row_groups_str)
 
 
-def load_row_groups(dataset):
+def load_row_groups(dataset, allow_read_footers=False):
     """
     Load dataset row group pieces from metadata
     :param dataset: parquet dataset object.
+    :param allow_read_footers: whether to allow reading parquet footers if there is no better way
+            to load row group information
     :return: splitted pieces, one piece per row group
     """
     # We try to get row group information from metadata file
     metadata = dataset.metadata
     common_metadata = dataset.common_metadata
     if not metadata and not common_metadata:
+
+        if allow_read_footers:
+            # If we are inferring the schema we allow reading the footers to get the row group information
+            return _split_row_groups_from_footers(dataset)
+
         # If neither the metadata or common metadata file exists, we know there is no row group information
         raise PetastormMetadataError(
             'Could not find _common_metadata file.'
@@ -296,6 +304,22 @@ def _split_row_groups(dataset):
             split_pieces.append(split_piece)
 
     return split_pieces
+
+
+def _split_row_groups_from_footers(dataset):
+    """Split the row groups by reading the footers of the parquet pieces"""
+    thread_pool = futures.ThreadPoolExecutor()
+
+    def split_piece(piece):
+        metadata = piece.get_metadata(dataset.fs.open)
+        return [pq.ParquetDatasetPiece(piece.path,
+                                       row_group,
+                                       piece.partition_keys) for row_group in range(metadata.num_row_groups)]
+
+    futures_list = [thread_pool.submit(split_piece, piece) for piece in dataset.pieces]
+    result = [item for f in futures_list for item in f.result()]
+    thread_pool.shutdown()
+    return result
 
 
 def get_schema(dataset):

@@ -18,6 +18,7 @@ from decimal import Decimal
 from functools import partial
 
 import numpy as np
+from pyspark import Row
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StringType, ShortType, LongType, DecimalType
 
@@ -123,3 +124,30 @@ def create_test_dataset(tmp_url, rows, num_files=2, spark=None):
         spark.stop()
 
     return dataset_dicts
+
+
+def create_test_scalar_dataset(tmp_url, num_rows, num_files=4, spark=None):
+    shutdown = False
+    if not spark:
+        spark_session = SparkSession \
+            .builder \
+            .appName('petastorm_end_to_end_test') \
+            .master('local[*]')
+
+        spark = spark_session.getOrCreate()
+        shutdown = True
+
+    rows = [Row(id=i, str='hello', str2='world', flt=float(i) * .66)
+            for i in range(num_rows)]
+
+    dataframe = spark.createDataFrame(rows)
+    dataframe. \
+        coalesce(num_files). \
+        write.option('compression', 'none'). \
+        mode('overwrite'). \
+        parquet(tmp_url)
+
+    if shutdown:
+        spark.stop()
+
+    return [row.asDict() for row in rows]

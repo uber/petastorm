@@ -100,7 +100,9 @@ def make_reader(dataset_url,
     :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
         libhdfs (java through JNI) or libhdfs3 (C++)
     :param infer_schema: Whether to infer the unischema object from the parquet schema.
-            Only works for schemas containing certain scalar type.
+            Only works for schemas containing certain scalar type. This option allows getting around explicitly
+            generating petastorm metadata using :func:`petastorm.etl.dataset_metadata.materialize_dataset` or
+            petastorm-generate-metadata.py
     :param reader_engine: Multiple engine implementations exist ('reader_v1' and 'experimental_reader_v2'). 'reader_v1'
         (the default value) selects a stable reader implementation.
     :param reader_engine_params: For advanced usage: a dictionary with arguments passed directly to a reader
@@ -181,7 +183,8 @@ def make_reader(dataset_url,
             'decoder_pool': decoder_pool,
             'shuffling_queue': shuffling_queue,
             'shuffle_row_groups': shuffle_row_groups,
-            'shuffle_row_drop_partitions': shuffle_row_drop_partitions
+            'shuffle_row_drop_partitions': shuffle_row_drop_partitions,
+            'infer_schema': infer_schema,
         }
 
         if reader_engine_params:
@@ -282,7 +285,7 @@ class Reader(object):
         self.schema = stored_schema.create_schema_view(fields) if fields else stored_schema
 
         # 2. Get a list of all groups
-        row_groups = dataset_metadata.load_row_groups(self.dataset)
+        row_groups = dataset_metadata.load_row_groups(self.dataset, infer_schema)
 
         # 3. Filter rowgroups
         filtered_row_group_indexes, worker_predicate = self._filter_row_groups(self.dataset, row_groups, predicate,
