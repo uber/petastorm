@@ -50,10 +50,10 @@ TestSchema = Unischema('TestSchema', [
 def _randomize_row(id_num):
     """Returns a row with random values"""
     row_dict = {
-        TestSchema.id.name: id_num,
-        TestSchema.id2.name: id_num % 2,
-        TestSchema.partition_key.name: 'p_{}'.format(int(id_num / 10)),
-        TestSchema.python_primitive_uint8.name: np.random.randint(0, 255),
+        TestSchema.id.name: np.int64(id_num),
+        TestSchema.id2.name: np.int32(id_num % 2),
+        TestSchema.partition_key.name: np.unicode_('p_{}'.format(int(id_num / 10))),
+        TestSchema.python_primitive_uint8.name: np.random.randint(0, 255, dtype=np.uint8),
         TestSchema.image_png.name: np.random.randint(0, 255, _DEFAULT_IMAGE_SIZE).astype(np.uint8),
         TestSchema.matrix.name: np.random.random(size=_DEFAULT_IMAGE_SIZE).astype(np.float32),
         TestSchema.decimal.name: Decimal(np.random.randint(0, 255) / Decimal(100)),
@@ -96,6 +96,12 @@ def create_test_dataset(tmp_url, rows, num_files=2, spark=None):
         # Make up some random data and store it for referencing in the tests
         random_dicts_rdd = id_rdd.map(_randomize_row).cache()
         dataset_dicts = random_dicts_rdd.collect()
+
+        def _partition_key_to_str(row):
+            row['partition_key'] = str(row['partition_key'])
+            return row
+
+        random_dicts_rdd = random_dicts_rdd.map(_partition_key_to_str)
 
         random_rows_rdd = random_dicts_rdd.map(partial(dict_to_spark_row, TestSchema))
 

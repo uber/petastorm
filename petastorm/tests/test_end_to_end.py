@@ -41,15 +41,12 @@ MINIMAL_READER_FLAVOR_FACTORIES = [
 # pylint: disable=unnecessary-lambda
 ALL_READER_FLAVOR_FACTORIES = MINIMAL_READER_FLAVOR_FACTORIES + [
     lambda url, **kwargs: make_reader(url, reader_pool_type='thread', **kwargs),
-    lambda url, **kwargs: make_reader(url, reader_pool_type='process', workers_count=2, pyarrow_serialize=False,
-                                      **kwargs),
-    lambda url, **kwargs: make_reader(url, reader_pool_type='process', workers_count=1,
-                                      pyarrow_serialize=True, **kwargs),
+    lambda url, **kwargs: make_reader(url, reader_pool_type='process', workers_count=2, **kwargs),
     lambda url, **kwargs: make_reader(url, workers_count=2, reader_engine='experimental_reader_v2', **kwargs)
 ]
 
 
-def _check_simple_reader(reader, expected_data, expected_rows_count=None):
+def _check_simple_reader(reader, expected_data, expected_rows_count=None, check_types=True):
     # Read a bunch of entries from the dataset and compare the data to reference
     def _type(v):
         return v.dtype if isinstance(v, np.ndarray) else type(v)
@@ -61,9 +58,9 @@ def _check_simple_reader(reader, expected_data, expected_rows_count=None):
         actual = row._asdict()
         expected = next(d for d in expected_data if d['id'] == actual['id'])
         np.testing.assert_equal(actual, expected)
-        actual_types = [_type(v) for v in actual.values()]
-        expected_types = [_type(v) for v in actual.values()]
-        assert actual_types == expected_types
+        actual_types = {k: _type(v) for k, v in actual.items()}
+        expected_types = {k: _type(v) for k, v in expected.items()}
+        assert not check_types or actual_types == expected_types
         count += 1
 
     assert count == expected_rows_count
@@ -74,6 +71,13 @@ def test_simple_read(synthetic_dataset, reader_factory):
     """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
     with reader_factory(synthetic_dataset.url) as reader:
         _check_simple_reader(reader, synthetic_dataset.data)
+
+
+def test_simple_read_with_pyarrow_serialize(synthetic_dataset):
+    """Same as test_simple_read, but don't check type correctness as pyarrow_serialize messes up integer types"""
+    with make_reader(synthetic_dataset.url, reader_pool_type='process', workers_count=1,
+                     pyarrow_serialize=True) as reader:
+        _check_simple_reader(reader, synthetic_dataset.data, check_types=False)
 
 
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
