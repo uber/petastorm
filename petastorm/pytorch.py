@@ -49,6 +49,8 @@ def _sanitize_pytorch_types(row_as_dict):
                 row_as_dict[name] = value.astype(np.int32)
             elif value.dtype == np.uint32:
                 row_as_dict[name] = value.astype(np.int64)
+        if isinstance(value, np.bool_):
+            row_as_dict[name] = np.uint8(value)
 
 
 def decimal_friendly_collate(batch):
