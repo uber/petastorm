@@ -474,4 +474,5 @@ def test_reader_inferring_schema(tmpdir_factory, reader_factory):
     dataset_url = 'file://' + tmpdir_factory.mktemp("data").strpath
     data = test_common.create_test_scalar_dataset(dataset_url, 100)
     with reader_factory(dataset_url, infer_schema=True) as reader:
-        _check_simple_reader(reader, data)
+        # We dont check types as the reader will return numpy types while spark will return regular primitives
+        _check_simple_reader(reader, data, check_types=False)
