@@ -30,14 +30,15 @@ except ImportError:
     OPENCV_AVAILABLE = False
 
 import numpy as np
-from pyspark.sql.types import BinaryType, LongType, IntegerType, ShortType, ByteType, StringType
+from pyspark.sql.types import BinaryType, LongType, IntegerType, ShortType, ByteType, StringType, \
+    FloatType, DoubleType, BooleanType
 
 
 class DataframeColumnCodec(object):
     """The abstract base class of codecs."""
 
     @abstractmethod
-    def encode(self, unischema_field, array):
+    def encode(self, unischema_field, value):
         raise RuntimeError('Abstract method was called')
 
     @abstractmethod
@@ -62,27 +63,27 @@ class CompressedImageCodec(DataframeColumnCodec):
         self._image_codec = '.' + image_codec
         self._quality = quality
 
-    def encode(self, unischema_field, array):
+    def encode(self, unischema_field, value):
         """Encodes the image using OpenCV."""
-        if unischema_field.numpy_dtype != array.dtype:
+        if unischema_field.numpy_dtype != value.dtype:
             raise ValueError("Unexpected type of {} feature, expected {}, got {}".format(
-                unischema_field.name, unischema_field.numpy_dtype, array.dtype
+                unischema_field.name, unischema_field.numpy_dtype, value.dtype
             ))
 
-        if not _is_compliant_shape(array.shape, unischema_field.shape):
+        if not _is_compliant_shape(value.shape, unischema_field.shape):
             raise ValueError("Unexpected dimensions of {} feature, expected {}, got {}".format(
-                unischema_field.name, unischema_field.shape, array.shape
+                unischema_field.name, unischema_field.shape, value.shape
             ))
 
-        if len(array.shape) == 2:
+        if len(value.shape) == 2:
             # Greyscale image
-            image_bgr_or_gray = array
-        elif len(array.shape) == 3 and array.shape[2] == 3:
+            image_bgr_or_gray = value
+        elif len(value.shape) == 3 and value.shape[2] == 3:
             # Convert RGB to BGR
-            image_bgr_or_gray = array[:, :, (2, 1, 0)]
+            image_bgr_or_gray = value[:, :, (2, 1, 0)]
         else:
             raise ValueError('Unexpected image dimensions. Supported dimensions are (H, W) or (H, W, 3). '
-                             'Got {}'.format(array.shape))
+                             'Got {}'.format(value.shape))
 
         _, contents = cv2.imencode(self._image_codec,
                                    image_bgr_or_gray,
@@ -112,23 +113,23 @@ class CompressedImageCodec(DataframeColumnCodec):
 class NdarrayCodec(DataframeColumnCodec):
     """Encodes numpy ndarray into, or decodes an ndarray from, a spark dataframe field."""
 
-    def encode(self, unischema_field, array):
+    def encode(self, unischema_field, value):
         expected_dtype = unischema_field.numpy_dtype
-        if isinstance(array, np.ndarray):
-            if expected_dtype != array.dtype.type:
+        if isinstance(value, np.ndarray):
+            if expected_dtype != value.dtype.type:
                 raise ValueError('Unexpected type of {} feature. '
-                                 'Expected {}. Got {}'.format(unischema_field.name, expected_dtype, array.dtype))
+                                 'Expected {}. Got {}'.format(unischema_field.name, expected_dtype, value.dtype))
 
             expected_shape = unischema_field.shape
-            if not _is_compliant_shape(array.shape, expected_shape):
+            if not _is_compliant_shape(value.shape, expected_shape):
                 raise ValueError('Unexpected dimensions of {} feature. '
-                                 'Expected {}. Got {}'.format(unischema_field.name, expected_shape, array.shape))
+                                 'Expected {}. Got {}'.format(unischema_field.name, expected_shape, value.shape))
         else:
             raise ValueError('Unexpected type of {} feature. '
-                             'Expected ndarray of {}. Got {}'.format(unischema_field.name, expected_dtype, type(array)))
+                             'Expected ndarray of {}. Got {}'.format(unischema_field.name, expected_dtype, type(value)))
 
         memfile = BytesIO()
-        np.save(memfile, array)
+        np.save(memfile, value)
         return bytearray(memfile.getvalue())
 
     def decode(self, unischema_field, value):
@@ -142,23 +143,23 @@ class NdarrayCodec(DataframeColumnCodec):
 class CompressedNdarrayCodec(DataframeColumnCodec):
     """Encodes numpy ndarray with compression into a spark dataframe field"""
 
-    def encode(self, unischema_field, array):
+    def encode(self, unischema_field, value):
         expected_dtype = unischema_field.numpy_dtype
-        if isinstance(array, np.ndarray):
-            if expected_dtype != array.dtype.type:
+        if isinstance(value, np.ndarray):
+            if expected_dtype != value.dtype.type:
                 raise ValueError('Unexpected type of {} feature. '
-                                 'Expected {}. Got {}'.format(unischema_field.name, expected_dtype, array.dtype))
+                                 'Expected {}. Got {}'.format(unischema_field.name, expected_dtype, value.dtype))
 
             expected_shape = unischema_field.shape
-            if not _is_compliant_shape(array.shape, expected_shape):
+            if not _is_compliant_shape(value.shape, expected_shape):
                 raise ValueError('Unexpected dimensions of {} feature. '
-                                 'Expected {}. Got {}'.format(unischema_field.name, expected_shape, array.shape))
+                                 'Expected {}. Got {}'.format(unischema_field.name, expected_shape, value.shape))
         else:
             raise ValueError('Unexpected type of {} feature. '
-                             'Expected ndarray of {}. Got {}'.format(unischema_field.name, expected_dtype, type(array)))
+                             'Expected ndarray of {}. Got {}'.format(unischema_field.name, expected_dtype, type(value)))
 
         memfile = BytesIO()
-        np.savez_compressed(memfile, arr=array)
+        np.savez_compressed(memfile, arr=value)
         return bytearray(memfile.getvalue())
 
     def decode(self, unischema_field, value):
@@ -179,14 +180,18 @@ class ScalarCodec(DataframeColumnCodec):
         """
         self._spark_type = spark_type
 
-    def encode(self, unischema_field, array):
+    def encode(self, unischema_field, value):
         if isinstance(self._spark_type, (ByteType, ShortType, IntegerType, LongType)):
-            return int(array)
+            return int(value)
+        if isinstance(self._spark_type, (FloatType, DoubleType)):
+            return float(value)
+        if isinstance(self._spark_type, BooleanType):
+            return bool(value)
         if isinstance(self._spark_type, StringType):
-            if not isinstance(array, str):
+            if not isinstance(value, str):
                 raise ValueError(
-                    'Expected a string value for field {}. Got type {}'.format(unischema_field.name, type(array)))
-        return array
+                    'Expected a string value for field {}. Got type {}'.format(unischema_field.name, type(value)))
+        return value
 
     def decode(self, unischema_field, value):
         # We are using pyarrow.serialize that does not support Decimal field types.

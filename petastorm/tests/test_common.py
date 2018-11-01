@@ -20,7 +20,7 @@ from functools import partial
 import numpy as np
 from pyspark import Row
 from pyspark.sql import SparkSession
-from pyspark.sql.types import StringType, ShortType, LongType, DecimalType
+from pyspark.sql.types import StringType, ShortType, LongType, DecimalType, DoubleType, BooleanType
 
 from petastorm.codecs import CompressedImageCodec, NdarrayCodec, \
     ScalarCodec
@@ -35,6 +35,8 @@ TestSchema = Unischema('TestSchema', [
     UnischemaField('partition_key', np.unicode_, (), ScalarCodec(StringType()), False),
     UnischemaField('id', np.int64, (), ScalarCodec(LongType()), False),
     UnischemaField('id2', np.int32, (), ScalarCodec(ShortType()), False),
+    UnischemaField('id_float', np.float64, (), ScalarCodec(DoubleType()), False),
+    UnischemaField('id_odd', np.bool_, (), ScalarCodec(BooleanType()), False),
     UnischemaField('python_primitive_uint8', np.uint8, (), ScalarCodec(ShortType()), False),
     UnischemaField('image_png', np.uint8, _DEFAULT_IMAGE_SIZE, CompressedImageCodec('png'), False),
     UnischemaField('matrix', np.float32, _DEFAULT_IMAGE_SIZE, NdarrayCodec(), False),
@@ -53,6 +55,8 @@ def _randomize_row(id_num):
     row_dict = {
         TestSchema.id.name: np.int64(id_num),
         TestSchema.id2.name: np.int32(id_num % 2),
+        TestSchema.id_float.name: np.float64(id_num),
+        TestSchema.id_odd.name: np.bool_(id_num % 2),
         TestSchema.partition_key.name: np.unicode_('p_{}'.format(int(id_num / 10))),
         TestSchema.python_primitive_uint8.name: np.random.randint(0, 255, dtype=np.uint8),
         TestSchema.image_png.name: np.random.randint(0, 255, _DEFAULT_IMAGE_SIZE).astype(np.uint8),
