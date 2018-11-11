@@ -181,6 +181,10 @@ class ScalarCodec(DataframeColumnCodec):
         self._spark_type = spark_type
 
     def encode(self, unischema_field, value):
+        if unischema_field.shape:
+            raise ValueError('The shape field of unischema_field \'%s\' must be an empty tuple (i.e. \'()\' '
+                             'to indicate a scalar. However, the actual shape is %s',
+                             unischema_field.name, unischema_field.shape)
         if isinstance(self._spark_type, (ByteType, ShortType, IntegerType, LongType)):
             return int(value)
         if isinstance(self._spark_type, (FloatType, DoubleType)):
