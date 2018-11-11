@@ -12,73 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import io
-from decimal import Decimal
 
 import numpy as np
 import pytest
 from PIL import Image
-from pyspark.sql.types import StringType, ByteType, ShortType, IntegerType, LongType, DecimalType
 
-from petastorm.codecs import NdarrayCodec, CompressedNdarrayCodec, ScalarCodec, CompressedImageCodec
+from petastorm.codecs import CompressedImageCodec
 from petastorm.unischema import UnischemaField
-
-
-def test_ndarray_codec():
-    SHAPE = (10, 20, 30)
-    expected = np.random.rand(*SHAPE).astype(dtype=np.int32)
-    codec = NdarrayCodec()
-    field = UnischemaField(name='test_name', numpy_dtype=np.int32, shape=SHAPE, codec=NdarrayCodec(),
-                           nullable=False)
-    np.testing.assert_equal(codec.decode(field, codec.encode(field, expected)), expected)
-
-
-def test_compressed_ndarray_codec():
-    SHAPE = (10, 20, 30)
-    expected = np.random.rand(*SHAPE).astype(dtype=np.int32)
-    codec = CompressedNdarrayCodec()
-    field = UnischemaField(name='test_name', numpy_dtype=np.int32, shape=SHAPE, codec=CompressedNdarrayCodec(),
-                           nullable=False)
-    np.testing.assert_equal(codec.decode(field, codec.encode(field, expected)), expected)
-
-
-def test_scalar_codec_string():
-    codec = ScalarCodec(StringType())
-    field = UnischemaField(name='field_string', numpy_dtype=np.string_, shape=(), codec=codec, nullable=False)
-
-    assert codec.decode(field, codec.encode(field, 'abc')) == b'abc'
-    assert codec.decode(field, codec.encode(field, '')) == b''
-
-
-def test_scalar_codec_unicode():
-    codec = ScalarCodec(StringType())
-    field = UnischemaField(name='field_string', numpy_dtype=np.unicode_, shape=(), codec=codec, nullable=False)
-
-    assert codec.decode(field, codec.encode(field, 'abc')) == 'abc'
-    assert codec.decode(field, codec.encode(field, '')) == ''
-
-
-def _test_scalar_type(spark_type, numpy_type, bits):
-    codec = ScalarCodec(spark_type())
-    field = UnischemaField(name='field_int', numpy_dtype=numpy_type, shape=(), codec=codec, nullable=False)
-
-    min_val, max_val = -2 ** (bits - 1), 2 ** (bits - 1) - 1
-    assert codec.decode(field, codec.encode(field, numpy_type(min_val))) == min_val
-    assert codec.decode(field, codec.encode(field, numpy_type(max_val))) == max_val
-
-
-def test_scalar_codec_byte():
-    _test_scalar_type(ByteType, np.int8, 8)
-    _test_scalar_type(ShortType, np.int16, 16)
-    _test_scalar_type(IntegerType, np.int32, 32)
-    _test_scalar_type(LongType, np.int64, 64)
-
-
-def test_scalar_codec_decimal():
-    codec = ScalarCodec(DecimalType(4, 3))
-    field = UnischemaField(name='field_decimal', numpy_dtype=Decimal, shape=(), codec=codec, nullable=False)
-
-    value = Decimal('123.4567')
-    assert codec.decode(field, codec.encode(field, value)) == value
 
 
 def test_png():
