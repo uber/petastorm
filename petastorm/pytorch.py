@@ -13,6 +13,8 @@
 # limitations under the License.
 
 # Must import pyarrow before torch. See: https://github.com/uber/petastorm/blob/master/docs/troubleshoot.rst
+import re
+
 import pyarrow  # noqa: F401 pylint: disable=W0611
 
 import collections
@@ -37,7 +39,8 @@ def _sanitize_pytorch_types(row_as_dict):
     int8, uint16 are promoted to int32; uint32 -> int64;
     numpy string_, unicode_, object arrays are not supported.
 
-    :param row_as_dict: a dictinoary of key-value pairs. The values types are promoted to pytorch compatible.
+    :param dict[str,obj] row_as_dict: a dictionary of key-value pairs. The values types are promoted to
+        pytorch compatible.
     :return: None
     """
     for name, value in row_as_dict.items():
@@ -49,8 +52,14 @@ def _sanitize_pytorch_types(row_as_dict):
                 row_as_dict[name] = value.astype(np.int32)
             elif value.dtype == np.uint32:
                 row_as_dict[name] = value.astype(np.int64)
-        if isinstance(value, np.bool_):
+            elif value.dtype == np.bool_:
+                row_as_dict[name] = value.astype(np.uint8)
+            elif re.search('[SaUO]', value.dtype.str):
+                raise TypeError('Pytorch does not support arrays of string classes. Found in field {}'.format(name))
+        elif isinstance(value, np.bool_):
             row_as_dict[name] = np.uint8(value)
+        elif value is None:
+            raise TypeError('Pytorch does not support nullable fields. Found None in {}'.format(name))
 
 
 def decimal_friendly_collate(batch):
@@ -58,7 +67,7 @@ def decimal_friendly_collate(batch):
 
     We use ``decimal.Decimal`` types in petastorm dataset to represent timestamps. PyTorch's ``default_collate``
     implementation does not support collating ``decimal.Decimal`` types. ``decimal_friendly_collate`` collates
-    ``decimal.Decima al`` separately and then combines with the rest of the fields collated by a standard
+    ``decimal.Decimal`` separately and then combines with the rest of the fields collated by a standard
     ``default_collate``.
 
     :param batch: A list of dictionaries to collate
@@ -99,8 +108,8 @@ class DataLoader(object):
 
         :param reader: petastorm Reader instance
         :param batch_size: the number of items to return per batch; factored into the len() of this reader
-        :param collate_fn: a optional callable to merge a list of samples to form a mini-batch.
-        :param transform: a optional tranform function to apply to each data row
+        :param collate_fn: an optional callable to merge a list of samples to form a mini-batch.
+        :param transform: an optional transform function to apply to each data row
         """
         self.reader = reader
         self.batch_size = batch_size
@@ -118,8 +127,8 @@ class DataLoader(object):
             # Default collate does not work nicely on namedtuples and treat them as lists
             # Using dict will result in the yielded structures being dicts as well
             row_as_dict = row._asdict()
-            _sanitize_pytorch_types(row_as_dict)
             transformed_row = self.transform(row_as_dict) if self.transform else row_as_dict
+            _sanitize_pytorch_types(transformed_row)
             batch.append(transformed_row)
             if len(batch) == self.batch_size:
                 yield self.collate_fn(batch)
