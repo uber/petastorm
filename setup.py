@@ -55,7 +55,7 @@ EXTRA_REQUIRE = {
     'test': [
         'Pillow>=3.0',
         'codecov>=2.0.15',
-        'mock>=2.0.0; python_version == "2.7"',
+        'mock>=2.0.0',
         'opencv-python>=3.2.0.6',
         'pylint>=1.9',
         'pytest>=3.0.0',
