@@ -55,8 +55,8 @@ class Net(nn.Module):
 
 def train(model, device, train_loader, log_interval, optimizer, epoch):
     model.train()
-    for batch_idx, (data, target) in enumerate(train_loader):
-        data, target = data.to(device), target.to(device)
+    for batch_idx, row in enumerate(train_loader):
+        data, target = row['image'].to(device), row['digit'].to(device)
         optimizer.zero_grad()
         output = model(data)
         loss = F.nll_loss(output, target)
@@ -73,8 +73,8 @@ def test(model, device, test_loader):
     correct = 0
     count = 0
     with torch.no_grad():
-        for data, target in test_loader:
-            data, target = data.to(device), target.to(device)
+        for row in test_loader:
+            data, target = row['image'].to(device), row['digit'].to(device)
             output = model(data)
             test_loss += F.nll_loss(output, target, reduction='sum').item()  # sum up batch loss
             pred = output.max(1, keepdim=True)[1]  # get the index of the max log-probability
@@ -97,7 +97,12 @@ def _transform_row(mnist_row):
     # In addition, the petastorm pytorch DataLoader does not distinguish the notion of
     # data or target transform, but that actually gives the user more flexibility
     # to make the desired partial transform, as shown here.
-    return (transform(mnist_row['image']), mnist_row['digit'])
+    result_row = {
+        'image': transform(mnist_row['image']),
+        'digit': mnist_row['digit']
+    }
+
+    return result_row
 
 
 def main():
