@@ -20,7 +20,7 @@ from collections import namedtuple
 import pytest
 import six
 
-from petastorm.tests.test_common import create_test_dataset
+from petastorm.tests.test_common import create_test_dataset, create_test_scalar_dataset
 
 SyntheticDataset = namedtuple('synthetic_dataset', ['url', 'data', 'path'])
 
@@ -92,3 +92,15 @@ def synthetic_dataset(request, tmpdir_factory):
         return dataset
 
     return maybe_cached_dataset(request.config, 'synthetic_dataset', _synthetic_dataset_no_cache)
+
+
+@pytest.fixture(scope="session")
+def scalar_dataset(request, tmpdir_factory):
+    def _pure_parquet_dataset_no_cache():
+        path = tmpdir_factory.mktemp("data").strpath
+        url = 'file://' + path
+        data = create_test_scalar_dataset(url, 100)
+        dataset = SyntheticDataset(url=url, path=path, data=data)
+        return dataset
+
+    return maybe_cached_dataset(request.config, 'scalar', _pure_parquet_dataset_no_cache)
