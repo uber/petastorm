@@ -40,7 +40,6 @@ class Ventilator(object):
         """A callback for the worker pool to tell the ventilator that it has processed an item from the ventilation
         queue. This allows the ventilator to know how many items are currently on the ventilation queue.
         This function should not have a return value."""
-        pass
 
     @abstractmethod
     def completed(self):

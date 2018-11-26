@@ -38,7 +38,6 @@ class PetastormMetadataError(Exception):
     Error to specify when the petastorm metadata does not exist, does not contain the necessary information,
     or is corrupt/invalid.
     """
-    pass
 
 
 class PetastormMetadataGenerationError(Exception):
@@ -46,7 +45,6 @@ class PetastormMetadataGenerationError(Exception):
     Error to specify when petastorm could not generate metadata properly.
     This error is usually accompanied with a message to try to regenerate dataset metadata.
     """
-    pass
 
 
 @contextmanager
