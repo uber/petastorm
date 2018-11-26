@@ -23,12 +23,10 @@ class RowGroupSelectorBase(object):
     @abc.abstractmethod
     def get_index_names(self):
         """ Return list of indexes required for given selector."""
-        pass
 
     @abc.abstractmethod
     def select_row_groups(self, index_dict):
         """ Return set of row groups which are selected."""
-        pass
 
 
 class SingleIndexSelector(RowGroupSelectorBase):

@@ -32,7 +32,6 @@ _VERIFY_END_OF_VENTILATION_PERIOD = 0.1
 
 class WorkerTerminationRequested(Exception):
     """This exception will be raised if a thread is being stopped while waiting to write to the results queue."""
-    pass
 
 
 class WorkerThread(Thread):
