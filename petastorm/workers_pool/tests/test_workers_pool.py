@@ -192,7 +192,10 @@ class TestWorkersPool(unittest.TestCase):
     def test_exception_in_worker_thread(self):
         """ Test exception handler in thread pool """
         QUEUE_SIZE = 100
-        self._test_exception_in_worker_impl(ThreadPool(10, results_queue_size=QUEUE_SIZE), QUEUE_SIZE)
+        pool = ThreadPool(10, results_queue_size=QUEUE_SIZE)
+        self._test_exception_in_worker_impl(pool, QUEUE_SIZE)
+        pool.stop()
+        pool.join()
 
     def test_exception_in_worker_process(self):
         """ Test exception handler in process pool """
@@ -201,7 +204,10 @@ class TestWorkersPool(unittest.TestCase):
         # zmq sockets will be closed and there is some race condition that can cause the ventilate
         # to raise an exception. Only ventilating a single time guarantees that it will be properly
         # sent to a worker before it has exited due to an exception
-        self._test_exception_in_worker_impl(ProcessPool(10), 1)
+        pool = ProcessPool(2)
+        self._test_exception_in_worker_impl(pool, 1)
+        pool.stop()
+        pool.join()
 
     def test_exception_in_all_worker_process(self):
         """ Tests that when all worker processes have exited, zmq will properly throw an exception
