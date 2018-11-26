@@ -264,7 +264,12 @@ class ProcessPool(object):
         logger.debug('stopping')
         if self._ventilator:
             self._ventilator.stop()
-        self._control_sender.send_string(_CONTROL_FINISHED)
+        try:
+            self._control_sender.send_string(_CONTROL_FINISHED)
+        except ZMQBaseError as e:
+            logger.warning('Stopping worker processes failed with \'%s\'. Does not necessary indicates an error.'
+                           'This can happen if worker processes were terminated due to an error raised in that '
+                           'process. See the log for additional messages from the failed worker.', str(e))
 
     def join(self):
         """Blocks until all workers are terminated."""
