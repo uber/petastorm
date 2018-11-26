@@ -31,7 +31,6 @@ _LOOP_IDLE_TIME_SEC = 0.001  # 1 ms
 class EOFSentinel(object):
     """This is a 'poison' object being queued into the output queue to signal that no further data will be arriving.
     This would happen when the number of epochs is limited and we are done reading all the data."""
-    pass
 
 
 def _decode_row_dispatcher(decoder, row):

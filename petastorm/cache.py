@@ -30,7 +30,6 @@ class CacheBase(object):
             value is present in the cache.
         :return: A value from cache
         """
-        pass
 
 
 class NullCache(CacheBase):

@@ -30,7 +30,6 @@ class ShufflingBufferBase(object):
         :param items: items to be added to the shuffling buffer.
         :return: None
         """
-        pass
 
     @abc.abstractmethod
     def retrieve(self):
@@ -38,7 +37,6 @@ class ShufflingBufferBase(object):
 
         :return: The selected item.
         """
-        pass
 
     @abc.abstractmethod
     def can_add(self):
@@ -46,7 +44,6 @@ class ShufflingBufferBase(object):
 
         :return: A boolean indicating whether an item can be added to the buffer at the time.
         """
-        pass
 
     @abc.abstractmethod
     def can_retrieve(self):
@@ -54,7 +51,6 @@ class ShufflingBufferBase(object):
 
         :return: A boolean indicating whether an item can be returned from the buffer at the time.
         """
-        pass
 
     @abc.abstractproperty
     def size(self):
@@ -62,7 +58,6 @@ class ShufflingBufferBase(object):
 
         :return: number of elements currently present in the buffer
         """
-        pass
 
     @abc.abstractmethod
     def finish(self):
@@ -73,7 +68,6 @@ class ShufflingBufferBase(object):
 
         :return: number of elements currently present in the buffer
         """
-        pass
 
 
 class NoopShufflingBuffer(ShufflingBufferBase):
