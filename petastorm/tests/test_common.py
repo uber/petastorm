@@ -20,7 +20,8 @@ from functools import partial
 import numpy as np
 from pyspark import Row
 from pyspark.sql import SparkSession
-from pyspark.sql.types import StringType, ShortType, LongType, DecimalType, DoubleType, BooleanType
+from pyspark.sql.types import StringType, ShortType, LongType, DecimalType, DoubleType, BooleanType, StructField, \
+    IntegerType, StructType
 
 from petastorm.codecs import CompressedImageCodec, NdarrayCodec, \
     ScalarCodec
@@ -147,10 +148,22 @@ def create_test_scalar_dataset(tmp_url, num_rows, num_files=4, spark=None):
         spark = spark_session.getOrCreate()
         shutdown = True
 
-    rows = [Row(id=i, str='hello', str2='world', flt=float(i) * .66)
-            for i in range(num_rows)]
+    expected_data = [{'id': np.int32(i),
+                      'string': np.unicode_('hello_{}'.format(i)),
+                      'string2': np.unicode_('world_{}'.format(i)),
+                      'float64': np.float64(i) * .66} for i in range(num_rows)]
 
-    dataframe = spark.createDataFrame(rows)
+    expected_data_as_scalars = [{k: np.asscalar(v) for k, v in row.items()} for row in expected_data]
+
+    rows = [Row(**row) for row in expected_data_as_scalars]
+
+    schema = StructType([
+        StructField('id', IntegerType(), False),
+        StructField('string', StringType(), False),
+        StructField('string2', StringType(), False),
+        StructField('float64', DoubleType(), False)])
+
+    dataframe = spark.createDataFrame(rows, schema)
     dataframe. \
         coalesce(num_files). \
         write.option('compression', 'none'). \
@@ -160,4 +173,4 @@ def create_test_scalar_dataset(tmp_url, num_rows, num_files=4, spark=None):
     if shutdown:
         spark.stop()
 
-    return [row.asDict() for row in rows]
+    return expected_data

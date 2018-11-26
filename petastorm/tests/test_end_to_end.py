@@ -27,7 +27,6 @@ from petastorm.etl.dataset_metadata import materialize_dataset
 from petastorm.reader import ReaderV2
 from petastorm.reader_impl.same_thread_executor import SameThreadExecutor
 from petastorm.selectors import SingleIndexSelector
-from petastorm.tests import test_common
 from petastorm.tests.test_common import create_test_dataset, TestSchema
 from petastorm.tests.test_end_to_end_predicates_impl import \
     PartitionKeyInSetPredicate, EqualPredicate
@@ -469,10 +468,8 @@ def test_dataset_path_is_a_unicode(synthetic_dataset, reader_factory):
 
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
-def test_reader_inferring_schema(tmpdir_factory, reader_factory):
+def test_reader_inferring_schema(scalar_dataset, reader_factory):
     """Read a scalar dataset and infer the unischema and the number of row groups per file"""
-    dataset_url = 'file://' + tmpdir_factory.mktemp("data").strpath
-    data = test_common.create_test_scalar_dataset(dataset_url, 100)
-    with reader_factory(dataset_url, infer_schema=True) as reader:
+    with reader_factory(scalar_dataset.url, infer_schema=True) as reader:
         # We dont check types as the reader will return numpy types while spark will return regular primitives
-        _check_simple_reader(reader, data, check_types=False)
+        _check_simple_reader(reader, scalar_dataset.data, check_types=False)
