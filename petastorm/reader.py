@@ -14,7 +14,6 @@
 
 import collections
 import logging
-import os
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 import six
@@ -355,9 +354,7 @@ class Reader(object):
 
         # We hash on the relative path of each parquet file to guarantee consistency between different reader
         # constructions even after moving the dataset
-        filtered_row_group_indexes = [index for index in filtered_row_group_indexes
-                                      if hash(os.path.relpath(row_groups[index].path, dataset.paths)) %
-                                      shard_count == cur_shard]
+        filtered_row_group_indexes = [index for index in filtered_row_group_indexes if index % shard_count == cur_shard]
         return filtered_row_group_indexes
 
     def _apply_row_group_selector(self, dataset, rowgroup_selector, filtered_row_group_indexes):
