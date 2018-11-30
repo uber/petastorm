@@ -216,7 +216,11 @@ def test_partition_multi_node(synthetic_dataset, reader_factory):
                 results_1.append(actual)
                 expected.append(next(d for d in synthetic_dataset.data if d['id'] == actual['id']))
 
+            assert results_1, 'Shard 0 is expected to have at least one row'
+
             results_2 = [dict(row._asdict()) for row in reader_2]
+
+            assert results_2, 'Shard 0 is expected to have at least one row'
 
             # Since order is non deterministic, we need to sort results by id
             results_1.sort(key=lambda x: x['id'])

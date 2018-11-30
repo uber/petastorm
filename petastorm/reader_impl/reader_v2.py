@@ -13,12 +13,11 @@
 # limitations under the License.
 import collections
 import logging
-import os
 import threading
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 
 import six
-from concurrent.futures import ThreadPoolExecutor
 from pyarrow import parquet as pq
 from six.moves.queue import Queue
 from six.moves.urllib.parse import urlparse
@@ -151,7 +150,8 @@ class ReaderV2(object):
         epoch_items = self._apply_row_drop_partition(filtered_row_groups, shuffle_row_drop_partitions)
 
         # 4. Launch a new thread running `worker_loop` function.
-        def epochs_iterator(): return epoch_generator(epoch_items, num_epochs, shuffle_row_groups)
+        def epochs_iterator():
+            return epoch_generator(epoch_items, num_epochs, shuffle_row_groups)
 
         self._results_queue = Queue(_OUTPUT_QUEUE_SIZE)
 
@@ -233,8 +233,7 @@ class ReaderV2(object):
         # We hash on the relative path of each parquet file to guarantee consistency between different reader
         # constructions even after moving the dataset
         filtered_row_group_indexes = [index for index in filtered_row_group_indexes
-                                      if hash(os.path.relpath(row_groups[index].path, dataset.paths)) %
-                                      num_training_partitions == training_partition]
+                                      if index % num_training_partitions == training_partition]
         return filtered_row_group_indexes
 
     def _apply_row_group_selector(self, dataset, rowgroup_selector, filtered_row_group_indexes):
