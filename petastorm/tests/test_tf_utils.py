@@ -14,6 +14,7 @@
 from __future__ import division
 
 from collections import namedtuple
+from contextlib import contextmanager
 from decimal import Decimal
 
 import numpy as np
@@ -26,6 +27,23 @@ from petastorm.tests.test_common import TestSchema
 from petastorm.tf_utils import _sanitize_field_tf_types, _numpy_to_tf_dtypes, \
     _schema_to_tf_dtypes, tf_tensors
 from petastorm.unischema import Unischema, UnischemaField
+
+NON_NULLABLE_FIELDS = set(TestSchema.fields.values()) - \
+                      {TestSchema.matrix_nullable, TestSchema.string_array_nullable}
+
+
+@contextmanager
+def _tf_session():
+    with tf.Session() as sess:
+        sess.run([tf.global_variables_initializer(), tf.local_variables_initializer()])
+
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(coord=coord, start=True)
+
+        yield sess
+
+        coord.request_stop()
+        coord.join(threads)
 
 
 def test_empty_dict():
@@ -88,31 +106,15 @@ def _read_from_tf_tensors(synthetic_dataset, count, shuffling_queue_capacity, mi
     The function returns a tuple with: (actual data read from the dataset, a TF tensor returned by the reader)
     """
 
-    # Nullable fields can not be read by tensorflow (what would be the dimension of a tensor for null data?)
-    fields = set(TestSchema.fields.values()) - {TestSchema.matrix_nullable, TestSchema.string_array_nullable}
-    schema_fields = (fields if ngram is None else ngram)
+    schema_fields = (NON_NULLABLE_FIELDS if ngram is None else ngram)
 
-    reader = make_reader(schema_fields=schema_fields, dataset_url=synthetic_dataset.url, reader_pool_type='dummy',
-                         shuffle_row_groups=False)
+    with make_reader(schema_fields=schema_fields, dataset_url=synthetic_dataset.url, reader_pool_type='dummy',
+                     shuffle_row_groups=False) as reader:
+        row_tensors = tf_tensors(reader, shuffling_queue_capacity=shuffling_queue_capacity,
+                                 min_after_dequeue=min_after_dequeue)
 
-    row_tensors = tf_tensors(reader, shuffling_queue_capacity=shuffling_queue_capacity,
-                             min_after_dequeue=min_after_dequeue)
-
-    # Read a bunch of entries from the dataset and compare the data to reference
-    with tf.Session() as sess:
-        sess.run([tf.global_variables_initializer(), tf.local_variables_initializer()])
-
-        coord = tf.train.Coordinator()
-        threads = tf.train.start_queue_runners(coord=coord, start=True)
-
-        # Collect all the data we need from 'count' number of reads
-        rows_data = [sess.run(row_tensors) for _ in range(count)]
-
-        coord.request_stop()
-        coord.join(threads)
-
-    reader.stop()
-    reader.join()
+        with _tf_session() as sess:
+            rows_data = [sess.run(row_tensors) for _ in range(count)]
 
     return rows_data, row_tensors
 
@@ -123,7 +125,20 @@ def _assert_all_tensors_have_shape(row_tensors):
         assert column.get_shape().dims is not None
 
 
-def _assert_expected_rows_data(synthetic_dataset, rows_data):
+def _assert_fields_eq(actual, desired):
+    if isinstance(desired, Decimal) or isinstance(actual, bytes):
+        # Tensorflow returns all strings as bytes in python3. So we will need to decode it
+        actual = actual.decode()
+    elif isinstance(desired, np.ndarray) and desired.dtype.type == np.unicode_:
+        actual = np.array([item.decode() for item in actual])
+
+    if isinstance(desired, Decimal):
+        np.testing.assert_equal(desired, Decimal(actual))
+    else:
+        np.testing.assert_equal(desired, actual)
+
+
+def _assert_expected_rows_data(expected_data, rows_data):
     """Asserts all elements of rows_data list of rows match reference data used to create the dataset"""
     for row_tuple in rows_data:
 
@@ -131,33 +146,26 @@ def _assert_expected_rows_data(synthetic_dataset, rows_data):
         row = row_tuple._asdict()
 
         # Find corresponding row in the reference data
-        expected = next(d for d in synthetic_dataset.data if d['id'] == row['id'])
+        expected = next(d for d in expected_data if d['id'] == row['id'])
 
         # Check equivalence of all values between a checked row and a row from reference data
         for column_name, actual in row.items():
             expected_val = expected[column_name]
-            if isinstance(expected_val, Decimal) or isinstance(expected_val, str):
-                # Tensorflow returns all strings as bytes in python3. So we will need to decode it
-                actual = actual.decode()
-            elif isinstance(expected_val, np.ndarray) and expected_val.dtype.type == np.unicode_:
-                actual = np.array([item.decode() for item in actual])
-
-            if isinstance(expected_val, Decimal):
-                np.testing.assert_equal(expected_val, Decimal(actual))
-            else:
-                np.testing.assert_equal(expected_val, actual)
+            _assert_fields_eq(actual, expected_val)
 
 
 @pytest.mark.forked
 def test_simple_read_tensorflow(synthetic_dataset):
     """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
     data"""
-    rows_data, row_tensors = \
-        _read_from_tf_tensors(synthetic_dataset, count=30, shuffling_queue_capacity=0, min_after_dequeue=0, ngram=None)
+    with make_reader(schema_fields=NON_NULLABLE_FIELDS, dataset_url=synthetic_dataset.url) as reader:
+        row_tensors = tf_tensors(reader)
+        with _tf_session() as sess:
+            rows_data = [sess.run(row_tensors) for _ in range(30)]
 
     # Make sure we have static shape info for all fields
     _assert_all_tensors_have_shape(row_tensors)
-    _assert_expected_rows_data(synthetic_dataset, rows_data)
+    _assert_expected_rows_data(synthetic_dataset.data, rows_data)
 
 
 @pytest.mark.forked
@@ -177,7 +185,7 @@ def test_shuffling_queue(synthetic_dataset):
     # Make sure we have static shapes and the data matches reference data (important since a different code path
     # is executed within tf_tensors when shuffling is specified
     _assert_all_tensors_have_shape(shuffled_1_row_tensors)
-    _assert_expected_rows_data(synthetic_dataset, shuffled_1)
+    _assert_expected_rows_data(synthetic_dataset.data, shuffled_1)
 
     assert [f.id for f in unshuffled_1] == [f.id for f in unshuffled_2]
     assert [f.id for f in unshuffled_1] != [f.id for f in shuffled_2]
@@ -203,7 +211,7 @@ def test_simple_ngram_read_tensorflow(synthetic_dataset):
         _assert_all_tensors_have_shape(row_tensors)
 
     for one_ngram_dict in ngrams:
-        _assert_expected_rows_data(synthetic_dataset, one_ngram_dict.values())
+        _assert_expected_rows_data(synthetic_dataset.data, one_ngram_dict.values())
 
 
 @pytest.mark.forked
@@ -244,7 +252,7 @@ def test_shuffling_queue_with_ngrams(synthetic_dataset):
     #  ...},...
     # ]
     for one_ngram_dict in shuffled_1:
-        _assert_expected_rows_data(synthetic_dataset, one_ngram_dict.values())
+        _assert_expected_rows_data(synthetic_dataset.data, one_ngram_dict.values())
 
     def flatten(list_of_ngrams):
         return [row for seq in list_of_ngrams for row in seq.values()]
