@@ -27,6 +27,8 @@ import tensorflow as tf
 from petastorm import make_reader
 from petastorm.etl.dataset_metadata import get_schema_from_dataset_url
 from petastorm.reader import ReaderV2
+from petastorm.reader_impl.pickle_serializer import PickleSerializer
+from petastorm.reader_impl.pyarrow_serializer import PyArrowSerializer
 from petastorm.reader_impl.same_thread_executor import SameThreadExecutor
 from petastorm.reader_impl.shuffling_buffer import RandomShufflingBuffer
 from petastorm.tf_utils import tf_tensors
@@ -260,7 +262,8 @@ def _create_worker_pool(pool_type, workers_count, profiling_enabled, pyarrow_ser
     if pool_type == WorkerPoolType.THREAD:
         worker_pool = ThreadPool(workers_count, profiling_enabled=profiling_enabled)
     elif pool_type == WorkerPoolType.PROCESS:
-        worker_pool = ProcessPool(workers_count, pyarrow_serialize=pyarrow_serialize)
+        worker_pool = ProcessPool(workers_count,
+                                  serializer=PyArrowSerializer() if pyarrow_serialize else PickleSerializer())
     elif pool_type == WorkerPoolType.NONE:
         worker_pool = DummyPool()
     else:
