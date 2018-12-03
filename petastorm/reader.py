@@ -25,6 +25,8 @@ from petastorm.fs_utils import FilesystemResolver
 from petastorm.local_disk_cache import LocalDiskCache
 from petastorm.ngram import NGram
 from petastorm.predicates import PredicateBase
+from petastorm.reader_impl.pickle_serializer import PickleSerializer
+from petastorm.reader_impl.pyarrow_serializer import PyArrowSerializer
 from petastorm.reader_impl.reader_v2 import ReaderV2
 from petastorm.reader_impl.same_thread_executor import SameThreadExecutor
 from petastorm.reader_impl.shuffling_buffer import NoopShufflingBuffer, RandomShufflingBuffer
@@ -131,7 +133,11 @@ def make_reader(dataset_url,
         if reader_pool_type == 'thread':
             reader_pool = ThreadPool(workers_count)
         elif reader_pool_type == 'process':
-            reader_pool = ProcessPool(workers_count, pyarrow_serialize=pyarrow_serialize)
+            if pyarrow_serialize:
+                serializer = PyArrowSerializer()
+            else:
+                serializer = PickleSerializer()
+            reader_pool = ProcessPool(workers_count, serializer)
         elif reader_pool_type == 'dummy':
             reader_pool = DummyPool()
         else:
