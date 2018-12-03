@@ -25,7 +25,6 @@ import zmq
 from zmq import ZMQBaseError
 
 from petastorm.reader_impl.pickle_serializer import PickleSerializer
-from petastorm.reader_impl.pyarrow_serializer import PyArrowSerializer
 from petastorm.workers_pool import EmptyResultError, VentilatedItemProcessedMessage
 from petastorm.workers_pool.exec_in_new_process import exec_in_new_process
 
@@ -109,7 +108,7 @@ def _keep_retrying_while_zmq_again(timeout, func, allowed_failures=3):
 
 
 class ProcessPool(object):
-    def __init__(self, workers_count, pyarrow_serialize=False):
+    def __init__(self, workers_count, serializer=None):
         """Initializes a ProcessPool.
 
         This pool is different from standard Python pool implementations by the fact that the workers are spawned
@@ -117,9 +116,11 @@ class ProcessPool(object):
         (could not access HDFS from the forked worker if the driver was already used in the parent process).
 
         :param workers_count: Number of processes to be spawned
-        :param pyarrow_serialize: Use ``pyarrow.serialize`` serialization if True. ``pyarrow.serialize`` is much faster
-          than pickling. Integer types (int8, uint8 etc...) is not done yet in pyarrow, so all integer types are
-          currently converted to 'int'
+        :param serializer: An object that would be used for data payload serialization when sending data from a worker
+          process to the main process. ``PickleSerializer`` is used by default. May use
+          :class:`petastorm.reader_impl.PyarrowSerializer` or
+          :class:`petastorm.reader_impl.ArrowTableSerializer` (should be used together with
+          :class:`petastorm.reader.ArrowReader`)
         """
         self._workers = []
         self._ventilator_send = None
@@ -131,7 +132,7 @@ class ProcessPool(object):
         self._ventilated_items = 0
         self._ventilated_items_processed = 0
         self._ventilator = None
-        self._serializer = PyArrowSerializer() if pyarrow_serialize else PickleSerializer()
+        self._serializer = serializer or PickleSerializer()
 
     def _create_local_socket_on_random_port(self, context, socket_type):
         """Creates a zmq socket on a random port.
