@@ -101,6 +101,11 @@ class ReaderV2(object):
             raise ValueError("""'sequence' argument of Reader object is deprecated. Please pass an NGram instance to
             'schema_fields' argument instead.""")
 
+        # Can not rely on a check in epochs.py since it runs on a separate thread. Inform user earlier about invalid
+        # argument value.
+        if num_epochs is not None and (not isinstance(num_epochs, int) or num_epochs < 1):
+            raise ValueError('iterations must be positive integer or None')
+
         self.ngram = schema_fields if isinstance(schema_fields, NGram) else None
 
         if self.ngram and not self.ngram.timestamp_overlap and shuffle_row_drop_partitions > 1:
@@ -175,6 +180,7 @@ class ReaderV2(object):
         self._flow_manager_thread.start()
 
         self._read_timeout_s = read_timeout_s
+        self.batched_output = False
 
     def _apply_row_drop_partition(self, row_groups, shuffle_row_drop_partitions):
         items_to_ventilate = []
