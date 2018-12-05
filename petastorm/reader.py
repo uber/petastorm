@@ -234,9 +234,9 @@ def make_batch_reader(dataset_url,
                       cache_row_size_estimate=None, cache_extra_settings=None,
                       hdfs_driver='libhdfs3'):
     """
-    Creates an instance of Reader for reading standard batches out of a Parquet store.
+    Creates an instance of Reader for reading batches out of a non-Petastorm Parquet store.
 
-    Currently, only stores having native scalar parquet data types.
+    Currently, only stores having native scalar parquet data types are supported.
     Use :func:`~petastorm.make_reader` to read Petastorm Parquet stores generated with
     :func:`~petastorm.etl.dataset_metadata.materialize_dataset`.
 

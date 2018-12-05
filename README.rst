@@ -24,6 +24,9 @@ Petastorm
 
 .. inclusion-marker-start-do-not-remove
 
+.. contents::
+
+
 Petastorm is an open source data access library developed at Uber ATG. This library enables single machine or
 distributed training and evaluation of deep learning models directly from datasets in Apache Parquet
 format. Petastorm supports popular Python-based machine learning (ML) frameworks such as
@@ -31,6 +34,7 @@ format. Petastorm supports popular Python-based machine learning (ML) frameworks
 `PySpark <http://spark.apache.org/docs/latest/api/python/pyspark.html>`_. It can also be used from pure Python code.
 
 Documentation web site: `<https://petastorm.readthedocs.io>`_
+
 
 
 Installation
@@ -252,6 +256,27 @@ SQL can be used to query a Petastorm dataset:
       'from parquet.`file:///tmp/hello_world_dataset`').collect()
 
 You can find a full code sample here: `pyspark_hello_world.py <https://github.com/uber/petastorm/blob/master/examples/hello_world/pyspark_hello_world.py>`_,
+
+Non Petastorm Parquet Stores
+----------------------------
+Petastorm can also be used to read data directly from Apache Parquet stores. To achieve that, use
+``make_parquet_reader`` (and not ``make_reader``). The following table summarizes the differences
+``make_parquet_reader`` and ``make_reader`` functions.
+
+
+==================================================================  =====================================================
+``make_reader``                                                     ``make_parquet_reader``
+==================================================================  =====================================================
+Only Petastorm datasets (created using materializes_dataset)        Any Parquet store (some native Parquet column types
+                                                                    are not supported yet.
+------------------------------------------------------------------  -----------------------------------------------------
+The reader returns one record at a time.                            The reader returns batches of records. The size of the
+                                                                    batch is not fixed and defined by Parquet row-group
+                                                                    size.
+------------------------------------------------------------------  -----------------------------------------------------
+Predicates passed to ``make_reader`` are evaluated per single row.  Predicates passed to ``make_parquet_reader`` are evaluated per batch.
+==================================================================  =====================================================
+
 
 .. inclusion-marker-end-do-not-remove
    Place contents above here if they should also appear in read-the-docs.
