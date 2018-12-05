@@ -349,6 +349,9 @@ def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_s
 
     results_sender.send_pyobj(_WORKER_STARTED_INDICATOR)
 
+    # Use this 'none_marker' as the first argument to send_multipart.
+    none_marker = bytes()
+
     logger.debug('Instantiating a worker')
     # Instantiate a worker
     worker = worker_class(worker_id, lambda data: _serialize_result_and_send(results_sender, serializer, data),
@@ -367,15 +370,14 @@ def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_s
                 logger.debug('Starting worker.process')
                 worker.process(*args, **kargs)
                 logger.debug('Finished worker.process')
-                results_sender.send_multipart([serializer.serialize(None),
-                                               pickle.dumps(VentilatedItemProcessedMessage())])
+                results_sender.send_multipart([none_marker, pickle.dumps(VentilatedItemProcessedMessage())])
                 logger.debug('Sending result')
             except Exception as e:  # pylint: disable=broad-except
                 stderr_message = 'Worker %d terminated: unexpected exception:\n' % worker_id
                 stderr_message += format_exc()
                 logger.debug('worker.process failed with exception %s', stderr_message)
                 sys.stderr.write(stderr_message)
-                results_sender.send_multipart([serializer.serialize(None), pickle.dumps(e)])
+                results_sender.send_multipart([none_marker, pickle.dumps(e)])
                 return
 
         # If the message came over the control channel, shut down the worker.
