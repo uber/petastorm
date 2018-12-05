@@ -19,21 +19,23 @@ from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 import six
 from pyarrow import parquet as pq
 
+from petastorm.arrow_reader_worker import ArrowReaderWorker
 from petastorm.cache import NullCache
 from petastorm.etl import dataset_metadata, rowgroup_indexing
+from petastorm.etl.dataset_metadata import PetastormMetadataError
 from petastorm.fs_utils import FilesystemResolver
+from petastorm.local_disk_arrow_table_cache import LocalDiskArrowTableCache
 from petastorm.local_disk_cache import LocalDiskCache
 from petastorm.ngram import NGram
 from petastorm.predicates import PredicateBase
+from petastorm.py_dict_reader_worker import PyDictReaderWorker
+from petastorm.reader_impl.arrow_table_serializer import ArrowTableSerializer
 from petastorm.reader_impl.pickle_serializer import PickleSerializer
 from petastorm.reader_impl.pyarrow_serializer import PyArrowSerializer
 from petastorm.reader_impl.reader_v2 import ReaderV2
 from petastorm.reader_impl.same_thread_executor import SameThreadExecutor
 from petastorm.reader_impl.shuffling_buffer import NoopShufflingBuffer, RandomShufflingBuffer
-from petastorm.reader_worker import ReaderWorker
 from petastorm.selectors import RowGroupSelectorBase
-from petastorm.unischema import Unischema
-from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.dummy_pool import DummyPool
 from petastorm.workers_pool.process_pool import ProcessPool
 from petastorm.workers_pool.thread_pool import ThreadPool
@@ -60,10 +62,14 @@ def make_reader(dataset_url,
                 cache_type='null', cache_location=None, cache_size_limit=None,
                 cache_row_size_estimate=None, cache_extra_settings=None,
                 hdfs_driver='libhdfs3',
-                infer_schema=False,
                 reader_engine='reader_v1', reader_engine_params=None):
     """
-    Factory convenience method for :class:`Reader`.
+    Creates an instance of Reader for reading Petastorm datasets. A Petastorm dataset is a dataset generated using
+    :func:`~petastorm.etl.dataset_metadata.materialize_dataset` context manager as explained
+    `here <https://petastorm.readthedocs.io/en/latest/readme_include.html#generating-a-dataset>`_.
+
+    See :func:`~petastorm.make_batch_reader` to read from a Parquet store that was not generated using
+    :func:`~petastorm.etl.dataset_metadata.materialize_dataset`.
 
     :param dataset_url: an filepath or a url to a parquet directory,
         e.g. ``'hdfs://some_hdfs_cluster/user/yevgeni/parquet8'``, or ``'file:///tmp/mydataset'``
@@ -82,7 +88,8 @@ def make_reader(dataset_url,
         For example if you specify 2 each row group read will drop half of the rows within every row group and
         read the remaining rows in separate reads. It is recommended to keep this number below the regular row
         group size in order to not waste reads which drop all rows.
-    :param predicate: instance of :class:`.PredicateBase` object to filter rows to be returned by reader.
+    :param predicate: instance of :class:`.PredicateBase` object to filter rows to be returned by reader. The predicate
+        will be passed a single row and must return a boolean value indicating whether to include it in the results.
     :param rowgroup_selector: instance of row group selector object to select row groups to be read
     :param num_epochs: An epoch is a single pass over all rows in the dataset. Setting ``num_epochs`` to
         ``None`` will result in an infinite number of epochs.
@@ -100,10 +107,6 @@ def make_reader(dataset_url,
     :param cache_extra_settings: A dictionary of extra settings to pass to the cache implementation,
     :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
         libhdfs (java through JNI) or libhdfs3 (C++)
-    :param infer_schema: Whether to infer the unischema object from the parquet schema.
-            Only works for schemas containing certain scalar type. This option allows getting around explicitly
-            generating petastorm metadata using :func:`petastorm.etl.dataset_metadata.materialize_dataset` or
-            petastorm-generate-metadata.py
     :param reader_engine: Multiple engine implementations exist ('reader_v1' and 'experimental_reader_v2'). 'reader_v1'
         (the default value) selects a stable reader implementation.
     :param reader_engine_params: For advanced usage: a dictionary with arguments passed directly to a reader
@@ -155,13 +158,22 @@ def make_reader(dataset_url,
             'cur_shard': cur_shard,
             'shard_count': shard_count,
             'cache': cache,
-            'infer_schema': infer_schema,
         }
 
         if reader_engine_params:
             kwargs.update(reader_engine_params)
 
-        return Reader(filesystem, dataset_path, **kwargs)
+        try:
+            return Reader(filesystem, dataset_path,
+                          worker_class=PyDictReaderWorker,
+                          **kwargs)
+        except PetastormMetadataError as e:
+            logger.error('Unexpected exception: %s', str(e))
+            raise RuntimeError('make_reader has failed. If you were trying to open a Parquet store that was not '
+                               'created using Petastorm materialize_dataset and it contains only scalar columns, '
+                               'you may use make_batch_reader to read it.\n'
+                               'Inner exception: %s', str(e))
+
     elif reader_engine == 'experimental_reader_v2':
         if reader_pool_type == 'thread':
             decoder_pool = ThreadPoolExecutor(workers_count)
@@ -189,7 +201,6 @@ def make_reader(dataset_url,
             'shuffling_queue': shuffling_queue,
             'shuffle_row_groups': shuffle_row_groups,
             'shuffle_row_drop_partitions': shuffle_row_drop_partitions,
-            'infer_schema': infer_schema,
         }
 
         if reader_engine_params:
@@ -203,6 +214,118 @@ def make_reader(dataset_url,
                          reader_engine)
 
 
+def make_batch_reader(dataset_url,
+                      reader_pool_type='thread', workers_count=10,
+                      shuffle_row_groups=True, shuffle_row_drop_partitions=1,
+                      predicate=None,
+                      rowgroup_selector=None,
+                      num_epochs=1,
+                      cur_shard=None, shard_count=None,
+                      cache_type='null', cache_location=None, cache_size_limit=None,
+                      cache_row_size_estimate=None, cache_extra_settings=None,
+                      hdfs_driver='libhdfs3',
+                      infer_schema=True):
+    """
+    Creates an instance of Reader for reading standard batches out of a Parquet store.
+
+    Currently, only stores having native scalar parquet data types.
+    Use :func:`~petastorm.make_reader` to read Petastorm Parquet stores generated with
+    :func:`~petastorm.etl.dataset_metadata.materialize_dataset`.
+
+    NOTE: only scalar columns are currently supported.
+
+    :param dataset_url: an filepath or a url to a parquet directory,
+        e.g. ``'hdfs://some_hdfs_cluster/user/yevgeni/parquet8'``, or ``'file:///tmp/mydataset'``
+        or ``'s3://bucket/mydataset'``.
+    :param reader_pool_type: A string denoting the reader pool type. Should be one of ['thread', 'process', 'dummy']
+        denoting a thread pool, process pool, or running everything in the master thread. Defaults to 'thread'
+    :param workers_count: An int for the number of workers to use in the reader pool. This only is used for the
+        thread or process pool. Defaults to 10
+    :param shuffle_row_groups: Whether to shuffle row groups (the order in which full row groups are read)
+    :param shuffle_row_drop_partitions: This is is a positive integer which determines how many partitions to
+        break up a row group into for increased shuffling in exchange for worse performance (extra reads).
+        For example if you specify 2 each row group read will drop half of the rows within every row group and
+        read the remaining rows in separate reads. It is recommended to keep this number below the regular row
+        group size in order to not waste reads which drop all rows.
+    :param predicate: instance of :class:`.PredicateBase` object to filter rows to be returned by reader. The predicate
+        will be passed a pandas DataFrame object and must return a pandas Series with boolean values of matching
+        dimensions.
+    :param rowgroup_selector: instance of row group selector object to select row groups to be read
+    :param num_epochs: An epoch is a single pass over all rows in the dataset. Setting ``num_epochs`` to
+        ``None`` will result in an infinite number of epochs.
+    :param cur_shard: An int denoting the current shard number. Each node reading a shard should
+        pass in a unique shard number in the range [0, shard_count). shard_count must be supplied as well.
+        Defaults to None
+    :param shard_count: An int denoting the number of shards to break this dataset into. Defaults to None
+    :param cache_type: A string denoting the cache type, if desired. Options are [None, 'null', 'local-disk'] to
+        either have a null/noop cache or a cache implemented using diskcache. Caching is useful when communication
+        to the main data store is either slow or expensive and the local machine has large enough storage
+        to store entire dataset (or a partition of a dataset if shard_count is used). By default will be a null cache.
+    :param cache_location: A string denoting the location or path of the cache.
+    :param cache_size_limit: An int specifying the size limit of the cache in bytes
+    :param cache_row_size_estimate: An int specifying the estimated size of a row in the dataset
+    :param cache_extra_settings: A dictionary of extra settings to pass to the cache implementation,
+    :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
+        libhdfs (java through JNI) or libhdfs3 (C++)
+    :param infer_schema: Whether to infer the unischema object from the parquet schema.
+        Only works for schemas containing certain scalar type. This option allows getting around explicitly
+        generating petastorm metadata using :func:`petastorm.etl.dataset_metadata.materialize_dataset` or
+        petastorm-generate-metadata.py. Should always be True for non-Petastorm generated datasets.
+    :return: A :class:`Reader` object
+    """
+
+    if dataset_url is None or not isinstance(dataset_url, six.string_types):
+        raise ValueError("""dataset_url must be a string""")
+
+    dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
+    logger.debug('dataset_url: %s', dataset_url)
+
+    resolver = FilesystemResolver(dataset_url, hdfs_driver=hdfs_driver)
+    filesystem = resolver.filesystem()
+
+    dataset_path = resolver.parsed_dataset_url().path
+
+    if cache_type is None or cache_type == 'null':
+        cache = NullCache()
+    elif cache_type == 'local-disk':
+        cache = LocalDiskArrowTableCache(cache_location, cache_size_limit, cache_row_size_estimate,
+                                         **cache_extra_settings or {})
+    else:
+        raise ValueError('Unknown cache_type: {}'.format(cache_type))
+
+    try:
+        dataset_metadata.get_schema_from_dataset_url(dataset_url)
+    except PetastormMetadataError:
+        pass
+    else:
+        raise RuntimeError('Currently make_batch_reader supports only reading scalar only parquet stores. '
+                           'To read from a Petastorm store created using "materialize_dataset", use '
+                           'make_reader')
+
+    if reader_pool_type == 'thread':
+        reader_pool = ThreadPool(workers_count)
+    elif reader_pool_type == 'process':
+        serializer = ArrowTableSerializer()
+        reader_pool = ProcessPool(workers_count, serializer)
+    elif reader_pool_type == 'dummy':
+        reader_pool = DummyPool()
+    else:
+        raise ValueError('Unknown reader_pool_type: {}'.format(reader_pool_type))
+
+    return Reader(filesystem, dataset_path,
+                  worker_class=ArrowReaderWorker,
+                  reader_pool=reader_pool,
+                  shuffle_row_groups=shuffle_row_groups,
+                  shuffle_row_drop_partitions=shuffle_row_drop_partitions,
+                  predicate=predicate,
+                  rowgroup_selector=rowgroup_selector,
+                  num_epochs=num_epochs,
+                  cur_shard=cur_shard,
+                  shard_count=shard_count,
+                  cache=cache,
+                  infer_schema=infer_schema)
+
+
 class Reader(object):
     """Reads a dataset from a Petastorm dataset.
 
@@ -212,7 +335,8 @@ class Reader(object):
     def __init__(self, pyarrow_filesystem, dataset_path, schema_fields=None,
                  shuffle_row_groups=True, shuffle_row_drop_partitions=1,
                  predicate=None, rowgroup_selector=None, reader_pool=None, num_epochs=1,
-                 cur_shard=None, shard_count=None, cache=None, infer_schema=False):
+                 cur_shard=None, shard_count=None, cache=None, infer_schema=False,
+                 worker_class=None):
         """Initializes a reader object.
 
         :param pyarrow_filesystem: An instance of ``pyarrow.FileSystem`` that will be used. If not specified,
@@ -247,6 +371,14 @@ class Reader(object):
             to the main data store is either slow or expensive and the local machine has large enough storage
             to store entire dataset (or a partition of a dataset if shards are used).
             By default, use the :class:`.NullCache` implementation.
+
+        :param infer_schema: Whether to infer the unischema object from the parquet schema.
+            Only works for schemas containing certain scalar type. This option allows getting around explicitly
+            generating petastorm metadata using :func:`petastorm.etl.dataset_metadata.materialize_dataset` or
+            petastorm-generate-metadata.py. Should always be True for non-Petastorm generated datasets.
+
+        :param worker_class: This is the class that will be instantiated on a different thread/process. It's
+            responsibility is to load and filter the data.
         """
 
         # 1. Open the parquet storage (dataset)
@@ -264,6 +396,10 @@ class Reader(object):
 
         self.ngram = schema_fields if isinstance(schema_fields, NGram) else None
 
+        # By default, use original method of working with list of dictionaries and not arrow tables
+        worker_class = worker_class or PyDictReaderWorker
+        self._results_queue_reader = worker_class.new_results_queue_reader()
+
         if self.ngram and not self.ngram.timestamp_overlap and shuffle_row_drop_partitions > 1:
             raise NotImplementedError('Using timestamp_overlap=False is not implemented with'
                                       ' shuffle_options.shuffle_row_drop_partitions > 1')
@@ -275,21 +411,14 @@ class Reader(object):
         self.dataset = pq.ParquetDataset(dataset_path, filesystem=pyarrow_filesystem,
                                          validate_schema=False)
 
-        if infer_schema:
-            # If inferring schema, just retrieve the schema from a file of the dataset
-            meta = self.dataset.pieces[0].get_metadata(self.dataset.fs.open)
-            arrow_schema = meta.schema.to_arrow_schema()
-            stored_schema = Unischema.from_arrow_schema(arrow_schema)
-        else:
-            # Otherwise, get the stored schema
-            stored_schema = dataset_metadata.get_schema(self.dataset)
+        stored_schema = worker_class.load_schema(self.dataset)
 
         # Make a schema view (a view is a Unischema containing only a subset of fields
         # Will raise an exception if invalid schema fields are in schema_fields
         fields = schema_fields if isinstance(schema_fields, collections.Iterable) else None
         self.schema = stored_schema.create_schema_view(fields) if fields else stored_schema
 
-        # 2. Get a list of all groups
+        # 2. Get a list of all row groups
         row_groups = dataset_metadata.load_row_groups(self.dataset, infer_schema)
 
         # 3. Filter rowgroups
@@ -304,15 +433,16 @@ class Reader(object):
                                              self._workers_pool.workers_count + _VENTILATE_EXTRA_ROWGROUPS)
 
         # 5. Start workers pool
-        self._workers_pool.start(ReaderWorker,
+        self._workers_pool.start(worker_class,
                                  (pyarrow_filesystem, dataset_path, self.schema, self.ngram, row_groups, cache),
                                  ventilator=ventilator)
         logger.debug('Workers pool started')
 
         self.last_row_consumed = False
 
-        # _result
-        self._result_buffer = []
+    @property
+    def batched_output(self):
+        return self._results_queue_reader.batched_output
 
     def _filter_row_groups(self, dataset, row_groups, predicate, rowgroup_selector, cur_shard,
                            shard_count):
@@ -461,29 +591,10 @@ class Reader(object):
 
     def __next__(self):
         try:
-            # We are receiving decoded rows from the worker in chunks. We store the list internally
-            # and return a single item upon each consequent call to __next__
-            if not self._result_buffer:
-                # Reverse order, so we can pop from the end of the list in O(1) while maintaining
-                # order the items are returned from the worker
-                rows_as_dict = list(reversed(self._workers_pool.get_results()))
-
-                if self.ngram:
-                    for ngram_row in rows_as_dict:
-                        for timestamp in ngram_row.keys():
-                            row = ngram_row[timestamp]
-                            schema_at_timestamp = self.ngram.get_schema_at_timestep(self.schema, timestamp)
-
-                            ngram_row[timestamp] = schema_at_timestamp.make_namedtuple(**row)
-                    self._result_buffer = rows_as_dict
-                else:
-                    self._result_buffer = [self.schema.make_namedtuple(**row) for row in rows_as_dict]
-
-            return self._result_buffer.pop()
-
-        except EmptyResultError:
+            return self._results_queue_reader.read_next(self._workers_pool, self.schema, self.ngram)
+        except StopIteration:
             self.last_row_consumed = True
-            raise StopIteration
+            raise
 
     def next(self):
         return self.__next__()

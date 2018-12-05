@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 import tensorflow as tf
 
-from petastorm import make_reader
+from petastorm import make_reader, make_batch_reader
 from petastorm.ngram import NGram
 from petastorm.tests.test_common import TestSchema
 from petastorm.tf_utils import _sanitize_field_tf_types, _numpy_to_tf_dtypes, \
@@ -261,3 +261,28 @@ def test_shuffling_queue_with_ngrams(synthetic_dataset):
 
     assert [f.id for f in flatten(unshuffled_1)] != [f.id for f in flatten(shuffled_2)]
     assert [f.id for f in flatten(shuffled_1)] != [f.id for f in flatten(shuffled_2)]
+
+
+@pytest.mark.forked
+def test_simple_read_tensorflow_with_parquet_dataset(scalar_dataset):
+    """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
+    data"""
+    with make_batch_reader(dataset_url=scalar_dataset.url) as reader:
+        row_tensors = tf_tensors(reader)
+        # Make sure we have static shape info for all fields
+        for column in row_tensors:
+            assert column.get_shape().as_list() == [None]
+
+        with _tf_session() as sess:
+            for _ in range(2):
+                batch = sess.run(row_tensors)._asdict()
+                for i, id_value in enumerate(batch['id']):
+                    expected_row = next(d for d in scalar_dataset.data if d['id'] == id_value)
+                    for field_name in expected_row.keys():
+                        _assert_fields_eq(batch[field_name][i], expected_row[field_name])
+
+
+def test_shuffling_queue_with_make_batch_reader(scalar_dataset):
+    with make_batch_reader(dataset_url=scalar_dataset.url) as reader:
+        with pytest.raises(ValueError):
+            tf_tensors(reader, 100, 90)

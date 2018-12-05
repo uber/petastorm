@@ -37,3 +37,17 @@ class EqualPredicate(PredicateBase):
 
     def do_include(self, values):
         return self._values == values
+
+
+class VectorizedEqualPredicate(PredicateBase):
+    def __init__(self, values):
+        self._values = values
+
+    def get_fields(self):
+        return list(self._values.keys())
+
+    def do_include(self, values):
+        result = [True] * len(values)
+        for field_name in self._values.keys():
+            result &= values[field_name] == self._values[field_name]
+        return result

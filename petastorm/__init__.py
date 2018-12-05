@@ -12,6 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from petastorm.reader import make_reader  # noqa: F401
+from petastorm.reader import make_reader, make_batch_reader  # noqa: F401
 
 __version__ = '0.4.2'

@@ -21,6 +21,8 @@ from pyarrow.parquet import ParquetFile
 
 from petastorm import utils
 from petastorm.cache import NullCache
+from petastorm.etl import dataset_metadata
+from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.worker_base import WorkerBase
 
 
@@ -41,9 +43,43 @@ def _select_cols(a_dict, keys):
         return {field_name: a_dict[field_name] for field_name in keys}
 
 
-class ReaderWorker(WorkerBase):
+class PyDictReaderWorkerResultsQueueReader(object):
+    def __init__(self):
+        self._result_buffer = []
+
+    @property
+    def batched_output(self):
+        return False
+
+    def read_next(self, workers_pool, schema, ngram):
+        try:
+            # We are receiving decoded rows from the worker in chunks. We store the list internally
+            # and return a single item upon each consequent call to __next__
+            if not self._result_buffer:
+                # Reverse order, so we can pop from the end of the list in O(1) while maintaining
+                # order the items are returned from the worker
+                rows_as_dict = list(reversed(workers_pool.get_results()))
+
+                if ngram:
+                    for ngram_row in rows_as_dict:
+                        for timestamp in ngram_row.keys():
+                            row = ngram_row[timestamp]
+                            schema_at_timestamp = ngram.get_schema_at_timestep(schema, timestamp)
+
+                            ngram_row[timestamp] = schema_at_timestamp.make_namedtuple(**row)
+                    self._result_buffer = rows_as_dict
+                else:
+                    self._result_buffer = [schema.make_namedtuple(**row) for row in rows_as_dict]
+
+            return self._result_buffer.pop()
+
+        except EmptyResultError:
+            raise StopIteration
+
+
+class PyDictReaderWorker(WorkerBase):
     def __init__(self, worker_id, publish_func, args):
-        super(ReaderWorker, self).__init__(worker_id, publish_func, args)
+        super(PyDictReaderWorker, self).__init__(worker_id, publish_func, args)
 
         self._filesystem = args[0]
         self._dataset_path = args[1]
@@ -55,6 +91,14 @@ class ReaderWorker(WorkerBase):
         # We create datasets lazily in the first invocation of 'def process'. This speeds up startup time since
         # all Worker constructors are serialized
         self._dataset = None
+
+    @staticmethod
+    def new_results_queue_reader():
+        return PyDictReaderWorkerResultsQueueReader()
+
+    @staticmethod
+    def load_schema(parquet_dataset):
+        return dataset_metadata.get_schema(parquet_dataset)
 
     # pylint: disable=arguments-differ
     def process(self, piece_index, worker_predicate, shuffle_row_drop_partition):
@@ -141,8 +185,7 @@ class ReaderWorker(WorkerBase):
                              'are not valid schema names: ({})'.format(', '.join(invalid_column_names),
                                                                        ', '.join(all_schema_names)))
 
-        other_column_names = all_schema_names - predicate_column_names - \
-            self._dataset.partitions.partition_names
+        other_column_names = all_schema_names - predicate_column_names - self._dataset.partitions.partition_names
 
         # Read columns needed for the predicate
         predicate_rows = self._read_with_shuffle_row_drop(piece, pq_file, predicate_column_names,

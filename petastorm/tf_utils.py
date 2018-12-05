@@ -164,18 +164,23 @@ def make_namedtuple_tf_ngram(unischema, ngram, *args, **kargs):
     return ngram_result
 
 
-def _set_shape(schema, fields_as_dict):
+def _set_shape(schema, fields_as_dict, batched_output=None):
     # Assign static shape for all tensors
     # Workaround of an issue described here:
     # https://stackoverflow.com/questions/49161316/trailing-x00-characters-in-tensor-when-numpy-string-array-is-returned-from-tf
     for k in fields_as_dict.keys():
         unischema_field = schema.fields[k]
 
+        if batched_output:
+            shape = (None,) + unischema_field.shape
+        else:
+            shape = unischema_field.shape
         # Set static shape
-        fields_as_dict[k].set_shape(unischema_field.shape)
+        fields_as_dict[k].set_shape(shape)
 
         # Workaround trailing null characters
-        if unischema_field.numpy_dtype == np.string_ and len(fields_as_dict[k].get_shape()) == 1:
+        if (unischema_field.numpy_dtype == np.string_ or unischema_field.numpy_dtype == np.unicode_) \
+                and len(fields_as_dict[k].get_shape()) == 1:
             fields_as_dict[k] = _char0bug_workaround(fields_as_dict[k])
 
 
@@ -226,7 +231,7 @@ def _tf_tensors_nonngram(reader, shuffling_queue_capacity, min_after_dequeue):
     fields_as_dict = reader.schema.make_namedtuple_tf(*fields_as_list)._asdict()
 
     # Force all static shapes to be set in the returned value based on the unischema
-    _set_shape(reader.schema, fields_as_dict)
+    _set_shape(reader.schema, fields_as_dict, reader.batched_output)
 
     # Make a row tensor into a nice named tuple
     return reader.schema.make_namedtuple_tf(**fields_as_dict)
@@ -304,6 +309,13 @@ def tf_tensors(reader, shuffling_queue_capacity=0, min_after_dequeue=0):
 
     # NGram enabled and disabled code is quite different. It appears to be cleaner to simply go in orthogonal
     # execution paths.
+
+    if reader.batched_output:
+        if shuffling_queue_capacity > 0:
+            raise ValueError('shuffling_queue_capacity can not be used with a reader that produces '
+                             'batched_output, since each batch is a parquet read rowgroup. Extra '
+                             'shuffling of the batches does not further decrease correlation.')
+
     if reader.ngram:
         result = _tf_tensors_ngram(reader, shuffling_queue_capacity, min_after_dequeue)
     else:
@@ -312,10 +324,10 @@ def tf_tensors(reader, shuffling_queue_capacity=0, min_after_dequeue=0):
     return result
 
 
-def _set_shape_to_named_tuple(schema, fields):
+def _set_shape_to_named_tuple(schema, fields, batched_output):
     """Assign static shape for all tensors"""
     fields_as_dict = fields._asdict()
-    _set_shape(schema, fields_as_dict)
+    _set_shape(schema, fields_as_dict, batched_output)
     return schema.make_namedtuple_tf(**fields_as_dict)
 
 
@@ -370,7 +382,7 @@ def make_petastorm_dataset(reader):
         flat_dataset = tf.data.Dataset.from_generator(dequeue_sample_impl, tuple(_schema_to_tf_dtypes(reader.schema)))
         named_tuple_dataset = flat_dataset \
             .map(reader.schema.make_namedtuple_tf) \
-            .map(lambda row: _set_shape_to_named_tuple(reader.schema, row))
+            .map(lambda row: _set_shape_to_named_tuple(reader.schema, row, reader.batched_output))
         return named_tuple_dataset
     else:
         raise NotImplementedError('make_petastorm_dataset does not support NGram yet.')
