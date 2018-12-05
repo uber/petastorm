@@ -31,6 +31,7 @@ class ReaderMock(object):
         if ngram is not None:
             raise ValueError('Sequence argument not supported for ReaderMock')
         self.ngram = ngram
+        self.batched_output = False
 
     def fetch(self):
         """

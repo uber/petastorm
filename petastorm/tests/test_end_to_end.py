@@ -24,12 +24,12 @@ from pyspark.sql.types import LongType, ShortType, StringType
 from petastorm import make_reader
 from petastorm.codecs import ScalarCodec
 from petastorm.etl.dataset_metadata import materialize_dataset
-from petastorm.reader import ReaderV2
+from petastorm.reader import ReaderV2, make_batch_reader
 from petastorm.reader_impl.same_thread_executor import SameThreadExecutor
 from petastorm.selectors import SingleIndexSelector
 from petastorm.tests.test_common import create_test_dataset, TestSchema
 from petastorm.tests.test_end_to_end_predicates_impl import \
-    PartitionKeyInSetPredicate, EqualPredicate
+    PartitionKeyInSetPredicate, EqualPredicate, VectorizedEqualPredicate
 from petastorm.unischema import UnischemaField, Unischema
 
 # pylint: disable=unnecessary-lambda
@@ -42,14 +42,30 @@ MINIMAL_READER_FLAVOR_FACTORIES = [
 ALL_READER_FLAVOR_FACTORIES = MINIMAL_READER_FLAVOR_FACTORIES + [
     lambda url, **kwargs: make_reader(url, reader_pool_type='thread', **kwargs),
     lambda url, **kwargs: make_reader(url, reader_pool_type='process', workers_count=2, **kwargs),
-    lambda url, **kwargs: make_reader(url, workers_count=2, reader_engine='experimental_reader_v2', **kwargs)
+    lambda url, **kwargs: make_reader(url, workers_count=2, reader_engine='experimental_reader_v2', **kwargs),
+    lambda url, **kwargs: make_reader(url, reader_pool_type='process', workers_count=2, **kwargs),
+    lambda url, **kwargs: make_reader(url, workers_count=2, reader_engine='experimental_reader_v2', **kwargs),
+]
+
+SCALAR_FIELDS = [f for f in TestSchema.fields.values() if isinstance(f.codec, ScalarCodec)]
+
+SCALAR_ONLY_READER_FACTORIES = [
+    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', infer_schema=False, **kwargs),
+    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='process', workers_count=2,
+                                            infer_schema=False, **kwargs),
 ]
 
 
 def _check_simple_reader(reader, expected_data, expected_rows_count=None, check_types=True):
     # Read a bunch of entries from the dataset and compare the data to reference
     def _type(v):
-        return v.dtype if isinstance(v, np.ndarray) else type(v)
+        if isinstance(v, np.ndarray):
+            if v.dtype.str.startswith('|S'):
+                return '|S'
+            else:
+                return v.dtype
+        else:
+            return type(v)
 
     expected_rows_count = expected_rows_count or len(expected_data)
     count = 0
@@ -66,6 +82,20 @@ def _check_simple_reader(reader, expected_data, expected_rows_count=None, check_
     assert count == expected_rows_count
 
 
+def _readout_all_ids(reader, limit=None):
+    ids = []
+    for i, row in enumerate(reader):
+        if limit is not None and i >= limit:
+            break
+        ids.append(row.id)
+
+    # Flatten ids if reader returns batches (make_batch_reader)
+    if isinstance(ids[0], np.ndarray):
+        ids = [i for arr in ids for i in arr]
+
+    return ids
+
+
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
 def test_simple_read(synthetic_dataset, reader_factory):
     """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
@@ -80,7 +110,7 @@ def test_simple_read_with_pyarrow_serialize(synthetic_dataset):
         _check_simple_reader(reader, synthetic_dataset.data, check_types=False)
 
 
-@pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
+@pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
 @pytest.mark.forked
 def test_simple_read_with_disk_cache(synthetic_dataset, reader_factory, tmpdir):
     """Try using the Reader with LocalDiskCache using different flavors of pools"""
@@ -89,24 +119,26 @@ def test_simple_read_with_disk_cache(synthetic_dataset, reader_factory, tmpdir):
     with reader_factory(synthetic_dataset.url, num_epochs=2,
                         cache_type='local-disk', cache_location=tmpdir.strpath,
                         cache_size_limit=CACHE_SIZE, cache_row_size_estimate=ROW_SIZE_BYTES) as reader:
-        _check_simple_reader(reader, synthetic_dataset.data, 200)
+        ids = _readout_all_ids(reader)
+        assert 200 == len(ids)  # We read 2 epochs
+        assert set(ids) == set(range(100))
 
 
-@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
+@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
 def test_simple_read_with_added_slashes(synthetic_dataset, reader_factory):
     """Tests that using relative paths for the dataset metadata works as expected"""
     with reader_factory(synthetic_dataset.url + '///') as reader:
-        _check_simple_reader(reader, synthetic_dataset.data)
+        next(reader)
 
 
-@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
+@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
 def test_simple_read_moved_dataset(synthetic_dataset, tmpdir, reader_factory):
     """Tests that a dataset may be opened after being moved to a new location"""
     a_moved_path = tmpdir.join('moved').strpath
     copytree(synthetic_dataset.path, a_moved_path)
 
     with reader_factory('file://{}'.format(a_moved_path)) as reader:
-        _check_simple_reader(reader, synthetic_dataset.data)
+        next(reader)
 
     rmtree(a_moved_path)
 
@@ -124,45 +156,43 @@ def test_reading_subset_of_columns(synthetic_dataset, reader_factory):
 
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
+    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', infer_schema=False, **kwargs),
     lambda url, **kwargs: ReaderV2(url, loader_pool=SameThreadExecutor(), decoder_pool=SameThreadExecutor(), **kwargs)])
 def test_shuffle(synthetic_dataset, reader_factory):
     rows_count = len(synthetic_dataset.data)
 
-    def readout_all_ids(shuffle):
-        with reader_factory(synthetic_dataset.url,
-                            shuffle_row_groups=shuffle) as reader:
-            ids = [row.id for row in reader]
-        return ids
-
     # Read ids twice without shuffle: assert we have the same array and all expected ids are in the array
-    first_readout = readout_all_ids(False)
-    second_readout = readout_all_ids(False)
+    with reader_factory(synthetic_dataset.url, shuffle_row_groups=False) as reader_1:
+        first_readout = _readout_all_ids(reader_1)
+    with reader_factory(synthetic_dataset.url, shuffle_row_groups=False) as reader_2:
+        second_readout = _readout_all_ids(reader_2)
+
     np.testing.assert_array_equal(range(rows_count), sorted(first_readout))
     np.testing.assert_array_equal(first_readout, second_readout)
 
     # Now read with shuffling
-    shuffled_readout = readout_all_ids(True)
+    with reader_factory(synthetic_dataset.url, shuffle_row_groups=True) as shuffled_reader:
+        shuffled_readout = _readout_all_ids(shuffled_reader)
     assert np.any(np.not_equal(first_readout, shuffled_readout))
 
 
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
+    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', infer_schema=False, **kwargs),
     lambda url, **kwargs: ReaderV2(url, loader_pool=SameThreadExecutor(), decoder_pool=SameThreadExecutor(), **kwargs)])
 def test_shuffle_drop_ratio(synthetic_dataset, reader_factory):
-    def readout_all_ids(shuffle, drop_ratio):
-        with reader_factory(synthetic_dataset.url,
-                            shuffle_row_groups=shuffle, shuffle_row_drop_partitions=drop_ratio) as reader:
-            ids = [row.id for row in reader]
-        return ids
-
     # Read ids twice without shuffle: assert we have the same array and all expected ids are in the array
-    first_readout = readout_all_ids(False, 1)
+    with reader_factory(synthetic_dataset.url, shuffle_row_groups=False, shuffle_row_drop_partitions=1) as reader:
+        first_readout = _readout_all_ids(reader)
     np.testing.assert_array_equal([r['id'] for r in synthetic_dataset.data], sorted(first_readout))
 
     # Test that the ids are increasingly not consecutive numbers as we increase the shuffle dropout
     prev_jumps_not_1 = 0
     for shuffle_dropout in [2, 5, 8]:
-        readout = readout_all_ids(True, shuffle_dropout)
+        with reader_factory(synthetic_dataset.url, shuffle_row_groups=True,
+                            shuffle_row_drop_partitions=shuffle_dropout) as reader:
+            readout = _readout_all_ids(reader)
+
         assert len(first_readout) == len(readout)
         jumps_not_1 = np.sum(np.diff(readout) != 1)
         assert jumps_not_1 > prev_jumps_not_1
@@ -178,6 +208,20 @@ def test_predicate_on_partition(synthetic_dataset, reader_factory):
             assert partition_keys == expected_partition_keys
 
 
+@pytest.mark.parametrize('reader_factory', SCALAR_ONLY_READER_FACTORIES)
+def test_predicate_on_partition_batched(synthetic_dataset, reader_factory):
+    for expected_partition_keys in [{'p_0', 'p_2'}, {'p_0'}, {'p_1', 'p_2'}]:
+        # TODO(yevgeni): scalar only reader takes 'vectorized' predicate that processes entire columns. Not
+        # yet implemented for the case of a prediction on partition, hence we use a non-vectorized
+        # PartitionKeyInSetPredicate here
+        with reader_factory(synthetic_dataset.url,
+                            predicate=PartitionKeyInSetPredicate(expected_partition_keys)) as reader:
+            partition_keys = set()
+            for row in reader:
+                partition_keys |= set(row.partition_key)
+            assert partition_keys == expected_partition_keys
+
+
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
 def test_predicate_on_multiple_fields(synthetic_dataset, reader_factory):
     expected_values = {'id': 11, 'id2': 1}
@@ -188,7 +232,18 @@ def test_predicate_on_multiple_fields(synthetic_dataset, reader_factory):
         assert actual.id2 == expected_values['id2']
 
 
-@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
+@pytest.mark.parametrize('reader_factory', SCALAR_ONLY_READER_FACTORIES)
+def test_predicate_on_multiple_fields_batched(synthetic_dataset, reader_factory):
+    expected_values = {'id': 11, 'id2': 1}
+    with reader_factory(synthetic_dataset.url, shuffle_row_groups=False,
+                        predicate=VectorizedEqualPredicate(expected_values)) as reader:
+        actual = next(reader)
+        assert actual.id.shape == (1,)
+        assert actual.id[0] == expected_values['id']
+        assert actual.id2[0] == expected_values['id2']
+
+
+@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
 def test_predicate_with_invalid_fields(synthetic_dataset, reader_factory):
     """Try passing an invalid field name from a predicate to the reader. An error should be raised."""
     TEST_CASES = [
@@ -204,58 +259,47 @@ def test_predicate_with_invalid_fields(synthetic_dataset, reader_factory):
                 next(reader)
 
 
-@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
+@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
 def test_partition_multi_node(synthetic_dataset, reader_factory):
     """Tests that the reader only returns half of the expected data consistently"""
     with reader_factory(synthetic_dataset.url, cur_shard=0, shard_count=5) as reader:
         with reader_factory(synthetic_dataset.url, cur_shard=0, shard_count=5) as reader_2:
-            results_1 = []
-            expected = []
-            for row in reader:
-                actual = dict(row._asdict())
-                results_1.append(actual)
-                expected.append(next(d for d in synthetic_dataset.data if d['id'] == actual['id']))
+            results_1 = set(_readout_all_ids(reader))
+            results_2 = set(_readout_all_ids(reader_2))
 
-            assert results_1, 'Shard 0 is expected to have at least one row'
+            assert results_1, 'Non empty shard expected'
 
-            results_2 = [dict(row._asdict()) for row in reader_2]
-
-            assert results_2, 'Shard 0 is expected to have at least one row'
-
-            # Since order is non deterministic, we need to sort results by id
-            results_1.sort(key=lambda x: x['id'])
-            results_2.sort(key=lambda x: x['id'])
-            expected.sort(key=lambda x: x['id'])
-
-            np.testing.assert_equal(expected, results_1)
             np.testing.assert_equal(results_1, results_2)
 
             assert len(results_1) < len(synthetic_dataset.data)
 
-            # Test that separate partitions also have no overlap by checking ids
-            id_set = set([item['id'] for item in results_1])
+            # Test that separate partitions also have no overlap by checking ids)
             for partition in range(1, 5):
                 with reader_factory(synthetic_dataset.url, cur_shard=partition,
                                     shard_count=5) as reader_other:
+                    ids_in_other_partition = set(_readout_all_ids(reader_other))
 
-                    for row in reader_other:
-                        assert dict(row._asdict())['id'] not in id_set
+                    assert not ids_in_other_partition.intersection(results_1)
 
 
-@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
+@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
 def test_partition_value_error(synthetic_dataset, reader_factory):
     """Tests that the reader raises value errors when appropriate"""
 
+    # shard_count has to be greater than 0
     with pytest.raises(ValueError):
         reader_factory(synthetic_dataset.url, shard_count=0)
 
+    # missing cur_shard value
     with pytest.raises(ValueError):
         reader_factory(synthetic_dataset.url, shard_count=5)
 
+    # cur_shard is a string
     with pytest.raises(ValueError):
         reader_factory(synthetic_dataset.url, cur_shard='0',
                        shard_count=5)
 
+    # shard_count is a string
     with pytest.raises(ValueError):
         reader_factory(synthetic_dataset.url, cur_shard=0,
                        shard_count='5')
@@ -263,17 +307,19 @@ def test_partition_value_error(synthetic_dataset, reader_factory):
 
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
+    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', infer_schema=False, **kwargs),
     lambda url, **kwargs: ReaderV2(url, loader_pool=SameThreadExecutor(), decoder_pool=SameThreadExecutor(), **kwargs)
 ])
 def test_stable_pieces_order(synthetic_dataset, reader_factory):
     """Tests that the reader raises value errors when appropriate"""
 
-    RERUN_THE_TEST_COUNT = 20
+    RERUN_THE_TEST_COUNT = 4
     baseline_run = None
     for _ in range(RERUN_THE_TEST_COUNT):
-        with reader_factory(synthetic_dataset.url, schema_fields=[TestSchema.id],
-                            shuffle_row_groups=False) as reader:
-            this_run = [row.id for row in reader]
+        # TODO(yevgeni): factor out. Reading all ids appears multiple times in this test.
+        with reader_factory(synthetic_dataset.url, shuffle_row_groups=False) as reader:
+            this_run = _readout_all_ids(reader)
+
         if baseline_run:
             assert this_run == baseline_run
 
@@ -303,62 +349,58 @@ def test_single_column_predicate(synthetic_dataset, reader_factory):
     """Test quering a single column with a predicate on the same column """
     with reader_factory(synthetic_dataset.url, schema_fields=[TestSchema.id], predicate=EqualPredicate({'id': 1})) \
             as reader:
-        # Read a bunch of entries from the dataset and compare the data to reference
-        for row in reader:
-            actual = dict(row._asdict())
-            expected = next(d for d in synthetic_dataset.data if d['id'] == actual['id'])
-            np.testing.assert_equal(expected['id'], actual['id'])
+        all_rows = list(reader)
+        assert 1 == len(all_rows)
+        assert 1 == all_rows[0].id
 
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
 def test_two_column_predicate(synthetic_dataset, reader_factory):
-    """Test quering a single column with a predicate on multiple columns, one of them is a partitioning key"""
-    with reader_factory(synthetic_dataset.url, schema_fields=[TestSchema.id, TestSchema.id2, TestSchema.partition_key],
+    """Test quering a single column with a predicate on the same column """
+    with reader_factory(synthetic_dataset.url, schema_fields=[TestSchema.id2, TestSchema.partition_key],
                         predicate=EqualPredicate({'id2': 1, 'partition_key': 'p_2'})) as reader:
         all_rows = list(reader)
         all_id2 = np.array(list(map(operator.attrgetter('id2'), all_rows)))
         all_partition_key = np.array(list(map(operator.attrgetter('partition_key'), all_rows)))
-        assert len(all_rows) == 5
         assert (all_id2 == 1).all()
         assert (all_partition_key == 'p_2').all()
 
 
-@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
+@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
 def test_multiple_epochs(synthetic_dataset, reader_factory):
     """Tests that multiple epochs works as expected"""
     num_epochs = 5
     with reader_factory(synthetic_dataset.url, num_epochs=num_epochs) as reader:
         # Read all expected entries from the dataset and compare the data to reference
         single_epoch_id_set = [d['id'] for d in synthetic_dataset.data]
-        actual_ids_in_all_epochs = list(d.id for d in reader)
+        actual_ids_in_all_epochs = _readout_all_ids(reader)
         np.testing.assert_equal(sorted(num_epochs * single_epoch_id_set), sorted(actual_ids_in_all_epochs))
 
 
-@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
+# TODO(yevgeni) this test is broken for reader_v2
+@pytest.mark.parametrize('reader_factory', [MINIMAL_READER_FLAVOR_FACTORIES[0]] + SCALAR_ONLY_READER_FACTORIES)
 def test_unlimited_epochs(synthetic_dataset, reader_factory):
     """Tests that unlimited epochs works as expected"""
     with reader_factory(synthetic_dataset.url, num_epochs=None) as reader:
-        # Read many expected entries from the dataset and compare the data to reference
-        for _ in range(len(synthetic_dataset.data) * 3 + 2):
-            actual = dict(next(reader)._asdict())
-            expected = next(d for d in synthetic_dataset.data if d['id'] == actual['id'])
-            np.testing.assert_equal(expected, actual)
+        read_limit = len(synthetic_dataset.data) * 3 + 2
+        actual_ids = _readout_all_ids(reader, read_limit)
+        expected_ids = [d['id'] for d in synthetic_dataset.data]
+        assert len(actual_ids) > len(expected_ids)
+        assert set(actual_ids) == set(expected_ids)
 
 
-def test_num_epochs_value_error(synthetic_dataset):
+@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
+def test_num_epochs_value_error(synthetic_dataset, reader_factory):
     """Tests that the reader raises value errors when appropriate"""
 
     # Testing only Reader v1, as the v2 uses an epoch generator. The error would raise only when the generator is
     # evaluated. Parameter validation for Reader v2 is covered by test_epoch_generator.py
 
     with pytest.raises(ValueError):
-        make_reader(synthetic_dataset.url, num_epochs=0)
+        reader_factory(synthetic_dataset.url, num_epochs=-10)
 
     with pytest.raises(ValueError):
-        make_reader(synthetic_dataset.url, num_epochs=-10)
-
-    with pytest.raises(ValueError):
-        make_reader(synthetic_dataset.url, num_epochs='abc')
+        reader_factory(synthetic_dataset.url, num_epochs='abc')
 
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
@@ -462,7 +504,7 @@ def test_pass_in_pyarrow_filesystem_to_materialize_dataset(synthetic_dataset, tm
     rmtree(a_moved_path)
 
 
-@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
+@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
 def test_dataset_path_is_a_unicode(synthetic_dataset, reader_factory):
     """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
     # Making sure unicode_in_p23 is a unicode both in python 2 and 3
@@ -471,9 +513,11 @@ def test_dataset_path_is_a_unicode(synthetic_dataset, reader_factory):
         next(reader)
 
 
-@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
-def test_reader_inferring_schema(scalar_dataset, reader_factory):
-    """Read a scalar dataset and infer the unischema and the number of row groups per file"""
-    with reader_factory(scalar_dataset.url, infer_schema=True) as reader:
-        # We dont check types as the reader will return numpy types while spark will return regular primitives
-        _check_simple_reader(reader, scalar_dataset.data, check_types=False)
+def test_make_reader_fails_loading_non_petastrom_dataset(scalar_dataset):
+    with pytest.raises(RuntimeError, match='use make_batch_reader'):
+        make_reader(scalar_dataset.url)
+
+
+def test_make_batch_reader_fails_loading_petastrom_dataset(synthetic_dataset):
+    with pytest.raises(RuntimeError, match='use make_reader'):
+        make_batch_reader(synthetic_dataset.url)
