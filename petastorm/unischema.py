@@ -18,9 +18,11 @@ in several different python libraries. Currently supported are pyspark, tensorfl
 import copy
 import re
 from collections import namedtuple, OrderedDict
+from decimal import Decimal
 
 from petastorm.codecs import ScalarCodec
-from pyspark.sql.types import StringType, ShortType, LongType, IntegerType, BooleanType, DoubleType, ByteType, FloatType
+from pyspark.sql.types import StringType, ShortType, LongType, IntegerType, BooleanType, DoubleType, ByteType, \
+    FloatType, DecimalType
 import numpy as np
 import pyarrow
 
@@ -197,7 +199,7 @@ class Unischema(object):
         return self._get_namedtuple()(*args, **kargs)
 
     @classmethod
-    def from_arrow_schema(cls, arrow_schema):
+    def from_arrow_schema(cls, parquet_dataset):
         """
         Convert an apache arrow schema into a unischema object. This is useful for datasets of only scalars
         which need no special encoding/decoding. If there is an unsupported type in the arrow schema, it will
@@ -206,7 +208,13 @@ class Unischema(object):
         :param arrow_schema: :class:`pyarrow.lib.Schema`
         :return: A :class:`Unischema` object.
         """
+        meta = parquet_dataset.pieces[0].get_metadata(parquet_dataset.fs.open)
+        arrow_schema = meta.schema.to_arrow_schema()
         unischema_fields = []
+
+        for partition_name in parquet_dataset.partitions.partition_names:
+            unischema_fields.append(UnischemaField(partition_name, np.str_, (), ScalarCodec(StringType()), False))
+
         for column_name in arrow_schema.names:
             arrow_field = arrow_schema.field_by_name(column_name)
             field_type = arrow_field.type
@@ -234,6 +242,15 @@ class Unischema(object):
             elif field_type == pyarrow.float64():
                 np_type = np.float64
                 codec = ScalarCodec(DoubleType())
+            elif isinstance(field_type, pyarrow.lib.Decimal128Type):
+                np_type = Decimal
+                codec = ScalarCodec(DecimalType(field_type.precision, field_type.scale))
+            elif field_type == pyarrow.binary():
+                np_type = np.string_
+                codec = ScalarCodec(StringType())
+            elif isinstance(field_type, pyarrow.lib.FixedSizeBinaryType):
+                np_type = np.string_
+                codec = ScalarCodec(StringType())
             else:
                 raise ValueError('Cannot auto-create unischema due to unsupported column type {}'.format(field_type))
 
