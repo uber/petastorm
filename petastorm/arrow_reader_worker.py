@@ -23,7 +23,6 @@ from pyarrow import parquet as pq
 from pyarrow.parquet import ParquetFile
 
 from petastorm.cache import NullCache
-from petastorm.unischema import Unischema
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.worker_base import WorkerBase
 
@@ -81,12 +80,6 @@ class ArrowReaderWorker(WorkerBase):
     @staticmethod
     def new_results_queue_reader():
         return ArrowReaderWorkerResultsQueueReader()
-
-    @staticmethod
-    def load_schema(parquet_dataset):
-        meta = parquet_dataset.pieces[0].get_metadata(parquet_dataset.fs.open)
-        arrow_schema = meta.schema.to_arrow_schema()
-        return Unischema.from_arrow_schema(arrow_schema)
 
     # pylint: disable=arguments-differ
     def process(self, piece_index, worker_predicate, shuffle_row_drop_partition):

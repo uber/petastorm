@@ -22,7 +22,7 @@ from pyarrow import parquet as pq
 from petastorm.arrow_reader_worker import ArrowReaderWorker
 from petastorm.cache import NullCache
 from petastorm.etl import dataset_metadata, rowgroup_indexing
-from petastorm.etl.dataset_metadata import PetastormMetadataError
+from petastorm.etl.dataset_metadata import PetastormMetadataError, infer_or_load_unischema
 from petastorm.fs_utils import FilesystemResolver
 from petastorm.local_disk_arrow_table_cache import LocalDiskArrowTableCache
 from petastorm.local_disk_cache import LocalDiskCache
@@ -132,6 +132,15 @@ def make_reader(dataset_url,
     else:
         raise ValueError('Unknown cache_type: {}'.format(cache_type))
 
+    # Fail if this is a non-petastorm dataset. Typically, a Parquet store will have hundred thousands rows in a single
+    # rowgroup. Using PyDictReaderWorker or ReaderV2 implementation is very inefficient as it processes data on a
+    # row by row basis. ArrowReaderWorker (used by make_batch_reader) is much more efficient in these cases.
+    try:
+        dataset_metadata.get_schema_from_dataset_url(dataset_url)
+    except PetastormMetadataError:
+        raise RuntimeError('Currently make_reader supports reading only Petastorm datasets. '
+                           'To read from a non-Petastorm Parquet store use make_batch_reader')
+
     if reader_engine == 'reader_v1':
         if reader_pool_type == 'thread':
             reader_pool = ThreadPool(workers_count)
@@ -223,8 +232,7 @@ def make_batch_reader(dataset_url,
                       cur_shard=None, shard_count=None,
                       cache_type='null', cache_location=None, cache_size_limit=None,
                       cache_row_size_estimate=None, cache_extra_settings=None,
-                      hdfs_driver='libhdfs3',
-                      infer_schema=True):
+                      hdfs_driver='libhdfs3'):
     """
     Creates an instance of Reader for reading standard batches out of a Parquet store.
 
@@ -267,10 +275,6 @@ def make_batch_reader(dataset_url,
     :param cache_extra_settings: A dictionary of extra settings to pass to the cache implementation,
     :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
         libhdfs (java through JNI) or libhdfs3 (C++)
-    :param infer_schema: Whether to infer the unischema object from the parquet schema.
-        Only works for schemas containing certain scalar type. This option allows getting around explicitly
-        generating petastorm metadata using :func:`petastorm.etl.dataset_metadata.materialize_dataset` or
-        petastorm-generate-metadata.py. Should always be True for non-Petastorm generated datasets.
     :return: A :class:`Reader` object
     """
 
@@ -293,15 +297,6 @@ def make_batch_reader(dataset_url,
     else:
         raise ValueError('Unknown cache_type: {}'.format(cache_type))
 
-    try:
-        dataset_metadata.get_schema_from_dataset_url(dataset_url)
-    except PetastormMetadataError:
-        pass
-    else:
-        raise RuntimeError('Currently make_batch_reader supports only reading scalar only parquet stores. '
-                           'To read from a Petastorm store created using "materialize_dataset", use '
-                           'make_reader')
-
     if reader_pool_type == 'thread':
         reader_pool = ThreadPool(workers_count)
     elif reader_pool_type == 'process':
@@ -322,8 +317,7 @@ def make_batch_reader(dataset_url,
                   num_epochs=num_epochs,
                   cur_shard=cur_shard,
                   shard_count=shard_count,
-                  cache=cache,
-                  infer_schema=infer_schema)
+                  cache=cache)
 
 
 class Reader(object):
@@ -335,8 +329,7 @@ class Reader(object):
     def __init__(self, pyarrow_filesystem, dataset_path, schema_fields=None,
                  shuffle_row_groups=True, shuffle_row_drop_partitions=1,
                  predicate=None, rowgroup_selector=None, reader_pool=None, num_epochs=1,
-                 cur_shard=None, shard_count=None, cache=None, infer_schema=False,
-                 worker_class=None):
+                 cur_shard=None, shard_count=None, cache=None, worker_class=None):
         """Initializes a reader object.
 
         :param pyarrow_filesystem: An instance of ``pyarrow.FileSystem`` that will be used. If not specified,
@@ -372,11 +365,6 @@ class Reader(object):
             to store entire dataset (or a partition of a dataset if shards are used).
             By default, use the :class:`.NullCache` implementation.
 
-        :param infer_schema: Whether to infer the unischema object from the parquet schema.
-            Only works for schemas containing certain scalar type. This option allows getting around explicitly
-            generating petastorm metadata using :func:`petastorm.etl.dataset_metadata.materialize_dataset` or
-            petastorm-generate-metadata.py. Should always be True for non-Petastorm generated datasets.
-
         :param worker_class: This is the class that will be instantiated on a different thread/process. It's
             responsibility is to load and filter the data.
         """
@@ -411,7 +399,7 @@ class Reader(object):
         self.dataset = pq.ParquetDataset(dataset_path, filesystem=pyarrow_filesystem,
                                          validate_schema=False)
 
-        stored_schema = worker_class.load_schema(self.dataset)
+        stored_schema = infer_or_load_unischema(self.dataset)
 
         # Make a schema view (a view is a Unischema containing only a subset of fields
         # Will raise an exception if invalid schema fields are in schema_fields
@@ -419,7 +407,7 @@ class Reader(object):
         self.schema = stored_schema.create_schema_view(fields) if fields else stored_schema
 
         # 2. Get a list of all row groups
-        row_groups = dataset_metadata.load_row_groups(self.dataset, infer_schema)
+        row_groups = dataset_metadata.load_row_groups(self.dataset)
 
         # 3. Filter rowgroups
         filtered_row_group_indexes, worker_predicate = self._filter_row_groups(self.dataset, row_groups, predicate,

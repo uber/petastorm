@@ -21,7 +21,6 @@ from pyarrow.parquet import ParquetFile
 
 from petastorm import utils
 from petastorm.cache import NullCache
-from petastorm.etl import dataset_metadata
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.worker_base import WorkerBase
 
@@ -95,10 +94,6 @@ class PyDictReaderWorker(WorkerBase):
     @staticmethod
     def new_results_queue_reader():
         return PyDictReaderWorkerResultsQueueReader()
-
-    @staticmethod
-    def load_schema(parquet_dataset):
-        return dataset_metadata.get_schema(parquet_dataset)
 
     # pylint: disable=arguments-differ
     def process(self, piece_index, worker_predicate, shuffle_row_drop_partition):

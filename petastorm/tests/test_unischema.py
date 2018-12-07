@@ -26,6 +26,28 @@ from petastorm.codecs import ScalarCodec, NdarrayCodec
 from petastorm.unischema import Unischema, UnischemaField, dict_to_spark_row, \
     insert_explicit_nulls, match_unischema_fields
 
+try:
+    from unittest import mock
+except ImportError:
+    from mock import mock
+
+
+def _mock_parquet_dataset(partition_names, schema):
+    """Creates a pyarrow.ParquetDataset mock capable of returning:
+
+        parquet_dataset.pieces[0].get_metadata(parquet_dataset.fs.open).schema.to_arrow_schema() == schema
+        parquet_dataset.partition_names.partition_names = partition_names
+
+    """
+    piece_mock = mock.Mock()
+    piece_mock.get_metadata().schema.to_arrow_schema.return_value = schema
+
+    dataset_mock = mock.Mock()
+    type(dataset_mock).pieces = mock.PropertyMock(return_value=[piece_mock])
+    type(dataset_mock.partitions).partition_names = mock.PropertyMock(return_value=partition_names)
+
+    return dataset_mock
+
 
 class UnischemaTest(unittest.TestCase):
 
@@ -173,6 +195,7 @@ class UnischemaTest(unittest.TestCase):
         assert match_unischema_fields(TestSchema, ['int32', 'uint8']) == [TestSchema.int32, TestSchema.uint8]
 
     def test_arrow_schema_convertion(self):
+
         arrow_schema = pa.schema([
             pa.field('string', pa.string()),
             pa.field('int8', pa.int8()),
@@ -182,8 +205,14 @@ class UnischemaTest(unittest.TestCase):
             pa.field('float', pa.float32()),
             pa.field('double', pa.float64()),
             pa.field('bool', pa.bool_(), False),
+            pa.field('fixed_size_binary', pa.binary(10)),
+            pa.field('variable_size_binary', pa.binary()),
+            pa.field('decimal', pa.decimal128(3, 4)),
         ])
-        unischema = Unischema.from_arrow_schema(arrow_schema)
+
+        mock_dataset = _mock_parquet_dataset([], arrow_schema)
+
+        unischema = Unischema.from_arrow_schema(mock_dataset)
         for name in arrow_schema.names:
             assert getattr(unischema, name).name == name
             assert isinstance(getattr(unischema, name).codec, ScalarCodec)
@@ -192,13 +221,26 @@ class UnischemaTest(unittest.TestCase):
             else:
                 assert getattr(unischema, name).nullable
 
+    def test_arrow_schema_convertion_with_partitions(self):
+
+        arrow_schema = pa.schema([
+            pa.field('int8', pa.int8()),
+        ])
+
+        mock_dataset = _mock_parquet_dataset(['part_name'], arrow_schema)
+
+        unischema = Unischema.from_arrow_schema(mock_dataset)
+        assert unischema.part_name.codec.spark_dtype().typeName() == 'string'
+
     def test_arrow_schema_convertion_fail(self):
         arrow_schema = pa.schema([
-            pa.field('string', pa.string()),
-            pa.field('binary', pa.binary(10)),
+            pa.field('list_of_int', pa.list_(pa.int8())),
         ])
+
+        mock_dataset = _mock_parquet_dataset([], arrow_schema)
+
         with self.assertRaises(ValueError) as ex:
-            Unischema.from_arrow_schema(arrow_schema)
+            Unischema.from_arrow_schema(mock_dataset)
             assert 'Cannot auto-create unischema due to unsupported column type' in str(ex.exception)
 
 
