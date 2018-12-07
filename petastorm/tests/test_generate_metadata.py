@@ -7,7 +7,6 @@ import pytest
 
 from petastorm import make_reader
 from petastorm.etl import petastorm_generate_metadata
-from petastorm.etl.dataset_metadata import PetastormMetadataError
 from petastorm.selectors import SingleIndexSelector
 from petastorm.tests.test_common import create_test_dataset, TestSchema
 
@@ -41,8 +40,8 @@ def test_regenerate_metadata(synthetic_dataset, tmpdir):
     dataset = pq.ParquetDataset(a_moved_path)
     os.remove(dataset.common_metadata_path)
 
-    # Should now raise a value error
-    with pytest.raises(PetastormMetadataError):
+    # make_reader should not be able to read a dataset without Petastorm metadat.
+    with pytest.raises(RuntimeError, match='make_reader supports reading only Petastorm datasets'):
         _check_reader(a_moved_path)
 
     # Regenerate all metadata including unischema information
