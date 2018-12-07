@@ -50,9 +50,8 @@ ALL_READER_FLAVOR_FACTORIES = MINIMAL_READER_FLAVOR_FACTORIES + [
 SCALAR_FIELDS = [f for f in TestSchema.fields.values() if isinstance(f.codec, ScalarCodec)]
 
 SCALAR_ONLY_READER_FACTORIES = [
-    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', infer_schema=False, **kwargs),
-    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='process', workers_count=2,
-                                            infer_schema=False, **kwargs),
+    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', **kwargs),
+    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='process', workers_count=2, **kwargs),
 ]
 
 
@@ -156,7 +155,7 @@ def test_reading_subset_of_columns(synthetic_dataset, reader_factory):
 
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
-    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', infer_schema=False, **kwargs),
+    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', **kwargs),
     lambda url, **kwargs: ReaderV2(url, loader_pool=SameThreadExecutor(), decoder_pool=SameThreadExecutor(), **kwargs)])
 def test_shuffle(synthetic_dataset, reader_factory):
     rows_count = len(synthetic_dataset.data)
@@ -178,7 +177,7 @@ def test_shuffle(synthetic_dataset, reader_factory):
 
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
-    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', infer_schema=False, **kwargs),
+    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', **kwargs),
     lambda url, **kwargs: ReaderV2(url, loader_pool=SameThreadExecutor(), decoder_pool=SameThreadExecutor(), **kwargs)])
 def test_shuffle_drop_ratio(synthetic_dataset, reader_factory):
     # Read ids twice without shuffle: assert we have the same array and all expected ids are in the array
@@ -307,7 +306,7 @@ def test_partition_value_error(synthetic_dataset, reader_factory):
 
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
-    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', infer_schema=False, **kwargs),
+    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', **kwargs),
     lambda url, **kwargs: ReaderV2(url, loader_pool=SameThreadExecutor(), decoder_pool=SameThreadExecutor(), **kwargs)
 ])
 def test_stable_pieces_order(synthetic_dataset, reader_factory):
@@ -516,8 +515,3 @@ def test_dataset_path_is_a_unicode(synthetic_dataset, reader_factory):
 def test_make_reader_fails_loading_non_petastrom_dataset(scalar_dataset):
     with pytest.raises(RuntimeError, match='use make_batch_reader'):
         make_reader(scalar_dataset.url)
-
-
-def test_make_batch_reader_fails_loading_petastrom_dataset(synthetic_dataset):
-    with pytest.raises(RuntimeError, match='use make_reader'):
-        make_batch_reader(synthetic_dataset.url)
