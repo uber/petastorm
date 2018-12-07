@@ -64,7 +64,7 @@ EXTRA_REQUIRE = {
         'pytest-logger>=0.4.0',
         's3fs>=0.0.1',
     ],
-    'torch': ['torchvision>=0.2.1'],
+    'torch': ['torchvision==0.2.1'],
 }
 
 packages = setuptools.find_packages()
