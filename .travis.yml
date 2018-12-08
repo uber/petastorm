@@ -32,7 +32,7 @@ install:
   - pip install --upgrade pip==18.0
   # This will use requirements from setup.py and install them in the tavis's virtual environment
   # [tf] chooses to depend on cpu version of tensorflow (alternatively, could do [tf_gpu])
-  - pip install -q -e .[tf,test,torch,docs]
+  - pip install -e .[tf,test,torch,docs]
   # pyarrow was compiled against a newer version of numpy than we require so we need to upgrade it
   # (or optionally install pyarrow from source instead of through binaries)
   - pip install --upgrade numpy
@@ -51,6 +51,9 @@ before_script:
   - flake8 . --count --exit-zero --max-complexity=10 --statistics
 
   - pylint --rcfile=.pylintrc petastorm examples -f parseable -r n
+
+
+  - pip list
 
 script:
   # Build documentation
