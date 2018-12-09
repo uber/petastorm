@@ -42,7 +42,7 @@ before_script:
   - export CONTAINER=$(docker ps -q | head -n 1)
 
   - export RUN="docker exec ${CONTAINER} bash /run_in_venv.sh ${TRAVIS_PYTHON_VERSION}"
-  - export PYTEST="pytest --timeout=180 --duration=0 -v --cov=./  --cov-append --color=yes"
+  - export PYTEST="pytest -n 2 --timeout=180 --duration=0 -v --cov=./  --cov-append --color=yes"
 
   # Refresh our dependencies' versions as in the CI image, they may go stale
   - $RUN pip install -e /petastorm/[test,tf,torch,docs,opencv]
