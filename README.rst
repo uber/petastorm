@@ -260,12 +260,12 @@ You can find a full code sample here: `pyspark_hello_world.py <https://github.co
 Non Petastorm Parquet Stores
 ----------------------------
 Petastorm can also be used to read data directly from Apache Parquet stores. To achieve that, use
-``make_parquet_reader`` (and not ``make_reader``). The following table summarizes the differences
-``make_parquet_reader`` and ``make_reader`` functions.
+``make_batch_reader`` (and not ``make_reader``). The following table summarizes the differences
+``make_batch_reader`` and ``make_reader`` functions.
 
 
 ==================================================================  =====================================================
-``make_reader``                                                     ``make_parquet_reader``
+``make_reader``                                                     ``make_batch_reader``
 ==================================================================  =====================================================
 Only Petastorm datasets (created using materializes_dataset)        Any Parquet store (some native Parquet column types
                                                                     are not supported yet.
@@ -274,7 +274,7 @@ The reader returns one record at a time.                            The reader r
                                                                     batch is not fixed and defined by Parquet row-group
                                                                     size.
 ------------------------------------------------------------------  -----------------------------------------------------
-Predicates passed to ``make_reader`` are evaluated per single row.  Predicates passed to ``make_parquet_reader`` are evaluated per batch.
+Predicates passed to ``make_reader`` are evaluated per single row.  Predicates passed to ``make_batch_reader`` are evaluated per batch.
 ==================================================================  =====================================================
 
 
