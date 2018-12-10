@@ -4,6 +4,30 @@
 Release notes
 =============
 
+Release 0.5.0
+=============
+
+Breaking changes
+----------------
+- :func:`~petastorm.reader.make_reader` should be used to create new instance of a reader.
+- It is still possible, but not recommended to use :class:`~petastorm.reader.Reader` in most cases. Its constructor arguments
+  has changed:
+  -- ``training_partition`` and ``num_training_partitions`` were renamed into ``cur_shard`` and ``shard_count``.
+  -- ``shuffle`` and ``shuffle_options`` were replaced by ``shuffle_row_groups=True, shuffle_row_drop_partitions=1``
+  -- ``sequence`` argument was removed
+
+
+New features and bug fixes
+--------------------------
+- It is possible to read non-Petastorm Parquet datasets (created externally to Petastorm). Currently most of the
+  scalar types are supported.
+- Support s3 as the protocol in a dataset url strings (e.g. 's3://...')
+- PyTorch: support collating decimal scalars
+- PyTorch: promote integer types that are not supported by PyTorch to the next larger integer types that is supported
+  (e.g. int8 -> int16). Booleans are promoted to uint8.
+- Support running ``petastorm-generate-metadata.py`` on datasets created by Hive.
+- Fix incorrect dataset sharding when using Python 3.
+
 Release 0.4.3
 =============
 
