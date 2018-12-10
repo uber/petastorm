@@ -53,7 +53,7 @@ _VENTILATE_EXTRA_ROWGROUPS = 2
 
 def make_reader(dataset_url,
                 schema_fields=None,
-                reader_pool_type='thread', workers_count=10, pyarrow_serialize=False,
+                reader_pool_type='thread', workers_count=10, pyarrow_serialize=False, results_queue_size=50,
                 shuffle_row_groups=True, shuffle_row_drop_partitions=1,
                 predicate=None,
                 rowgroup_selector=None,
@@ -82,6 +82,8 @@ def make_reader(dataset_url,
         thread or process pool. Defaults to 10
     :param pyarrow_serialize: Whether to use pyarrow for serialization. Currently only applicable to process pool.
         Defaults to False.
+    :param results_queue_size: Size of the results queue to store prefetched rows. Currently only applicable to
+        thread reader pool type.
     :param shuffle_row_groups: Whether to shuffle row groups (the order in which full row groups are read)
     :param shuffle_row_drop_partitions: This is is a positive integer which determines how many partitions to
         break up a row group into for increased shuffling in exchange for worse performance (extra reads).
@@ -143,7 +145,7 @@ def make_reader(dataset_url,
 
     if reader_engine == 'reader_v1':
         if reader_pool_type == 'thread':
-            reader_pool = ThreadPool(workers_count)
+            reader_pool = ThreadPool(workers_count, results_queue_size)
         elif reader_pool_type == 'process':
             if pyarrow_serialize:
                 serializer = PyArrowSerializer()
