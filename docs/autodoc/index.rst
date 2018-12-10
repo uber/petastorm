@@ -24,6 +24,7 @@ training frameworks.
    benchmarks_tutorial_include
    troubleshoot_include
    release_notes_include
+   migration_guide_include
 
 
 Indices and tables
