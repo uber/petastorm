@@ -18,7 +18,7 @@ Use :func:`~petastorm.reader.make_reader` to create a new instance of a reader. 
 takes arguments that are almost similar to constructor arguments of :class:`~petastorm.reader.Reader`. The following
 list enumerates the differences:
 
-- ``reader_pool``: takes one of the strings: ``'thread'``, ``'process'``, ``'dummy'``
+- ``reader_pool_type``: takes one of the strings: ``'thread'``, ``'process'``, ``'dummy'``
   (instead of ``ThreadPool()``, ``ProcessPool()`` and ``DummyPool()`` object instances). Pass number of workers using
   ``workers_count`` argument.
 - ``training_partition`` and ``num_training_partitions`` were renamed into ``cur_shard`` and ``shard_count``.
@@ -38,7 +38,7 @@ To:
 
     from petastorm import make_reader
     reader = make_reader(dataset_url,
-                         reader_pool='thread',
+                         reader_pool_type='thread',
                          workers_count=5,
                          cur_shard=1, shard_count=5,
                          shuffle_row_groups=False)
