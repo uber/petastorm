@@ -93,18 +93,15 @@ class DataLoader(object):
 
     This class iterates and returns items from the Reader in batches.
 
-    This loader can be used as a context manager, but it will terminate at the end of an epoch.
-    The context will invoke next_epoch() upon entry.
-
-    If not used as context manager, invoke the next_epoch() function at the start of each epoch, and
-    once more at the very end.
+    This loader can be used as an iterator and will terminate when the reader used in the construction of the class
+    runs out of samples.
     """
 
     def __init__(self, reader, batch_size=1, collate_fn=decimal_friendly_collate, transform=None):
         """
         Initializes a data loader object, with a default collate and optional transform functions.
 
-        This loader handles multiple epochs by instantiating a new Reader per epoch.
+        Number of epochs is defined by the configuration of the reader argument.
 
         :param reader: petastorm Reader instance
         :param batch_size: the number of items to return per batch; factored into the len() of this reader
@@ -118,9 +115,7 @@ class DataLoader(object):
 
     def __iter__(self):
         """
-        The Data Loader iterator stops the for-loop at the end of each epoch, but a subsequent for-loop
-        will instantiate a new Reader and yield more results, until the requested number of epoch has been
-        reached.  After that point, any subsequent call results in StopIteration, per iterator protocol.
+        The Data Loader iterator stops the for-loop when reader runs out of samples.
         """
         batch = []
         for row in self.reader:
