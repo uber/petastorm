@@ -74,8 +74,8 @@ def make_reader(dataset_url,
     :param dataset_url: an filepath or a url to a parquet directory,
         e.g. ``'hdfs://some_hdfs_cluster/user/yevgeni/parquet8'``, or ``'file:///tmp/mydataset'``
         or ``'s3://bucket/mydataset'``.
-    :param schema_fields: Either list of unischema fields to subset, or ``None`` to read all fields.
-            OR an NGram object, then it will return an NGram of the specified properties.
+    :param schema_fields: Can be: a list of unischema fields and/or regex pattern strings; ``None`` to read all fields;
+            an NGram object, then it will return an NGram of the specified fields.
     :param reader_pool_type: A string denoting the reader pool type. Should be one of ['thread', 'process', 'dummy']
         denoting a thread pool, process pool, or running everything in the master thread. Defaults to 'thread'
     :param workers_count: An int for the number of workers to use in the reader pool. This only is used for the

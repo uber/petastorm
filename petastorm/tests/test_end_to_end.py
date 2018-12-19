@@ -153,6 +153,18 @@ def test_reading_subset_of_columns(synthetic_dataset, reader_factory):
             np.testing.assert_equal(expected['id2'], actual['id2'])
 
 
+@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
+def test_reading_subset_of_columns_using_regex(synthetic_dataset, reader_factory):
+    """Just a bunch of read and compares of all values to the expected values"""
+    with reader_factory(synthetic_dataset.url, schema_fields=['id$', 'id_.*$', 'partition_key$']) as reader:
+        # Read a bunch of entries from the dataset and compare the data to reference
+        for row in reader:
+            actual = dict(row._asdict())
+            assert set(actual.keys()) == {'id_float', 'id_odd', 'id', 'partition_key'}
+            expected = next(d for d in synthetic_dataset.data if d['id'] == actual['id'])
+            np.testing.assert_equal(expected['id_float'], actual['id_float'])
+
+
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
     lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', **kwargs),
