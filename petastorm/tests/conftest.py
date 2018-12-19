@@ -104,3 +104,15 @@ def scalar_dataset(request, tmpdir_factory):
         return dataset
 
     return maybe_cached_dataset(request.config, 'scalar', _pure_parquet_dataset_no_cache)
+
+
+@pytest.fixture(scope="session")
+def scalar_dataset_with_nulls(request, tmpdir_factory):
+    def _pure_parquet_dataset_no_cache():
+        path = tmpdir_factory.mktemp("data").strpath
+        url = 'file://' + path
+        data = create_test_scalar_dataset(url, 100, include_nulls=True)
+        dataset = SyntheticDataset(url=url, path=path, data=data)
+        return dataset
+
+    return maybe_cached_dataset(request.config, 'scalar_with_nulls', _pure_parquet_dataset_no_cache)

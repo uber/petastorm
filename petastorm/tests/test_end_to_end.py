@@ -32,6 +32,8 @@ from petastorm.tests.test_end_to_end_predicates_impl import \
     PartitionKeyInSetPredicate, EqualPredicate, VectorizedEqualPredicate
 from petastorm.unischema import UnischemaField, Unischema
 
+NOT_NULLABLE_FIELDS = [f for f in TestSchema.fields.values() if not f.nullable]
+
 # pylint: disable=unnecessary-lambda
 MINIMAL_READER_FLAVOR_FACTORIES = [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
@@ -47,11 +49,10 @@ ALL_READER_FLAVOR_FACTORIES = MINIMAL_READER_FLAVOR_FACTORIES + [
     lambda url, **kwargs: make_reader(url, workers_count=2, reader_engine='experimental_reader_v2', **kwargs),
 ]
 
-SCALAR_FIELDS = [f for f in TestSchema.fields.values() if isinstance(f.codec, ScalarCodec)]
-
 SCALAR_ONLY_READER_FACTORIES = [
-    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', **kwargs),
-    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='process', workers_count=2, **kwargs),
+    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', schema_fields=NOT_NULLABLE_FIELDS, **kwargs),
+    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='process', schema_fields=NOT_NULLABLE_FIELDS,
+                                            workers_count=2, **kwargs),
 ]
 
 
@@ -167,7 +168,7 @@ def test_reading_subset_of_columns_using_regex(synthetic_dataset, reader_factory
 
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
-    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', **kwargs),
+    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', schema_fields=NOT_NULLABLE_FIELDS, **kwargs),
     lambda url, **kwargs: ReaderV2(url, loader_pool=SameThreadExecutor(), decoder_pool=SameThreadExecutor(), **kwargs)])
 def test_shuffle(synthetic_dataset, reader_factory):
     rows_count = len(synthetic_dataset.data)
@@ -189,7 +190,7 @@ def test_shuffle(synthetic_dataset, reader_factory):
 
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
-    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', **kwargs),
+    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', schema_fields=NOT_NULLABLE_FIELDS, **kwargs),
     lambda url, **kwargs: ReaderV2(url, loader_pool=SameThreadExecutor(), decoder_pool=SameThreadExecutor(), **kwargs)])
 def test_shuffle_drop_ratio(synthetic_dataset, reader_factory):
     # Read ids twice without shuffle: assert we have the same array and all expected ids are in the array
@@ -318,7 +319,7 @@ def test_partition_value_error(synthetic_dataset, reader_factory):
 
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
-    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', **kwargs),
+    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', schema_fields=NOT_NULLABLE_FIELDS, **kwargs),
     lambda url, **kwargs: ReaderV2(url, loader_pool=SameThreadExecutor(), decoder_pool=SameThreadExecutor(), **kwargs)
 ])
 def test_stable_pieces_order(synthetic_dataset, reader_factory):

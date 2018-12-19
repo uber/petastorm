@@ -63,4 +63,13 @@ def test_specify_columns_to_read(scalar_dataset, reader_factory):
         assert set(sample._asdict().keys()) == {'id', 'float64'}
         assert sample.float64.size > 0
 
+
+@pytest.mark.parametrize('reader_factory', _D)
+def test_raise_error_with_null_fields(scalar_dataset_with_nulls, reader_factory):
+    """Batching with None values is currently not supported since we use numpy arrays as return values and
+    these do not support null values."""
+    with reader_factory(scalar_dataset_with_nulls.url) as reader:
+        with pytest.raises(RuntimeError, match='Batching rows with null values is unsupported'):
+            next(reader)
+
 # TODO(yevgeni): missing tests: https://github.com/uber/petastorm/issues/257

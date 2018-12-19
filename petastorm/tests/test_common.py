@@ -137,7 +137,7 @@ def create_test_dataset(tmp_url, rows, num_files=2, spark=None):
     return dataset_dicts
 
 
-def create_test_scalar_dataset(tmp_url, num_rows, num_files=4, spark=None):
+def create_test_scalar_dataset(tmp_url, num_rows, num_files=4, include_nulls=False, spark=None):
     shutdown = False
     if not spark:
         spark_session = SparkSession \
@@ -149,16 +149,19 @@ def create_test_scalar_dataset(tmp_url, num_rows, num_files=4, spark=None):
         shutdown = True
 
     expected_data = [{'id': np.int32(i),
+                      'maybe_nullable_int8': np.int8(i) if i % 2 == 0 or not include_nulls else None,
                       'string': np.unicode_('hello_{}'.format(i)),
                       'string2': np.unicode_('world_{}'.format(i)),
                       'float64': np.float64(i) * .66} for i in range(num_rows)]
 
-    expected_data_as_scalars = [{k: np.asscalar(v) for k, v in row.items()} for row in expected_data]
+    expected_data_as_scalars = [{k: np.asscalar(v) if v is not None else v for k, v in row.items()}
+                                for row in expected_data]
 
     rows = [Row(**row) for row in expected_data_as_scalars]
 
     schema = StructType([
         StructField('id', IntegerType(), False),
+        StructField('maybe_nullable_int8', IntegerType(), include_nulls),
         StructField('string', StringType(), False),
         StructField('string2', StringType(), False),
         StructField('float64', DoubleType(), False)])

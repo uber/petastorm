@@ -48,6 +48,9 @@ class ArrowReaderWorkerResultsQueueReader(object):
             for column in result_table.columns:
                 # Assume we get only one chunk since reader worker reads one rowgroup at a time
                 assert len(column.data.chunks) == 1
+                if column.data.chunks[0].null_count > 0:
+                    raise RuntimeError('Batching rows with null values is unsupported. Column %s contains nulls.',
+                                       column.name)
                 if column.type == pa.string():
                     result_dict[column.name] = column.data.chunks[0].to_pandas().astype(np.unicode_)
                 else:
