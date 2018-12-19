@@ -175,6 +175,39 @@ class UnischemaTest(unittest.TestCase):
             TestSchema.create_schema_view([UnischemaField('id', np.int64, (), ScalarCodec(LongType()), False)])
         self.assertTrue('does not belong to the schema' in str(ex.exception))
 
+    def test_create_schema_view_using_unischema_fields(self):
+        TestSchema = Unischema('TestSchema', [
+            UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
+            UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
+        ])
+        view = TestSchema.create_schema_view([TestSchema.int_field])
+        self.assertEqual(set(view.fields.keys()), {'int_field'})
+
+    def test_create_schema_view_using_regex(self):
+        TestSchema = Unischema('TestSchema', [
+            UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
+            UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
+        ])
+        view = TestSchema.create_schema_view(['int.*$'])
+        self.assertEqual(set(view.fields.keys()), {'int_field'})
+
+    def test_create_schema_view_using_regex_and_unischema_fields(self):
+        TestSchema = Unischema('TestSchema', [
+            UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
+            UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
+            UnischemaField('other_string_field', np.string_, (), ScalarCodec(StringType()), False),
+        ])
+        view = TestSchema.create_schema_view(['int.*$', TestSchema.string_field])
+        self.assertEqual(set(view.fields.keys()), {'int_field', 'string_field'})
+
+    def test_create_schema_view_no_field_matches_regex(self):
+        TestSchema = Unischema('TestSchema', [
+            UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
+            UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
+        ])
+        view = TestSchema.create_schema_view(['bogus'])
+        self.assertEqual(len(view.fields), 0)
+
     def test_name_property(self):
         TestSchema = Unischema('TestSchema', [
             UnischemaField('nullable', np.int32, (), ScalarCodec(StringType()), True),

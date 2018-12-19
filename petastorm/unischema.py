@@ -117,26 +117,33 @@ class Unischema(object):
 
     def create_schema_view(self, fields):
         """Creates a new instance of the schema using a subset of fields.
-        In the process, validates that all fields are part of the scheme.
+
+        Fields can be either UnischemaField objects or regular expression patterns.
 
         If one of the fields is not part of the schema an error is raised.
 
-        The example returns a schema, but with only two fields:
+        The example returns a schema, with field_1 and any other field matching ``other.*$`` pattern.
 
         >>> SomeSchema.create_schema_view(
         >>>     [SomeSchema.field_1,
-        >>>      SomeSchema.field_4])
+        >>>      'other.*$'])
 
-        :param fields: subset of fields from which to create a new schema
+        :param fields: A list of UnischemaField objects and/or regular expressions
         :return: a new view of the original schema containing only the supplied fields
         """
-        for field in fields:
+
+        # Split fields parameter to regex pattern strings and UnischemaField objects
+        regex_patterns = [f for f in fields if isinstance(f, str)]
+        unischema_field_objects = [f for f in fields if not isinstance(f, str)]
+        view_fields = unischema_field_objects + match_unischema_fields(self, regex_patterns)
+
+        for field in unischema_field_objects:
             # Comparing by field names. Prevoiusly was looking for `field not in self._fields.values()`, but it breaks
             # due to faulty pickling: T223683
             if field.name not in self._fields:
                 raise ValueError('field {} does not belong to the schema {}'.format(field, self))
-        # TODO(yevgeni): what happens when we have several views? Is it ok to have multiple namedtuples named similarly?
-        return Unischema('{}_view'.format(self._name), fields)
+
+        return Unischema('{}_view'.format(self._name), view_fields)
 
     def _get_namedtuple(self):
         return _NamedtupleCache.get(self._name, self._fields.keys())
