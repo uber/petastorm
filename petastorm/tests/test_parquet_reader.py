@@ -54,4 +54,13 @@ def test_simple_read(scalar_dataset, reader_factory):
     with reader_factory(scalar_dataset.url) as reader:
         _check_simple_reader(reader, scalar_dataset.data)
 
+
+@pytest.mark.parametrize('reader_factory', _D)
+def test_specify_columns_to_read(scalar_dataset, reader_factory):
+    """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
+    with reader_factory(scalar_dataset.url, schema_fields=['id', 'float.*$']) as reader:
+        sample = next(reader)
+        assert set(sample._asdict().keys()) == {'id', 'float64'}
+        assert sample.float64.size > 0
+
 # TODO(yevgeni): missing tests: https://github.com/uber/petastorm/issues/257

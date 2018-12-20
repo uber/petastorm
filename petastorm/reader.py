@@ -226,6 +226,7 @@ def make_reader(dataset_url,
 
 
 def make_batch_reader(dataset_url,
+                      schema_fields=None,
                       reader_pool_type='thread', workers_count=10,
                       shuffle_row_groups=True, shuffle_row_drop_partitions=1,
                       predicate=None,
@@ -247,6 +248,8 @@ def make_batch_reader(dataset_url,
     :param dataset_url: an filepath or a url to a parquet directory,
         e.g. ``'hdfs://some_hdfs_cluster/user/yevgeni/parquet8'``, or ``'file:///tmp/mydataset'``
         or ``'s3://bucket/mydataset'``.
+    :param schema_fields: A list of regex pattern strings. Only columns matching at least one of the
+        patterns in the list will be loaded.
     :param reader_pool_type: A string denoting the reader pool type. Should be one of ['thread', 'process', 'dummy']
         denoting a thread pool, process pool, or running everything in the master thread. Defaults to 'thread'
     :param workers_count: An int for the number of workers to use in the reader pool. This only is used for the
@@ -310,6 +313,7 @@ def make_batch_reader(dataset_url,
         raise ValueError('Unknown reader_pool_type: {}'.format(reader_pool_type))
 
     return Reader(filesystem, dataset_path,
+                  schema_fields=schema_fields,
                   worker_class=ArrowReaderWorker,
                   reader_pool=reader_pool,
                   shuffle_row_groups=shuffle_row_groups,
