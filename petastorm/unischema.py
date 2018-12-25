@@ -221,52 +221,10 @@ class Unischema(object):
         for partition_name in parquet_dataset.partitions.partition_names:
             unischema_fields.append(UnischemaField(partition_name, np.str_, (), ScalarCodec(StringType()), False))
 
-        import pyarrow.types as types
-
         for column_name in arrow_schema.names:
             arrow_field = arrow_schema.field_by_name(column_name)
             field_type = arrow_field.type
-            if types.is_int8(field_type):
-                np_type = np.int8
-                codec = ScalarCodec(ByteType())
-            elif types.is_int16(field_type):
-                np_type = np.int16
-                codec = ScalarCodec(ShortType())
-            elif types.is_int32(field_type):
-                np_type = np.int32
-                codec = ScalarCodec(IntegerType())
-            elif types.is_int64(field_type):
-                np_type = np.int64
-                codec = ScalarCodec(LongType())
-            elif types.is_string(field_type):
-                np_type = np.unicode_
-                codec = ScalarCodec(StringType())
-            elif types.is_boolean(field_type):
-                np_type = np.bool_
-                codec = ScalarCodec(BooleanType())
-            elif types.is_float32(field_type):
-                np_type = np.float32
-                codec = ScalarCodec(FloatType())
-            elif types.is_float64(field_type):
-                np_type = np.float64
-                codec = ScalarCodec(DoubleType())
-            elif types.is_decimal(field_type):
-                np_type = Decimal
-                codec = ScalarCodec(DecimalType(field_type.precision, field_type.scale))
-            elif types.is_binary(field_type):
-                codec = ScalarCodec(StringType())
-                np_type = np.string_
-            elif types.is_fixed_size_binary(field_type):
-                codec = ScalarCodec(StringType())
-                np_type = np.string_
-            elif types.is_date(field_type):
-                np_type = np.datetime64
-                codec = ScalarCodec(DateType())
-            elif types.is_timestamp(field_type):
-                np_type = np.datetime64
-                codec = ScalarCodec(TimestampType())
-            else:
-                raise ValueError('Cannot auto-create unischema due to unsupported column type {}'.format(field_type))
+            codec, np_type = _numpy_and_codec_from_arrow_type(field_type)
 
             unischema_fields.append(UnischemaField(column_name, np_type, (), codec, arrow_field.nullable))
         return Unischema('inferred_schema', unischema_fields)
@@ -338,3 +296,53 @@ def match_unischema_fields(schema, field_regex):
     else:
         unischema_fields = field_regex
     return unischema_fields
+
+
+def _numpy_and_codec_from_arrow_type(field_type):
+    from pyarrow import types
+
+    if types.is_int8(field_type):
+        np_type = np.int8
+        codec = ScalarCodec(ByteType())
+    elif types.is_int16(field_type):
+        np_type = np.int16
+        codec = ScalarCodec(ShortType())
+    elif types.is_int32(field_type):
+        np_type = np.int32
+        codec = ScalarCodec(IntegerType())
+    elif types.is_int64(field_type):
+        np_type = np.int64
+        codec = ScalarCodec(LongType())
+    elif types.is_string(field_type):
+        np_type = np.unicode_
+        codec = ScalarCodec(StringType())
+    elif types.is_boolean(field_type):
+        np_type = np.bool_
+        codec = ScalarCodec(BooleanType())
+    elif types.is_float32(field_type):
+        np_type = np.float32
+        codec = ScalarCodec(FloatType())
+    elif types.is_float64(field_type):
+        np_type = np.float64
+        codec = ScalarCodec(DoubleType())
+    elif types.is_decimal(field_type):
+        np_type = Decimal
+        codec = ScalarCodec(DecimalType(field_type.precision, field_type.scale))
+    elif types.is_binary(field_type):
+        codec = ScalarCodec(StringType())
+        np_type = np.string_
+    elif types.is_fixed_size_binary(field_type):
+        codec = ScalarCodec(StringType())
+        np_type = np.string_
+    elif types.is_date(field_type):
+        np_type = np.datetime64
+        codec = ScalarCodec(DateType())
+    elif types.is_timestamp(field_type):
+        np_type = np.datetime64
+        codec = ScalarCodec(TimestampType())
+    elif types.is_list(field_type):
+        _, np_type = _numpy_and_codec_from_arrow_type(field_type.value_type)
+        codec = None
+    else:
+        raise ValueError('Cannot auto-create unischema due to unsupported column type {}'.format(field_type))
+    return codec, np_type

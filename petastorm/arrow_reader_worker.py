@@ -48,8 +48,18 @@ class ArrowReaderWorkerResultsQueueReader(object):
             for column in result_table.columns:
                 # Assume we get only one chunk since reader worker reads one rowgroup at a time
                 assert len(column.data.chunks) == 1
-                if column.type == pa.string():
+                if pa.types.is_string(column.type):
                     result_dict[column.name] = column.data.chunks[0].to_pandas().astype(np.unicode_)
+                elif pa.types.is_list(column.type):
+                    # Assuming all lists are of the same length, hence we can collate them into a matrix
+                    list_of_lists = column.data.chunks[0].to_pandas()
+                    try:
+                        result_dict[column.name] = np.vstack(list_of_lists.tolist())
+                    except ValueError:
+                        raise RuntimeError('Length of all values in column \'%s\' are expected to be the same length. '
+                                           'Got the following set of lengths: \'%s\'',
+                                           column.name,
+                                           ', '.join({value.shape[0] for value in list_of_lists}))
                 else:
                     result_dict[column.name] = column.data.chunks[0].to_pandas()
 

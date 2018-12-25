@@ -41,7 +41,6 @@ def _check_simple_reader(reader, expected_data):
                 expected_value = expected[field]
                 actual_value = actual[field][i, ...]
                 np.testing.assert_equal(actual_value, expected_value)
-                assert actual_value == expected_value
 
         count += len(actual['id'])
 

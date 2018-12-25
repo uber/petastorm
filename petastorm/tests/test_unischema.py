@@ -272,14 +272,15 @@ class UnischemaTest(unittest.TestCase):
 
     def test_arrow_schema_convertion_fail(self):
         arrow_schema = pa.schema([
-            pa.field('list_of_int', pa.list_(pa.int8())),
+            pa.field('list_of_int', pa.float16()),
         ])
 
         mock_dataset = _mock_parquet_dataset([], arrow_schema)
 
         with self.assertRaises(ValueError) as ex:
             Unischema.from_arrow_schema(mock_dataset)
-            assert 'Cannot auto-create unischema due to unsupported column type' in str(ex.exception)
+
+        assert 'Cannot auto-create unischema due to unsupported column type' in str(ex.exception)
 
 
 class UnischemaFieldTest(unittest.TestCase):
