@@ -134,6 +134,9 @@ def _assert_fields_eq(actual, desired):
 
     if isinstance(desired, Decimal):
         np.testing.assert_equal(desired, Decimal(actual))
+    elif issubclass(desired.dtype.type, np.datetime64):
+        # tf_utils will convert timestamps to ns from epoch int64 value.
+        assert desired.astype('<M8[ns]').astype(np.int64) == actual
     else:
         np.testing.assert_equal(desired, actual)
 
