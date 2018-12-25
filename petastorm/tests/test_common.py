@@ -18,10 +18,11 @@ from decimal import Decimal
 from functools import partial
 
 import numpy as np
+import pytz
 from pyspark import Row
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StringType, ShortType, LongType, DecimalType, DoubleType, BooleanType, StructField, \
-    IntegerType, StructType
+    IntegerType, StructType, DateType, TimestampType
 
 from petastorm.codecs import CompressedImageCodec, NdarrayCodec, \
     ScalarCodec
@@ -149,19 +150,32 @@ def create_test_scalar_dataset(tmp_url, num_rows, num_files=4, spark=None):
         shutdown = True
 
     expected_data = [{'id': np.int32(i),
+                      'datetime': np.datetime64('2019-01-02'),
+                      'timestamp': np.datetime64('2005-02-25T03:30'),
                       'string': np.unicode_('hello_{}'.format(i)),
                       'string2': np.unicode_('world_{}'.format(i)),
                       'float64': np.float64(i) * .66} for i in range(num_rows)]
 
-    expected_data_as_scalars = [{k: np.asscalar(v) for k, v in row.items()} for row in expected_data]
+    expected_data_as_scalars = [{k: np.asscalar(v) if isinstance(v, np.generic) else v for k, v in row.items()} for row
+                                in expected_data]
+
+    # np.datetime64 is converted to a timezone unaware datetime instances. Working explicitly in UTC so we don't need
+    # to think about local timezone in the tests
+    for row in expected_data_as_scalars:
+        row['timestamp'] = row['timestamp'].replace(tzinfo=pytz.UTC)
 
     rows = [Row(**row) for row in expected_data_as_scalars]
 
+    # WARNING: surprisingly, schema fields and row fields are matched only by order and not name.
+    # We must maintain alphabetical order of the struct fields for the code to work!!!
     schema = StructType([
+        StructField('datetime', DateType(), False),
+        StructField('float64', DoubleType(), False),
         StructField('id', IntegerType(), False),
         StructField('string', StringType(), False),
         StructField('string2', StringType(), False),
-        StructField('float64', DoubleType(), False)])
+        StructField('timestamp', TimestampType(), False),
+    ])
 
     dataframe = spark.createDataFrame(rows, schema)
     dataframe. \

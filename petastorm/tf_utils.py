@@ -37,6 +37,7 @@ _NUMPY_TO_TF_DTYPES_MAPPING = {
     np.str_: tf.string,
     np.bool_: tf.bool,
     Decimal: tf.string,
+    np.datetime64: tf.int64,
 }
 
 # Name of an op in the TF graph used for the random shuffling queue. This name can be used by diagnostics code that
@@ -71,6 +72,10 @@ def _sanitize_field_tf_types(sample):
             # Normalizing decimals only to get rid of the trailing zeros (makes testing easier, assuming has
             # no other effect)
             next_sample_dict[k] = str(v.normalize())
+        elif isinstance(v, np.ndarray) and np.issubdtype(v.dtype, np.datetime64):
+            # Convert to nanoseconds from POSIX epoch
+            next_sample_dict[k] = (v - np.datetime64('1970-01-01T00:00:00.0Z'))\
+                .astype('timedelta64[ns]').astype(np.int64)
         elif isinstance(v, np.ndarray) and v.dtype == np.uint16:
             next_sample_dict[k] = v.astype(np.int32)
 
