@@ -22,7 +22,7 @@ import pytz
 from pyspark import Row
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StringType, ShortType, LongType, DecimalType, DoubleType, BooleanType, StructField, \
-    IntegerType, StructType, DateType, TimestampType
+    IntegerType, StructType, DateType, TimestampType, ArrayType
 
 from petastorm.codecs import CompressedImageCodec, NdarrayCodec, \
     ScalarCodec
@@ -150,6 +150,7 @@ def create_test_scalar_dataset(tmp_url, num_rows, num_files=4, spark=None):
         shutdown = True
 
     expected_data = [{'id': np.int32(i),
+                      'int_fixed_size_list': np.arange(1 + i, 10 + i).astype(np.int32),
                       'datetime': np.datetime64('2019-01-02'),
                       'timestamp': np.datetime64('2005-02-25T03:30'),
                       'string': np.unicode_('hello_{}'.format(i)),
@@ -163,6 +164,7 @@ def create_test_scalar_dataset(tmp_url, num_rows, num_files=4, spark=None):
     # to think about local timezone in the tests
     for row in expected_data_as_scalars:
         row['timestamp'] = row['timestamp'].replace(tzinfo=pytz.UTC)
+        row['int_fixed_size_list'] = row['int_fixed_size_list'].tolist()
 
     rows = [Row(**row) for row in expected_data_as_scalars]
 
@@ -172,6 +174,7 @@ def create_test_scalar_dataset(tmp_url, num_rows, num_files=4, spark=None):
         StructField('datetime', DateType(), False),
         StructField('float64', DoubleType(), False),
         StructField('id', IntegerType(), False),
+        StructField('int_fixed_size_list', ArrayType(IntegerType(), False), False),
         StructField('string', StringType(), False),
         StructField('string2', StringType(), False),
         StructField('timestamp', TimestampType(), False),
