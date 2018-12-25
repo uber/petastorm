@@ -20,14 +20,13 @@ import re
 from collections import namedtuple, OrderedDict
 from decimal import Decimal
 
-from petastorm.codecs import ScalarCodec
-from pyspark.sql.types import StringType, ShortType, LongType, IntegerType, BooleanType, DoubleType, ByteType, \
-    FloatType, DecimalType
 import numpy as np
-import pyarrow
-
 from pyspark import Row
+from pyspark.sql.types import StringType, ShortType, LongType, IntegerType, BooleanType, DoubleType, ByteType, \
+    FloatType, DecimalType, DateType, TimestampType
 from pyspark.sql.types import StructField, StructType
+
+from petastorm.codecs import ScalarCodec
 
 
 def _fields_as_tuple(field):
@@ -222,42 +221,50 @@ class Unischema(object):
         for partition_name in parquet_dataset.partitions.partition_names:
             unischema_fields.append(UnischemaField(partition_name, np.str_, (), ScalarCodec(StringType()), False))
 
+        import pyarrow.types as types
+
         for column_name in arrow_schema.names:
             arrow_field = arrow_schema.field_by_name(column_name)
             field_type = arrow_field.type
-            if field_type == pyarrow.int8():
+            if types.is_int8(field_type):
                 np_type = np.int8
                 codec = ScalarCodec(ByteType())
-            elif field_type == pyarrow.int16():
+            elif types.is_int16(field_type):
                 np_type = np.int16
                 codec = ScalarCodec(ShortType())
-            elif field_type == pyarrow.int32():
+            elif types.is_int32(field_type):
                 np_type = np.int32
                 codec = ScalarCodec(IntegerType())
-            elif field_type == pyarrow.int64():
+            elif types.is_int64(field_type):
                 np_type = np.int64
                 codec = ScalarCodec(LongType())
-            elif field_type == pyarrow.string():
+            elif types.is_string(field_type):
                 np_type = np.unicode_
                 codec = ScalarCodec(StringType())
-            elif field_type == pyarrow.bool_():
+            elif types.is_boolean(field_type):
                 np_type = np.bool_
                 codec = ScalarCodec(BooleanType())
-            elif field_type == pyarrow.float32():
+            elif types.is_float32(field_type):
                 np_type = np.float32
                 codec = ScalarCodec(FloatType())
-            elif field_type == pyarrow.float64():
+            elif types.is_float64(field_type):
                 np_type = np.float64
                 codec = ScalarCodec(DoubleType())
-            elif isinstance(field_type, pyarrow.lib.Decimal128Type):
+            elif types.is_decimal(field_type):
                 np_type = Decimal
                 codec = ScalarCodec(DecimalType(field_type.precision, field_type.scale))
-            elif field_type == pyarrow.binary():
-                np_type = np.string_
+            elif types.is_binary(field_type):
                 codec = ScalarCodec(StringType())
-            elif isinstance(field_type, pyarrow.lib.FixedSizeBinaryType):
                 np_type = np.string_
+            elif types.is_fixed_size_binary(field_type):
                 codec = ScalarCodec(StringType())
+                np_type = np.string_
+            elif types.is_date(field_type):
+                np_type = np.datetime64
+                codec = ScalarCodec(DateType())
+            elif types.is_timestamp(field_type):
+                np_type = np.datetime64
+                codec = ScalarCodec(TimestampType())
             else:
                 raise ValueError('Cannot auto-create unischema due to unsupported column type {}'.format(field_type))
 
