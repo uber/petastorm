@@ -4,6 +4,25 @@
 Release notes
 =============
 
+
+Release 0.5.1
+=============
+
+Breaking changes
+----------------
+None
+
+New features and bug fixes
+--------------------------
+- ``make_batch_reader`` and ``make_reader`` now take an optional ``schema_fields`` argument. The argument may contain
+  a list of field names or regular expression patterns that define a set of columns loaded from a parquet store.
+- The following data types are now supported when opening a non-Petastorm Parquet store using ``make_batch_reader``:
+
+  - ``DateType``
+  - ``TimestampType``
+  - ``ArrayType``
+
+
 Release 0.5.0
 =============
 
@@ -12,9 +31,10 @@ Breaking changes
 - :func:`~petastorm.reader.make_reader` should be used to create new instance of a reader.
 - It is still possible, but not recommended to use :class:`~petastorm.reader.Reader` in most cases. Its constructor arguments
   has changed:
-  -- ``training_partition`` and ``num_training_partitions`` were renamed into ``cur_shard`` and ``shard_count``.
-  -- ``shuffle`` and ``shuffle_options`` were replaced by ``shuffle_row_groups=True, shuffle_row_drop_partitions=1``
-  -- ``sequence`` argument was removed
+
+ - ``training_partition`` and ``num_training_partitions`` were renamed into ``cur_shard`` and ``shard_count``.
+ - ``shuffle`` and ``shuffle_options`` were replaced by ``shuffle_row_groups=True, shuffle_row_drop_partitions=1``
+ - ``sequence`` argument was removed
 
 
 New features and bug fixes
