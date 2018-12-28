@@ -45,18 +45,13 @@ _NUMPY_TO_TF_DTYPES_MAPPING = {
 RANDOM_SHUFFLING_QUEUE_SIZE = 'random_shuffling_queue_size'
 
 
-def _char0bug_workaround(string_tensor):
-    # CAUTION: this would unintentionally modify a string if this is a binary string that have null characters. A real
-    # solution would be to fix tensorflow bug causing this in the first place!
-    return tf.string_split(string_tensor, delimiter='\x00', skip_empty=True).values
-
-
 def _sanitize_field_tf_types(sample):
     """Takes a named tuple and casts/promotes types unknown to TF to the types that are known.
 
-    Two casts that are currently implemented
+    Three casts that are currently implemented
       - Decimal to string
       - uint16 to int32
+      - np.datetime64 to int64, as nanoseconds since unix epoch
 
     :param sample: named tuple or a dictionary
     :return: same type as the input with values casted to types supported by Tensorflow
@@ -74,10 +69,13 @@ def _sanitize_field_tf_types(sample):
             next_sample_dict[k] = str(v.normalize())
         elif isinstance(v, np.ndarray) and np.issubdtype(v.dtype, np.datetime64):
             # Convert to nanoseconds from POSIX epoch
-            next_sample_dict[k] = (v - np.datetime64('1970-01-01T00:00:00.0Z'))\
+            next_sample_dict[k] = (v - np.datetime64('1970-01-01T00:00:00.0Z')) \
                 .astype('timedelta64[ns]').astype(np.int64)
         elif isinstance(v, np.ndarray) and v.dtype == np.uint16:
             next_sample_dict[k] = v.astype(np.int32)
+        elif isinstance(v, np.ndarray) and v.dtype.type in (np.bytes_, np.unicode_):
+            if v.size != 0:
+                next_sample_dict[k] = v.tolist()
 
     # Construct object of the same type as the input
     return sample.__class__(**next_sample_dict)
@@ -182,11 +180,6 @@ def _set_shape(schema, fields_as_dict, batched_output=None):
             shape = unischema_field.shape
         # Set static shape
         fields_as_dict[k].set_shape(shape)
-
-        # Workaround trailing null characters
-        if (unischema_field.numpy_dtype == np.string_ or unischema_field.numpy_dtype == np.unicode_) \
-                and len(fields_as_dict[k].get_shape()) == 1:
-            fields_as_dict[k] = _char0bug_workaround(fields_as_dict[k])
 
 
 def _shuffling_queue(shuffling_queue_capacity, min_after_dequeue, dtypes, fields_as_list):
