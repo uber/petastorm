@@ -133,12 +133,12 @@ def _assert_fields_eq(actual, desired):
         actual = np.array([item.decode() for item in actual])
 
     if isinstance(desired, Decimal):
-        np.testing.assert_equal(desired, Decimal(actual))
+        np.testing.assert_equal(Decimal(actual), desired)
     elif issubclass(desired.dtype.type, np.datetime64):
         # tf_utils will convert timestamps to ns from epoch int64 value.
         assert desired.astype('<M8[ns]').astype(np.int64) == actual
     else:
-        np.testing.assert_equal(desired, actual)
+        np.testing.assert_equal(actual, desired)
 
 
 def _assert_expected_rows_data(expected_data, rows_data):
