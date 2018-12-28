@@ -14,6 +14,7 @@
 
 from __future__ import division
 
+import random
 from decimal import Decimal
 from functools import partial
 
@@ -44,12 +45,24 @@ TestSchema = Unischema('TestSchema', [
     UnischemaField('matrix', np.float32, _DEFAULT_IMAGE_SIZE, NdarrayCodec(), False),
     UnischemaField('decimal', Decimal, (), ScalarCodec(DecimalType(10, 9)), False),
     UnischemaField('matrix_uint16', np.uint16, _DEFAULT_IMAGE_SIZE, NdarrayCodec(), False),
-    UnischemaField('matrix_string', np.string_, (None,), NdarrayCodec(), False),
+    UnischemaField('matrix_string', np.string_, (None, None,), NdarrayCodec(), False),
     UnischemaField('empty_matrix_string', np.string_, (None,), NdarrayCodec(), False),
     UnischemaField('matrix_nullable', np.uint16, _DEFAULT_IMAGE_SIZE, NdarrayCodec(), True),
     UnischemaField('sensor_name', np.unicode_, (1,), NdarrayCodec(), False),
     UnischemaField('string_array_nullable', np.unicode_, (None,), NdarrayCodec(), True),
 ])
+
+
+def _random_binary_string_gen(max_length):
+    """Returns a single random string up to max_length specified length that may include \x00 character anywhere in the
+    string"""
+    size = random.randint(0, max_length)
+    return ''.join(random.choice(('\x00', 'A', 'B')) for _ in range(size))
+
+
+def _random_binary_string_matrix(rows, cols, max_length):
+    """Returns a list of lists of random strings"""
+    return [[_random_binary_string_gen(max_length) for _ in range(cols)] for _ in range(rows)]
 
 
 def _randomize_row(id_num):
@@ -65,7 +78,7 @@ def _randomize_row(id_num):
         TestSchema.matrix.name: np.random.random(size=_DEFAULT_IMAGE_SIZE).astype(np.float32),
         TestSchema.decimal.name: Decimal(np.random.randint(0, 255) / Decimal(100)),
         TestSchema.matrix_uint16.name: np.random.randint(0, 255, _DEFAULT_IMAGE_SIZE).astype(np.uint16),
-        TestSchema.matrix_string.name: np.random.randint(0, 100, (4,)).astype(np.string_),
+        TestSchema.matrix_string.name: np.asarray(_random_binary_string_matrix(2, 3, 10)).astype(np.bytes_),
         TestSchema.empty_matrix_string.name: np.asarray([], dtype=np.string_),
         TestSchema.matrix_nullable.name: None,
         TestSchema.sensor_name.name: np.asarray(['test_sensor'], dtype=np.unicode_),
