@@ -30,6 +30,7 @@ with io.open('petastorm/__init__.py', 'rt', encoding='utf8') as f:
         raise ImportError('Could not find __version__ in petastorm/__init__.py')
 
 REQUIRED_PACKAGES = [
+    'dill>=0.2.1',
     'diskcache>=3.0.0',
     'numpy>=1.13.3',
     'pandas>=0.19.0',

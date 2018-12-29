@@ -36,6 +36,7 @@ from petastorm.reader_impl.reader_v2 import ReaderV2
 from petastorm.reader_impl.same_thread_executor import SameThreadExecutor
 from petastorm.reader_impl.shuffling_buffer import NoopShufflingBuffer, RandomShufflingBuffer
 from petastorm.selectors import RowGroupSelectorBase
+from petastorm.transform import transform_schema
 from petastorm.workers_pool.dummy_pool import DummyPool
 from petastorm.workers_pool.process_pool import ProcessPool
 from petastorm.workers_pool.thread_pool import ThreadPool
@@ -62,7 +63,8 @@ def make_reader(dataset_url,
                 cache_type='null', cache_location=None, cache_size_limit=None,
                 cache_row_size_estimate=None, cache_extra_settings=None,
                 hdfs_driver='libhdfs3',
-                reader_engine='reader_v1', reader_engine_params=None):
+                reader_engine='reader_v1', reader_engine_params=None,
+                transform_spec=None):
     """
     Creates an instance of Reader for reading Petastorm datasets. A Petastorm dataset is a dataset generated using
     :func:`~petastorm.etl.dataset_metadata.materialize_dataset` context manager as explained
@@ -114,6 +116,9 @@ def make_reader(dataset_url,
     :param reader_engine_params: For advanced usage: a dictionary with arguments passed directly to a reader
         implementation constructor chosen by ``reader_engine`` argument.  You should not use this parameter, unless you
         fine-tuning of a reader.
+    :param transform_spec: An instance of :class:`~petastorm.transform.TransformSpec` object defining how a record
+        is transformed after it is loaded and decoded. The transformation occurs on a worker thread/process (depends
+        on the ``reader_pool_type`` value).
     :return: A :class:`Reader` object
     """
 
@@ -169,6 +174,7 @@ def make_reader(dataset_url,
             'cur_shard': cur_shard,
             'shard_count': shard_count,
             'cache': cache,
+            'transform_spec': transform_spec,
         }
 
         if reader_engine_params:
@@ -186,6 +192,9 @@ def make_reader(dataset_url,
                                'Inner exception: %s', str(e))
 
     elif reader_engine == 'experimental_reader_v2':
+        if transform_spec:
+            raise NotImplementedError('experimental_reader_v2 reader engine does not support transforms for now.')
+
         if reader_pool_type == 'thread':
             decoder_pool = ThreadPoolExecutor(workers_count)
         elif reader_pool_type == 'process':
@@ -335,7 +344,8 @@ class Reader(object):
     def __init__(self, pyarrow_filesystem, dataset_path, schema_fields=None,
                  shuffle_row_groups=True, shuffle_row_drop_partitions=1,
                  predicate=None, rowgroup_selector=None, reader_pool=None, num_epochs=1,
-                 cur_shard=None, shard_count=None, cache=None, worker_class=None):
+                 cur_shard=None, shard_count=None, cache=None, worker_class=None,
+                 transform_spec=None):
         """Initializes a reader object.
 
         :param pyarrow_filesystem: An instance of ``pyarrow.FileSystem`` that will be used. If not specified,
@@ -410,7 +420,11 @@ class Reader(object):
         # Make a schema view (a view is a Unischema containing only a subset of fields
         # Will raise an exception if invalid schema fields are in schema_fields
         fields = schema_fields if isinstance(schema_fields, collections.Iterable) else None
-        self.schema = stored_schema.create_schema_view(fields) if fields else stored_schema
+        storage_schema = stored_schema.create_schema_view(fields) if fields else stored_schema
+        if transform_spec:
+            self.schema = transform_schema(storage_schema, transform_spec)
+        else:
+            self.schema = storage_schema
 
         # 2. Get a list of all row groups
         row_groups = dataset_metadata.load_row_groups(self.dataset)
@@ -427,8 +441,8 @@ class Reader(object):
                                              self._workers_pool.workers_count + _VENTILATE_EXTRA_ROWGROUPS)
 
         # 5. Start workers pool
-        self._workers_pool.start(worker_class,
-                                 (pyarrow_filesystem, dataset_path, self.schema, self.ngram, row_groups, cache),
+        self._workers_pool.start(worker_class, (pyarrow_filesystem, dataset_path, storage_schema, self.ngram,
+                                                row_groups, cache, transform_spec),
                                  ventilator=ventilator)
         logger.debug('Workers pool started')
 

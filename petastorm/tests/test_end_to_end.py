@@ -21,10 +21,10 @@ import pytest
 from pyspark.sql import SparkSession
 from pyspark.sql.types import LongType, ShortType, StringType
 
-from petastorm import make_reader
+from petastorm import make_reader, make_batch_reader, TransformSpec
 from petastorm.codecs import ScalarCodec
 from petastorm.etl.dataset_metadata import materialize_dataset
-from petastorm.reader import ReaderV2, make_batch_reader
+from petastorm.reader import ReaderV2
 from petastorm.reader_impl.same_thread_executor import SameThreadExecutor
 from petastorm.selectors import SingleIndexSelector
 from petastorm.tests.test_common import create_test_dataset, TestSchema
@@ -55,7 +55,7 @@ SCALAR_ONLY_READER_FACTORIES = [
 ]
 
 
-def _check_simple_reader(reader, expected_data, expected_rows_count=None, check_types=True):
+def _check_simple_reader(reader, expected_data, expected_rows_count=None, check_types=True, limit_checked_rows=None):
     # Read a bunch of entries from the dataset and compare the data to reference
     def _type(v):
         if isinstance(v, np.ndarray):
@@ -69,7 +69,10 @@ def _check_simple_reader(reader, expected_data, expected_rows_count=None, check_
     expected_rows_count = expected_rows_count or len(expected_data)
     count = 0
 
-    for row in reader:
+    for i, row in enumerate(reader):
+        if limit_checked_rows and i >= limit_checked_rows:
+            break
+
         actual = row._asdict()
         expected = next(d for d in expected_data if d['id'] == actual['id'])
         np.testing.assert_equal(actual, expected)
@@ -78,7 +81,10 @@ def _check_simple_reader(reader, expected_data, expected_rows_count=None, check_
         assert not check_types or actual_types == expected_types
         count += 1
 
-    assert count == expected_rows_count
+    if limit_checked_rows:
+        assert count == min(expected_rows_count, limit_checked_rows)
+    else:
+        assert count == expected_rows_count
 
 
 def _readout_all_ids(reader, limit=None):
@@ -100,6 +106,45 @@ def test_simple_read(synthetic_dataset, reader_factory):
     """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
     with reader_factory(synthetic_dataset.url) as reader:
         _check_simple_reader(reader, synthetic_dataset.data)
+
+
+@pytest.mark.parametrize('reader_factory', [
+    lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
+])
+def test_transform_function(synthetic_dataset, reader_factory):
+    """"""
+
+    def double_matrix(sample):
+        sample['matrix'] *= 2
+        return sample
+
+    with reader_factory(synthetic_dataset.url, schema_fields=[TestSchema.id, TestSchema.matrix],
+                        transform_spec=TransformSpec(double_matrix)) as reader:
+        actual = next(reader)
+        original_sample = next(d for d in synthetic_dataset.data if d['id'] == actual.id)
+        expected_matrix = original_sample['matrix'] * 2
+        np.testing.assert_equal(expected_matrix, actual.matrix)
+
+
+@pytest.mark.parametrize('reader_factory', [
+    lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
+])
+def test_transform_function_new_field(synthetic_dataset, reader_factory):
+    """"""
+
+    def double_matrix(sample):
+        sample['double_matrix'] = sample['matrix'] * 2
+        del sample['matrix']
+        return sample
+
+    with reader_factory(synthetic_dataset.url, schema_fields=[TestSchema.id, TestSchema.matrix],
+                        transform_spec=TransformSpec(double_matrix,
+                                                     [('double_matrix', np.float32, (32, 16, 3), False)],
+                                                     ['matrix'])) as reader:
+        actual = next(reader)
+        original_sample = next(d for d in synthetic_dataset.data if d['id'] == actual.id)
+        expected_matrix = original_sample['matrix'] * 2
+        np.testing.assert_equal(expected_matrix, actual.double_matrix)
 
 
 def test_simple_read_with_pyarrow_serialize(synthetic_dataset):

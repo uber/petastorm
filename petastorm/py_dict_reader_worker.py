@@ -86,6 +86,7 @@ class PyDictReaderWorker(WorkerBase):
         self._ngram = args[3]
         self._split_pieces = args[4]
         self._local_cache = args[5]
+        self._transform_spec = args[6]
 
         # We create datasets lazily in the first invocation of 'def process'. This speeds up startup time since
         # all Worker constructors are serialized
@@ -156,7 +157,8 @@ class PyDictReaderWorker(WorkerBase):
 
         all_rows = self._read_with_shuffle_row_drop(piece, pq_file, column_names, shuffle_row_drop_range)
 
-        return [utils.decode_row(row, self._schema) for row in all_rows]
+        transform_func = self._transform_spec.func if self._transform_spec else (lambda x: x)
+        return [transform_func(utils.decode_row(row, self._schema)) for row in all_rows]
 
     def _load_rows_with_predicate(self, pq_file, piece, worker_predicate, shuffle_row_drop_partition):
         """Loads all rows that match a predicate from a piece"""
@@ -187,8 +189,10 @@ class PyDictReaderWorker(WorkerBase):
                                                           shuffle_row_drop_partition)
 
         # Decode values
-        decoded_predicate_rows = [utils.decode_row(_select_cols(row, predicate_column_names), self._schema)
-                                  for row in predicate_rows]
+        transform_func = self._transform_spec.func if self._transform_spec else (lambda x: x)
+        decoded_predicate_rows = [
+            transform_func(utils.decode_row(_select_cols(row, predicate_column_names), self._schema))
+            for row in predicate_rows]
 
         # Use the predicate to filter
         match_predicate_mask = [worker_predicate.do_include(row) for row in decoded_predicate_rows]
