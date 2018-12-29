@@ -19,6 +19,8 @@ import subprocess
 import sys
 from tempfile import mkstemp
 
+import dill
+
 logger = logging.getLogger(__name__)
 
 
@@ -35,7 +37,7 @@ def exec_in_new_process(func, *args, **kargs):
     # Store function handle and arguments into a pickle
     new_process_runnable_handle, new_process_runnable_file = mkstemp(suffix='runnable')
     with os.fdopen(new_process_runnable_handle, 'wb') as f:
-        pickle.dump((func, args, kargs), f)
+        dill.dump((func, args, kargs), f)
 
     bootstrap_package_name = '{}.{}'.format(__package__, os.path.splitext(os.path.basename(__file__))[0])
     # Popen this script (__main__) below will be an entry point

@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 import tensorflow as tf
 
-from petastorm import make_reader, make_batch_reader
+from petastorm import make_reader, make_batch_reader, TransformSpec
 from petastorm.ngram import NGram
 from petastorm.tests.test_common import TestSchema
 from petastorm.tf_utils import _sanitize_field_tf_types, _numpy_to_tf_dtypes, \
@@ -289,3 +289,22 @@ def test_shuffling_queue_with_make_batch_reader(scalar_dataset):
     with make_batch_reader(dataset_url=scalar_dataset.url) as reader:
         with pytest.raises(ValueError):
             tf_tensors(reader, 100, 90)
+
+
+def test_transform_function_new_field(synthetic_dataset):
+    def double_matrix(sample):
+        sample['double_matrix'] = sample['matrix'] * 2
+        del sample['matrix']
+        return sample
+
+    with make_reader(synthetic_dataset.url, reader_pool_type='dummy', schema_fields=[TestSchema.id, TestSchema.matrix],
+                     transform_spec=TransformSpec(double_matrix,
+                                                  [('double_matrix', np.float32, (32, 16, 3), False)],
+                                                  ['matrix'])) as reader:
+        row_tensors = tf_tensors(reader)
+        with _tf_session() as sess:
+            actual = sess.run(row_tensors)
+
+        original_sample = next(d for d in synthetic_dataset.data if d['id'] == actual.id)
+        expected_matrix = original_sample['matrix'] * 2
+        np.testing.assert_equal(expected_matrix, actual.double_matrix)
