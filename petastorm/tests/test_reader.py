@@ -16,7 +16,7 @@ from time import sleep
 import pyarrow.parquet as pq
 import pytest
 
-from petastorm import make_reader
+from petastorm import make_reader, TransformSpec
 from petastorm.reader import Reader
 
 # pylint: disable=unnecessary-lambda
@@ -94,3 +94,10 @@ def test_invalid_reader_pool_type(synthetic_dataset, reader_factory):
 def test_invalid_reader_engine(synthetic_dataset, reader_factory):
     with pytest.raises(ValueError, match='Supported reader_engine values'):
         make_reader(synthetic_dataset.url, reader_engine='bogus reader engine')
+
+
+@pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+def test_reader_engine_v2_with_transform_is_not_supported(synthetic_dataset, reader_factory):
+    with pytest.raises(NotImplementedError):
+        make_reader(synthetic_dataset.url, reader_engine='experimental_reader_v2',
+                    transform_spec=TransformSpec(lambda x: x))
