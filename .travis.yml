@@ -88,6 +88,7 @@ script:
   - $RUN $PYTEST
       examples/mnist/tests/test_pytorch_mnist.py
       petastorm/tests/test_pytorch_dataloader.py
+      petastorm/tests/test_pytorch_utils.py
 
 after_success:
   - codecov
