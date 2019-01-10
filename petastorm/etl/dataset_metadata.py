@@ -69,12 +69,27 @@ def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_
     >>> indexer = [SingleFieldIndexer(...)]
     >>> build_rowgroup_index(ds_url, spark.sparkContext, indexer)
 
+    A user may provide their own instance of pyarrow filesystem object in ``pyarrow_filesystem`` argument (otherwise,
+    petastorm will create a default one based on the url).
+
+    The following example shows how a custom pyarrow HDFS filesystem, instantiated using ``libhdfs`` driver can be used
+    during Petastorm dataset generation:
+
+    >>> resolver=FilesystemResolver(dataset_url, spark.sparkContext._jsc.hadoopConfiguration(),
+    >>>                             hdfs_driver='libhdfs')
+    >>> with materialize_dataset(..., pyarrow_filesystem=resolver.filesystem()):
+    >>>     ...
+
+
     :param spark: The spark session you are using
     :param dataset_url: The dataset url to output your dataset to (e.g. ``hdfs:///path/to/dataset``)
     :param schema: The :class:`petastorm.unischema.Unischema` definition of your dataset
     :param row_group_size_mb: The parquet row group size to use for your dataset
     :param use_summary_metadata: Whether to use the parquet summary metadata for row group indexing or a custom
-            indexing method. The custom indexing method is more scalable for very large datasets.
+      indexing method. The custom indexing method is more scalable for very large datasets.
+    :param pyarrow_filesystem: A pyarrow filesystem object to be used when saving Petastorm specific metadata to the
+      Parquet store.
+
     """
     spark_config = {}
     _init_spark(spark, spark_config, row_group_size_mb, use_summary_metadata)
