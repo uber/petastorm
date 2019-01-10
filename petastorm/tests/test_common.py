@@ -142,6 +142,7 @@ def create_test_dataset(tmp_url, rows, num_files=2, spark=None):
         SingleFieldIndexer(TestSchema.id.name, TestSchema.id.name),
         SingleFieldIndexer(TestSchema.sensor_name.name, TestSchema.sensor_name.name),
         SingleFieldIndexer(TestSchema.string_array_nullable.name, TestSchema.string_array_nullable.name),
+        SingleFieldIndexer(TestSchema.partition_key.name, TestSchema.partition_key.name),
     ]
     build_rowgroup_index(tmp_url, spark_context, indexers)
 
