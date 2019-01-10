@@ -461,6 +461,16 @@ def test_rowgroup_selector_nullable_array_field(synthetic_dataset, reader_factor
 
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
+def test_rowgroup_selector_partition_key(synthetic_dataset, reader_factory):
+    """ Select row groups to read based on dataset index for array field"""
+    with reader_factory(synthetic_dataset.url,
+                        rowgroup_selector=SingleIndexSelector(TestSchema.partition_key.name,
+                                                              ['p_1'])) as reader:
+        count = sum(1 for _ in reader)
+        assert 10 == count
+
+
+@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
 def test_rowgroup_selector_wrong_index_name(synthetic_dataset, reader_factory):
     """ Attempt to select row groups to based on wrong dataset index,
         Reader should raise exception
