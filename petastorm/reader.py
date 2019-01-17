@@ -138,7 +138,7 @@ def make_reader(dataset_url,
     # rowgroup. Using PyDictReaderWorker or ReaderV2 implementation is very inefficient as it processes data on a
     # row by row basis. ArrowReaderWorker (used by make_batch_reader) is much more efficient in these cases.
     try:
-        dataset_metadata.get_schema_from_dataset_url(dataset_url)
+        dataset_metadata.get_schema_from_dataset_url(dataset_url, hdfs_driver=hdfs_driver)
     except PetastormMetadataError:
         raise RuntimeError('Currently make_reader supports reading only Petastorm datasets. '
                            'To read from a non-Petastorm Parquet store use make_batch_reader')

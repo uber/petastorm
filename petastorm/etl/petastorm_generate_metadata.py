@@ -44,7 +44,8 @@ spark-submit \\
 '''
 
 
-def generate_petastorm_metadata(spark, dataset_url, unischema_class=None, use_summary_metadata=False):
+def generate_petastorm_metadata(spark, dataset_url, unischema_class=None, use_summary_metadata=False,
+                                hdfs_driver='libhdfs3'):
     """
     Generates metadata necessary to read a petastorm dataset to an existing dataset.
 
@@ -53,13 +54,16 @@ def generate_petastorm_metadata(spark, dataset_url, unischema_class=None, use_su
     :param unischema_class: (optional) fully qualified dataset unischema class. If not specified will attempt
         to find one already in the dataset. (e.g.
         :class:`examples.hello_world.generate_hello_world_dataset.HelloWorldSchema`)
+    :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
+        libhdfs (java through JNI) or libhdfs3 (C++)
     """
     sc = spark.sparkContext
 
-    resolver = FilesystemResolver(dataset_url, sc._jsc.hadoopConfiguration())
+    resolver = FilesystemResolver(dataset_url, sc._jsc.hadoopConfiguration(), hdfs_driver=hdfs_driver)
+    fs = resolver.filesystem()
     dataset = pq.ParquetDataset(
         resolver.get_dataset_path(),
-        filesystem=resolver.filesystem(),
+        filesystem=fs,
         validate_schema=False)
 
     if unischema_class:
@@ -79,7 +83,8 @@ def generate_petastorm_metadata(spark, dataset_url, unischema_class=None, use_su
     # overwriting the metadata to keep row group indexes and the old row group per file index
     arrow_metadata = dataset.common_metadata or None
 
-    with materialize_dataset(spark, dataset_url, schema, use_summary_metadata=use_summary_metadata):
+    with materialize_dataset(spark, dataset_url, schema, use_summary_metadata=use_summary_metadata,
+                             pyarrow_filesystem=fs):
         if use_summary_metadata:
             # Inside the materialize dataset context we just need to write the metadata file as the schema will
             # be written by the context manager.
@@ -124,6 +129,9 @@ def _main(args):
     parser.add_argument('--use-summary-metadata', action='store_true',
                         help='Whether to use the parquet summary metadata format.'
                              ' Not scalable for large amounts of columns and/or row groups.')
+    parser.add_argument('--hdfs-driver', type=str,
+                        help='A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are' \
+                             'libhdfs (java through JNI) or libhdfs3 (C++)')
     args = parser.parse_args(args)
 
     # Open Spark Session
@@ -136,7 +144,8 @@ def _main(args):
 
     spark = spark_session.getOrCreate()
 
-    generate_petastorm_metadata(spark, args.dataset_url, args.unischema_class, args.use_summary_metadata)
+    generate_petastorm_metadata(spark, args.dataset_url, args.unischema_class, args.use_summary_metadata,
+                                hdfs_driver=args.hdfs_driver)
 
     # Shut down the spark sessions and context
     spark.stop()

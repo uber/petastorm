@@ -35,12 +35,14 @@ ROWGROUPS_INDEX_KEY = b'dataset-toolkit.rowgroups_index.v1'
 PieceInfo = namedtuple('PieceInfo', ['piece_index', 'path', 'row_group', 'partition_keys'])
 
 
-def build_rowgroup_index(dataset_url, spark_context, indexers):
+def build_rowgroup_index(dataset_url, spark_context, indexers, hdfs_driver='libhdfs3'):
     """
     Build index for given list of fields to use for fast rowgroup selection
     :param dataset_url: (str) the url for the dataset (or a path if you would like to use the default hdfs config)
     :param spark_context: (SparkContext)
     :param indexers: list of objects to build row groups indexes. Should support RowGroupIndexerBase interface
+    :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
+    libhdfs (java through JNI) or libhdfs3 (C++)
     :return: None, upon successful completion the rowgroup predicates will be saved to _metadata file
     """
 
@@ -48,7 +50,7 @@ def build_rowgroup_index(dataset_url, spark_context, indexers):
         dataset_url = dataset_url[:-1]
 
     # Create pyarrow file system
-    resolver = FilesystemResolver(dataset_url, spark_context._jsc.hadoopConfiguration())
+    resolver = FilesystemResolver(dataset_url, spark_context._jsc.hadoopConfiguration(), hdfs_driver=hdfs_driver)
     dataset = pq.ParquetDataset(resolver.get_dataset_path(), filesystem=resolver.filesystem(),
                                 validate_schema=False)
 
@@ -69,7 +71,7 @@ def build_rowgroup_index(dataset_url, spark_context, indexers):
     start_time = time.time()
     piece_info_rdd = spark_context.parallelize(piece_info_list, min(len(piece_info_list), PARALLEL_SLICE_NUM))
     indexer_rdd = piece_info_rdd.map(lambda piece_info: _index_columns(piece_info, dataset_url, partitions,
-                                                                       indexers, schema))
+                                                                       indexers, schema, hdfs_driver=hdfs_driver))
     indexer_list = indexer_rdd.reduce(_combine_indexers)
 
     indexer_dict = {indexer.index_name: indexer for indexer in indexer_list}
@@ -78,7 +80,7 @@ def build_rowgroup_index(dataset_url, spark_context, indexers):
     logger.info("Elapsed time of index creation: %f s", (time.time() - start_time))
 
 
-def _index_columns(piece_info, dataset_url, partitions, indexers, schema):
+def _index_columns(piece_info, dataset_url, partitions, indexers, schema, hdfs_driver='libhdfs3'):
     """
     Function build indexes for  dataset piece described in piece_info
     :param piece_info: description of dataset piece
@@ -86,6 +88,8 @@ def _index_columns(piece_info, dataset_url, partitions, indexers, schema):
     :param partitions: dataset partitions
     :param indexers: list of indexer objects
     :param schema: dataset schema
+    :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
+        libhdfs (java through JNI) or libhdfs3 (C++)
     :return: list of indexers containing index data
     """
     # Create pyarrow piece
@@ -98,7 +102,7 @@ def _index_columns(piece_info, dataset_url, partitions, indexers, schema):
 
     # Read columns needed for indexing
     # Resolver in executor context will get hadoop config from environment
-    resolver = FilesystemResolver(dataset_url)
+    resolver = FilesystemResolver(dataset_url, hdfs_driver=hdfs_driver)
     column_rows = piece.read(
         open_file_func=resolver.filesystem().open,
         columns=list(column_names),

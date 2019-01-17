@@ -20,20 +20,23 @@ from petastorm.etl.dataset_metadata import get_schema_from_dataset_url
 from petastorm.fs_utils import FilesystemResolver
 
 
-def dataset_as_rdd(dataset_url, spark_session, schema_fields=None):
+def dataset_as_rdd(dataset_url, spark_session, schema_fields=None, hdfs_driver='libhdfs3'):
     """
     Retrieve a spark rdd for a given petastorm dataset
 
     :param dataset_url: A string for the dataset url (e.g. hdfs:///path/to/dataset)
     :param spark_session: A spark session
     :param schema_fields: list of unischema fields to subset, or None to read all fields.
+    :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
+        libhdfs (java through JNI) or libhdfs3 (C++)
     :return: A rdd of dictionary records from the dataset
     """
-    schema = get_schema_from_dataset_url(dataset_url)
+    schema = get_schema_from_dataset_url(dataset_url, hdfs_driver=hdfs_driver)
 
     dataset_url_parsed = urlparse(dataset_url)
 
-    resolver = FilesystemResolver(dataset_url_parsed, spark_session.sparkContext._jsc.hadoopConfiguration())
+    resolver = FilesystemResolver(dataset_url_parsed, spark_session.sparkContext._jsc.hadoopConfiguration(),
+                                  hdfs_driver=hdfs_driver)
 
     dataset_df = spark_session.read.parquet(resolver.get_dataset_path())
     if schema_fields is not None:
