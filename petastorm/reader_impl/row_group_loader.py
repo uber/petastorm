@@ -43,7 +43,7 @@ def _select_cols(a_dict, keys):
 
 
 class RowGroupLoader(object):
-    def __init__(self, dataset_url, schema, ngram, local_cache, worker_predicate):
+    def __init__(self, dataset_url, schema, ngram, local_cache, worker_predicate, hdfs_driver='libhdfs3'):
         """RowGroupLoader responsible for loading one rowgroup at a time. Rows returned are returned encoded.
 
         :param dataset_url: A url of a parquet dataset.
@@ -52,6 +52,8 @@ class RowGroupLoader(object):
           a single sample returned.
         :param local_cache: An instance of a rowgroup cache (CacheBase interface) object to be used.
         :param worker_predicate: An instance of predicate (PredicateBase interface)
+        :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
+        libhdfs (java through JNI) or libhdfs3 (C++)
         """
         self._dataset_url_parsed = urlparse(dataset_url)
         self._schema = schema
@@ -59,7 +61,7 @@ class RowGroupLoader(object):
         self._local_cache = local_cache
         self._worker_predicate = worker_predicate
 
-        resolver = FilesystemResolver(self._dataset_url_parsed)
+        resolver = FilesystemResolver(self._dataset_url_parsed, hdfs_driver=hdfs_driver)
         self._dataset = pq.ParquetDataset(
             resolver.get_dataset_path(),
             filesystem=resolver.filesystem(),

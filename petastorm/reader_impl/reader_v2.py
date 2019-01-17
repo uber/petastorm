@@ -46,7 +46,7 @@ class ReaderV2(object):
     def __init__(self, dataset_url, schema_fields=None, predicate=None, rowgroup_selector=None,
                  num_epochs=1, sequence=None, cur_shard=None, shard_count=None,
                  read_timeout_s=None, cache=None, loader_pool=None, decoder_pool=None, shuffling_queue=None,
-                 shuffle_row_groups=True, shuffle_row_drop_partitions=1, pyarrow_filesystem=None):
+                 shuffle_row_groups=True, shuffle_row_drop_partitions=1, pyarrow_filesystem=None, hdfs_driver='libhdfs3'):
         """Initializes a reader object.
 
         :param dataset_url: an filepath or a url to a parquet directory,
@@ -77,6 +77,8 @@ class ReaderV2(object):
           a default ThreadPoolExecutor(5) will be used.
         :param loader_pool: An instance of a concurrent.futures pool executor used for decoding. If None,
           a default ThreadPoolExecutor(5) will be used.
+        :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
+        libhdfs (java through JNI) or libhdfs3 (C++)
 
         By default, `NullCache` implementation
         """
@@ -153,7 +155,7 @@ class ReaderV2(object):
 
         self._results_queue = Queue(_OUTPUT_QUEUE_SIZE)
 
-        loader = RowGroupLoader(dataset_url, self.schema, self.ngram, cache, worker_predicate)
+        loader = RowGroupLoader(dataset_url, self.schema, self.ngram, cache, worker_predicate, hdfs_driver=hdfs_driver)
         decoder = RowDecoder(self.schema, self.ngram)
         self._loader_pool = loader_pool or ThreadPoolExecutor(5)
         self._decoder_pool = decoder_pool or ThreadPoolExecutor(5)
