@@ -30,9 +30,11 @@ from petastorm.etl.dataset_metadata import materialize_dataset, get_schema_from_
 from petastorm.tools.spark_session_cli import add_configure_spark_arguments, configure_spark
 from petastorm.fs_utils import FilesystemResolver
 
+
 def copy_dataset(spark, source_url, target_url, field_regex, not_null_fields, overwrite_output, partitions_count,
                  row_group_size_mb, hdfs_driver='libhdfs3'):
-    """Creates a copy of a dataset. A new dataset will optionally contain a subset of columns. Rows that have NULL
+    """
+    Creates a copy of a dataset. A new dataset will optionally contain a subset of columns. Rows that have NULL
     values in fields defined by ``not_null_fields`` argument are filtered out.
 
 
@@ -114,8 +116,8 @@ def args_parser():
     parser.add_argument('--row-group-size-mb', type=int, required=False,
                         help='Specifies the row group size in the created dataset')
     parser.add_argument('--hdfs-driver', type=str,
-                        help='A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are' \
-                             'libhdfs (java through JNI) or libhdfs3 (C++)')
+                        help='A string denoting the hdfs driver to use (if using a dataset on hdfs). '
+                             'Current choices are libhdfs (java through JNI) or libhdfs3 (C++)')
 
     add_configure_spark_arguments(parser)
 

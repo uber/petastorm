@@ -130,8 +130,8 @@ def _main(args):
                         help='Whether to use the parquet summary metadata format.'
                              ' Not scalable for large amounts of columns and/or row groups.')
     parser.add_argument('--hdfs-driver', type=str,
-                        help='A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are' \
-                             'libhdfs (java through JNI) or libhdfs3 (C++)')
+                        help='A string denoting the hdfs driver to use (if using a dataset on hdfs). '
+                             'Current choices are libhdfs (java through JNI) or libhdfs3 (C++)')
     args = parser.parse_args(args)
 
     # Open Spark Session
