@@ -36,7 +36,7 @@ if __name__ == "__main__":
                         help='Print index values (dataset piece indexes)')
     parser.add_argument('--skip-index', nargs='+', type=str,
                         help='Donot display indexed values for given fields')
-    parser.add_argument('--hdfs-driver', type=str,
+    parser.add_argument('--hdfs-driver', type=str, default='libhdfs3',
                         help='A string denoting the hdfs driver to use (if using a dataset on hdfs). '
                              'Current choices are libhdfs (java through JNI) or libhdfs3 (C++)')
 
