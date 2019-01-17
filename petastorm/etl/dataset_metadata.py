@@ -365,13 +365,15 @@ def get_schema(dataset):
     return schema
 
 
-def get_schema_from_dataset_url(dataset_url):
+def get_schema_from_dataset_url(dataset_url, hdfs_driver='libhdfs3'):
     """Returns a :class:`petastorm.unischema.Unischema` object loaded from a dataset specified by a url.
 
     :param dataset_url: A dataset URL
+    :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
+        libhdfs (java through JNI) or libhdfs3 (C++)
     :return: A :class:`petastorm.unischema.Unischema` object
     """
-    resolver = FilesystemResolver(dataset_url)
+    resolver = FilesystemResolver(dataset_url, hdfs_driver=hdfs_driver)
     dataset = pq.ParquetDataset(resolver.get_dataset_path(), filesystem=resolver.filesystem(),
                                 validate_schema=False)
 

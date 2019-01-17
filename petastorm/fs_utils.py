@@ -41,6 +41,8 @@ class FilesystemResolver(object):
         :param dataset_url: The hdfs URL or absolute path to the dataset
         :param hadoop_configuration: an optional hadoop configuration
         :param connector: the HDFS connector object to use (ONLY override for testing purposes)
+        :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
+        libhdfs (java through JNI) or libhdfs3 (C++)
         """
         # Cache both the original URL and the resolved, urlparsed dataset_url
         self._dataset_url = dataset_url

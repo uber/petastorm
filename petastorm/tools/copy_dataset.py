@@ -28,10 +28,10 @@ from pyspark.sql import SparkSession
 from petastorm.unischema import match_unischema_fields
 from petastorm.etl.dataset_metadata import materialize_dataset, get_schema_from_dataset_url
 from petastorm.tools.spark_session_cli import add_configure_spark_arguments, configure_spark
-
+from petastorm.fs_utils import FilesystemResolver
 
 def copy_dataset(spark, source_url, target_url, field_regex, not_null_fields, overwrite_output, partitions_count,
-                 row_group_size_mb):
+                 row_group_size_mb, hdfs_driver='libhdfs3'):
     """Creates a copy of a dataset. A new dataset will optionally contain a subset of columns. Rows that have NULL
     values in fields defined by ``not_null_fields`` argument are filtered out.
 
@@ -47,9 +47,11 @@ def copy_dataset(spark, source_url, target_url, field_regex, not_null_fields, ov
     :param partitions_count: If not ``None``, the dataset is repartitioned before write. Number of files in the target
       Parquet store is defined by this parameter.
     :param row_group_size_mb: The size of the rowgroup in the target dataset. Specified in megabytes.
+    :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
+        libhdfs (java through JNI) or libhdfs3 (C++)
     :return: None
     """
-    schema = get_schema_from_dataset_url(source_url)
+    schema = get_schema_from_dataset_url(source_url, hdfs_driver=hdfs_driver)
 
     fields = match_unischema_fields(schema, field_regex)
 
@@ -62,7 +64,8 @@ def copy_dataset(spark, source_url, target_url, field_regex, not_null_fields, ov
     else:
         subschema = schema
 
-    with materialize_dataset(spark, target_url, subschema, row_group_size_mb):
+    resolver = FilesystemResolver(target_url, spark.sparkContext._jsc.hadoopConfiguration(), hdfs_driver=hdfs_driver)
+    with materialize_dataset(spark, target_url, subschema, row_group_size_mb, pyarrow_filesystem=resolver.filesystem()):
         data_frame = spark.read \
             .parquet(source_url)
 
@@ -110,6 +113,9 @@ def args_parser():
 
     parser.add_argument('--row-group-size-mb', type=int, required=False,
                         help='Specifies the row group size in the created dataset')
+    parser.add_argument('--hdfs-driver', type=str,
+                        help='A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are' \
+                             'libhdfs (java through JNI) or libhdfs3 (C++)')
 
     add_configure_spark_arguments(parser)
 
@@ -129,7 +135,7 @@ def _main(sys_argv):
         .getOrCreate()
 
     copy_dataset(spark, args.source_url, args.target_url, args.field_regex, args.not_null_fields, args.overwrite_output,
-                 args.partition_count, args.row_group_size_mb)
+                 args.partition_count, args.row_group_size_mb, hdfs_driver=args.hdfs_driver)
 
     spark.stop()
 

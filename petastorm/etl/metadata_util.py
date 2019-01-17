@@ -36,6 +36,9 @@ if __name__ == "__main__":
                         help='Print index values (dataset piece indexes)')
     parser.add_argument('--skip-index', nargs='+', type=str,
                         help='Donot display indexed values for given fields')
+    parser.add_argument('--hdfs-driver', type=str,
+                        help='A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are' \
+                             'libhdfs (java through JNI) or libhdfs3 (C++)')
 
     args = parser.parse_args()
 
@@ -43,7 +46,7 @@ if __name__ == "__main__":
         args.dataset_url = args.dataset_url[:-1]
 
     # Create pyarrow file system
-    resolver = FilesystemResolver(args.dataset_url)
+    resolver = FilesystemResolver(args.dataset_url, hdfs_driver=args.hdfs_driver)
     dataset = pq.ParquetDataset(resolver.get_dataset_path(), filesystem=resolver.filesystem(),
                                 validate_schema=False)
 
