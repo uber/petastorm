@@ -46,7 +46,8 @@ class ReaderV2(object):
     def __init__(self, dataset_url, schema_fields=None, predicate=None, rowgroup_selector=None,
                  num_epochs=1, sequence=None, cur_shard=None, shard_count=None,
                  read_timeout_s=None, cache=None, loader_pool=None, decoder_pool=None, shuffling_queue=None,
-                 shuffle_row_groups=True, shuffle_row_drop_partitions=1, pyarrow_filesystem=None, hdfs_driver='libhdfs3'):
+                 shuffle_row_groups=True, shuffle_row_drop_partitions=1, pyarrow_filesystem=None,
+                 hdfs_driver='libhdfs3'):
         """Initializes a reader object.
 
         :param dataset_url: an filepath or a url to a parquet directory,

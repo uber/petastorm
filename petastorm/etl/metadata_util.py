@@ -37,8 +37,8 @@ if __name__ == "__main__":
     parser.add_argument('--skip-index', nargs='+', type=str,
                         help='Donot display indexed values for given fields')
     parser.add_argument('--hdfs-driver', type=str,
-                        help='A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are' \
-                             'libhdfs (java through JNI) or libhdfs3 (C++)')
+                        help='A string denoting the hdfs driver to use (if using a dataset on hdfs). '
+                             'Current choices are libhdfs (java through JNI) or libhdfs3 (C++)')
 
     args = parser.parse_args()
 
