@@ -115,7 +115,7 @@ def args_parser():
 
     parser.add_argument('--row-group-size-mb', type=int, required=False,
                         help='Specifies the row group size in the created dataset')
-    parser.add_argument('--hdfs-driver', type=str,
+    parser.add_argument('--hdfs-driver', type=str, default='libhdfs3',
                         help='A string denoting the hdfs driver to use (if using a dataset on hdfs). '
                              'Current choices are libhdfs (java through JNI) or libhdfs3 (C++)')
 
