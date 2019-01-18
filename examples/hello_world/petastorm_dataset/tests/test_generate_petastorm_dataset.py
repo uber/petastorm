@@ -16,20 +16,20 @@ import unittest
 
 import pytest
 
-from examples.hello_world.generate_hello_world_dataset import generate_hello_world_dataset
-from examples.hello_world.pyspark_hello_world import pyspark_hello_world
-from examples.hello_world.pytorch_hello_world import pytorch_hello_world
-from examples.hello_world.tensorflow_hello_world import tensorflow_hello_world
+from examples.hello_world.petastorm_dataset.generate_petastorm_dataset import generate_petastorm_dataset
+from examples.hello_world.petastorm_dataset.pyspark_hello_world import pyspark_hello_world
+from examples.hello_world.petastorm_dataset.pytorch_hello_world import pytorch_hello_world
+from examples.hello_world.petastorm_dataset.tensorflow_hello_world import tensorflow_hello_world
 from petastorm import make_reader
 from petastorm.tests.conftest import SyntheticDataset
 
 
 @pytest.fixture(scope="session")
-def hello_world_dataset(tmpdir_factory):
+def petastorm_dataset(tmpdir_factory):
     path = tmpdir_factory.mktemp("data").strpath
     url = 'file://' + path
 
-    generate_hello_world_dataset(url)
+    generate_petastorm_dataset(url)
 
     dataset = SyntheticDataset(url=url, path=path, data=None)
 
@@ -39,26 +39,26 @@ def hello_world_dataset(tmpdir_factory):
     return dataset
 
 
-def test_generate(hello_world_dataset):
+def test_generate(petastorm_dataset):
     # Read from it using a plain reader
-    with make_reader(hello_world_dataset.url) as reader:
+    with make_reader(petastorm_dataset.url) as reader:
         all_samples = list(reader)
     assert all_samples
 
 
 @unittest.skip('Some conflict between pytorch and parquet shared libraries results in occasional '
                'segfaults in this case.')
-def test_pytorch_hello_world_example(hello_world_dataset):
-    pytorch_hello_world(hello_world_dataset.url)
+def test_pytorch_hello_world_petastorm_dataset_example(petastorm_dataset):
+    pytorch_hello_world(petastorm_dataset.url)
 
 
-def test_pyspark_hello_world_example(hello_world_dataset):
-    pyspark_hello_world(hello_world_dataset.url)
+def test_pyspark_hello_world_petastorm_dataset_example(petastorm_dataset):
+    pyspark_hello_world(petastorm_dataset.url)
 
 
-def test_python_hello_world_example(hello_world_dataset):
-    pyspark_hello_world(hello_world_dataset.url)
+def test_python_hello_world_petastorm_dataset_example(petastorm_dataset):
+    pyspark_hello_world(petastorm_dataset.url)
 
 
-def test_tensorflow_hello_world_example(hello_world_dataset):
-    tensorflow_hello_world(hello_world_dataset.url)
+def test_tensorflow_hello_world_petastorm_dataset_example(petastorm_dataset):
+    tensorflow_hello_world(petastorm_dataset.url)
