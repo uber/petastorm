@@ -278,22 +278,11 @@ Predicates passed to ``make_reader`` are evaluated per single row.  Predicates p
 ==================================================================  =====================================================
 
 
-.. inclusion-marker-end-do-not-remove
-   Place contents above here if they should also appear in read-the-docs.
-   Contents below are already part of the read-the-docs table of contents.
-
 Troubleshooting
 ---------------
 
 See the Troubleshooting_ page and please submit a ticket_ if you can't find an
 answer.
-
-
-Development
------------
-
-See the Development_ page for instructions on how to develop Petastorm and
-run tests.
 
 
 Publications
@@ -305,3 +294,30 @@ Publications
 .. _Troubleshooting: docs/troubleshoot.rst
 .. _ticket: https://github.com/uber/petastorm/issues/new
 .. _Development: docs/development.rst
+
+How to Contribute
+=================
+
+We prefer to receive contributions in the form of GitHub pull requests. Please send pull requests against the ``github.com/uber/petastorm`` repository.
+
+- If you are looking for some ideas on what to contribute, check out `github issues <https://github.com/uber/petastorm/issues>`_ and comment on the issue.
+- If you have an idea for an improvement, or you'd like to report a bug but don't have time to fix it please a `create a github issue <https://github.com/uber/petastorm/issues/new>`_.
+
+To contribute a patch:
+
+- Break your work into small, single-purpose patches if possible. It's much harder to merge in a large change with a lot of disjoint features.
+- Submit the patch as a GitHub pull request against the master branch. For a tutorial, see the GitHub guides on forking a repo and sending a pull request.
+- Include a detailed describtion of the proposed change in the pull request.
+- Make sure that your code passes the unit tests. You can find instructions how to run the unit tests `here <https://github.com/uber/petastorm/blob/master/docs/development.rst>`_.
+- Add new unit tests for your code.
+
+Thank you in advance for your contributions!
+
+
+See the Development_ for development related information.
+
+
+.. inclusion-marker-end-do-not-remove
+   Place contents above here if they should also appear in read-the-docs.
+   Contents below are already part of the read-the-docs table of contents.
+
