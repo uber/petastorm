@@ -79,6 +79,7 @@ class ArrowReaderWorker(WorkerBase):
         self._ngram = args[3]
         self._split_pieces = args[4]
         self._local_cache = args[5]
+        self._transform_spec = args[6]
 
         if self._ngram:
             raise NotImplementedError('ngrams are not supported by ArrowReaderWorker')
@@ -148,7 +149,12 @@ class ArrowReaderWorker(WorkerBase):
         column_names_in_schema = set(field.name for field in self._schema.fields.values())
         column_names = column_names_in_schema - partitions.partition_names
 
-        return self._read_with_shuffle_row_drop(piece, pq_file, column_names, shuffle_row_drop_range)
+        result = self._read_with_shuffle_row_drop(piece, pq_file, column_names, shuffle_row_drop_range)
+
+        if self._transform_spec:
+            result = pa.Table.from_pandas(self._transform_spec.func(result.to_pandas()), preserve_index=False)
+
+        return result
 
     def _load_rows_with_predicate(self, pq_file, piece, worker_predicate, shuffle_row_drop_partition):
         """Loads all rows that match a predicate from a piece"""
@@ -204,7 +210,12 @@ class ArrowReaderWorker(WorkerBase):
         else:
             result_data_frame = predicates_data_frame
 
-        return pa.Table.from_pandas(result_data_frame[match_predicate_mask], preserve_index=False)
+        result = result_data_frame[match_predicate_mask]
+
+        if self._transform_spec:
+            result = self._transform_spec.func(result)
+
+        return pa.Table.from_pandas(result, preserve_index=False)
 
     def _read_with_shuffle_row_drop(self, piece, pq_file, column_names, shuffle_row_drop_partition):
         table = piece.read(

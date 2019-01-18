@@ -24,6 +24,7 @@ from pyspark.sql.types import LongType, ShortType, StringType
 from petastorm import make_reader, make_batch_reader, TransformSpec
 from petastorm.codecs import ScalarCodec
 from petastorm.etl.dataset_metadata import materialize_dataset
+from petastorm.predicates import in_lambda
 from petastorm.reader import ReaderV2
 from petastorm.reader_impl.same_thread_executor import SameThreadExecutor
 from petastorm.selectors import SingleIndexSelector
@@ -145,6 +146,35 @@ def test_transform_function_new_field(synthetic_dataset, reader_factory):
         original_sample = next(d for d in synthetic_dataset.data if d['id'] == actual.id)
         expected_matrix = original_sample['matrix'] * 2
         np.testing.assert_equal(expected_matrix, actual.double_matrix)
+
+
+def test_transform_function_batched(scalar_dataset):
+    def double_float64(sample):
+        sample['float64'] *= 2
+        return sample
+
+    with make_batch_reader(scalar_dataset.url, transform_spec=TransformSpec(double_float64)) as reader:
+        actual = next(reader)
+        for actual_id, actual_float64 in zip(actual.id, actual.float64):
+            original_sample = next(d for d in scalar_dataset.data if d['id'] == actual_id)
+            expected_matrix = original_sample['float64'] * 2
+            np.testing.assert_equal(expected_matrix, actual_float64)
+
+
+def test_transform_function_with_predicate_batched(scalar_dataset):
+    def double_float64(sample):
+        assert all(sample['id'] % 2 == 0)
+        sample['float64'] *= 2
+        return sample
+
+    with make_batch_reader(scalar_dataset.url, transform_spec=TransformSpec(double_float64),
+                           predicate=in_lambda(['id'], lambda id: id % 2 == 0)) as reader:
+        actual = next(reader)
+        for actual_id, actual_float64 in zip(actual.id, actual.float64):
+            assert actual_id % 2 == 0
+            original_sample = next(d for d in scalar_dataset.data if d['id'] == actual_id)
+            expected_matrix = original_sample['float64'] * 2
+            np.testing.assert_equal(expected_matrix, actual_float64)
 
 
 def test_simple_read_with_pyarrow_serialize(synthetic_dataset):

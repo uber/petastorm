@@ -244,7 +244,8 @@ def make_batch_reader(dataset_url,
                       cur_shard=None, shard_count=None,
                       cache_type='null', cache_location=None, cache_size_limit=None,
                       cache_row_size_estimate=None, cache_extra_settings=None,
-                      hdfs_driver='libhdfs3'):
+                      hdfs_driver='libhdfs3',
+                      transform_spec=None):
     """
     Creates an instance of Reader for reading batches out of a non-Petastorm Parquet store.
 
@@ -289,6 +290,9 @@ def make_batch_reader(dataset_url,
     :param cache_extra_settings: A dictionary of extra settings to pass to the cache implementation,
     :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
         libhdfs (java through JNI) or libhdfs3 (C++)
+    :param transform_spec: An instance of :class:`~petastorm.transform.TransformSpec` object defining how a record
+        is transformed after it is loaded and decoded. The transformation occurs on a worker thread/process (depends
+        on the ``reader_pool_type`` value).
     :return: A :class:`Reader` object
     """
 
@@ -332,7 +336,8 @@ def make_batch_reader(dataset_url,
                   num_epochs=num_epochs,
                   cur_shard=cur_shard,
                   shard_count=shard_count,
-                  cache=cache)
+                  cache=cache,
+                  transform_spec=transform_spec)
 
 
 class Reader(object):

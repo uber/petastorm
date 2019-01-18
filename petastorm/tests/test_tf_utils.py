@@ -308,3 +308,23 @@ def test_transform_function_new_field(synthetic_dataset):
         original_sample = next(d for d in synthetic_dataset.data if d['id'] == actual.id)
         expected_matrix = original_sample['matrix'] * 2
         np.testing.assert_equal(expected_matrix, actual.double_matrix)
+
+
+def test_transform_function_new_field_batched(scalar_dataset):
+    def double_float64(sample):
+        sample['new_float64'] = sample['float64'] * 2
+        del sample['float64']
+        return sample
+
+    with make_batch_reader(scalar_dataset.url, reader_pool_type='dummy',
+                           transform_spec=TransformSpec(double_float64,
+                                                        [('new_float64', np.float64, (), False)],
+                                                        ['float64'])) as reader:
+        row_tensors = tf_tensors(reader)
+        with _tf_session() as sess:
+            actual = sess.run(row_tensors)
+
+        for actual_id, actual_float64 in zip(actual.id, actual.new_float64):
+            original_sample = next(d for d in scalar_dataset.data if d['id'] == actual_id)
+            expected = original_sample['float64'] * 2
+            np.testing.assert_equal(expected, actual_float64)
