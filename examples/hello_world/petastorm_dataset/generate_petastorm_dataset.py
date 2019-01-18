@@ -40,7 +40,7 @@ def row_generator(x):
             'array_4d': np.random.randint(0, 255, dtype=np.uint8, size=(4, 128, 30, 3))}
 
 
-def generate_hello_world_dataset(output_url='file:///tmp/hello_world_dataset'):
+def generate_petastorm_dataset(output_url='file:///tmp/hello_world_dataset'):
     rowgroup_size_mb = 256
 
     spark = SparkSession.builder.config('spark.driver.memory', '2g').master('local[2]').getOrCreate()
@@ -63,4 +63,4 @@ def generate_hello_world_dataset(output_url='file:///tmp/hello_world_dataset'):
 
 
 if __name__ == '__main__':
-    generate_hello_world_dataset()
+    generate_petastorm_dataset()

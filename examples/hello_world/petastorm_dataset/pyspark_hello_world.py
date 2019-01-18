@@ -19,7 +19,7 @@ from __future__ import print_function
 
 from pyspark.sql import SparkSession
 
-from examples.hello_world.generate_hello_world_dataset import HelloWorldSchema
+from examples.hello_world.petastorm_dataset.generate_petastorm_dataset import HelloWorldSchema
 from petastorm.spark_utils import dataset_as_rdd
 
 
