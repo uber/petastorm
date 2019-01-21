@@ -22,26 +22,18 @@ services:
 
 install:
   # We will use selitvin/petastorm_ci:latest as docker image for running on travis-ci.
-  # To rebuild the ci image, uncomment the following two lines.
-  # The image contains all petastorm dependencies installed, we do rerun dependencies installation to refresh
-  # versions of the dependencies on each build if needed
-
-  #  - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-  #  - docker build -t selitvin/petastorm_ci:latest -f docker/ubuntu16.04.dockerfile .
-  #  - docker push selitvin/petastorm_ci:latest
-
+  # To rebuild the ci image, see docker/Makefile.The image contains all petastorm dependencies
+  # installed, we do rerun dependencies installation to refresh ersions of the dependencies
+  # on each build if needed
   - docker pull selitvin/petastorm_ci:latest
 
 before_script:
-
   # run docker container for an hour. Will execute all docker commands inside this container
-  - docker run -v `pwd`:/petastorm selitvin/petastorm_ci:latest /bin/sh -c "sleep 3600" &
+  - docker run -v `pwd`:/petastorm --name petastorm_ci selitvin/petastorm_ci:latest /bin/sh -c "sleep 3600" &
 
-  # wait for docker to start and get its hash
+  # wait for docker to start
   - sleep 5
-  - export CONTAINER=$(docker ps -q | head -n 1)
-
-  - export RUN="docker exec ${CONTAINER} bash /run_in_venv.sh ${TRAVIS_PYTHON_VERSION}"
+  - export RUN="docker exec petastorm_ci bash /run_in_venv.sh ${TRAVIS_PYTHON_VERSION}"
   - export PYTEST="pytest --timeout=180 --duration=0 -v --cov=./  --cov-append --color=yes"
 
   # Refresh our dependencies' versions as in the CI image, they may go stale
@@ -65,7 +57,6 @@ before_script:
   - $RUN ulimit -c unlimited -S
 
 script:
-
   # Build documentation
   - $RUN bash -c "cd /petastorm/docs/autodoc && pwd && make html"
 
