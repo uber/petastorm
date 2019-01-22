@@ -14,6 +14,17 @@ This section shows a way to configure a development environment that allows you 
     pip install -U pip setuptools
     pip install -e .[opencv,tf,test,torch]
 
+Additionally, you can use the Dockerized Linux workspace via the Makefile provided at `docker/Makefile`. The following
+will build the Docker image, start a running container with petastorm source mounted into it from the host,
+and open a BASH shell into it (you must have GNU Make and Docker installed beforehand):
+
+.. code-block:: bash
+
+    make build run shell
+
+Within the Dockerized workspace, you can find the Python virtual environments at `/petastorm_venv2.7` and `/petastorm_venv3.6`,
+and the local `petastorm/` mounted at `/petastorm`.
+
 Unit tests
 ----------
 To run unit tests:
