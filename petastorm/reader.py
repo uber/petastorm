@@ -36,6 +36,7 @@ from petastorm.reader_impl.reader_v2 import ReaderV2
 from petastorm.reader_impl.same_thread_executor import SameThreadExecutor
 from petastorm.reader_impl.shuffling_buffer import NoopShufflingBuffer, RandomShufflingBuffer
 from petastorm.selectors import RowGroupSelectorBase
+from petastorm.stats import NoopStatisticsCollector
 from petastorm.transform import transform_schema
 from petastorm.workers_pool.dummy_pool import DummyPool
 from petastorm.workers_pool.process_pool import ProcessPool
@@ -64,7 +65,8 @@ def make_reader(dataset_url,
                 cache_row_size_estimate=None, cache_extra_settings=None,
                 hdfs_driver='libhdfs3',
                 reader_engine='reader_v1', reader_engine_params=None,
-                transform_spec=None):
+                transform_spec=None,
+                statistics_collector=None):
     """
     Creates an instance of Reader for reading Petastorm datasets. A Petastorm dataset is a dataset generated using
     :func:`~petastorm.etl.dataset_metadata.materialize_dataset` context manager as explained
@@ -119,6 +121,8 @@ def make_reader(dataset_url,
     :param transform_spec: An instance of :class:`~petastorm.transform.TransformSpec` object defining how a record
         is transformed after it is loaded and decoded. The transformation occurs on a worker thread/process (depends
         on the ``reader_pool_type`` value).
+    :param petastorm.stats.StatisticsCollector statistics_collector: A petastorm :class:`StatisticsCollector`
+        implementation which will collect and optionally emit metrics on Reader performance.
     :return: A :class:`Reader` object
     """
 
@@ -175,6 +179,7 @@ def make_reader(dataset_url,
             'shard_count': shard_count,
             'cache': cache,
             'transform_spec': transform_spec,
+            'statistics_collector': statistics_collector,
         }
 
         if reader_engine_params:
@@ -194,6 +199,9 @@ def make_reader(dataset_url,
     elif reader_engine == 'experimental_reader_v2':
         if transform_spec:
             raise NotImplementedError('experimental_reader_v2 reader engine does not support transforms for now.')
+        if statistics_collector:
+            raise NotImplementedError('experimental_reader_v2 reader engine does not support statistics collector '
+                                      'for now.')
 
         if reader_pool_type == 'thread':
             decoder_pool = ThreadPoolExecutor(workers_count)
@@ -245,7 +253,8 @@ def make_batch_reader(dataset_url,
                       cache_type='null', cache_location=None, cache_size_limit=None,
                       cache_row_size_estimate=None, cache_extra_settings=None,
                       hdfs_driver='libhdfs3',
-                      transform_spec=None):
+                      transform_spec=None,
+                      statistics_collector=None):
     """
     Creates an instance of Reader for reading batches out of a non-Petastorm Parquet store.
 
@@ -293,6 +302,8 @@ def make_batch_reader(dataset_url,
     :param transform_spec: An instance of :class:`~petastorm.transform.TransformSpec` object defining how a record
         is transformed after it is loaded and decoded. The transformation occurs on a worker thread/process (depends
         on the ``reader_pool_type`` value).
+    :param petastorm.stats.StatisticsCollector statistics_collector: A petastorm :class:`StatisticsCollector`
+        implementation which will collect and optionally emit metrics on Reader performance.
     :return: A :class:`Reader` object
     """
 
@@ -337,7 +348,8 @@ def make_batch_reader(dataset_url,
                   cur_shard=cur_shard,
                   shard_count=shard_count,
                   cache=cache,
-                  transform_spec=transform_spec)
+                  transform_spec=transform_spec,
+                  statistics_collector=statistics_collector)
 
 
 class Reader(object):
@@ -350,7 +362,7 @@ class Reader(object):
                  shuffle_row_groups=True, shuffle_row_drop_partitions=1,
                  predicate=None, rowgroup_selector=None, reader_pool=None, num_epochs=1,
                  cur_shard=None, shard_count=None, cache=None, worker_class=None,
-                 transform_spec=None):
+                 transform_spec=None, statistics_collector=None):
         """Initializes a reader object.
 
         :param pyarrow_filesystem: An instance of ``pyarrow.FileSystem`` that will be used. If not specified,
@@ -388,70 +400,74 @@ class Reader(object):
 
         :param worker_class: This is the class that will be instantiated on a different thread/process. It's
             responsibility is to load and filter the data.
+        :param petastorm.stats.StatisticsCollector statistics_collector: A petastorm :class:`StatisticsCollector`
+            implementation.
         """
 
-        # 1. Open the parquet storage (dataset)
-        # 2. Get a list of all groups
-        # 3. Filter rowgroups
-        #    a. predicates
-        #    b. row-group selector (our indexing mechanism)
-        #    c. partition: used to get a subset of data for distributed training
-        # 4. Create a rowgroup ventilator object
-        # 5. Start workers pool
-        if not (isinstance(schema_fields, collections.Iterable) or isinstance(schema_fields, NGram)
-                or schema_fields is None):
-            raise ValueError("""Fields must be either None, an iterable collection of Unischema fields or an NGram
-            object.""")
+        self._statistics_collector = statistics_collector or NoopStatisticsCollector()
+        with self._statistics_collector.measure_reader_startup():
+            # 1. Open the parquet storage (dataset)
+            # 2. Get a list of all groups
+            # 3. Filter rowgroups
+            #    a. predicates
+            #    b. row-group selector (our indexing mechanism)
+            #    c. partition: used to get a subset of data for distributed training
+            # 4. Create a rowgroup ventilator object
+            # 5. Start workers pool
+            if not (isinstance(schema_fields, collections.Iterable) or isinstance(schema_fields, NGram)
+                    or schema_fields is None):
+                raise ValueError("""Fields must be either None, an iterable collection of Unischema fields or an NGram
+                object.""")
 
-        self.ngram = schema_fields if isinstance(schema_fields, NGram) else None
+            self.ngram = schema_fields if isinstance(schema_fields, NGram) else None
 
-        # By default, use original method of working with list of dictionaries and not arrow tables
-        worker_class = worker_class or PyDictReaderWorker
-        self._results_queue_reader = worker_class.new_results_queue_reader()
+            # By default, use original method of working with list of dictionaries and not arrow tables
+            worker_class = worker_class or PyDictReaderWorker
+            self._results_queue_reader = worker_class.new_results_queue_reader()
 
-        if self.ngram and not self.ngram.timestamp_overlap and shuffle_row_drop_partitions > 1:
-            raise NotImplementedError('Using timestamp_overlap=False is not implemented with'
-                                      ' shuffle_options.shuffle_row_drop_partitions > 1')
+            if self.ngram and not self.ngram.timestamp_overlap and shuffle_row_drop_partitions > 1:
+                raise NotImplementedError('Using timestamp_overlap=False is not implemented with'
+                                          ' shuffle_options.shuffle_row_drop_partitions > 1')
 
-        cache = cache or NullCache()
+            cache = cache or NullCache()
 
-        self._workers_pool = reader_pool or ThreadPool(10)
-        # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
-        self.dataset = pq.ParquetDataset(dataset_path, filesystem=pyarrow_filesystem,
-                                         validate_schema=False)
+            self._workers_pool = reader_pool or ThreadPool(10)
+            # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
+            self.dataset = pq.ParquetDataset(dataset_path, filesystem=pyarrow_filesystem,
+                                             validate_schema=False)
 
-        stored_schema = infer_or_load_unischema(self.dataset)
+            stored_schema = infer_or_load_unischema(self.dataset)
 
-        # Make a schema view (a view is a Unischema containing only a subset of fields
-        # Will raise an exception if invalid schema fields are in schema_fields
-        fields = schema_fields if isinstance(schema_fields, collections.Iterable) else None
-        storage_schema = stored_schema.create_schema_view(fields) if fields else stored_schema
-        if transform_spec:
-            self.schema = transform_schema(storage_schema, transform_spec)
-        else:
-            self.schema = storage_schema
+            # Make a schema view (a view is a Unischema containing only a subset of fields
+            # Will raise an exception if invalid schema fields are in schema_fields
+            fields = schema_fields if isinstance(schema_fields, collections.Iterable) else None
+            storage_schema = stored_schema.create_schema_view(fields) if fields else stored_schema
+            if transform_spec:
+                self.schema = transform_schema(storage_schema, transform_spec)
+            else:
+                self.schema = storage_schema
 
-        # 2. Get a list of all row groups
-        row_groups = dataset_metadata.load_row_groups(self.dataset)
+            # 2. Get a list of all row groups
+            row_groups = dataset_metadata.load_row_groups(self.dataset)
 
-        # 3. Filter rowgroups
-        filtered_row_group_indexes, worker_predicate = self._filter_row_groups(self.dataset, row_groups, predicate,
-                                                                               rowgroup_selector, cur_shard,
-                                                                               shard_count)
-        # 4. Create a rowgroup ventilator object
-        normalized_shuffle_row_drop_partitions = \
-            self._normalize_shuffle_options(shuffle_row_drop_partitions, self.dataset)
-        ventilator = self._create_ventilator(filtered_row_group_indexes, shuffle_row_groups,
-                                             normalized_shuffle_row_drop_partitions, num_epochs, worker_predicate,
-                                             self._workers_pool.workers_count + _VENTILATE_EXTRA_ROWGROUPS)
+            # 3. Filter rowgroups
+            filtered_row_group_indexes, worker_predicate = self._filter_row_groups(self.dataset, row_groups, predicate,
+                                                                                   rowgroup_selector, cur_shard,
+                                                                                   shard_count)
+            # 4. Create a rowgroup ventilator object
+            normalized_shuffle_row_drop_partitions = \
+                self._normalize_shuffle_options(shuffle_row_drop_partitions, self.dataset)
+            ventilator = self._create_ventilator(filtered_row_group_indexes, shuffle_row_groups,
+                                                 normalized_shuffle_row_drop_partitions, num_epochs, worker_predicate,
+                                                 self._workers_pool.workers_count + _VENTILATE_EXTRA_ROWGROUPS)
 
-        # 5. Start workers pool
-        self._workers_pool.start(worker_class, (pyarrow_filesystem, dataset_path, storage_schema, self.ngram,
-                                                row_groups, cache, transform_spec),
-                                 ventilator=ventilator)
-        logger.debug('Workers pool started')
+            # 5. Start workers pool
+            self._workers_pool.start(worker_class, (pyarrow_filesystem, dataset_path, storage_schema, self.ngram,
+                                                    row_groups, cache, transform_spec),
+                                     ventilator=ventilator)
+            logger.debug('Workers pool started')
 
-        self.last_row_consumed = False
+            self.last_row_consumed = False
 
     @property
     def batched_output(self):
@@ -589,11 +605,13 @@ class Reader(object):
 
     def stop(self):
         """Stops all worker threads/processes."""
-        self._workers_pool.stop()
+        with self._statistics_collector.measure_reader_stop():
+            self._workers_pool.stop()
 
     def join(self):
         """Joins all worker threads/processes. Will block until all worker workers have been fully terminated."""
-        self._workers_pool.join()
+        with self._statistics_collector.measure_reader_join():
+            self._workers_pool.join()
 
     @property
     def diagnostics(self):
@@ -603,11 +621,13 @@ class Reader(object):
         return self
 
     def __next__(self):
-        try:
-            return self._results_queue_reader.read_next(self._workers_pool, self.schema, self.ngram)
-        except StopIteration:
-            self.last_row_consumed = True
-            raise
+        with self._statistics_collector.measure_row_retrieval():
+            try:
+                results = self._results_queue_reader.read_next(self._workers_pool, self.schema, self.ngram)
+                return results
+            except StopIteration:
+                self.last_row_consumed = True
+                raise
 
     def next(self):
         return self.__next__()

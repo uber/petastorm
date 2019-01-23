@@ -20,6 +20,8 @@ from petastorm import make_reader, TransformSpec
 from petastorm.reader import Reader
 
 # pylint: disable=unnecessary-lambda
+from petastorm.stats import InMemoryStatisticsCollector
+
 READER_FACTORIES = [
     make_reader,
     lambda url, **kwargs: make_reader(url, reader_engine='experimental_reader_v2', **kwargs),
@@ -52,6 +54,18 @@ def test_diagnostics_reader_v2(synthetic_dataset):
         diags = reader.diagnostics
         # Hard to make a meaningful assert on the content of the diags without potentially introducing a race
         assert 'output_queue_size' in diags
+
+
+def test_statistics_collector(synthetic_dataset):
+    stats_collector = InMemoryStatisticsCollector()
+    with make_reader(synthetic_dataset.url, statistics_collector=stats_collector) as reader:
+        [next(reader) for _ in range(10)]
+    assert stats_collector.time_startup > 0
+    assert stats_collector.time_join > 0
+    assert stats_collector.time_stop > 0
+    assert stats_collector.rows_retrieved == 10
+    assert len(stats_collector.row_retrieval_times) == 10
+    assert all(t > 0 for t in stats_collector.row_retrieval_times)
 
 
 @pytest.mark.skip('We no longer know how many rows in each row group')
