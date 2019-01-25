@@ -304,8 +304,7 @@ def make_batch_reader(dataset_url,
 
     resolver = FilesystemResolver(dataset_url, hdfs_driver=hdfs_driver)
     filesystem = resolver.filesystem()
-
-    dataset_path = resolver.parsed_dataset_url().path
+    dataset_path = resolver.get_dataset_path()
 
     if cache_type is None or cache_type == 'null':
         cache = NullCache()
