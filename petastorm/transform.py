@@ -23,8 +23,7 @@ class TransformSpec(object):
         schema transform: pre-transform-schema to post-transform-schema.
 
         ``func`` argument is a callable which takes a row as its parameter and returns a modified row.
-        ``edit_fields`` and ``removed_fields`` define how the schema to which
-        ``edit_fields`` and ``removed_fields`` are define mutation operation performed on the original schema that
+        ``edit_fields`` and ``removed_fields`` define mutating operations performed on the original schema that
         produce a post-transform schema. ``func`` return value must comply to this post-transform schema.
 
         :param func: A callable. The function is called on the worker thread. It takes a dictionary that complies to

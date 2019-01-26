@@ -15,7 +15,7 @@ from __future__ import division
 
 import numpy as np
 
-from petastorm import make_reader
+from petastorm import make_reader, TransformSpec
 from petastorm.pytorch import DataLoader
 from petastorm.tests.test_common import TestSchema
 
@@ -47,7 +47,8 @@ def test_basic_pytorch_dataloader(synthetic_dataset):
 
 def test_pytorch_dataloader_with_transform_function(synthetic_dataset):
     with DataLoader(make_reader(synthetic_dataset.url, schema_fields=ALL_FIELDS - NULLABLE_FIELDS,
-                                reader_pool_type='dummy'), collate_fn=_noop_collate, transform=_str_to_int) as loader:
+                                reader_pool_type='dummy',
+                                transform_spec=TransformSpec(_str_to_int)), collate_fn=_noop_collate) as loader:
         for item in loader:
             assert len(item) == 1
 

@@ -23,7 +23,7 @@ import pytest
 import examples.mnist.pytorch_example as pytorch_example
 from examples.mnist.generate_petastorm_mnist import mnist_data_to_petastorm_dataset, download_mnist_data
 from examples.mnist.tests.conftest import SMALL_MOCK_IMAGE_COUNT
-from petastorm import make_reader
+from petastorm import make_reader, TransformSpec
 
 logging.basicConfig(level=logging.INFO)
 
@@ -54,11 +54,13 @@ def test_full_pytorch_example(large_mock_mnist_data, tmpdir):
     model = pytorch_example.Net().to(device)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.5)
 
-    with DataLoader(make_reader('{}/train'.format(dataset_url), reader_pool_type='dummy', num_epochs=1),
-                    batch_size=32, transform=pytorch_example._transform_row) as train_loader:
+    transform = TransformSpec(pytorch_example._transform_row, removed_fields=['idx'])
+
+    with DataLoader(make_reader('{}/train'.format(dataset_url), reader_pool_type='dummy', num_epochs=1,
+                                transform_spec=transform), batch_size=32) as train_loader:
         pytorch_example.train(model, device, train_loader, 10, optimizer, 1)
-    with DataLoader(make_reader('{}/test'.format(dataset_url), reader_pool_type='dummy', num_epochs=1),
-                    batch_size=100, transform=pytorch_example._transform_row) as test_loader:
+    with DataLoader(make_reader('{}/test'.format(dataset_url), reader_pool_type='dummy', num_epochs=1,
+                                transform_spec=transform), batch_size=100) as test_loader:
         pytorch_example.test(model, device, test_loader)
 
 
