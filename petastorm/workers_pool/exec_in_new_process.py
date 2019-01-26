@@ -14,7 +14,6 @@
 
 import logging
 import os
-import pickle
 import subprocess
 import sys
 from tempfile import mkstemp
@@ -59,7 +58,7 @@ if __name__ == '__main__':
         new_process_runnable_file = sys.argv[1]
 
         with open(new_process_runnable_file, 'rb') as f:
-            func, args, kargs = pickle.load(f)
+            func, args, kargs = dill.load(f)
 
         # Don't need the pickle file with the runable. Cleanup.
         os.remove(new_process_runnable_file)
