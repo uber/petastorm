@@ -219,11 +219,14 @@ The minimalist example below assumes the definition of a ``Net`` class and
         ])
         return (transform(mnist_row['image']), mnist_row['digit'])
 
-    with DataLoader(make_reader('file:///localpath/mnist/train', num_epochs=10),
-                    batch_size=64, transform=_transform_row) as train_loader:
+
+    transform = TransformSpec(_transform_row, removed_fields=['idx'])
+
+    with DataLoader(make_reader('file:///localpath/mnist/train', num_epochs=10,
+                                transform_spec=transform), batch_size=64) as train_loader:
         train(model, device, train_loader, 10, optimizer, 1)
-    with DataLoader(make_reader('file:///localpath/mnist/test', num_epochs=10),
-                    batch_size=1000, transform=_transform_row) as test_loader:
+    with DataLoader(make_reader('file:///localpath/mnist/test', num_epochs=10,
+                                transform_spec=transform), batch_size=1000) as test_loader:
         test(model, device, test_loader)
 
 PySpark and SQL
