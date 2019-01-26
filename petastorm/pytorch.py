@@ -97,21 +97,19 @@ class DataLoader(object):
     runs out of samples.
     """
 
-    def __init__(self, reader, batch_size=1, collate_fn=decimal_friendly_collate, transform=None):
+    def __init__(self, reader, batch_size=1, collate_fn=decimal_friendly_collate):
         """
-        Initializes a data loader object, with a default collate and optional transform functions.
+        Initializes a data loader object, with a default collate.
 
         Number of epochs is defined by the configuration of the reader argument.
 
         :param reader: petastorm Reader instance
         :param batch_size: the number of items to return per batch; factored into the len() of this reader
         :param collate_fn: an optional callable to merge a list of samples to form a mini-batch.
-        :param transform: an optional transform function to apply to each data row
         """
         self.reader = reader
         self.batch_size = batch_size
         self.collate_fn = collate_fn
-        self.transform = transform
 
     def __iter__(self):
         """
@@ -122,9 +120,8 @@ class DataLoader(object):
             # Default collate does not work nicely on namedtuples and treat them as lists
             # Using dict will result in the yielded structures being dicts as well
             row_as_dict = row._asdict()
-            transformed_row = self.transform(row_as_dict) if self.transform else row_as_dict
-            _sanitize_pytorch_types(transformed_row)
-            batch.append(transformed_row)
+            _sanitize_pytorch_types(row_as_dict)
+            batch.append(row_as_dict)
             if len(batch) == self.batch_size:
                 yield self.collate_fn(batch)
                 batch = []

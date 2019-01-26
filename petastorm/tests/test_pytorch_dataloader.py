@@ -6,7 +6,7 @@ import pytest
 import pyarrow  # noqa: F401 pylint: disable=W0611
 import torch
 
-from petastorm import make_reader
+from petastorm import make_reader, TransformSpec
 from petastorm.pytorch import _sanitize_pytorch_types, DataLoader, decimal_friendly_collate
 from petastorm.tests.test_common import TestSchema
 
@@ -17,7 +17,8 @@ BATCHABLE_FIELDS = set(TestSchema.fields.values()) - \
 # pylint: disable=unnecessary-lambda
 MINIMAL_READER_FLAVOR_FACTORIES = [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
-    lambda url, **kwargs: make_reader(url, reader_engine='experimental_reader_v2', **kwargs)
+    # Disabling v2 since it does not support transform_spec which is needed in reading data into pytorch
+    # lambda url, **kwargs: make_reader(url, reader_engine='experimental_reader_v2', **kwargs)
 ]
 
 # pylint: disable=unnecessary-lambda
@@ -26,7 +27,9 @@ ALL_READER_FLAVOR_FACTORIES = MINIMAL_READER_FLAVOR_FACTORIES + [
     lambda url, **kwargs: make_reader(url, reader_pool_type='process', pyarrow_serialize=False, **kwargs),
     lambda url, **kwargs: make_reader(url, reader_pool_type='process', workers_count=1, pyarrow_serialize=True,
                                       **kwargs),
-    lambda url, **kwargs: make_reader(url, reader_engine='experimental_reader_v2', reader_pool_type='process', **kwargs)
+    # Disabling v2 since it does not support transform_spec which is needed in reading data into pytorch
+    # lambda url, **kwargs: make_reader(url, reader_engine='experimental_reader_v2', reader_pool_type='process',
+    # **kwargs)
 ]
 
 
@@ -64,8 +67,8 @@ def _sensor_name_to_int(row):
 
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
 def test_simple_read(synthetic_dataset, reader_factory):
-    with DataLoader(reader_factory(synthetic_dataset.url, schema_fields=BATCHABLE_FIELDS),
-                    transform=_sensor_name_to_int) as loader:
+    with DataLoader(reader_factory(synthetic_dataset.url, schema_fields=BATCHABLE_FIELDS,
+                                   transform_spec=TransformSpec(_sensor_name_to_int))) as loader:
         _check_simple_reader(loader, synthetic_dataset.data, BATCHABLE_FIELDS - {TestSchema.sensor_name})
 
 

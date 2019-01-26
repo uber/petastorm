@@ -29,7 +29,7 @@ import torch.optim as optim
 from torchvision import transforms
 
 from examples.mnist import DEFAULT_MNIST_DATA_PATH
-from petastorm import make_reader
+from petastorm import make_reader, TransformSpec
 from petastorm.pytorch import DataLoader
 
 
@@ -153,13 +153,17 @@ def main():
         loop_epochs = args.epochs
         reader_epochs = 1
 
+    transform = TransformSpec(_transform_row, removed_fields=['idx'])
+
     # Instantiate each petastorm Reader with a single thread, shuffle enabled, and appropriate epoch setting
     for epoch in range(1, loop_epochs + 1):
-        with DataLoader(make_reader('{}/train'.format(args.dataset_url), num_epochs=reader_epochs),
-                        batch_size=args.batch_size, transform=_transform_row) as train_loader:
+        with DataLoader(make_reader('{}/train'.format(args.dataset_url), num_epochs=reader_epochs,
+                                    transform_spec=transform),
+                        batch_size=args.batch_size) as train_loader:
             train(model, device, train_loader, args.log_interval, optimizer, epoch)
-        with DataLoader(make_reader('{}/test'.format(args.dataset_url), num_epochs=reader_epochs),
-                        batch_size=args.test_batch_size, transform=_transform_row) as test_loader:
+        with DataLoader(make_reader('{}/test'.format(args.dataset_url), num_epochs=reader_epochs,
+                                    transform_spec=transform),
+                        batch_size=args.test_batch_size) as test_loader:
             test(model, device, test_loader)
 
 
