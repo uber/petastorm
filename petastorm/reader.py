@@ -544,9 +544,11 @@ class Reader(object):
                 for piece_index, piece in enumerate(row_groups):
                     partition_name, partition_index = piece.partition_keys[0]
                     partition_value = dataset.partitions[0].keys[partition_index]
+
+                    # Convert partition value to correct type per the schema
+                    partition_value = self.schema.fields[partition_name].numpy_dtype(partition_value)
                     if predicate.do_include({partition_name: partition_value}):
                         filtered_row_group_indexes.append(piece_index)
-
                 worker_predicate = None
             else:
                 filtered_row_group_indexes = list(range(len(row_groups)))

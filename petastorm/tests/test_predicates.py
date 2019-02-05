@@ -14,10 +14,17 @@
 
 import pytest
 
+import numpy as np
+from pyspark.sql import SparkSession
+from pyspark.sql.types import IntegerType
+
 from petastorm import make_reader
+from petastorm.codecs import ScalarCodec
+from petastorm.etl.dataset_metadata import materialize_dataset
 from petastorm.predicates import in_set, in_intersection, \
     in_negate, in_reduce, in_pseudorandom_split, in_lambda
 from petastorm.tests.test_common import TestSchema
+from petastorm.unischema import dict_to_spark_row, Unischema, UnischemaField
 
 
 @pytest.fixture(scope="session")
@@ -124,3 +131,44 @@ def test_predicate_on_single_column(synthetic_dataset):
         actual = dict(row._asdict())
         assert actual['id2'] < 2
     assert counter == len(synthetic_dataset.data)
+
+
+def test_predicate_on_partitioned_dataset(tmpdir):
+    """
+    Generates a partitioned dataset and ensures that readers evaluate the type of the partition
+    column according to the type given in the Unischema.
+    """
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('id', np.int32, (), ScalarCodec(IntegerType()), False),
+        UnischemaField('test_field', np.int32, (), ScalarCodec(IntegerType()), False),
+    ])
+
+    def test_row_generator(x):
+        """Returns a single entry in the generated dataset."""
+        return {'id': x,
+                'test_field': x*x}
+
+    rowgroup_size_mb = 256
+    dataset_url = "file://{0}/partitioned_test_dataset".format(tmpdir)
+
+    spark = SparkSession.builder.config('spark.driver.memory', '2g').master('local[2]').getOrCreate()
+    sc = spark.sparkContext
+
+    rows_count = 10
+    with materialize_dataset(spark, dataset_url, TestSchema, rowgroup_size_mb):
+
+        rows_rdd = sc.parallelize(range(rows_count))\
+            .map(test_row_generator)\
+            .map(lambda x: dict_to_spark_row(TestSchema, x))
+
+        spark.createDataFrame(rows_rdd, TestSchema.as_spark_schema()) \
+            .write \
+            .partitionBy('id') \
+            .parquet(dataset_url)
+
+    with make_reader(dataset_url, predicate=in_lambda(['id'], lambda x: x == 3)) as reader:
+        assert next(reader).id == 3
+    with make_reader(dataset_url, predicate=in_lambda(['id'], lambda x: x == '3')) as reader:
+        with pytest.raises(StopIteration):
+            # Predicate should have selected none, so a StopIteration should be raised.
+            next(reader)
