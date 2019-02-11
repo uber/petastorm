@@ -84,7 +84,7 @@ def generate_petastorm_metadata(spark, dataset_url, unischema_class=None, use_su
     arrow_metadata = dataset.common_metadata or None
 
     with materialize_dataset(spark, dataset_url, schema, use_summary_metadata=use_summary_metadata,
-                             pyarrow_filesystem=fs):
+                             filesystem_factory=resolver.filesystem_factory()):
         if use_summary_metadata:
             # Inside the materialize dataset context we just need to write the metadata file as the schema will
             # be written by the context manager.

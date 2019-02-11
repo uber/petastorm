@@ -585,12 +585,12 @@ def test_pass_in_pyarrow_filesystem_to_materialize_dataset(synthetic_dataset, tm
     a_moved_path = tmpdir.join('moved').strpath
     copytree(synthetic_dataset.path, a_moved_path)
 
-    local_fs = pyarrow.LocalFileSystem()
+    local_fs = pyarrow.LocalFileSystem
     os.remove(a_moved_path + '/_common_metadata')
 
     spark = SparkSession.builder.getOrCreate()
 
-    with materialize_dataset(spark, a_moved_path, TestSchema, pyarrow_filesystem=local_fs):
+    with materialize_dataset(spark, a_moved_path, TestSchema, filesystem_factory=local_fs):
         pass
 
     with make_reader('file://{}'.format(a_moved_path), reader_pool_type='dummy') as reader:
