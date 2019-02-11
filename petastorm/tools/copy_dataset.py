@@ -67,7 +67,8 @@ def copy_dataset(spark, source_url, target_url, field_regex, not_null_fields, ov
         subschema = schema
 
     resolver = FilesystemResolver(target_url, spark.sparkContext._jsc.hadoopConfiguration(), hdfs_driver=hdfs_driver)
-    with materialize_dataset(spark, target_url, subschema, row_group_size_mb, pyarrow_filesystem=resolver.filesystem()):
+    with materialize_dataset(spark, target_url, subschema, row_group_size_mb,
+                             filesystem_factory=resolver.filesystem_factory()):
         data_frame = spark.read \
             .parquet(source_url)
 

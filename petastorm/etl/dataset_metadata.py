@@ -50,7 +50,7 @@ class PetastormMetadataGenerationError(Exception):
 
 @contextmanager
 def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_summary_metadata=False,
-                        pyarrow_filesystem=None):
+                        filesystem_factory=None):
     """
     A Context Manager which handles all the initialization and finalization necessary
     to generate metadata for a petastorm dataset. This should be used around your
@@ -96,13 +96,13 @@ def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_
     yield
 
     # After job completes, add the unischema metadata and check for the metadata summary file
-    if pyarrow_filesystem is None:
+    if filesystem_factory is None:
         resolver = FilesystemResolver(dataset_url, spark.sparkContext._jsc.hadoopConfiguration())
-        filesystem = resolver.filesystem()
+        filesystem_factory = resolver.filesystem_factory()
         dataset_path = resolver.get_dataset_path()
     else:
-        filesystem = pyarrow_filesystem
         dataset_path = urlparse(dataset_url).path
+    filesystem = filesystem_factory()
 
     dataset = pq.ParquetDataset(
         dataset_path,
@@ -111,7 +111,7 @@ def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_
 
     _generate_unischema_metadata(dataset, schema)
     if not use_summary_metadata:
-        _generate_num_row_groups_per_file(dataset, spark.sparkContext)
+        _generate_num_row_groups_per_file(dataset, spark.sparkContext, filesystem_factory)
 
     # Reload the dataset to take into account the new metadata
     dataset = pq.ParquetDataset(
@@ -192,7 +192,7 @@ def _generate_unischema_metadata(dataset, schema):
     utils.add_to_dataset_metadata(dataset, UNISCHEMA_KEY, serialized_schema)
 
 
-def _generate_num_row_groups_per_file(dataset, spark_context):
+def _generate_num_row_groups_per_file(dataset, spark_context, filesystem_factory):
     """
     Generates the metadata file containing the number of row groups in each file
     for the parquet dataset located at the dataset_url. It does this in spark by
@@ -210,11 +210,10 @@ def _generate_num_row_groups_per_file(dataset, spark_context):
     paths = [piece.path for piece in dataset.pieces]
 
     # Needed pieces from the dataset must be extracted for spark because the dataset object is not serializable
-
-    fs = dataset.fs
     base_path = dataset.paths
 
     def get_row_group_info(path):
+        fs = filesystem_factory()
         relative_path = os.path.relpath(path, base_path)
         pq_file = fs.open(path)
         num_row_groups = pq.read_metadata(pq_file).num_row_groups

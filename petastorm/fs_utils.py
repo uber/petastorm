@@ -63,6 +63,7 @@ class FilesystemResolver(object):
         elif self._parsed_dataset_url.scheme == 'file':
             # Case 2: definitely local
             self._filesystem = pyarrow.localfs
+            self._filesystem_factory = lambda: pyarrow.localfs
 
         elif self._parsed_dataset_url.scheme == 'hdfs':
 
@@ -80,14 +81,17 @@ class FilesystemResolver(object):
                     namenodes = namenode_resolver.resolve_hdfs_name_service(nameservice)
                     if namenodes:
                         self._filesystem = connector.connect_to_either_namenode(namenodes)
+                        self._filesystem_factory = lambda: connector.connect_to_either_namenode(namenodes)
                     if self._filesystem is None:
                         # Case 3a1: That didn't work; try the URL as a namenode host
                         self._filesystem = connector.hdfs_connect_namenode(self._parsed_dataset_url)
+                        self._filesystem_factory = lambda: connector.hdfs_connect_namenode(self._parsed_dataset_url)
                 else:
                     # Case 3b: No netloc, so let's try to connect to default namenode
                     # HdfsNamenodeResolver will raise exception if it fails to connect.
                     nameservice, namenodes = namenode_resolver.resolve_default_hdfs_service()
                     filesystem = connector.connect_to_either_namenode(namenodes)
+                    self._filesystem_factory = lambda: connector.connect_to_either_namenode(namenodes)
                     if filesystem is not None:
                         # Properly replace the parsed dataset URL once default namenode is confirmed
                         self._parsed_dataset_url = urlparse(
@@ -95,6 +99,8 @@ class FilesystemResolver(object):
                         self._filesystem = filesystem
             else:
                 self._filesystem = connector.hdfs_connect_namenode(self._parsed_dataset_url, hdfs_driver)
+                self._filesystem_factory = lambda: connector.hdfs_connect_namenode(
+                    self._parsed_dataset_url, hdfs_driver)
 
         elif self._parsed_dataset_url.scheme == 's3':
             # Case 5
@@ -110,6 +116,7 @@ class FilesystemResolver(object):
 
             fs = s3fs.S3FileSystem()
             self._filesystem = pyarrow.filesystem.S3FSWrapper(fs)
+            self._filesystem_factory = lambda: pyarrow.filesystem.S3FSWrapper(s3fs.S3FileSystem())
 
         else:
             # Case 6
@@ -139,3 +146,11 @@ class FilesystemResolver(object):
         :return: The pyarrow filesystem object
         """
         return self._filesystem
+
+    def filesystem_factory(self):
+        """
+        :return: A serializable function that can be used to recreate the filesystem
+        object; useful for providing access to the filesystem object on distributed
+        Spark executors.
+        """
+        return self._filesystem_factory
