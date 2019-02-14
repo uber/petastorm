@@ -423,7 +423,11 @@ class Reader(object):
 
         # Make a schema view (a view is a Unischema containing only a subset of fields
         # Will raise an exception if invalid schema fields are in schema_fields
-        fields = schema_fields if isinstance(schema_fields, collections.Iterable) else None
+        if self.ngram:
+            fields = self.ngram.get_field_names_at_all_timesteps()
+        else:
+            fields = schema_fields if isinstance(schema_fields, collections.Iterable) else None
+
         storage_schema = stored_schema.create_schema_view(fields) if fields else stored_schema
         if transform_spec:
             self.schema = transform_schema(storage_schema, transform_spec)

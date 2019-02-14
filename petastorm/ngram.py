@@ -280,3 +280,7 @@ class NGram(object):
             current_schema = self.get_schema_at_timestep(schema=schema, timestep=timestamp)
             ngram_as_tuples[timestamp] = current_schema.make_namedtuple(**data_as_dict)
         return ngram_as_tuples
+
+    def get_field_names_at_all_timesteps(self):
+        """Returns a list of fields that are present at least in the one of the time offsets"""
+        return list({field for fields in self._fields.values() for field in fields})
