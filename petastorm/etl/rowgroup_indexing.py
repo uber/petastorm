@@ -26,7 +26,6 @@ from petastorm.etl.legacy import depickle_legacy_package_name_compatible
 from petastorm.fs_utils import FilesystemResolver
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 PARALLEL_SLICE_NUM = 2000
 
