@@ -14,6 +14,7 @@
 
 import collections
 import logging
+import warnings
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 import six
@@ -123,7 +124,7 @@ def make_reader(dataset_url,
     """
 
     if dataset_url is None or not isinstance(dataset_url, six.string_types):
-        raise ValueError("""dataset_url must be a string""")
+        raise ValueError('dataset_url must be a string')
 
     dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
     logger.debug('dataset_url: %s', dataset_url)
@@ -297,7 +298,16 @@ def make_batch_reader(dataset_url,
     """
 
     if dataset_url is None or not isinstance(dataset_url, six.string_types):
-        raise ValueError("""dataset_url must be a string""")
+        raise ValueError('dataset_url must be a string')
+
+    try:
+        dataset_metadata.get_schema_from_dataset_url(dataset_url, hdfs_driver=hdfs_driver)
+        warnings.warn('Please use make_reader (instead of \'make_batch_dataset\' function to read this dataset. '
+                      'You may get unexpected results. '
+                      'Currently make_batch_reader supports reading only Parquet stores that contain '
+                      'standard Parquet data types and do not require petastorm decoding.')
+    except PetastormMetadataError:
+        pass
 
     dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
     logger.debug('dataset_url: %s', dataset_url)
@@ -399,8 +409,8 @@ class Reader(object):
         # 5. Start workers pool
         if not (isinstance(schema_fields, collections.Iterable) or isinstance(schema_fields, NGram)
                 or schema_fields is None):
-            raise ValueError("""Fields must be either None, an iterable collection of Unischema fields or an NGram
-            object.""")
+            raise ValueError('Fields must be either None, an iterable collection of Unischema fields '
+                             'or an NGram object.')
 
         self.ngram = schema_fields if isinstance(schema_fields, NGram) else None
 
