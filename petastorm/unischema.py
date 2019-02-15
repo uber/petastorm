@@ -25,6 +25,7 @@ from pyspark import Row
 from pyspark.sql.types import StringType, ShortType, LongType, IntegerType, BooleanType, DoubleType, ByteType, \
     FloatType, DecimalType, DateType, TimestampType
 from pyspark.sql.types import StructField, StructType
+from six import string_types
 
 from petastorm.codecs import ScalarCodec
 
@@ -132,8 +133,17 @@ class Unischema(object):
         """
 
         # Split fields parameter to regex pattern strings and UnischemaField objects
-        regex_patterns = [f for f in fields if isinstance(f, str)]
-        unischema_field_objects = [f for f in fields if not isinstance(f, str)]
+        regex_patterns = [f for f in fields if isinstance(f, string_types)]
+        # We can not check type against UnischemaField because the artifact introduced by
+        # pickling, since depickled UnischemaField are of type collections.UnischemaField
+        # while withing depickling they are of petastorm.unischema.UnischemaField
+        # Since UnischemaField is a tuple, we check against it since it is invariant to
+        # pickling
+        unischema_field_objects = [f for f in fields if isinstance(f, tuple)]
+        if len(unischema_field_objects) + len(regex_patterns) != len(fields):
+            raise ValueError('Elements of "fields" must be either a string (regular expressions) or '
+                             'an instance of UnischemaField class.')
+
         view_fields = unischema_field_objects + match_unischema_fields(self, regex_patterns)
 
         for field in unischema_field_objects:

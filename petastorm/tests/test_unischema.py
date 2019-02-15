@@ -175,6 +175,16 @@ class UnischemaTest(unittest.TestCase):
             TestSchema.create_schema_view([UnischemaField('id', np.int64, (), ScalarCodec(LongType()), False)])
         self.assertTrue('does not belong to the schema' in str(ex.exception))
 
+    def test_create_schema_view_using_invalid_type(self):
+        """ Exercises code paths unischema.create_schema_view ValueError, and unischema.__str__."""
+        TestSchema = Unischema('TestSchema', [
+            UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
+            UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
+        ])
+        with self.assertRaises(ValueError) as ex:
+            TestSchema.create_schema_view([42])
+        self.assertTrue('must be either a string' in str(ex.exception))
+
     def test_create_schema_view_using_unischema_fields(self):
         TestSchema = Unischema('TestSchema', [
             UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
@@ -189,6 +199,9 @@ class UnischemaTest(unittest.TestCase):
             UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
         ])
         view = TestSchema.create_schema_view(['int.*$'])
+        self.assertEqual(set(view.fields.keys()), {'int_field'})
+
+        view = TestSchema.create_schema_view([u'int.*$'])
         self.assertEqual(set(view.fields.keys()), {'int_field'})
 
     def test_create_schema_view_using_regex_and_unischema_fields(self):
