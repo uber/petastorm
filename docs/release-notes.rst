@@ -4,6 +4,23 @@
 Release notes
 =============
 
+Release 0.6.0
+=============
+
+Breaking changes
+----------------
+- ``petastorm.etl.dataset_metadata.materialize_dataset()`` should be passed a filesystem factory method
+  instead of a pyarrow filesystem object. This change was made to fix a serialization bug that occurred during
+  distributed reads (#280)
+
+New features and bug fixes
+--------------------------
+- the Docker container in ``/docker`` has been made into a workspace container aimed to support development on MacOS.
+- New `hello_world` examples added for using non-Petastorm datasets.
+- Added functionality for transform-on-worker thread/pool. Users now specify a ``transform_spec`` when calling ``make_reader()``
+  or ``make_batch_reader()``
+- Fixed a bug that caused all columns of a dataset to be read when ``schema_fields=NGram(...)`` was used.
+- Allow for unicode strings to be passed as regex filters in Unischema when selecting which columns to read.
 
 Release 0.5.1
 =============
