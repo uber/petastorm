@@ -7,6 +7,8 @@ Release notes
 Release 0.6.0
 =============
 
+Thanks to our new contributers: Kim Hammar and Joshua Goller!
+
 Breaking changes
 ----------------
 - ``petastorm.etl.dataset_metadata.materialize_dataset()`` should be passed a filesystem factory method
@@ -15,12 +17,20 @@ Breaking changes
 
 New features and bug fixes
 --------------------------
+- Added functionality for transform-on-worker thread/pool. The transform enables PyTorch users to run preprocessing
+  code on worker processes/threads. It enables Tensorflow users to parallelize Python preprocessing code on
+  a process pool, as part of the training/evaluation graph. Users now specify a ``transform_spec`` when calling
+  ``make_reader()`` or ``make_batch_reader()``.
+- Added ``hdfs_driver`` argument to the following functions: ``get_schema_from_dataset_url``, ``FilesystemResolver``,
+  ``generate_petastorm_metadata``, ``build_rowgroup_index``, ``RowGroupLoader``, ``dataset_as_rdd`` and ``copy_dataset``
 - the Docker container in ``/docker`` has been made into a workspace container aimed to support development on MacOS.
 - New `hello_world` examples added for using non-Petastorm datasets.
-- Added functionality for transform-on-worker thread/pool. Users now specify a ``transform_spec`` when calling ``make_reader()``
-  or ``make_batch_reader()``
-- Fixed a bug that caused all columns of a dataset to be read when ``schema_fields=NGram(...)`` was used.
 - Allow for unicode strings to be passed as regex filters in Unischema when selecting which columns to read.
+- Fixed a bug that caused all columns of a dataset to be read when ``schema_fields=NGram(...)`` was used.
+- Fixed type of an argument passed to a predicate when the predicate is defined on a numeric partition field
+- Support regular unicode strings as expressions as a value of make_reader's schema_fields argument.
+- Emit a warning when opening a Petastorm-created dataset using make_batch_reader (``make_batch_reader`` currently
+  does not support Petastorm specific types, such as tensors).
 
 Release 0.5.1
 =============
