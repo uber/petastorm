@@ -14,9 +14,7 @@
 
 import logging
 import os
-
 import pyarrow
-
 from multiprocessing import Pool
 
 from pyarrow.filesystem import LocalFileSystem
