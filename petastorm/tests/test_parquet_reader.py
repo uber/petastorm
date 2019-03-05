@@ -14,7 +14,6 @@
 
 import numpy as np
 import pytest
-import six
 
 from petastorm import make_batch_reader
 
@@ -65,8 +64,6 @@ def test_specify_columns_to_read(scalar_dataset, reader_factory):
 
 
 @pytest.mark.parametrize('reader_factory', _D)
-@pytest.mark.skipif(six.PY3, reason='Python 3 does not support namedtuples with > 255 number of fields. '
-                                    'https://github.com/uber/petastorm/pull/323 will address this issue')
 def test_many_columns_non_petastorm_dataset(many_columns_non_petastorm_dataset, reader_factory):
     """Check if we can read a dataset with huge number of columns (1000 in this case)"""
     with reader_factory(many_columns_non_petastorm_dataset.url) as reader:
