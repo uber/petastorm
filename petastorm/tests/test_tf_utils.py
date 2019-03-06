@@ -19,6 +19,7 @@ from decimal import Decimal
 
 import numpy as np
 import pytest
+import six
 import tensorflow as tf
 
 from petastorm import make_reader, make_batch_reader, TransformSpec
@@ -283,6 +284,23 @@ def test_simple_read_tensorflow_with_parquet_dataset(scalar_dataset):
                     expected_row = next(d for d in scalar_dataset.data if d['id'] == id_value)
                     for field_name in expected_row.keys():
                         _assert_fields_eq(batch[field_name][i], expected_row[field_name])
+
+
+@pytest.mark.forked
+@pytest.mark.skipif(six.PY3, reason='Python 3 does not support namedtuples with > 255 number of fields. '
+                                    'https://github.com/uber/petastorm/pull/323 will address this issue')
+def test_simple_read_tensorflow_with_non_petastorm_many_columns_dataset(many_columns_non_petastorm_dataset):
+    """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
+    data"""
+    with make_batch_reader(dataset_url=many_columns_non_petastorm_dataset.url) as reader:
+        row_tensors = tf_tensors(reader)
+        # Make sure we have static shape info for all fields
+        for column in row_tensors:
+            assert column.get_shape().as_list() == [None]
+
+        with _tf_session() as sess:
+            batch = sess.run(row_tensors)._asdict()
+            assert set(batch.keys()) == set(many_columns_non_petastorm_dataset.data[0].keys())
 
 
 def test_shuffling_queue_with_make_batch_reader(scalar_dataset):

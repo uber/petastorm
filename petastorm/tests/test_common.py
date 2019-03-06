@@ -205,3 +205,52 @@ def create_test_scalar_dataset(tmp_url, num_rows, num_files=4, spark=None):
         spark.stop()
 
     return expected_data
+
+
+def create_many_columns_non_petastorm_dataset(output_url, num_rows, num_columns=1000, num_files=4, spark=None):
+    """Creates a dataset with the following properties (used in tests)
+
+    1. Has 1000 columns
+    2. Each column is an int32 integer
+    3. Parquet store consists of 4 files (controlled by ``num_files`` argument)
+
+    :param output_url: The dataset is written to this url (e.g. ``file:///tmp/some_directory``)
+    :param num_rows: Number of rows in the generated dataset
+    :param num_columns: Number of columns (1000 is the default)
+    :param num_files: Number of parquet files that will be created in the store
+    :param spark: An instance of SparkSession object. A new instance will be created if non specified
+    :return:
+    """
+    shutdown = False
+    if not spark:
+        spark_session = SparkSession \
+            .builder \
+            .appName('petastorm_end_to_end_test') \
+            .master('local[*]')
+
+        spark = spark_session.getOrCreate()
+        shutdown = True
+
+    column_names = ['col_{}'.format(col_id) for col_id in range(num_columns)]
+
+    def generate_row(i):
+        return {'col_{}'.format(col_id): i * 10000 for col_id, col_name in enumerate(column_names)}
+
+    expected_data = [generate_row(row_number) for row_number in range(num_rows)]
+
+    rows = [Row(**row) for row in expected_data]
+
+    # WARNING: surprisingly, schema fields and row fields are matched only by order and not name.
+    schema = StructType([StructField(column_name, IntegerType(), False) for column_name in column_names])
+
+    dataframe = spark.createDataFrame(rows, schema)
+    dataframe. \
+        coalesce(num_files). \
+        write.option('compression', 'none'). \
+        mode('overwrite'). \
+        parquet(output_url)
+
+    if shutdown:
+        spark.stop()
+
+    return expected_data
