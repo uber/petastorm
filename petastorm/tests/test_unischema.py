@@ -295,6 +295,31 @@ class UnischemaTest(unittest.TestCase):
 
         assert 'Cannot auto-create unischema due to unsupported column type' in str(ex.exception)
 
+    def test_arrow_schema_arrow_1644_list_of_struct(self):
+        arrow_schema = pa.schema([
+            pa.field('id', pa.string()),
+            pa.field('list_of_struct', pa.list_(pa.struct([('a', pa.string()), ('b', pa.int32())])))
+        ])
+
+        mock_dataset = _mock_parquet_dataset([], arrow_schema)
+
+        unischema = Unischema.from_arrow_schema(mock_dataset)
+        assert getattr(unischema, 'id').name == 'id'
+        assert not hasattr(unischema, 'list_of_struct')
+
+    def test_arrow_schema_arrow_1644_list_of_list(self):
+        arrow_schema = pa.schema([
+            pa.field('id', pa.string()),
+            pa.field('list_of_list',
+                     pa.list_(pa.list_(pa.struct([('a', pa.string()), ('b', pa.int32())]))))
+        ])
+
+        mock_dataset = _mock_parquet_dataset([], arrow_schema)
+
+        unischema = Unischema.from_arrow_schema(mock_dataset)
+        assert getattr(unischema, 'id').name == 'id'
+        assert not hasattr(unischema, 'list_of_list')
+
 
 class UnischemaFieldTest(unittest.TestCase):
     @classmethod
