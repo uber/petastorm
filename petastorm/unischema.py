@@ -17,10 +17,13 @@ in several different python libraries. Currently supported are pyspark, tensorfl
 """
 import copy
 import re
+import warnings
 from collections import namedtuple, OrderedDict
 from decimal import Decimal
 
 import numpy as np
+from pyarrow.lib import ListType
+from pyarrow.lib import StructType as pyStructType
 from pyspark import Row
 from pyspark.sql.types import StringType, ShortType, LongType, IntegerType, BooleanType, DoubleType, ByteType, \
     FloatType, DecimalType, DateType, TimestampType
@@ -234,8 +237,12 @@ class Unischema(object):
         for column_name in arrow_schema.names:
             arrow_field = arrow_schema.field_by_name(column_name)
             field_type = arrow_field.type
+            if isinstance(field_type, ListType):
+                if isinstance(field_type.value_type, ListType) or isinstance(field_type.value_type, pyStructType):
+                    warnings.warn('[ARROW-1644] Ignoring unsupported structure %r for field %r'
+                                  % (field_type, column_name))
+                    continue
             codec, np_type = _numpy_and_codec_from_arrow_type(field_type)
-
             unischema_fields.append(UnischemaField(column_name, np_type, (), codec, arrow_field.nullable))
         return Unischema('inferred_schema', unischema_fields)
 
