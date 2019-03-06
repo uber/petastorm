@@ -14,10 +14,11 @@
 
 import numpy as np
 import pytest
+import six
 
-# pylint: disable=unnecessary-lambda
 from petastorm import make_batch_reader
 
+# pylint: disable=unnecessary-lambda
 _D = [lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', **kwargs)]
 
 # pylint: disable=unnecessary-lambda
@@ -61,5 +62,15 @@ def test_specify_columns_to_read(scalar_dataset, reader_factory):
         sample = next(reader)
         assert set(sample._asdict().keys()) == {'id', 'float64'}
         assert sample.float64.size > 0
+
+
+@pytest.mark.parametrize('reader_factory', _D)
+@pytest.mark.skipif(six.PY3, reason='Python 3 does not support namedtuples with > 255 number of fields. '
+                                    'https://github.com/uber/petastorm/pull/323 will address this issue')
+def test_many_columns_non_petastorm_dataset(many_columns_non_petastorm_dataset, reader_factory):
+    """Check if we can read a dataset with huge number of columns (1000 in this case)"""
+    with reader_factory(many_columns_non_petastorm_dataset.url) as reader:
+        sample = next(reader)
+        assert set(sample._fields) == set(many_columns_non_petastorm_dataset.data[0].keys())
 
 # TODO(yevgeni): missing tests: https://github.com/uber/petastorm/issues/257
