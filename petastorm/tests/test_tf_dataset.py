@@ -18,16 +18,17 @@ from copy import copy
 
 import numpy as np
 import pytest
+import six
 import tensorflow as tf
 
-from petastorm import make_reader
+from petastorm import make_reader, make_batch_reader
 from petastorm.ngram import NGram
 from petastorm.predicates import in_lambda
 from petastorm.tests.test_common import TestSchema
 from petastorm.tf_utils import make_petastorm_dataset
 
 _EXCLUDE_FIELDS = set(TestSchema.fields.values()) \
-    - {TestSchema.matrix_nullable, TestSchema.string_array_nullable, TestSchema.decimal}
+                  - {TestSchema.matrix_nullable, TestSchema.string_array_nullable, TestSchema.decimal}
 
 MINIMAL_READER_FLAVOR_FACTORIES = [
     lambda url, **kwargs: make_reader(url, **_merge_params({'reader_pool_type': 'dummy',
@@ -150,3 +151,24 @@ def test_dataset_on_ngram_not_supported(synthetic_dataset, reader_factory):
     with reader_factory(synthetic_dataset.url, schema_fields=ngram) as reader:
         with pytest.raises(NotImplementedError):
             make_petastorm_dataset(reader)
+
+
+@pytest.mark.forked
+@pytest.mark.skipif(six.PY3, reason='Python 3 does not support namedtuples with > 255 number of fields. '
+                                    'https://github.com/uber/petastorm/pull/323 will address this issue')
+def test_non_petastorm_with_many_colums_with_one_shot_iterator(many_columns_non_petastorm_dataset):
+    """Just a bunch of read and compares of all values to the expected values"""
+    with make_batch_reader(many_columns_non_petastorm_dataset.url, workers_count=1) as reader:
+        dataset = make_petastorm_dataset(reader)
+        iterator = dataset.make_one_shot_iterator()
+
+        # Make sure we have static shape info for all fields
+        for shape in dataset.output_shapes:
+            # TODO(yevgeni): check that the shapes are actually correct, not just not None
+            assert shape.dims is not None
+
+        # Read a bunch of entries from the dataset and compare the data to reference
+        with tf.Session() as sess:
+            iterator = iterator.get_next()
+            sample = sess.run(iterator)._asdict()
+            assert set(sample.keys()) == set(many_columns_non_petastorm_dataset.data[0].keys())

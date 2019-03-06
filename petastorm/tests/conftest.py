@@ -20,7 +20,8 @@ from collections import namedtuple
 import pytest
 import six
 
-from petastorm.tests.test_common import create_test_dataset, create_test_scalar_dataset
+from petastorm.tests.test_common import create_test_dataset, create_test_scalar_dataset, \
+    create_many_columns_non_petastorm_dataset
 
 SyntheticDataset = namedtuple('synthetic_dataset', ['url', 'data', 'path'])
 
@@ -104,3 +105,16 @@ def scalar_dataset(request, tmpdir_factory):
         return dataset
 
     return maybe_cached_dataset(request.config, 'scalar', _pure_parquet_dataset_no_cache)
+
+
+@pytest.fixture(scope="session")
+def many_columns_non_petastorm_dataset(request, tmpdir_factory):
+    """This dataset has 1000 columns. All of the same int32 type."""
+    def _dataset_no_cache():
+        path = tmpdir_factory.mktemp("data").strpath
+        url = 'file://' + path
+        data = create_many_columns_non_petastorm_dataset(url, 10)
+        dataset = SyntheticDataset(url=url, path=path, data=data)
+        return dataset
+
+    return maybe_cached_dataset(request.config, 'many_column_non_petastorm', _dataset_no_cache)
