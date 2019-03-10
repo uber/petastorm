@@ -13,8 +13,10 @@
 # limitations under the License.
 
 """A set of Tensorflow specific helper functions for the unischema"""
+import datetime
 import sys
 import warnings
+from calendar import timegm
 from collections import OrderedDict, namedtuple
 from decimal import Decimal
 
@@ -45,6 +47,13 @@ _NUMPY_TO_TF_DTYPES_MAPPING = {
 RANDOM_SHUFFLING_QUEUE_SIZE = 'random_shuffling_queue_size'
 
 
+def date_to_nsec_from_epoch(dt):
+    return timegm(dt.timetuple()) * 1000000000
+
+
+_date_to_nsec_from_epoch_vectorized = np.vectorize(date_to_nsec_from_epoch)
+
+
 def _sanitize_field_tf_types(sample):
     """Takes a named tuple and casts/promotes types unknown to TF to the types that are known.
 
@@ -69,13 +78,17 @@ def _sanitize_field_tf_types(sample):
             next_sample_dict[k] = str(v.normalize())
         elif isinstance(v, np.ndarray) and np.issubdtype(v.dtype, np.datetime64):
             # Convert to nanoseconds from POSIX epoch
-            next_sample_dict[k] = (v - np.datetime64('1970-01-01T00:00:00.0Z')) \
+            next_sample_dict[k] = (v - np.datetime64('1970-01-01T00:00:00.0')) \
                 .astype('timedelta64[ns]').astype(np.int64)
         elif isinstance(v, np.ndarray) and v.dtype == np.uint16:
             next_sample_dict[k] = v.astype(np.int32)
         elif isinstance(v, np.ndarray) and v.dtype.type in (np.bytes_, np.unicode_):
             if v.size != 0:
                 next_sample_dict[k] = v.tolist()
+        elif isinstance(v, np.ndarray) and v.dtype.kind == 'O' and isinstance(v[0], datetime.date):
+            # Pyarrow 0.12.1 started returning python datetime.date when parquet column is a DateType() column.
+            # Convert values in such column into nsec from epoch int64.
+            next_sample_dict[k] = _date_to_nsec_from_epoch_vectorized(v)
 
     # Construct object of the same type as the input
     return sample.__class__(**next_sample_dict)
