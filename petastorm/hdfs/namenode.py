@@ -16,9 +16,11 @@ import functools
 import inspect
 import logging
 import os
+from distutils.version import LooseVersion
 from xml.etree import ElementTree as ET
 
 import pyarrow
+import six
 from pyarrow.hdfs import HadoopFileSystem
 from pyarrow.lib import ArrowIOError
 from six.moves.urllib.parse import urlparse
@@ -247,7 +249,17 @@ class HdfsConnector(object):
         :param driver: An optional driver identifier
         :return: Pyarrow HDFS connection object.
         """
-        return pyarrow.hdfs.connect(url.hostname or 'default', url.port or 8020, driver=driver)
+
+        # According to pyarrow.hdfs.connect:
+        #    host : NameNode. Set to "default" for fs.defaultFS from core-site.xml
+        # So we pass 'default' as a host name if the url does not specify one (i.e. hdfs:///...)
+        if LooseVersion(pyarrow.__version__) < LooseVersion('0.12.0'):
+            hostname = url.hostname or 'default'
+            driver = driver
+        else:
+            hostname = six.text_type(url.hostname or 'default')
+            driver = six.text_type(driver)
+        return pyarrow.hdfs.connect(hostname, url.port or 8020, driver=driver)
 
     @classmethod
     def connect_to_either_namenode(cls, list_of_namenodes):
