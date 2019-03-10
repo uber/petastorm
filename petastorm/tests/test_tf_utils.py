@@ -13,6 +13,8 @@
 # limitations under the License.
 from __future__ import division
 
+import datetime
+from calendar import timegm
 from collections import namedtuple
 from contextlib import contextmanager
 from decimal import Decimal
@@ -46,13 +48,17 @@ def _tf_session():
         coord.join(threads)
 
 
-def test_empty_dict():
-    # Check two types that should be promoted/converted (uint16 and Decimal) and one that should not be
-    # modified (int32)
+def test_sanitize_field_tf_types():
+    expected_datetime_array = [datetime.date(1970, 1, 1), datetime.date(2015, 9, 29)]
+    expected_datetime_ns_from_epoch = [timegm(dt.timetuple()) * 1000000000 for dt in expected_datetime_array]
+    assert expected_datetime_ns_from_epoch[0] == 0
+
     sample_input_dict = {
         'int32': np.asarray([-2 ** 31, 0, 100, 2 ** 31 - 1], dtype=np.int32),
         'uint16': np.asarray([0, 2, 2 ** 16 - 1], dtype=np.uint16),
         'Decimal': Decimal(1234) / Decimal(10),
+        'array_of_datetime_date': np.asarray(expected_datetime_array),
+        'array_of_np_datetime_64': np.asarray(expected_datetime_array).astype(np.datetime64),
     }
 
     TestNamedTuple = namedtuple('TestNamedTuple', sample_input_dict.keys())
@@ -66,6 +72,9 @@ def test_empty_dict():
     np.testing.assert_equal(sanitized_tuple.int32, sample_input_dict['int32'])
     np.testing.assert_equal(sanitized_tuple.uint16, sample_input_dict['uint16'])
     np.testing.assert_equal(str(sanitized_tuple.Decimal), str(sample_input_dict['Decimal'].normalize()))
+
+    np.testing.assert_equal(sanitized_tuple.array_of_datetime_date, expected_datetime_ns_from_epoch)
+    np.testing.assert_equal(sanitized_tuple.array_of_np_datetime_64, expected_datetime_ns_from_epoch)
 
 
 def test_decimal_conversion():
