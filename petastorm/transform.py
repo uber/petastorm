@@ -59,4 +59,4 @@ def transform_schema(schema, transform_spec):
                                                 shape=field_to_edit[2], codec=None, nullable=field_to_edit[3])
         fields.append(edited_unischema_field)
 
-    return Unischema(schema.name + '_transformed', fields)
+    return Unischema(schema._name + '_transformed', fields)
