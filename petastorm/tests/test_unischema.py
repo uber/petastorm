@@ -19,6 +19,7 @@ from decimal import Decimal
 
 import numpy as np
 import pyarrow as pa
+import pytest
 from pyspark import Row
 from pyspark.sql.types import StringType, IntegerType, DecimalType, ShortType, LongType
 
@@ -226,7 +227,12 @@ class UnischemaTest(unittest.TestCase):
             UnischemaField('nullable', np.int32, (), ScalarCodec(StringType()), True),
         ])
 
-        self.assertEqual('TestSchema', TestSchema.name)
+        self.assertEqual('TestSchema', TestSchema._name)
+
+    def test_field_name_conflict_with_unischema_attribute(self):
+        # fields is an existing attribute of Unischema
+        with pytest.warns(UserWarning, match='Can not create dynamic property'):
+            Unischema('TestSchema', [UnischemaField('fields', np.int32, (), ScalarCodec(StringType()), True)])
 
     def test_filter_schema_fields_from_url(self):
         TestSchema = Unischema('TestSchema', [
