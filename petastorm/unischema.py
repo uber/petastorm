@@ -134,7 +134,11 @@ class Unischema(object):
         self._fields = OrderedDict([(f.name, f) for f in sorted(fields, key=lambda t: t.name)])
         # Generates attributes named by the field names as an access syntax sugar.
         for f in fields:
-            setattr(self, f.name, f)
+            if not hasattr(self, f.name):
+                setattr(self, f.name, f)
+            else:
+                warnings.warn(('Can not create dynamic property {} because it conflicts with an existing property of '
+                               'Unischema').format(f.name))
 
     def create_schema_view(self, fields):
         """Creates a new instance of the schema using a subset of fields.
@@ -196,10 +200,6 @@ class Unischema(object):
     @property
     def fields(self):
         return self._fields
-
-    @property
-    def name(self):
-        return self._name
 
     def as_spark_schema(self):
         """Returns an object derived from the unischema as spark schema.
