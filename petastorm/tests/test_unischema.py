@@ -320,6 +320,17 @@ class UnischemaTest(unittest.TestCase):
         assert getattr(unischema, 'id').name == 'id'
         assert not hasattr(unischema, 'list_of_list')
 
+    def test_arrow_schema_convertion_ignore(self):
+        arrow_schema = pa.schema([
+            pa.field('list_of_int', pa.float16()),
+            pa.field('struct', pa.struct([('a', pa.string()), ('b', pa.int32())])),
+        ])
+
+        mock_dataset = _mock_parquet_dataset([], arrow_schema)
+
+        unischema = Unischema.from_arrow_schema(mock_dataset, omit_unsupported_fields=True)
+        assert not hasattr(unischema, 'list_of_int')
+
 
 class UnischemaFieldTest(unittest.TestCase):
     @classmethod
