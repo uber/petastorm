@@ -25,7 +25,8 @@ import numpy as np
 from pyarrow.lib import ListType
 from pyarrow.lib import StructType as pyStructType
 from pyspark import Row
-from pyspark.sql.types import StringType, ShortType, LongType, IntegerType, BooleanType, DoubleType, ByteType, \
+from pyspark.sql.types import StringType, ShortType, LongType, IntegerType, BooleanType, DoubleType, \
+    ByteType, \
     FloatType, DecimalType, DateType, TimestampType
 from pyspark.sql.types import StructField, StructType
 from six import string_types
@@ -218,13 +219,15 @@ class Unischema(object):
         return self._get_namedtuple()(*args, **kargs)
 
     @classmethod
-    def from_arrow_schema(cls, parquet_dataset):
+    def from_arrow_schema(cls, parquet_dataset, omit_unsupported_fields=False):
         """
         Convert an apache arrow schema into a unischema object. This is useful for datasets of only scalars
         which need no special encoding/decoding. If there is an unsupported type in the arrow schema, it will
         throw an exception.
+        When the warn_only parameter is turned to True, unsupported column types prints only warnings.
 
         :param arrow_schema: :class:`pyarrow.lib.Schema`
+        :param omit_unsupported_fields: ::class: `Boolean`
         :return: A :class:`Unischema` object.
         """
         meta = parquet_dataset.pieces[0].get_metadata(parquet_dataset.fs.open)
@@ -242,7 +245,15 @@ class Unischema(object):
                     warnings.warn('[ARROW-1644] Ignoring unsupported structure %r for field %r'
                                   % (field_type, column_name))
                     continue
-            codec, np_type = _numpy_and_codec_from_arrow_type(field_type)
+            try:
+                codec, np_type = _numpy_and_codec_from_arrow_type(field_type)
+            except ValueError:
+                if omit_unsupported_fields:
+                    warnings.warn('Column %r has an unsupported field %r. Ignoring...'
+                                  % (column_name, field_type))
+                    continue
+                else:
+                    raise
             unischema_fields.append(UnischemaField(column_name, np_type, (), codec, arrow_field.nullable))
         return Unischema('inferred_schema', unischema_fields)
 
