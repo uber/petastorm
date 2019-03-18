@@ -227,7 +227,7 @@ class Unischema(object):
         When the warn_only parameter is turned to True, unsupported column types prints only warnings.
 
         :param arrow_schema: :class:`pyarrow.lib.Schema`
-        :param omit_unsupported_fields: ::class: `Boolean`
+        :param omit_unsupported_fields: :class:`Boolean`
         :return: A :class:`Unischema` object.
         """
         meta = parquet_dataset.pieces[0].get_metadata(parquet_dataset.fs.open)
