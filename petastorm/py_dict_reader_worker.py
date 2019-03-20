@@ -14,6 +14,7 @@
 from __future__ import division
 
 import hashlib
+import threading
 
 import numpy as np
 from pyarrow import parquet as pq
@@ -44,6 +45,7 @@ def _select_cols(a_dict, keys):
 
 class PyDictReaderWorkerResultsQueueReader(object):
     def __init__(self):
+        self._result_buffer_lock = threading.Lock()
         self._result_buffer = []
 
     @property
@@ -54,23 +56,24 @@ class PyDictReaderWorkerResultsQueueReader(object):
         try:
             # We are receiving decoded rows from the worker in chunks. We store the list internally
             # and return a single item upon each consequent call to __next__
-            if not self._result_buffer:
-                # Reverse order, so we can pop from the end of the list in O(1) while maintaining
-                # order the items are returned from the worker
-                rows_as_dict = list(reversed(workers_pool.get_results()))
+            with self._result_buffer_lock:
+                if not self._result_buffer:
+                    # Reverse order, so we can pop from the end of the list in O(1) while maintaining
+                    # order the items are returned from the worker
+                    list_of_rows = list(reversed(workers_pool.get_results()))
 
-                if ngram:
-                    for ngram_row in rows_as_dict:
-                        for timestamp in ngram_row.keys():
-                            row = ngram_row[timestamp]
-                            schema_at_timestamp = ngram.get_schema_at_timestep(schema, timestamp)
+                    if ngram:
+                        for ngram_row in list_of_rows:
+                            for timestamp in ngram_row.keys():
+                                row = ngram_row[timestamp]
+                                schema_at_timestamp = ngram.get_schema_at_timestep(schema, timestamp)
 
-                            ngram_row[timestamp] = schema_at_timestamp.make_namedtuple(**row)
-                    self._result_buffer = rows_as_dict
-                else:
-                    self._result_buffer = [schema.make_namedtuple(**row) for row in rows_as_dict]
+                                ngram_row[timestamp] = schema_at_timestamp.make_namedtuple(**row)
+                        self._result_buffer = list_of_rows
+                    else:
+                        self._result_buffer = [schema.make_namedtuple(**row) for row in list_of_rows]
 
-            return self._result_buffer.pop()
+                return self._result_buffer.pop()
 
         except EmptyResultError:
             raise StopIteration
