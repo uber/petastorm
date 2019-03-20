@@ -18,6 +18,7 @@ from shutil import rmtree, copytree
 import numpy as np
 import pyarrow.hdfs
 import pytest
+from concurrent.futures import ThreadPoolExecutor
 from pyspark.sql import SparkSession
 from pyspark.sql.types import LongType, ShortType, StringType
 
@@ -612,3 +613,15 @@ def test_dataset_path_is_a_unicode(synthetic_dataset, reader_factory):
 def test_make_reader_fails_loading_non_petastrom_dataset(scalar_dataset):
     with pytest.raises(RuntimeError, match='use make_batch_reader'):
         make_reader(scalar_dataset.url)
+
+
+def test_multithreaded_reads(synthetic_dataset):
+    with make_reader(synthetic_dataset.url, workers_count=5, num_epochs=1) as reader:
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            def read_one_row():
+                return next(reader)
+
+            futures = [executor.submit(read_one_row) for _ in range(100)]
+            results = [f.result() for f in futures]
+            assert len(results) == len(synthetic_dataset.data)
+            assert set(r.id for r in results) == set(d['id'] for d in synthetic_dataset.data)
