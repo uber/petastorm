@@ -19,6 +19,8 @@ New features and bug fixes
 - `pyarrow==0.12.1` compatibility issues fixes.
 - Ignore list-of-lists and list-of-structs columns (with a warning) when loading data from Apache Parquet store.
   This is useful when reading from an existing Parquet store that has these incompatible types.
+- Added a mutex synchronizing readout from the results queue. Previously, race condition could have caused loss of
+  some samples when fetching samples from ``Reader`` object from multiple threads.
 
 
 Release 0.6.0
