@@ -113,15 +113,11 @@ class Unischema(object):
         :param fields: a list of ``UnischemaField`` instances describing the fields. The order of the fields is
             not important - they are stored sorted by name internally.
         """
-        self.__name = name
+        self._name = name
         self._fields = OrderedDict([(f.name, f) for f in sorted(fields, key=lambda t: t.name)])
         # Generates attributes named by the field names as an access syntax sugar.
         for f in fields:
-            if not hasattr(self, f.name):
-                setattr(self, f.name, f)
-            else:
-                warnings.warn(('Can not create dynamic property {} because it conflicts with an existing property of '
-                               'Unischema').format(f.name))
+            setattr(self, f.name, f)
 
     def create_schema_view(self, fields):
         """Creates a new instance of the schema using a subset of fields.
@@ -160,10 +156,10 @@ class Unischema(object):
             if field.name not in self._fields:
                 raise ValueError('field {} does not belong to the schema {}'.format(field, self))
 
-        return Unischema('{}_view'.format(self.__name), view_fields)
+        return Unischema('{}_view'.format(self._name), view_fields)
 
     def _get_namedtuple(self):
-        return _NamedtupleCache.get(self.__name, self._fields.keys())
+        return _NamedtupleCache.get(self._name, self._fields.keys())
 
     def __str__(self):
         """Represent this as the following form:
@@ -178,15 +174,15 @@ class Unischema(object):
             fields_str += '  {}(\'{}\', {}, {}, {}, {}),\n'.format(type(field).__name__, field.name,
                                                                    field.numpy_dtype.__name__,
                                                                    field.shape, field.codec, field.nullable)
-        return '{}({}, [\n{}])'.format(type(self).__name__, self.__name, fields_str)
+        return '{}({}, [\n{}])'.format(type(self).__name__, self._name, fields_str)
 
     @property
     def fields(self):
         return self._fields
 
     @property
-    def _name(self):
-        return self.__name
+    def name(self):
+        return self._name
 
     def as_spark_schema(self):
         """Returns an object derived from the unischema as spark schema.
