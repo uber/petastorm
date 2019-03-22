@@ -4,6 +4,23 @@
 Release notes
 =============
 
+Release 0.7.0
+=============
+
+Thanks to our new contributer: Rémy Saissy!
+
+Breaking changes
+----------------
+- ``transform`` argument of the ``petastorm.pytorch.DataLoader`` class was superseeded by `transform_spec` argument of
+  ``make_reader``/``make_batch_reader`` functions.
+
+New features and bug fixes
+--------------------------
+- `pyarrow==0.12.1` compatibility issues fixes.
+- Ignore list-of-lists and list-of-structs columns (with a warning) when loading data from Apache Parquet store.
+  This is useful when reading from an existing Parquet store that has these incompatible types.
+
+
 Release 0.6.0
 =============
 
