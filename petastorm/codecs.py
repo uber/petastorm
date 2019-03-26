@@ -170,6 +170,26 @@ class CompressedNdarrayCodec(DataframeColumnCodec):
         return BinaryType()
 
 
+class DummySparkCodec(DataframeColumnCodec):
+    """Uses internal arrow data representation without encoding/decoding"""
+    
+    def __init__(self, spark_type):
+        """Constructs a codec.
+
+        :param spark_type: an instance of a Type object from :mod:`pyspark.sql.types`
+        """
+        self._spark_type = spark_type
+    
+    def encode(self, unischema_field, value):
+        return value
+
+    def decode(self, unischema_field, value):
+        return value
+
+    def spark_dtype(self):
+        return self._spark_type
+
+
 class ScalarCodec(DataframeColumnCodec):
     """Encodes a scalar into a spark dataframe field."""
 
