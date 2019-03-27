@@ -226,11 +226,13 @@ class PyDictReaderWorker(WorkerBase):
             return filtered_decoded_predicate_rows
 
     def _read_with_shuffle_row_drop(self, piece, pq_file, column_names, shuffle_row_drop_partition):
+        # If integer_object_nulls is set to False, nullable integer fields are return as floats
+        # with nulls translated to nans
         data_frame = piece.read(
             open_file_func=lambda _: pq_file,
             columns=column_names,
             partitions=self._dataset.partitions
-        ).to_pandas()
+        ).to_pandas(integer_object_nulls=True)
 
         num_rows = len(data_frame)
         num_partitions = shuffle_row_drop_partition[1]

@@ -31,7 +31,7 @@ from petastorm.tf_utils import _sanitize_field_tf_types, _numpy_to_tf_dtypes, \
 from petastorm.unischema import Unischema, UnischemaField
 
 NON_NULLABLE_FIELDS = set(TestSchema.fields.values()) - \
-                      {TestSchema.matrix_nullable, TestSchema.string_array_nullable}
+                      {TestSchema.matrix_nullable, TestSchema.string_array_nullable, TestSchema.integer_nullable}
 
 
 @contextmanager
