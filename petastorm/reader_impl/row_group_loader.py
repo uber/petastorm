@@ -197,7 +197,7 @@ class RowGroupLoader(object):
             open_file_func=lambda _: parquet_file,
             columns=column_names,
             partitions=self._dataset.partitions
-        ).to_pandas()
+        ).to_pandas(integer_object_nulls=True)
 
         num_rows = len(data_frame)
         num_partitions = shuffle_row_drop_partition[1]

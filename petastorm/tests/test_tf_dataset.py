@@ -28,7 +28,8 @@ from petastorm.tests.test_common import TestSchema
 from petastorm.tf_utils import make_petastorm_dataset
 
 _EXCLUDE_FIELDS = set(TestSchema.fields.values()) \
-                  - {TestSchema.matrix_nullable, TestSchema.string_array_nullable, TestSchema.decimal}
+                  - {TestSchema.matrix_nullable, TestSchema.string_array_nullable, TestSchema.decimal,
+                     TestSchema.integer_nullable}
 
 MINIMAL_READER_FLAVOR_FACTORIES = [
     lambda url, **kwargs: make_reader(url, **_merge_params({'reader_pool_type': 'dummy',

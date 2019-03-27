@@ -50,6 +50,7 @@ TestSchema = Unischema('TestSchema', [
     UnischemaField('matrix_nullable', np.uint16, _DEFAULT_IMAGE_SIZE, NdarrayCodec(), True),
     UnischemaField('sensor_name', np.unicode_, (1,), NdarrayCodec(), False),
     UnischemaField('string_array_nullable', np.unicode_, (None,), NdarrayCodec(), True),
+    UnischemaField('integer_nullable', np.int32, (), ScalarCodec(ShortType()), True),
 ])
 
 
@@ -85,6 +86,7 @@ def _randomize_row(id_num):
         TestSchema.string_array_nullable.name:
             None if id_num % 5 == 0 else np.asarray([], dtype=np.unicode_)
             if id_num % 4 == 0 else np.asarray([str(i + id_num) for i in range(2)], dtype=np.unicode_),
+        TestSchema.integer_nullable.name: None if id_num % 2 else np.int32(id_num),
     }
     return row_dict
 
