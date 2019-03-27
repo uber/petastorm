@@ -14,9 +14,10 @@
 
 import logging
 import os
-import pyarrow
 from multiprocessing import Pool
 
+import pyarrow
+from future.utils import raise_with_traceback
 from pyarrow.filesystem import LocalFileSystem
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,10 @@ def run_in_subprocess(func, *args, **kwargs):
     return result
 
 
+class DecodeFieldError(RuntimeError):
+    pass
+
+
 def decode_row(row, schema):
     """
     Decode dataset row according to coding spec from unischema object
@@ -53,11 +58,15 @@ def decode_row(row, schema):
     for field_name_unicode, _ in row.items():
         field_name = str(field_name_unicode)
         if field_name in schema.fields:
-            if row[field_name] is not None:
-                codec = schema.fields[field_name].codec
-                decoded_row[field_name] = codec.decode(schema.fields[field_name], row[field_name])
-            else:
-                decoded_row[field_name] = None
+            try:
+                if row[field_name] is not None:
+                    codec = schema.fields[field_name].codec
+                    decoded_row[field_name] = codec.decode(schema.fields[field_name], row[field_name])
+                else:
+                    decoded_row[field_name] = None
+            except Exception:  # pylint: disable=broad-except
+                raise_with_traceback(DecodeFieldError('Decoding field "{}" failed'.format(field_name)))
+
     return decoded_row
 
 
