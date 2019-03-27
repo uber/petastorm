@@ -12,7 +12,7 @@ from petastorm.tests.test_common import TestSchema
 
 BATCHABLE_FIELDS = set(TestSchema.fields.values()) - \
                    {TestSchema.matrix_nullable, TestSchema.string_array_nullable,
-                    TestSchema.matrix_string, TestSchema.empty_matrix_string}
+                    TestSchema.matrix_string, TestSchema.empty_matrix_string, TestSchema.integer_nullable}
 
 # pylint: disable=unnecessary-lambda
 MINIMAL_READER_FLAVOR_FACTORIES = [
