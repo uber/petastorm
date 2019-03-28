@@ -24,7 +24,7 @@ from pyspark.sql.types import StringType, IntegerType, DecimalType, ShortType, L
 
 from petastorm.codecs import ScalarCodec, NdarrayCodec
 from petastorm.unischema import Unischema, UnischemaField, dict_to_spark_row, \
-    insert_explicit_nulls, match_unischema_fields
+    insert_explicit_nulls, match_unischema_fields, _new_gt_255_compatible_namedtuple
 
 try:
     from unittest import mock
@@ -355,6 +355,16 @@ class UnischemaFieldTest(unittest.TestCase):
         self.assertEqual(hash(self._TestField2a), hash(self._TestField2b))
         self.assertNotEqual(hash(self._TestField1a), hash(self._TestField1c))
         self.assertNotEqual(hash(self._TestField2a), hash(self._TestField2c))
+
+
+def test_new_gt_255_compatible_namedtuple():
+    fields_count = 1000
+    field_names = ['f{}'.format(i) for i in range(fields_count)]
+    values = list(range(1000))
+    huge_tuple = _new_gt_255_compatible_namedtuple('HUGE_TUPLE', field_names)
+    huge_tuple_instance = huge_tuple(**dict(zip(field_names, values)))
+    assert len(huge_tuple_instance) == fields_count
+    assert huge_tuple_instance.f764 == 764
 
 
 if __name__ == '__main__':
