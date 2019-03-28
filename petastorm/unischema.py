@@ -17,11 +17,13 @@ in several different python libraries. Currently supported are pyspark, tensorfl
 """
 import copy
 import re
+import sys
 import warnings
 from collections import namedtuple, OrderedDict
 from decimal import Decimal
 
 import numpy as np
+import six
 from pyarrow.lib import ListType
 from pyarrow.lib import StructType as pyStructType
 from pyspark import Row
@@ -32,7 +34,6 @@ from pyspark.sql.types import StructField, StructType
 from six import string_types
 
 from petastorm.codecs import ScalarCodec
-from petastorm.namedtuple import namedtuple_gt_255_fields
 
 
 def _fields_as_tuple(field):
@@ -96,8 +97,23 @@ class _NamedtupleCache(object):
         sorted_names = list(sorted(field_names))
         key = ' '.join([parent_schema_name] + sorted_names)
         if key not in _NamedtupleCache._store:
-            _NamedtupleCache._store[key] = namedtuple_gt_255_fields('{}_view'.format(parent_schema_name), sorted_names)
+            _NamedtupleCache._store[key] = \
+                _new_gt_255_compatible_namedtuple('{}_view'.format(parent_schema_name), sorted_names)
         return _NamedtupleCache._store[key]
+
+
+def _new_gt_255_compatible_namedtuple(*args, **kwargs):
+    # Between Python 3 - 3.6.8 namedtuple can not have more than 255 fields. We use
+    # our custom version of namedtuple in these cases
+    if six.PY3 and sys.version_info[1] < 7:
+        # Have to hide the codeblock in namedtuple_gt_255_fields.py from Python 2 interpreter
+        # as it would trigger "unqualified exec is not allowed in function" SyntaxError
+        from petastorm.namedtuple_gt_255_fields import namedtuple_gt_255_fields
+        namedtuple_cls = namedtuple_gt_255_fields
+    else:  # Python 2 or Python 3.7 and later.
+        namedtuple_cls = namedtuple
+
+    return namedtuple_cls(*args, **kwargs)
 
 
 # TODO: Changing fields in this class or the UnischemaField will break reading due to the schema being pickled next to
