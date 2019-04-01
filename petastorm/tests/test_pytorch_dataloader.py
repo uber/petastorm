@@ -59,6 +59,18 @@ def _check_simple_reader(loader, expected_data, expected_fields):
         assert actual_types == expected_types
 
 
+def _readout_all_ids_from_dataloader(loader):
+    ids = []
+    for row in loader:
+        ids.append(row['id'])
+
+    # Flatten ids if reader returns batches (make_batch_reader)
+    if len(ids[0]) > 1:
+        ids = [int(i) for arr in ids for i in arr]
+
+    return ids
+
+
 def _sensor_name_to_int(row):
     result_row = dict(**row)
     result_row['sensor_name'] = 0
@@ -70,6 +82,59 @@ def test_simple_read(synthetic_dataset, reader_factory):
     with DataLoader(reader_factory(synthetic_dataset.url, schema_fields=BATCHABLE_FIELDS,
                                    transform_spec=TransformSpec(_sensor_name_to_int))) as loader:
         _check_simple_reader(loader, synthetic_dataset.data, BATCHABLE_FIELDS - {TestSchema.sensor_name})
+
+
+@pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
+def test_simple_read_with_small_shuffle_size(synthetic_dataset, reader_factory):
+    with DataLoader(reader_factory(synthetic_dataset.url, schema_fields=BATCHABLE_FIELDS,
+                                   transform_spec=TransformSpec(_sensor_name_to_int)),
+                    shuffle_size=20) as loader:
+        _check_simple_reader(loader, synthetic_dataset.data, BATCHABLE_FIELDS - {TestSchema.sensor_name})
+
+
+@pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
+def test_simple_read_with_large_shuffle_size(synthetic_dataset, reader_factory):
+    with DataLoader(reader_factory(synthetic_dataset.url, schema_fields=BATCHABLE_FIELDS,
+                                   transform_spec=TransformSpec(_sensor_name_to_int)),
+                    shuffle_size=200) as loader:
+        _check_simple_reader(loader, synthetic_dataset.data, BATCHABLE_FIELDS - {TestSchema.sensor_name})
+
+
+@pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
+def test_shuffle(synthetic_dataset, reader_factory):
+    rows_count = len(synthetic_dataset.data)
+
+    with DataLoader(reader_factory(synthetic_dataset.url, schema_fields=BATCHABLE_FIELDS,
+                                   transform_spec=TransformSpec(_sensor_name_to_int)),
+                    batch_size=10,
+                    shuffle_size=200) as loader1:
+        ids1 = _readout_all_ids_from_dataloader(loader1)
+
+    with DataLoader(reader_factory(synthetic_dataset.url, schema_fields=BATCHABLE_FIELDS,
+                                   transform_spec=TransformSpec(_sensor_name_to_int)),
+                    batch_size=10,
+                    shuffle_size=200) as loader2:
+        ids2 = _readout_all_ids_from_dataloader(loader2)
+
+    np.testing.assert_array_equal(range(rows_count), sorted(ids1))
+    assert np.any(np.not_equal(ids1, ids2))
+
+
+@pytest.mark.parametrize('reader_factory', [
+    lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
+    lambda url, **kwargs: make_reader(url, reader_pool_type='process', workers_count=1, pyarrow_serialize=True,
+                                      **kwargs)
+])
+def test_without_shuffle(synthetic_dataset, reader_factory):
+    rows_count = len(synthetic_dataset.data)
+
+    with DataLoader(reader_factory(synthetic_dataset.url, schema_fields=BATCHABLE_FIELDS,
+                                   shuffle_row_groups=False,
+                                   transform_spec=TransformSpec(_sensor_name_to_int)),
+                    batch_size=10) as loader:
+        ids = _readout_all_ids_from_dataloader(loader)
+
+    np.testing.assert_array_equal(range(rows_count), ids)
 
 
 def test_sanitize_pytorch_types_int8():

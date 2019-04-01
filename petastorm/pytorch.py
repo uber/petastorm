@@ -21,6 +21,7 @@ import collections
 import decimal
 
 import numpy as np
+from petastorm.reader_impl.shuffling_buffer import NoopShufflingBuffer, RandomShufflingBuffer
 from six import PY2
 from torch.utils.data.dataloader import default_collate
 
@@ -97,7 +98,7 @@ class DataLoader(object):
     runs out of samples.
     """
 
-    def __init__(self, reader, batch_size=1, collate_fn=decimal_friendly_collate):
+    def __init__(self, reader, batch_size=1, collate_fn=decimal_friendly_collate, shuffle_size=0):
         """
         Initializes a data loader object, with a default collate.
 
@@ -106,10 +107,17 @@ class DataLoader(object):
         :param reader: petastorm Reader instance
         :param batch_size: the number of items to return per batch; factored into the len() of this reader
         :param collate_fn: an optional callable to merge a list of samples to form a mini-batch.
+        :param shuffle_size: the number of samples to be shuffled randomly.
         """
         self.reader = reader
         self.batch_size = batch_size
         self.collate_fn = collate_fn
+        self.shuffle_size = shuffle_size
+        if shuffle_size > 0:
+            min_after_retrieve = shuffle_size // 2
+            self.shuffle_queue = RandomShufflingBuffer(shuffle_size, min_after_retrieve)
+        else:
+            self.shuffle_queue = NoopShufflingBuffer()
 
     def __iter__(self):
         """
@@ -121,10 +129,32 @@ class DataLoader(object):
             # Using dict will result in the yielded structures being dicts as well
             row_as_dict = row._asdict()
             _sanitize_pytorch_types(row_as_dict)
-            batch.append(row_as_dict)
+
+            if (self.shuffle_size == 0 and self.shuffle_queue.size < self.batch_size) or \
+               (self.shuffle_size != 0 and self.shuffle_queue.can_add()):
+                self.shuffle_queue.add_many([row_as_dict])
+                continue
+
+            while self.shuffle_queue.can_retrieve() and len(batch) < self.batch_size:
+                batch.append(self.shuffle_queue.retrieve())
+
+            # Do not missing the sample for previous full queue.
+            self.shuffle_queue.add_many([row_as_dict])
+
             if len(batch) == self.batch_size:
                 yield self.collate_fn(batch)
                 batch = []
+
+        self.shuffle_queue.finish()
+        while self.shuffle_queue.can_retrieve():
+            if len(batch) < self.batch_size:
+                batch.append(self.shuffle_queue.retrieve())
+                continue
+
+            if len(batch) == self.batch_size:
+                yield self.collate_fn(batch)
+                batch = []
+
         if batch:
             yield self.collate_fn(batch)
 
