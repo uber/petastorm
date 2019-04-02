@@ -97,6 +97,8 @@ class ConcurrentVentilator(Ventilator):
         self._iterations_remaining = iterations
         self._randomize_item_order = randomize_item_order
 
+        self._iterations = iterations
+
         # For the default max ventilation queue size we will use the size of the items to ventilate
         self._max_ventilation_queue_size = max_ventilation_queue_size or len(items_to_ventilate)
         self._ventilation_interval = ventilation_interval
@@ -119,6 +121,17 @@ class ConcurrentVentilator(Ventilator):
     def completed(self):
         assert self._iterations_remaining is None or self._iterations_remaining >= 0
         return self._stop_requested or self._iterations_remaining == 0 or not self._items_to_ventilate
+
+    def reset(self):
+        """Will restart the ventilation from the beginning. Currently, we may do this only if the ventilator has
+        finished ventilating all its items (i.e. ventilator.completed()==True)
+        """
+        if not self.completed():
+            # Might be hard to solve all race conditions, unless no more ventilation is going on.
+            raise NotImplementedError('Reseting ventilator while ventilating is not supported.')
+
+        self._iterations_remaining = self._iterations
+        self.start()
 
     def _ventilate(self):
         while True:

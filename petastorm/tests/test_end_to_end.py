@@ -13,12 +13,12 @@
 # limitations under the License.
 import operator
 import os
+from concurrent.futures import ThreadPoolExecutor
 from shutil import rmtree, copytree
 
 import numpy as np
 import pyarrow.hdfs
 import pytest
-from concurrent.futures import ThreadPoolExecutor
 from pyspark.sql import SparkSession
 from pyspark.sql.types import LongType, ShortType, StringType
 
@@ -453,7 +453,10 @@ def test_two_column_predicate(synthetic_dataset, reader_factory):
         assert (all_partition_key == 'p_2').all()
 
 
-@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
+@pytest.mark.parametrize('reader_factory',
+                         [lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
+                          lambda url, **kwargs: make_reader(url, reader_pool_type='thread', **kwargs),
+                          lambda url, **kwargs: make_reader(url, reader_pool_type='process', **kwargs)])
 def test_multiple_epochs(synthetic_dataset, reader_factory):
     """Tests that multiple epochs works as expected"""
     num_epochs = 5
@@ -461,7 +464,28 @@ def test_multiple_epochs(synthetic_dataset, reader_factory):
         # Read all expected entries from the dataset and compare the data to reference
         single_epoch_id_set = [d['id'] for d in synthetic_dataset.data]
         actual_ids_in_all_epochs = _readout_all_ids(reader)
-        np.testing.assert_equal(sorted(num_epochs * single_epoch_id_set), sorted(actual_ids_in_all_epochs))
+        np.testing.assert_equal(sorted(actual_ids_in_all_epochs), sorted(num_epochs * single_epoch_id_set))
+
+        # Reset reader should reset ventilator. Should produce another `num_epochs` results
+        reader.reset()
+        actual_ids_in_all_epochs = _readout_all_ids(reader)
+        np.testing.assert_equal(sorted(actual_ids_in_all_epochs), sorted(num_epochs * single_epoch_id_set))
+
+
+@pytest.mark.parametrize('reader_factory',
+                         [lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
+                          lambda url, **kwargs: make_reader(url, reader_pool_type='thread', **kwargs),
+                          lambda url, **kwargs: make_reader(url, reader_pool_type='process', **kwargs)])
+def test_fail_if_resetting_in_the_middle_of_epoch(synthetic_dataset, reader_factory):
+    """Tests that multiple epochs works as expected"""
+    num_epochs = 5
+    with reader_factory(synthetic_dataset.url, num_epochs=num_epochs) as reader:
+        # Read all expected entries from the dataset and compare the data to reference
+        actual_ids = _readout_all_ids(reader, limit=20)
+        assert len(actual_ids) == 20
+
+        with pytest.raises(NotImplementedError):
+            reader.reset()
 
 
 # TODO(yevgeni) this test is broken for reader_v2
