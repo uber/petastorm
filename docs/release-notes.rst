@@ -4,6 +4,19 @@
 Release notes
 =============
 
+Release 0.7.1
+=============
+
+Thanks to our contributors: Rémy Saissy!
+
+New features and bug fixes
+--------------------------
+- Support opening parquet datasets with more than 255 columns using Python 3.0-3.6.
+- Do not cast integers scalars to floats in columns containing nullable integer values.
+- Include column name in an exception raised in case of decoding failure.
+
+
+
 Release 0.7.0
 =============
 
