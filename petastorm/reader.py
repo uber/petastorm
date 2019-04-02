@@ -454,17 +454,43 @@ class Reader(object):
         # 4. Create a rowgroup ventilator object
         normalized_shuffle_row_drop_partitions = \
             self._normalize_shuffle_options(shuffle_row_drop_partitions, self.dataset)
-        ventilator = self._create_ventilator(filtered_row_group_indexes, shuffle_row_groups,
-                                             normalized_shuffle_row_drop_partitions, num_epochs, worker_predicate,
-                                             self._workers_pool.workers_count + _VENTILATE_EXTRA_ROWGROUPS)
+        self.ventilator = self._create_ventilator(filtered_row_group_indexes, shuffle_row_groups,
+                                                  normalized_shuffle_row_drop_partitions, num_epochs, worker_predicate,
+                                                  self._workers_pool.workers_count + _VENTILATE_EXTRA_ROWGROUPS)
 
         # 5. Start workers pool
         self._workers_pool.start(worker_class, (pyarrow_filesystem, dataset_path, storage_schema, self.ngram,
                                                 row_groups, cache, transform_spec),
-                                 ventilator=ventilator)
+                                 ventilator=self.ventilator)
         logger.debug('Workers pool started')
 
         self.last_row_consumed = False
+
+    def reset(self):
+        """Resets ``Reader`` state and allows to fetch more samples once the ``Reader`` finished reading all epochs,
+        as specified by the ``num_epochs`` parameter.
+
+        Once all samples were read from a reader, an attempt to fetch new sample (e.g. ``next(reader)`` would raise
+        ``StopIterationError``. You can reset the reader to the original state and restart reading samples
+        calling ``reset()``.
+
+        We do not support calling ``reset()`` until all samples were consumed. ``NotImplementedError``
+        will be raised if a user attempt to do so.
+
+        Calling reset after ``stop()`` was called has no effect.
+
+        :return: None
+        """
+        # TODO(yevgeni): could there be a race here?
+        if not self.last_row_consumed:
+            # Don't allow reseting in the middle of epoch iterations since it is not very well defined how
+            # to treat samples that are already 'in-flight': do we need to stop emitting results immediately and
+            # drop these in-flight samples? Or just ignore it? What would happen if we have two concurrent ventilators
+            # that are emitting load requests at the same time?
+            raise NotImplementedError('Currently do not support resetting a reader while in the middle of iteration. '
+                                      'You can call reset only after all samples were consumed.')
+        self.last_row_consumed = False
+        self.ventilator.reset()
 
     @property
     def batched_output(self):
