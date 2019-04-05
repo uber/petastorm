@@ -40,19 +40,24 @@ class ArrowReaderWorkerResultsQueueReader(object):
             assert not ngram, 'ArrowReader does not support ngrams for now'
 
             result_table = workers_pool.get_results()
-            assert 1 == result_table.column(0).data.num_chunks
 
             # Convert arrow table columns into numpy. Strings are handled differently since to_pandas() returns
             # numpy array of dtype=object.
             result_dict = dict()
             for column in result_table.columns:
                 # Assume we get only one chunk since reader worker reads one rowgroup at a time
-                assert len(column.data.chunks) == 1
+
+                # `to_pandas` works slower when called on the entire `data` rather directly on a chunk.
+                if result_table.column(0).data.num_chunks == 1:
+                    column_as_pandas = column.data.chunks[0].to_pandas()
+                else:
+                    column_as_pandas = column.data.to_pandas()
+
                 if pa.types.is_string(column.type):
-                    result_dict[column.name] = column.data.chunks[0].to_pandas().astype(np.unicode_)
+                    result_dict[column.name] = column_as_pandas.astype(np.unicode_)
                 elif pa.types.is_list(column.type):
                     # Assuming all lists are of the same length, hence we can collate them into a matrix
-                    list_of_lists = column.data.chunks[0].to_pandas()
+                    list_of_lists = column_as_pandas
                     try:
                         result_dict[column.name] = np.vstack(list_of_lists.tolist())
                     except ValueError:
@@ -61,7 +66,7 @@ class ArrowReaderWorkerResultsQueueReader(object):
                                            column.name,
                                            ', '.join({value.shape[0] for value in list_of_lists}))
                 else:
-                    result_dict[column.name] = column.data.chunks[0].to_pandas()
+                    result_dict[column.name] = column_as_pandas
 
             return schema.make_namedtuple(**result_dict)
 
