@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from petastorm.errors import NoDataAvailableError  # noqa: F401
-from petastorm.reader import make_reader, make_batch_reader  # noqa: F401
-from petastorm.transform import TransformSpec  # noqa: F401
 
-__version__ = '0.7.3'
+class NoDataAvailableError(Exception):
+    """Raised when a sharding was enabled shard_count > 1 from a reader but non-empty shards can not be produced"""

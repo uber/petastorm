@@ -15,13 +15,14 @@
 import collections
 import logging
 import warnings
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 import six
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from pyarrow import parquet as pq
 
 from petastorm.arrow_reader_worker import ArrowReaderWorker
 from petastorm.cache import NullCache
+from petastorm.errors import NoDataAvailableError
 from petastorm.etl import dataset_metadata, rowgroup_indexing
 from petastorm.etl.dataset_metadata import PetastormMetadataError, infer_or_load_unischema
 from petastorm.fs_utils import FilesystemResolver
@@ -528,6 +529,11 @@ class Reader(object):
             filtered_row_group_indexes = self._partition_row_groups(dataset, row_groups, shard_count,
                                                                     cur_shard,
                                                                     filtered_row_group_indexes)
+
+        if not filtered_row_group_indexes:
+            warnings.warn('No matching data is available for loading after rowgroup '
+                          'selector were applied and the data was sharded.')
+
         return filtered_row_group_indexes, worker_predicate
 
     def _partition_row_groups(self, dataset, row_groups, shard_count, cur_shard,
@@ -539,6 +545,10 @@ class Reader(object):
                 or not isinstance(cur_shard, int) \
                 or not isinstance(shard_count, int):
             raise ValueError('partition and num_partitions must be ints and both specified to use partitioning')
+
+        if shard_count is not None and len(row_groups) < shard_count:
+            raise NoDataAvailableError('Number of row-groups in the dataset must be greater or equal to the number of '
+                                       'requested shards. Otherwise, some of the shards will end up being empty.')
 
         # We hash on the relative path of each parquet file to guarantee consistency between different reader
         # constructions even after moving the dataset
