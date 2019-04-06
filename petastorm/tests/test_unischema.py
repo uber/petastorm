@@ -304,7 +304,7 @@ class UnischemaTest(unittest.TestCase):
     def test_arrow_schema_arrow_1644_list_of_struct(self):
         arrow_schema = pa.schema([
             pa.field('id', pa.string()),
-            pa.field('list_of_struct', pa.list_(pa.struct([('a', pa.string()), ('b', pa.int32())])))
+            pa.field('list_of_struct', pa.list_(pa.struct([pa.field('a', pa.string()), pa.field('b', pa.int32())])))
         ])
 
         mock_dataset = _mock_parquet_dataset([], arrow_schema)
@@ -317,7 +317,7 @@ class UnischemaTest(unittest.TestCase):
         arrow_schema = pa.schema([
             pa.field('id', pa.string()),
             pa.field('list_of_list',
-                     pa.list_(pa.list_(pa.struct([('a', pa.string()), ('b', pa.int32())]))))
+                     pa.list_(pa.list_(pa.struct([pa.field('a', pa.string()), pa.field('b', pa.int32())]))))
         ])
 
         mock_dataset = _mock_parquet_dataset([], arrow_schema)
@@ -329,7 +329,7 @@ class UnischemaTest(unittest.TestCase):
     def test_arrow_schema_convertion_ignore(self):
         arrow_schema = pa.schema([
             pa.field('list_of_int', pa.float16()),
-            pa.field('struct', pa.struct([('a', pa.string()), ('b', pa.int32())])),
+            pa.field('struct', pa.struct([pa.field('a', pa.string()), pa.field('b', pa.int32())])),
         ])
 
         mock_dataset = _mock_parquet_dataset([], arrow_schema)

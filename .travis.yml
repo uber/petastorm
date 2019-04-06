@@ -17,6 +17,9 @@ language: python
 python:
   - '2.7'
   - '3.6'
+env:
+  - PYARROW_VERSION=0.10.0 TF_VERSION=1.12
+  - PYARROW_VERSION=0.12.1 TF_VERSION=1.12
 services:
   - docker
 
@@ -45,6 +48,8 @@ before_script:
   # pyarrow was compiled against a newer version of numpy than we require so we need to upgrade it
   # (or optionally install pyarrow from source instead of through binaries)
   - $RUN pip install --upgrade numpy
+
+  - $RUN pip install -U pyarrow==${PYARROW_VERSION} tensorflow==${TF_VERSION}
 
   - $RUN pip list
 
