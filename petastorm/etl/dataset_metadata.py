@@ -268,7 +268,8 @@ def load_row_groups(dataset):
         # looking up the number of row groups.
         row_groups_key = os.path.relpath(piece.path, dataset.paths)
         for row_group in range(row_groups_per_file[row_groups_key]):
-            rowgroups.append(pq.ParquetDatasetPiece(piece.path, row_group, piece.partition_keys))
+            rowgroups.append(pq.ParquetDatasetPiece(piece.path, row_group=row_group,
+                                                    partition_keys=piece.partition_keys))
     return rowgroups
 
 
@@ -304,7 +305,7 @@ def _split_row_groups(dataset):
             continue
 
         for row_group in range(row_groups_per_file[relative_path]):
-            split_piece = pq.ParquetDatasetPiece(piece.path, row_group, piece.partition_keys)
+            split_piece = pq.ParquetDatasetPiece(piece.path, row_group=row_group, partition_keys=piece.partition_keys)
             split_pieces.append(split_piece)
 
     return split_pieces
@@ -323,8 +324,9 @@ def _split_row_groups_from_footers(dataset):
     def split_piece(piece):
         metadata = piece.get_metadata(dataset.fs.open)
         return [pq.ParquetDatasetPiece(piece.path,
-                                       row_group,
-                                       piece.partition_keys) for row_group in range(metadata.num_row_groups)]
+                                       row_group=row_group,
+                                       partition_keys=piece.partition_keys)
+                for row_group in range(metadata.num_row_groups)]
 
     futures_list = [thread_pool.submit(split_piece, piece) for piece in dataset.pieces]
     result = [item for f in futures_list for item in f.result()]
