@@ -92,7 +92,8 @@ def _index_columns(piece_info, dataset_url, partitions, indexers, schema, hdfs_d
     :return: list of indexers containing index data
     """
     # Create pyarrow piece
-    piece = pq.ParquetDatasetPiece(piece_info.path, piece_info.row_group, piece_info.partition_keys)
+    piece = pq.ParquetDatasetPiece(piece_info.path, row_group=piece_info.row_group,
+                                   partition_keys=piece_info.partition_keys)
 
     # Collect column names needed for indexing
     column_names = set()
