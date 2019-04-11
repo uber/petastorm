@@ -282,7 +282,17 @@ def test_shuffling_queue_with_ngrams(synthetic_dataset):
 def test_simple_read_tensorflow_with_parquet_dataset(scalar_dataset):
     """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
     data"""
-    with make_batch_reader(dataset_url=scalar_dataset.url) as reader:
+
+    tf_incompatible_field_names = ['struct']
+
+    def remove_tf_non_compatible_fields(sample):
+        for field_name in tf_incompatible_field_names:
+            del sample[field_name]
+        return sample
+
+    transform_spec = TransformSpec(remove_tf_non_compatible_fields, removed_fields=tf_incompatible_field_names)
+    with make_batch_reader(dataset_url=scalar_dataset.url,
+                           transform_spec=transform_spec) as reader:
         row_tensors = tf_tensors(reader)
         # Make sure we have static shape info for all fields
         for column in row_tensors:
@@ -293,7 +303,7 @@ def test_simple_read_tensorflow_with_parquet_dataset(scalar_dataset):
                 batch = sess.run(row_tensors)._asdict()
                 for i, id_value in enumerate(batch['id']):
                     expected_row = next(d for d in scalar_dataset.data if d['id'] == id_value)
-                    for field_name in expected_row.keys():
+                    for field_name in set(expected_row.keys()) - set(tf_incompatible_field_names):
                         _assert_fields_eq(batch[field_name][i], expected_row[field_name])
 
 
@@ -312,12 +322,14 @@ def test_simple_read_tensorflow_with_non_petastorm_many_columns_dataset(many_col
             assert set(batch.keys()) == set(many_columns_non_petastorm_dataset.data[0].keys())
 
 
+@pytest.mark.forked
 def test_shuffling_queue_with_make_batch_reader(scalar_dataset):
     with make_batch_reader(dataset_url=scalar_dataset.url) as reader:
         with pytest.raises(ValueError):
             tf_tensors(reader, 100, 90)
 
 
+@pytest.mark.forked
 def test_transform_function_new_field(synthetic_dataset):
     def double_matrix(sample):
         sample['double_matrix'] = sample['matrix'] * 2
@@ -337,16 +349,18 @@ def test_transform_function_new_field(synthetic_dataset):
         np.testing.assert_equal(expected_matrix, actual.double_matrix)
 
 
+@pytest.mark.forked
 def test_transform_function_new_field_batched(scalar_dataset):
     def double_float64(sample):
         sample['new_float64'] = sample['float64'] * 2
         del sample['float64']
+        del sample['struct']
         return sample
 
     with make_batch_reader(scalar_dataset.url, reader_pool_type='dummy',
                            transform_spec=TransformSpec(double_float64,
-                                                        [('new_float64', np.float64, (), False)],
-                                                        ['float64'])) as reader:
+                                                        edit_fields=[('new_float64', np.float64, (), False)],
+                                                        removed_fields=['float64', 'struct'])) as reader:
         row_tensors = tf_tensors(reader)
         with _tf_session() as sess:
             actual = sess.run(row_tensors)
@@ -355,3 +369,13 @@ def test_transform_function_new_field_batched(scalar_dataset):
             original_sample = next(d for d in scalar_dataset.data if d['id'] == actual_id)
             expected = original_sample['float64'] * 2
             np.testing.assert_equal(expected, actual_float64)
+
+
+@pytest.mark.forked
+def test_tensorflow_incompatible_field(scalar_dataset):
+    """scalar_dataset has 'struct' field (a struct) that can not be converted to a Tensorflow Tensor. Verify we raise
+    an error with a field name mentioned in it"""
+
+    with pytest.raises(RuntimeError, match='Don\'t know how to map field \'struct\' to'):
+        with make_batch_reader(scalar_dataset.url, reader_pool_type='dummy') as reader:
+            tf_tensors(reader)

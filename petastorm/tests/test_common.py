@@ -173,21 +173,34 @@ def create_test_scalar_dataset(tmp_url, num_rows, num_files=4, spark=None):
                       'timestamp': np.datetime64('2005-02-25T03:30'),
                       'string': np.unicode_('hello_{}'.format(i)),
                       'string2': np.unicode_('world_{}'.format(i)),
-                      'float64': np.float64(i) * .66} for i in range(num_rows)]
+                      'float64': np.float64(i) * .66,
+                      'struct': np.asarray({'a': i, 'b': 2 * i}),
+                      'struct_of_lists': np.asarray({'a': [i, i], 'b': [2 * i, 2 * i]}),
+                      'struct_of_struct': np.asarray({'a': {'x': 1, 'y': 2}})}
+                     for i in range(num_rows)]
 
     expected_data_as_scalars = [{k: np.asscalar(v) if isinstance(v, np.generic) else v for k, v in row.items()} for row
                                 in expected_data]
+
+    # Delete columns that will not make it through pyarrow because the types are not supported by it
+    for row in expected_data:
+        del row['struct_of_lists']
+        del row['struct_of_struct']
 
     # np.datetime64 is converted to a timezone unaware datetime instances. Working explicitly in UTC so we don't need
     # to think about local timezone in the tests
     for row in expected_data_as_scalars:
         row['timestamp'] = row['timestamp'].replace(tzinfo=pytz.UTC)
         row['int_fixed_size_list'] = row['int_fixed_size_list'].tolist()
+        row['struct'] = row['struct'].tolist()
+        row['struct_of_lists'] = row['struct_of_lists'].tolist()
+        row['struct_of_struct'] = row['struct_of_struct'].tolist()
 
     rows = [Row(**row) for row in expected_data_as_scalars]
 
     # WARNING: surprisingly, schema fields and row fields are matched only by order and not name.
     # We must maintain alphabetical order of the struct fields for the code to work!!!
+    xy_struct = StructType([StructField('x', IntegerType(), False), StructField('y', IntegerType(), False)])
     schema = StructType([
         StructField('datetime', DateType(), False),
         StructField('float64', DoubleType(), False),
@@ -195,6 +208,19 @@ def create_test_scalar_dataset(tmp_url, num_rows, num_files=4, spark=None):
         StructField('int_fixed_size_list', ArrayType(IntegerType(), False), False),
         StructField('string', StringType(), False),
         StructField('string2', StringType(), False),
+        StructField('struct',
+                    StructType([
+                        StructField('a', IntegerType(), False),
+                        StructField('b', IntegerType(), False)]),
+                    False),
+        StructField('struct_of_lists',
+                    StructType([
+                        StructField('a', ArrayType(IntegerType(), False), False),
+                        StructField('b', ArrayType(IntegerType(), False), False)]),
+                    False),
+        StructField('struct_of_struct',
+                    StructType([
+                        StructField('a', xy_struct, False)])),
         StructField('timestamp', TimestampType(), False),
     ])
 

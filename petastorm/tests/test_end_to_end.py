@@ -152,9 +152,13 @@ def test_transform_function_new_field(synthetic_dataset, reader_factory):
 def test_transform_function_batched(scalar_dataset):
     def double_float64(sample):
         sample['float64'] *= 2
+        # https://issues.apache.org/jira/browse/ARROW-5161: from_pandas does not support struct fields.
+        # By removing the struct field we make the test pass.
+        del sample['struct']
         return sample
 
-    with make_batch_reader(scalar_dataset.url, transform_spec=TransformSpec(double_float64)) as reader:
+    with make_batch_reader(scalar_dataset.url, transform_spec=TransformSpec(double_float64,
+                                                                            removed_fields=['struct'])) as reader:
         actual = next(reader)
         for actual_id, actual_float64 in zip(actual.id, actual.float64):
             original_sample = next(d for d in scalar_dataset.data if d['id'] == actual_id)
@@ -166,9 +170,13 @@ def test_transform_function_with_predicate_batched(scalar_dataset):
     def double_float64(sample):
         assert all(sample['id'] % 2 == 0)
         sample['float64'] *= 2
+        # https://issues.apache.org/jira/browse/ARROW-5161: from_pandas does not support struct fields.
+        # By removing the struct field we make the test pass.
+        del sample['struct']
         return sample
 
-    with make_batch_reader(scalar_dataset.url, transform_spec=TransformSpec(double_float64),
+    with make_batch_reader(scalar_dataset.url, transform_spec=TransformSpec(double_float64,
+                                                                            removed_fields=['struct']),
                            predicate=in_lambda(['id'], lambda id: id % 2 == 0)) as reader:
         actual = next(reader)
         for actual_id, actual_float64 in zip(actual.id, actual.float64):

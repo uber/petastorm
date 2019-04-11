@@ -102,6 +102,15 @@ def _schema_to_tf_dtypes(schema):
     :param schema: The schema.
     :return: List of tensorflow dtypes.
     """
+
+    list_of_dtypes = []
+    for f in schema.fields.values():
+        if f.numpy_dtype is None:
+            raise RuntimeError(('Don\'t know how to map field \'{}\' to a Tensorflow Tensor type. '
+                                'Use make_reader or make_batch_reader \'transform_spec=\' argument to transform this '
+                                'field to a numpy array or a scalar that can be then converted to one of the '
+                                'Tensorflow Tensor types.').format(f.name))
+        list_of_dtypes.append(_numpy_to_tf_dtypes(f.numpy_dtype))
     return [_numpy_to_tf_dtypes(f.numpy_dtype) for f in schema.fields.values()]
 
 

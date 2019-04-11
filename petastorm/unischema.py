@@ -257,20 +257,15 @@ class Unischema(object):
         for column_name in arrow_schema.names:
             arrow_field = arrow_schema.field_by_name(column_name)
             field_type = arrow_field.type
-            if isinstance(field_type, ListType):
-                if isinstance(field_type.value_type, ListType) or isinstance(field_type.value_type, pyStructType):
-                    warnings.warn('[ARROW-1644] Ignoring unsupported structure %r for field %r'
-                                  % (field_type, column_name))
-                    continue
+            if not _is_supported_by_pyarrow(field_type):
+                warnings.warn('[ARROW-1644] Ignoring unsupported structure %r for field %r'
+                              % (field_type, column_name))
+                continue
             try:
                 codec, np_type = _numpy_and_codec_from_arrow_type(field_type)
             except ValueError:
-                if omit_unsupported_fields:
-                    warnings.warn('Column %r has an unsupported field %r. Ignoring...'
-                                  % (column_name, field_type))
-                    continue
-                else:
-                    raise
+                codec = None
+                np_type = None
             unischema_fields.append(UnischemaField(column_name, np_type, (), codec, arrow_field.nullable))
         return Unischema('inferred_schema', unischema_fields)
 
@@ -391,3 +386,36 @@ def _numpy_and_codec_from_arrow_type(field_type):
     else:
         raise ValueError('Cannot auto-create unischema due to unsupported column type {}'.format(field_type))
     return codec, np_type
+
+
+def _check_if_children_has_list_type(parent_field_type):
+    if isinstance(parent_field_type, ListType):
+        return True
+
+    if isinstance(parent_field_type, pyStructType):
+        for field in parent_field_type:
+            field_type = field.type
+            if _check_if_children_has_list_type(field_type):
+                return True
+    else:
+        return False
+
+
+def _is_supported_by_pyarrow(field_type):
+    if isinstance(field_type, ListType):
+        current_level_type = field_type.value_type
+        while isinstance(current_level_type, ListType):
+            current_level_type = current_level_type.value_type
+
+        if isinstance(current_level_type, pyStructType):
+            return False
+        else:
+            return True
+
+    if isinstance(field_type, pyStructType):
+        for field in field_type:
+            struct_field_type = field.type
+            if isinstance(struct_field_type, pyStructType) or isinstance(struct_field_type, ListType):
+                return False
+
+    return True

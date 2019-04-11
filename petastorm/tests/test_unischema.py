@@ -264,7 +264,6 @@ class UnischemaTest(unittest.TestCase):
             pa.field('timestamp_ns', pa.timestamp('ns')),
             pa.field('date_32', pa.date32()),
             pa.field('date_64', pa.date64()),
-            pa.field('timestamp_ns', pa.timestamp('ns')),
         ])
 
         mock_dataset = _mock_parquet_dataset([], arrow_schema)
@@ -289,17 +288,14 @@ class UnischemaTest(unittest.TestCase):
         unischema = Unischema.from_arrow_schema(mock_dataset)
         assert unischema.part_name.codec.spark_dtype().typeName() == 'string'
 
-    def test_arrow_schema_convertion_fail(self):
+    def test_arrow_schema_convertion_of_a_list(self):
         arrow_schema = pa.schema([
             pa.field('list_of_int', pa.float16()),
         ])
 
         mock_dataset = _mock_parquet_dataset([], arrow_schema)
 
-        with self.assertRaises(ValueError) as ex:
-            Unischema.from_arrow_schema(mock_dataset)
-
-        assert 'Cannot auto-create unischema due to unsupported column type' in str(ex.exception)
+        Unischema.from_arrow_schema(mock_dataset)
 
     def test_arrow_schema_arrow_1644_list_of_struct(self):
         arrow_schema = pa.schema([
@@ -328,14 +324,18 @@ class UnischemaTest(unittest.TestCase):
 
     def test_arrow_schema_convertion_ignore(self):
         arrow_schema = pa.schema([
-            pa.field('list_of_int', pa.float16()),
+            pa.field('float', pa.float16()),
             pa.field('struct', pa.struct([pa.field('a', pa.string()), pa.field('b', pa.int32())])),
+            pa.field('list_of_struct',
+                     pa.list_(pa.struct([pa.field('a', pa.string()), pa.field('b', pa.int32())]))),
         ])
 
         mock_dataset = _mock_parquet_dataset([], arrow_schema)
 
-        unischema = Unischema.from_arrow_schema(mock_dataset, omit_unsupported_fields=True)
-        assert not hasattr(unischema, 'list_of_int')
+        unischema = Unischema.from_arrow_schema(mock_dataset)
+        assert hasattr(unischema, 'float')
+        assert hasattr(unischema, 'struct')
+        assert not hasattr(unischema, 'list_of_struct')
 
 
 class UnischemaFieldTest(unittest.TestCase):

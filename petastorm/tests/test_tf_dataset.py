@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 import tensorflow as tf
 
-from petastorm import make_reader, make_batch_reader
+from petastorm import make_reader, make_batch_reader, TransformSpec
 from petastorm.ngram import NGram
 from petastorm.predicates import in_lambda
 from petastorm.tests.test_common import TestSchema
@@ -170,3 +170,40 @@ def test_non_petastorm_with_many_colums_with_one_shot_iterator(many_columns_non_
             iterator = iterator.get_next()
             sample = sess.run(iterator)._asdict()
             assert set(sample.keys()) == set(many_columns_non_petastorm_dataset.data[0].keys())
+
+
+@pytest.mark.forked
+def test_non_petastorm_with_one_shot_iterator(scalar_dataset):
+    tf_incompatible_field_names = ['struct']
+
+    def remove_tf_non_compatible_fields(sample):
+        for field_name in tf_incompatible_field_names:
+            del sample[field_name]
+        return sample
+
+    transform_spec = TransformSpec(remove_tf_non_compatible_fields, removed_fields=tf_incompatible_field_names)
+
+    with make_batch_reader(scalar_dataset.url, transform_spec=transform_spec, workers_count=1) as reader:
+        dataset = make_petastorm_dataset(reader)
+        iterator = dataset.make_one_shot_iterator()
+
+        # Make sure we have static shape info for all fields
+        for shape in dataset.output_shapes:
+            # TODO(yevgeni): check that the shapes are actually correct, not just not None
+            assert shape.dims is not None
+
+        # Read a bunch of entries from the dataset and compare the data to reference
+        with tf.Session() as sess:
+            iterator = iterator.get_next()
+            sample = sess.run(iterator)._asdict()
+            assert set(sample.keys()) == set(scalar_dataset.data[0].keys()) - set(tf_incompatible_field_names)
+
+
+@pytest.mark.forked
+def test_tensorflow_incompatible_field(scalar_dataset):
+    """scalar_dataset has 'struct' field (a struct) that can not be converted to a Tensorflow Tensor. Verify we raise
+    an error with a field name mentioned in it"""
+
+    with make_batch_reader(scalar_dataset.url, workers_count=1) as reader:
+        with pytest.raises(RuntimeError, match='Don\'t know how to map field \'struct\' to'):
+            make_petastorm_dataset(reader)
