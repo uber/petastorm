@@ -170,7 +170,7 @@ class CompressedNdarrayCodec(DataframeColumnCodec):
         return BinaryType()
 
 
-class DummySparkCodec(DataframeColumnCodec):
+class NoopCodec(DataframeColumnCodec):
     """Uses internal arrow data representation without encoding/decoding"""
 
     def __init__(self, spark_type):
