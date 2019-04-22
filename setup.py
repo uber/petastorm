@@ -32,6 +32,8 @@ with io.open('petastorm/__init__.py', 'rt', encoding='utf8') as f:
 REQUIRED_PACKAGES = [
     'dill>=0.2.1',
     'diskcache>=3.0.0',
+    'future>=0.10.2',
+    'futures>=2.0; python_version == "2.7"',  # TODO(yevgeni): check if 2.0 is the minimum
     'numpy>=1.13.3',
     'pandas>=0.19.0',
     'psutil>=4.0.0',
@@ -39,7 +41,6 @@ REQUIRED_PACKAGES = [
     'pyzmq>=14.0.0',
     'pyarrow>=0.10',
     'six>=1.5.0',
-    'futures>=2.0; python_version == "2.7"',  # TODO(yevgeni): check if 2.0 is the minimum
 ]
 
 EXTRA_REQUIRE = {
