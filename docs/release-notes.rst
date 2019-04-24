@@ -11,10 +11,9 @@ Release 0.7.2
 New features and bug fixes
 --------------------------
 - Add `Reader.reset()` method. Resets ``Reader`` state and allows to fetch more samples once the ``Reader`` finished reading all epochs,
-as specified by the ``num_epochs`` parameter. Once all samples were read from a reader, an attempt to fetch new sample (e.g. ``next(reader)`` would raise
-``StopIterationError``. You can reset the reader to the original state and restart reading samples
-calling ``reset()``.
-
+  as specified by the ``num_epochs`` parameter. Once all samples were read from a reader, an attempt to fetch new sample (e.g. ``next(reader)`` would raise
+  ``StopIterationError``. You can reset the reader to the original state and restart reading samples
+  calling ``reset()``.
 - pyarrow 0.13 compatibility issue fixed (``TypeError: an integer is required`` error was raised before the fix)
 - ``make_batch_reader`` can now be used with Parquet stores that have ``name`` as a column name.
 - Other ``make_batch_reader`` bug fixes.
