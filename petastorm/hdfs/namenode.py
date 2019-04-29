@@ -241,7 +241,7 @@ class HdfsConnector(object):
     MAX_NAMENODES = 2
 
     @classmethod
-    def hdfs_connect_namenode(cls, url, driver='libhdfs3'):
+    def hdfs_connect_namenode(cls, url, driver='libhdfs3', username=None):
         """
         Performs HDFS connect in one place, facilitating easy change of driver and test mocking.
 
@@ -259,7 +259,7 @@ class HdfsConnector(object):
         else:
             hostname = six.text_type(url.hostname or 'default')
             driver = six.text_type(driver)
-        return pyarrow.hdfs.connect(hostname, url.port or 8020, driver=driver)
+        return pyarrow.hdfs.connect(hostname, url.port or 8020, driver=driver, user=username)
 
     @classmethod
     def connect_to_either_namenode(cls, list_of_namenodes):

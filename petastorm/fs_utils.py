@@ -22,7 +22,8 @@ from petastorm.hdfs.namenode import HdfsNamenodeResolver, HdfsConnector
 class FilesystemResolver(object):
     """Resolves a dataset URL, makes a connection via pyarrow, and provides a filesystem object."""
 
-    def __init__(self, dataset_url, hadoop_configuration=None, connector=HdfsConnector, hdfs_driver='libhdfs3'):
+    def __init__(self, dataset_url, hadoop_configuration=None, connector=HdfsConnector, hdfs_driver='libhdfs3',
+                 username=None):
         """
         Given a dataset URL and an optional hadoop configuration, parse and interpret the URL to
         instantiate a pyarrow filesystem.
@@ -43,6 +44,8 @@ class FilesystemResolver(object):
         :param connector: the HDFS connector object to use (ONLY override for testing purposes)
         :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
         libhdfs (java through JNI) or libhdfs3 (C++)
+        :param username: an optional string representing a username, currently just for HDFS (S3 credentials should be
+         set externally).
         """
         # Cache both the original URL and the resolved, urlparsed dataset_url
         self._dataset_url = dataset_url
@@ -68,9 +71,10 @@ class FilesystemResolver(object):
         elif self._parsed_dataset_url.scheme == 'hdfs':
 
             if hdfs_driver == 'libhdfs3':
+                self.hdfs_username = username
+
                 # libhdfs3 does not do any namenode resolution itself so we do it manually. This is not necessary
                 # if using libhdfs
-
                 # Obtain singleton and force hadoop config evaluation
                 namenode_resolver = HdfsNamenodeResolver(hadoop_configuration)
 
@@ -90,17 +94,17 @@ class FilesystemResolver(object):
                     # Case 3b: No netloc, so let's try to connect to default namenode
                     # HdfsNamenodeResolver will raise exception if it fails to connect.
                     nameservice, namenodes = namenode_resolver.resolve_default_hdfs_service()
-                    filesystem = connector.connect_to_either_namenode(namenodes)
-                    self._filesystem_factory = lambda: connector.connect_to_either_namenode(namenodes)
+                    filesystem = connector.connect_to_either_namenode(namenodes, username)
+                    self._filesystem_factory = lambda: connector.connect_to_either_namenode(namenodes, username)
                     if filesystem is not None:
                         # Properly replace the parsed dataset URL once default namenode is confirmed
                         self._parsed_dataset_url = urlparse(
                             'hdfs://{}{}'.format(nameservice, self._parsed_dataset_url.path))
                         self._filesystem = filesystem
             else:
-                self._filesystem = connector.hdfs_connect_namenode(self._parsed_dataset_url, hdfs_driver)
+                self._filesystem = connector.hdfs_connect_namenode(self._parsed_dataset_url, hdfs_driver, username)
                 self._filesystem_factory = lambda: connector.hdfs_connect_namenode(
-                    self._parsed_dataset_url, hdfs_driver)
+                    self._parsed_dataset_url, hdfs_driver, username)
 
         elif self._parsed_dataset_url.scheme == 's3':
             # Case 5

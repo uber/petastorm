@@ -63,4 +63,5 @@ def generate_petastorm_dataset(output_url='file:///tmp/hello_world_dataset'):
 
 
 if __name__ == '__main__':
-    generate_petastorm_dataset()
+    # TOOD (joshua.goller): Undo this
+    generate_petastorm_dataset("hdfs://ns-silver-prod-irn1/user/joshua.goller/petastorm")
