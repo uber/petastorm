@@ -56,6 +56,7 @@ def test_sanitize_field_tf_types():
     sample_input_dict = {
         'int32': np.asarray([-2 ** 31, 0, 100, 2 ** 31 - 1], dtype=np.int32),
         'uint16': np.asarray([0, 2, 2 ** 16 - 1], dtype=np.uint16),
+        'uint32': np.asarray([0, 2, 2 ** 32 - 1], dtype=np.uint32),
         'Decimal': Decimal(1234) / Decimal(10),
         'array_of_datetime_date': np.asarray(expected_datetime_array),
         'array_of_np_datetime_64': np.asarray(expected_datetime_array).astype(np.datetime64),
@@ -67,10 +68,12 @@ def test_sanitize_field_tf_types():
 
     np.testing.assert_equal(sanitized_tuple.int32.dtype, np.int32)
     np.testing.assert_equal(sanitized_tuple.uint16.dtype, np.int32)
+    np.testing.assert_equal(sanitized_tuple.uint32.dtype, np.int64)
     assert isinstance(sanitized_tuple.Decimal, str)
 
     np.testing.assert_equal(sanitized_tuple.int32, sample_input_dict['int32'])
     np.testing.assert_equal(sanitized_tuple.uint16, sample_input_dict['uint16'])
+    np.testing.assert_equal(sanitized_tuple.uint32, sample_input_dict['uint32'])
     np.testing.assert_equal(str(sanitized_tuple.Decimal), str(sample_input_dict['Decimal'].normalize()))
 
     np.testing.assert_equal(sanitized_tuple.array_of_datetime_date, expected_datetime_ns_from_epoch)
