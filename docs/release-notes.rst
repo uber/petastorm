@@ -4,6 +4,13 @@
 Release notes
 =============
 
+Release 0.7.3
+=============
+New features and bug fixes
+--------------------------
+- Adding missing ``future`` package as a wheel dependency
+
+
 Release 0.7.2
 =============
 
