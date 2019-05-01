@@ -32,6 +32,7 @@ _NUMPY_TO_TF_DTYPES_MAPPING = {
     np.int64: tf.int64,
     np.uint8: tf.uint8,
     np.uint16: tf.int32,
+    np.uint32: tf.int64,
     np.float32: tf.float32,
     np.float64: tf.float64,
     np.string_: tf.string,
@@ -82,6 +83,8 @@ def _sanitize_field_tf_types(sample):
                 .astype('timedelta64[ns]').astype(np.int64)
         elif isinstance(v, np.ndarray) and v.dtype == np.uint16:
             next_sample_dict[k] = v.astype(np.int32)
+        elif isinstance(v, np.ndarray) and v.dtype == np.uint32:
+            next_sample_dict[k] = v.astype(np.int64)
         elif isinstance(v, np.ndarray) and v.dtype.type in (np.bytes_, np.unicode_):
             if v.size != 0:
                 next_sample_dict[k] = v.tolist()
