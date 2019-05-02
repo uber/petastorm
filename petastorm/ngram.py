@@ -16,6 +16,7 @@ import numbers
 from petastorm.unischema import Unischema, UnischemaField, match_unischema_fields
 from six import string_types
 
+
 class NGram(object):
     """
     Defines an NGram, having certain fields as set by fields, where consecutive items in an NGram are no further apart
@@ -126,7 +127,6 @@ class NGram(object):
         self.schema = schema
         self.timestamp_overlap = timestamp_overlap
 
-
     @property
     def length(self):
         """
@@ -173,7 +173,8 @@ class NGram(object):
         if delta_threshold is None or not isinstance(delta_threshold, numbers.Number):
             raise ValueError('delta_threshold must be a number.')
 
-        if timestamp_field is None or not (isinstance(timestamp_field, UnischemaField) or isinstance(timestamp_field, string_types)):
+        if timestamp_field is None or not (isinstance(timestamp_field, UnischemaField) or
+                                           isinstance(timestamp_field, string_types)):
             raise ValueError('timestamp_field must be set and must be of type UnischemaField or string')
 
         if timestamp_overlap is None or not isinstance(timestamp_overlap, bool):
@@ -298,7 +299,7 @@ class NGram(object):
 
     def convert_fields(self, unischema, field_list):
         """
-        Convert all the fields in field_list into Unischema fields. 
+        Convert all the fields in field_list into Unischema fields.
         field_list can contain unischema fields and strings (regular expressions)
 
         :param unischema: Unischema object
@@ -316,9 +317,8 @@ class NGram(object):
 
         if len(unischema_field_objects) + len(regex_patterns) != len(field_list):
             raise ValueError('"Elements of fields"/"timestamp field" must be either a string (regular expressions) or '
-                                 'an instance of UnischemaField class.')       
+                             'an instance of UnischemaField class.')
 
         converted_fields = unischema_field_objects + match_unischema_fields(unischema, regex_patterns)
 
         return converted_fields
-
