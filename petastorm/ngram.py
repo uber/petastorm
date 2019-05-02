@@ -298,13 +298,12 @@ class NGram(object):
         return list({field for fields in self._fields.values() for field in fields})
 
     def convert_fields(self, unischema, field_list):
-        """
-        Convert all the fields in field_list into Unischema fields.
+        """Convert all the fields in field_list into Unischema fields.
         field_list can contain unischema fields and strings (regular expressions)
 
         :param unischema: Unischema object
-        :fields: A list of unischema fields or strings (regular expressions)
-        :returnL list of unischema fields
+        :param field_list: A list of unischema fields or strings (regular expressions)
+        :return: list of unischema fields
         """
         # Split fields parameter to regex pattern strings and UnischemaField objects
         regex_patterns = [f for f in field_list if isinstance(f, string_types)]
