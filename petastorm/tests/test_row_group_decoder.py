@@ -54,7 +54,7 @@ def test_ngram_decoding():
         -1: [TestSchema.some_number, TestSchema.some_matrix],
         0: [TestSchema.some_number],
         1: [TestSchema.some_number, TestSchema.some_matrix],
-    }, 2, TestSchema.some_number)
+    }, 2, TestSchema.some_number, TestSchema)
 
     expected_rows = [_rand_row(n) for n in range(N)]
     encoded_rows = [dict_to_spark_row(TestSchema, row).asDict() for row in expected_rows]

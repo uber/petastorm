@@ -147,7 +147,7 @@ def test_some_processing_functions(synthetic_dataset, reader_factory):
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
 def test_dataset_on_ngram_not_supported(synthetic_dataset, reader_factory):
-    ngram = NGram({0: list(_EXCLUDE_FIELDS), 1: [TestSchema.id]}, 100, TestSchema.id)
+    ngram = NGram({0: list(_EXCLUDE_FIELDS), 1: [TestSchema.id]}, 100, TestSchema.id, schema=TestSchema)
     with reader_factory(synthetic_dataset.url, schema_fields=ngram) as reader:
         with pytest.raises(NotImplementedError):
             make_petastorm_dataset(reader)
