@@ -545,14 +545,15 @@ def test_ngram_shuffle_drop_ratio(synthetic_dataset, reader_factory):
     assert len(unshuffled) == len(shuffled)
     assert unshuffled != shuffled
 
+
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
 def test_ngram_with_regular_expressions_fields(dataset_num_files_1, reader_factory):
     """Tests to verify fields and timestamp field can be regular expressions
     """
     fields = {
         -1: ["id*", "sensor_name", TestSchema.partition_key],
-         0: ["id*", "sensor_name", TestSchema.partition_key],
-         1: ["id*", "sensor_name", TestSchema.partition_key]
+        0: ["id*", "sensor_name", TestSchema.partition_key],
+        1: ["id*", "sensor_name", TestSchema.partition_key]
     }
 
     ts_field = 'partition_key'
@@ -560,7 +561,7 @@ def test_ngram_with_regular_expressions_fields(dataset_num_files_1, reader_facto
     ngram = NGram(fields=fields, delta_threshold=10, timestamp_field=ts_field, schema=TestSchema)
 
     expected_fields = [TestSchema.id, TestSchema.id2, TestSchema.id_float, TestSchema.id_odd,
-                        TestSchema.sensor_name, TestSchema.partition_key]
+                       TestSchema.sensor_name, TestSchema.partition_key]
 
     ngram_fields = ngram.fields
 
