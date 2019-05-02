@@ -121,9 +121,8 @@ class NGram(object):
         self._fields = {k: self.convert_fields(schema, fields[k]) for k in fields.keys()}
         self._delta_threshold = delta_threshold
 
-        converted_ts_field = self.convert_fields(schema, [timestamp_field])
-        self._timestamp_field = converted_ts_field[0] if len(converted_ts_field) == 1 else converted_ts_field
-        
+        self._timestamp_field = self.convert_fields(schema, [timestamp_field])[0]
+
         self.schema = schema
         self.timestamp_overlap = timestamp_overlap
 
@@ -316,7 +315,7 @@ class NGram(object):
         unischema_field_objects = [f for f in field_list if isinstance(f, tuple)]
 
         if len(unischema_field_objects) + len(regex_patterns) != len(field_list):
-            raise ValueError('Elements of "fields/timestamp field must be either a string (regular expressions) or '
+            raise ValueError('"Elements of fields"/"timestamp field" must be either a string (regular expressions) or '
                                  'an instance of UnischemaField class.')       
 
         converted_fields = unischema_field_objects + match_unischema_fields(unischema, regex_patterns)
