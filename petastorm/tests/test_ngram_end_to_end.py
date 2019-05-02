@@ -570,12 +570,3 @@ def test_ngram_with_regular_expressions_fields(dataset_num_files_1, reader_facto
     assert TestSchema.partition_key == ngram._timestamp_field
 
     _test_continuous_ngram(fields, dataset_num_files_1, reader_factory, TestSchema)
-    # with reader_factory(dataset_num_files_1.url, schema_fields=ngram, shuffle_row_groups=False) as reader:
-    #         expected_id = 0
-    #         for _ in range(ngram.length):
-    #             actual = next(reader)
-    #             expected_ngram = _get_named_tuple_from_ngram(ngram, dataset_num_files_1.data, expected_id)
-    #             np.testing.assert_equal(actual, expected_ngram)
-    #             expected_id = expected_id + 1
-
-
