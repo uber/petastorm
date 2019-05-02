@@ -308,7 +308,8 @@ def test_ngram_basic_longer_no_overlap(synthetic_dataset, reader_factory):
     }
 
     dataset_dicts = synthetic_dataset.data
-    ngram = NGram(fields=fields, delta_threshold=10, timestamp_field=TestSchema.id, timestamp_overlap=False, schema=TestSchema)
+    ngram = NGram(fields=fields, delta_threshold=10, timestamp_field=TestSchema.id, timestamp_overlap=False,
+                  schema=TestSchema)
     with reader_factory(synthetic_dataset.url, schema_fields=ngram, shuffle_row_groups=False) as reader:
         timestamps_seen = set()
         for actual in reader:
@@ -552,7 +553,7 @@ def test_ngram_with_regular_expressions_fields(dataset_num_files_1, reader_facto
         -1: ["id*", "sensor_name", TestSchema.partition_key],
          0: ["id*", "sensor_name", TestSchema.partition_key],
          1: ["id*", "sensor_name", TestSchema.partition_key]
-    } 
+    }
 
     ts_field = 'partition_key'
 
