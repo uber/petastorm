@@ -217,7 +217,7 @@ def test_simple_ngram_read_tensorflow(synthetic_dataset):
     }
 
     # Expecting delta between ids to be 1. Setting 1.5 as upper bound
-    ngram = NGram(fields=fields, delta_threshold=1.5, timestamp_field=TestSchema.id, schema=TestSchema)
+    ngram = NGram(fields=fields, delta_threshold=1.5, timestamp_field=TestSchema.id)
 
     ngrams, row_tensors_seq = \
         _read_from_tf_tensors(synthetic_dataset, 30, shuffling_queue_capacity=0, min_after_dequeue=0, ngram=ngram)
@@ -240,7 +240,7 @@ def test_shuffling_queue_with_ngrams(synthetic_dataset):
     }
 
     # Expecting delta between ids to be 1. Setting 1.5 as upper bound
-    ngram = NGram(fields=fields, delta_threshold=1.5, timestamp_field=TestSchema.id, schema=TestSchema)
+    ngram = NGram(fields=fields, delta_threshold=1.5, timestamp_field=TestSchema.id)
     unshuffled_1, _ = _read_from_tf_tensors(synthetic_dataset, 30, shuffling_queue_capacity=0, min_after_dequeue=0,
                                             ngram=ngram)
     unshuffled_2, _ = _read_from_tf_tensors(synthetic_dataset, 30, shuffling_queue_capacity=0, min_after_dequeue=0,

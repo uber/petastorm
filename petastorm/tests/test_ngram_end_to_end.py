@@ -112,13 +112,13 @@ def _get_named_tuple_from_ngram(ngram, dataset_dicts, starting_index):
     return expected_ngram
 
 
-def _test_continuous_ngram_tf(ngram_fields, dataset_num_files_1, reader_factory, schema):
+def _test_continuous_ngram_tf(ngram_fields, dataset_num_files_1, reader_factory):
     """Tests continuous ngram in tf of a certain length. Continuous here refers to
     that this reader will always return consecutive ngrams due to shuffle being false
     and partition being 1.
     """
 
-    ngram = NGram(fields=ngram_fields, delta_threshold=10, timestamp_field=TestSchema.id, schema=schema)
+    ngram = NGram(fields=ngram_fields, delta_threshold=10, timestamp_field=TestSchema.id)
     with reader_factory(dataset_num_files_1.url,
                         schema_fields=ngram,
                         shuffle_row_groups=False) as reader:
@@ -140,12 +140,12 @@ def _test_continuous_ngram_tf(ngram_fields, dataset_num_files_1, reader_factory,
                 expected_id = expected_id + 1
 
 
-def _test_continuous_ngram(ngram_fields, dataset_num_files_1, reader_factory, schema):
+def _test_continuous_ngram(ngram_fields, dataset_num_files_1, reader_factory):
     """Test continuous ngram of a certain length. Continuous here refers to
     that this reader will always return consecutive ngrams due to shuffle being false
     and partition being 1."""
 
-    ngram = NGram(fields=ngram_fields, delta_threshold=10, timestamp_field=TestSchema.id, schema=schema)
+    ngram = NGram(fields=ngram_fields, delta_threshold=10, timestamp_field=TestSchema.id)
     with reader_factory(dataset_num_files_1.url, schema_fields=ngram, shuffle_row_groups=False) as reader:
         expected_id = 0
 
@@ -156,13 +156,13 @@ def _test_continuous_ngram(ngram_fields, dataset_num_files_1, reader_factory, sc
             expected_id = expected_id + 1
 
 
-def _test_noncontinuous_ngram_tf(ngram_fields, synthetic_dataset, reader_factory, schema):
+def _test_noncontinuous_ngram_tf(ngram_fields, synthetic_dataset, reader_factory):
     """Test non continuous ngram in tf of a certain length. Non continuous here refers
     to that the reader will not necessarily return consecutive ngrams because partition is more
     than one and false is true."""
 
     dataset_dicts = synthetic_dataset.data
-    ngram = NGram(fields=ngram_fields, delta_threshold=10, timestamp_field=TestSchema.id, schema=schema)
+    ngram = NGram(fields=ngram_fields, delta_threshold=10, timestamp_field=TestSchema.id)
     reader = reader_factory(synthetic_dataset.url, schema_fields=ngram)
 
     readout_examples = tf_tensors(reader)
@@ -183,13 +183,13 @@ def _test_noncontinuous_ngram_tf(ngram_fields, synthetic_dataset, reader_factory
     reader.join()
 
 
-def _test_noncontinuous_ngram(ngram_fields, synthetic_dataset, reader_factory, schema):
+def _test_noncontinuous_ngram(ngram_fields, synthetic_dataset, reader_factory):
     """Test noncontinuous ngram of a certain length. Non continuous here refers
     to that the reader will not necessarily return consecutive ngrams because partition is more
     than one and false is true."""
 
     dataset_dicts = synthetic_dataset.data
-    ngram = NGram(fields=ngram_fields, delta_threshold=10, timestamp_field=TestSchema.id, schema=schema)
+    ngram = NGram(fields=ngram_fields, delta_threshold=10, timestamp_field=TestSchema.id)
     with reader_factory(synthetic_dataset.url,
                         schema_fields=ngram,
                         shuffle_row_groups=True,
@@ -208,7 +208,7 @@ def test_ngram_basic_tf(dataset_num_files_1, reader_factory):
         -1: [TestSchema.id, TestSchema.id2, TestSchema.image_png, TestSchema.matrix],
         0: [TestSchema.id, TestSchema.id2, TestSchema.sensor_name],
     }
-    _test_continuous_ngram_tf(fields, dataset_num_files_1, reader_factory, TestSchema)
+    _test_continuous_ngram_tf(fields, dataset_num_files_1, reader_factory)
 
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
@@ -218,7 +218,7 @@ def test_ngram_basic(dataset_num_files_1, reader_factory):
         -1: [TestSchema.id, TestSchema.id2, TestSchema.image_png, TestSchema.matrix],
         0: [TestSchema.id, TestSchema.id2, TestSchema.sensor_name],
     }
-    _test_continuous_ngram(fields, dataset_num_files_1, reader_factory, TestSchema)
+    _test_continuous_ngram(fields, dataset_num_files_1, reader_factory)
 
 
 @pytest.mark.forked
@@ -232,7 +232,7 @@ def test_ngram_basic_longer_tf(dataset_num_files_1, reader_factory):
         1: [TestSchema.id, TestSchema.id2, TestSchema.sensor_name],
         2: [TestSchema.id, TestSchema.id2]
     }
-    _test_continuous_ngram_tf(fields, dataset_num_files_1, reader_factory, TestSchema)
+    _test_continuous_ngram_tf(fields, dataset_num_files_1, reader_factory)
 
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
@@ -245,7 +245,7 @@ def test_ngram_basic_longer(dataset_num_files_1, reader_factory):
         1: [TestSchema.id, TestSchema.id2, TestSchema.sensor_name],
         2: [TestSchema.id, TestSchema.id2]
     }
-    _test_continuous_ngram(fields, dataset_num_files_1, reader_factory, TestSchema)
+    _test_continuous_ngram(fields, dataset_num_files_1, reader_factory)
 
 
 @pytest.mark.forked
@@ -256,7 +256,7 @@ def test_ngram_basic_shuffle_multi_partition_tf(synthetic_dataset, reader_factor
         -1: [TestSchema.id, TestSchema.id2, TestSchema.image_png, TestSchema.matrix],
         0: [TestSchema.id, TestSchema.id2, TestSchema.sensor_name],
     }
-    _test_noncontinuous_ngram_tf(fields, synthetic_dataset, reader_factory, TestSchema)
+    _test_noncontinuous_ngram_tf(fields, synthetic_dataset, reader_factory)
 
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
@@ -266,7 +266,7 @@ def test_ngram_basic_shuffle_multi_partition(synthetic_dataset, reader_factory):
         0: [TestSchema.id, TestSchema.id2, TestSchema.image_png, TestSchema.matrix],
         1: [TestSchema.id, TestSchema.id2, TestSchema.sensor_name],
     }
-    _test_noncontinuous_ngram(fields, synthetic_dataset, reader_factory, TestSchema)
+    _test_noncontinuous_ngram(fields, synthetic_dataset, reader_factory)
 
 
 @pytest.mark.forked
@@ -280,7 +280,7 @@ def test_ngram_basic_longer_shuffle_multi_partition_tf(synthetic_dataset, reader
         1: [TestSchema.id, TestSchema.id2, TestSchema.sensor_name],
         2: [TestSchema.id, TestSchema.id2]
     }
-    _test_noncontinuous_ngram_tf(fields, synthetic_dataset, reader_factory, TestSchema)
+    _test_noncontinuous_ngram_tf(fields, synthetic_dataset, reader_factory)
 
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
@@ -293,7 +293,7 @@ def test_ngram_basic_longer_shuffle_multi_partition(synthetic_dataset, reader_fa
         -2: [TestSchema.id, TestSchema.id2, TestSchema.sensor_name],
         -1: [TestSchema.id, TestSchema.id2]
     }
-    _test_noncontinuous_ngram(fields, synthetic_dataset, reader_factory, TestSchema)
+    _test_noncontinuous_ngram(fields, synthetic_dataset, reader_factory)
 
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
@@ -308,8 +308,7 @@ def test_ngram_basic_longer_no_overlap(synthetic_dataset, reader_factory):
     }
 
     dataset_dicts = synthetic_dataset.data
-    ngram = NGram(fields=fields, delta_threshold=10, timestamp_field=TestSchema.id, timestamp_overlap=False,
-                  schema=TestSchema)
+    ngram = NGram(fields=fields, delta_threshold=10, timestamp_field=TestSchema.id, timestamp_overlap=False)
     with reader_factory(synthetic_dataset.url, schema_fields=ngram, shuffle_row_groups=False) as reader:
         timestamps_seen = set()
         for actual in reader:
@@ -332,7 +331,7 @@ def test_ngram_delta_threshold_tf(dataset_0_3_8_10_11_20_23, reader_factory):
         0: [TestSchema.id, TestSchema.id2, TestSchema.image_png, TestSchema.matrix],
         1: [TestSchema.id, TestSchema.id2, TestSchema.sensor_name],
     }
-    ngram = NGram(fields=fields, delta_threshold=4, timestamp_field=TestSchema.id, schema=TestSchema)
+    ngram = NGram(fields=fields, delta_threshold=4, timestamp_field=TestSchema.id)
     with reader_factory(
             dataset_0_3_8_10_11_20_23.url,
             schema_fields=ngram,
@@ -379,7 +378,7 @@ def test_ngram_delta_threshold(dataset_0_3_8_10_11_20_23, reader_factory):
         0: [TestSchema.id, TestSchema.id2, TestSchema.image_png, TestSchema.matrix],
         1: [TestSchema.id, TestSchema.id2, TestSchema.sensor_name],
     }
-    ngram = NGram(fields=fields, delta_threshold=4, timestamp_field=TestSchema.id, schema=TestSchema)
+    ngram = NGram(fields=fields, delta_threshold=4, timestamp_field=TestSchema.id)
     with reader_factory(dataset_0_3_8_10_11_20_23.url, schema_fields=ngram,
                         shuffle_row_groups=False) as reader:
         # NGrams expected: (0, 3), (8, 10), (10, 11)
@@ -409,7 +408,7 @@ def test_ngram_delta_small_threshold_tf(reader_factory, dataset_range_0_99_5):
         0: [TestSchema.id, TestSchema.id2, TestSchema.image_png, TestSchema.matrix],
         1: [TestSchema.id, TestSchema.id2, TestSchema.sensor_name],
     }
-    ngram = NGram(fields=fields, delta_threshold=1, timestamp_field=TestSchema.id, schema=TestSchema)
+    ngram = NGram(fields=fields, delta_threshold=1, timestamp_field=TestSchema.id)
     with reader_factory(dataset_range_0_99_5.url, schema_fields=ngram) as reader:
         with tf.Session() as sess:
             with pytest.raises(OutOfRangeError):
@@ -424,7 +423,7 @@ def test_ngram_delta_small_threshold(reader_factory, dataset_range_0_99_5):
         0: [TestSchema.id, TestSchema.id2, TestSchema.image_png, TestSchema.matrix],
         1: [TestSchema.id, TestSchema.id2, TestSchema.sensor_name],
     }
-    ngram = NGram(fields=fields, delta_threshold=1, timestamp_field=TestSchema.id, schema=TestSchema)
+    ngram = NGram(fields=fields, delta_threshold=1, timestamp_field=TestSchema.id)
     with reader_factory(dataset_range_0_99_5.url, schema_fields=ngram) as reader:
         with pytest.raises(StopIteration):
             next(reader)
@@ -440,31 +439,27 @@ def test_ngram_validation():
 
     with pytest.raises(ValueError):
         # delta threshold must be an int
-        NGram(fields=fields, delta_threshold='abc', timestamp_field=TestSchema.id, schema=TestSchema)
+        NGram(fields=fields, delta_threshold='abc', timestamp_field=TestSchema.id)
 
     with pytest.raises(ValueError):
         # timestamp_field must be a field
-        NGram(fields=fields, delta_threshold=5, timestamp_field=5, schema=TestSchema)
+        NGram(fields=fields, delta_threshold=5, timestamp_field=5)
 
     with pytest.raises(ValueError):
         # Fields must be a dict
-        NGram(fields=[], delta_threshold=5, timestamp_field=TestSchema.id, schema=TestSchema)
+        NGram(fields=[], delta_threshold=5, timestamp_field=TestSchema.id)
 
     with pytest.raises(ValueError):
         # Each value in fields must be an array
-        NGram(fields={0: 'test'}, delta_threshold=5, timestamp_field=TestSchema.id, schema=TestSchema)
+        NGram(fields={0: 'test'}, delta_threshold=5, timestamp_field=TestSchema.id)
 
     with pytest.raises(ValueError):
         # timestamp_overlap must be bool
-        NGram(fields=fields, delta_threshold=0.5, timestamp_field=TestSchema.id, timestamp_overlap=2, schema=TestSchema)
-
-    with pytest.raises(ValueError):
-        # schema must be a Unischema
-        NGram(fields=fields, delta_threshold=.5, timestamp_field=TestSchema.id, schema="fake_schema")
+        NGram(fields=fields, delta_threshold=0.5, timestamp_field=TestSchema.id, timestamp_overlap=2)
 
     # Check some positive cases
-    NGram(fields=fields, delta_threshold=0.5, timestamp_field=TestSchema.id, schema=TestSchema)
-    NGram(fields=fields, delta_threshold=Decimal('0.5'), timestamp_field=TestSchema.id, schema=TestSchema)
+    NGram(fields=fields, delta_threshold=0.5, timestamp_field=TestSchema.id)
+    NGram(fields=fields, delta_threshold=Decimal('0.5'), timestamp_field=TestSchema.id)
 
 
 @pytest.mark.forked
@@ -473,7 +468,7 @@ def test_ngram_length_1_tf(synthetic_dataset, reader_factory):
     """Test to verify that ngram generalize to support length 1"""
     dataset_dicts = synthetic_dataset.data
     fields = {0: [TestSchema.id, TestSchema.id2]}
-    ngram = NGram(fields=fields, delta_threshold=0.012, timestamp_field=TestSchema.id, schema=TestSchema)
+    ngram = NGram(fields=fields, delta_threshold=0.012, timestamp_field=TestSchema.id)
     reader = reader_factory(synthetic_dataset.url, schema_fields=ngram,
                             shuffle_row_groups=True, shuffle_row_drop_partitions=5)
     with tf.Session() as sess:
@@ -491,7 +486,7 @@ def test_ngram_length_1(synthetic_dataset, reader_factory):
     """Test to verify that ngram generalize to support length 1"""
     dataset_dicts = synthetic_dataset.data
     fields = {0: [TestSchema.id, TestSchema.id2]}
-    ngram = NGram(fields=fields, delta_threshold=0.012, timestamp_field=TestSchema.id, schema=TestSchema)
+    ngram = NGram(fields=fields, delta_threshold=0.012, timestamp_field=TestSchema.id)
     with reader_factory(synthetic_dataset.url, schema_fields=ngram,
                         shuffle_row_groups=True, shuffle_row_drop_partitions=3) as reader:
         for _ in range(10):
@@ -508,7 +503,7 @@ def test_non_consecutive_ngram(dataset_num_files_1, reader_factory):
         -1: [TestSchema.id, TestSchema.id2, TestSchema.image_png, TestSchema.matrix],
         1: [TestSchema.id, TestSchema.id2, TestSchema.sensor_name],
     }
-    _test_continuous_ngram_tf(fields, dataset_num_files_1, reader_factory, TestSchema)
+    _test_continuous_ngram_tf(fields, dataset_num_files_1, reader_factory)
 
 
 @pytest.mark.forked
@@ -519,7 +514,7 @@ def test_shuffled_fields(dataset_num_files_1, reader_factory):
         2: [TestSchema.id, TestSchema.id2, TestSchema.image_png, TestSchema.matrix],
         -1: [TestSchema.id, TestSchema.id2, TestSchema.sensor_name],
     }
-    _test_continuous_ngram_tf(fields, dataset_num_files_1, reader_factory, TestSchema)
+    _test_continuous_ngram_tf(fields, dataset_num_files_1, reader_factory)
 
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
@@ -532,7 +527,7 @@ def test_ngram_shuffle_drop_ratio(synthetic_dataset, reader_factory):
         1: [TestSchema.id, TestSchema.id2, TestSchema.sensor_name],
         2: [TestSchema.id, TestSchema.id2]
     }
-    ngram = NGram(fields=fields, delta_threshold=10, timestamp_field=TestSchema.id, schema=TestSchema)
+    ngram = NGram(fields=fields, delta_threshold=10, timestamp_field=TestSchema.id)
     with reader_factory(synthetic_dataset.url,
                         schema_fields=ngram,
                         shuffle_row_groups=False) as reader:
@@ -545,9 +540,25 @@ def test_ngram_shuffle_drop_ratio(synthetic_dataset, reader_factory):
     assert len(unshuffled) == len(shuffled)
     assert unshuffled != shuffled
 
+def _test_continuous_ngram_returns(ngram_fields, ts_field, dataset_num_files_1, reader_factory):
+    """Test continuous ngram of a certain length. Continuous here refers to
+    that this reader will always return consecutive ngrams due to shuffle being false
+    and partition being 1."""
+
+    ngram = NGram(fields=ngram_fields, delta_threshold=10, timestamp_field=ts_field)
+    with reader_factory(dataset_num_files_1.url, schema_fields=ngram, shuffle_row_groups=False) as reader:
+        expected_id = 0
+
+        for _ in range(ngram.length):
+            actual = next(reader)
+            expected_ngram = _get_named_tuple_from_ngram(ngram, dataset_num_files_1.data, expected_id)
+            np.testing.assert_equal(actual, expected_ngram)
+            expected_id = expected_id + 1
+
+    return ngram
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
-def test_ngram_with_regular_expressions_fields(dataset_num_files_1, reader_factory):
+def test_ngram_with_regex_fields(dataset_num_files_1, reader_factory):
     """Tests to verify fields and timestamp field can be regular expressions
     """
     fields = {
@@ -556,19 +567,47 @@ def test_ngram_with_regular_expressions_fields(dataset_num_files_1, reader_facto
         1: ["id*", "sensor_name", TestSchema.partition_key]
     }
 
-    ts_field = 'partition_key'
+    ts_field = 'id'
 
-    ngram = NGram(fields=fields, delta_threshold=10, timestamp_field=ts_field, schema=TestSchema)
+    #ngram = NGram(fields=fields, delta_threshold=10, timestamp_field=ts_field)
 
     expected_fields = [TestSchema.id, TestSchema.id2, TestSchema.id_float, TestSchema.id_odd,
                        TestSchema.sensor_name, TestSchema.partition_key]
 
+    ngram = _test_continuous_ngram_returns(fields, ts_field, dataset_num_files_1, reader_factory)
+
+    #fields should get resolved after call to a reader
+    ngram_fields = ngram.fields
+    for exp_field in expected_fields:
+        for k in ngram_fields.keys():
+            assert exp_field in ngram_fields[k]
+
+    assert TestSchema.id == ngram._timestamp_field
+
+
+@pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+def test_ngram_regex_field_resolve(dataset_num_files_1, reader_factory):
+    """Tests ngram.resolve_regex_field_names function 
+    """
+    fields = {
+        -1: ["id*", "sensor_name", TestSchema.partition_key],
+        0: ["id*", "sensor_name", TestSchema.partition_key],
+        1: ["id*", "sensor_name", TestSchema.partition_key]
+    }
+
+    ts_field = 'id'
+
+    ngram = NGram(fields=fields, delta_threshold=10, timestamp_field=ts_field)
+
+    expected_fields = [TestSchema.id, TestSchema.id2, TestSchema.id_float, TestSchema.id_odd,
+                       TestSchema.sensor_name, TestSchema.partition_key]
+
+    ngram.resolve_regex_field_names(TestSchema)
+    
     ngram_fields = ngram.fields
 
     for exp_field in expected_fields:
         for k in ngram_fields.keys():
             assert exp_field in ngram_fields[k]
 
-    assert TestSchema.partition_key == ngram._timestamp_field
-
-    _test_continuous_ngram(fields, dataset_num_files_1, reader_factory, TestSchema)
+    assert TestSchema.id == ngram._timestamp_field
