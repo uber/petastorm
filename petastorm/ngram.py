@@ -99,7 +99,7 @@ class NGram(object):
     key will be the item.
     """
 
-    def __init__(self, fields, delta_threshold, timestamp_field, schema, timestamp_overlap=True):
+    def __init__(self, fields, delta_threshold, timestamp_field, timestamp_overlap=True):
         """
         Constructor to initialize ngram with fields, delta_threshold and timestamp_field.
 
@@ -117,15 +117,14 @@ class NGram(object):
             timestamp record should only occur once in the returned data)
         """
 
-        self._validate_ngram(fields, delta_threshold, timestamp_field, schema, timestamp_overlap)
-
-        self._fields = {k: self.convert_fields(schema, fields[k]) for k in fields.keys()}
+        self._fields = fields
         self._delta_threshold = delta_threshold
 
-        self._timestamp_field = self.convert_fields(schema, [timestamp_field])[0]
+        self._timestamp_field = timestamp_field
 
-        self.schema = schema
         self.timestamp_overlap = timestamp_overlap
+
+        self._validate_ngram(fields, delta_threshold, timestamp_field, timestamp_overlap)
 
     @property
     def length(self):
@@ -151,13 +150,12 @@ class NGram(object):
         """
         return self._delta_threshold
 
-    def _validate_ngram(self, fields, delta_threshold, timestamp_field, schema, timestamp_overlap):
+    def _validate_ngram(self, fields, delta_threshold, timestamp_field, timestamp_overlap):
         """
         Validates the fields, delta_threshold and timestamp_field are set and of the correct types.
         :param fields: The ngram fields.
         :param delta_threshold: The delta threshold.
         :param timestamp_field: The timestamp field.
-        :param schema: The :class:`petastorm.unischema.Unischema` definition of your dataset
         :param timestamp_overlap: Whether timestamps in sequences are allowed to overlap
         """
         if fields is None or not isinstance(fields, dict):
@@ -180,9 +178,6 @@ class NGram(object):
         if timestamp_overlap is None or not isinstance(timestamp_overlap, bool):
             raise ValueError('timestamp_overlap must be set and must be of type bool')
 
-        if schema is None or not isinstance(schema, Unischema):
-            raise ValueError('schema must be of type Unischema')
-
     def _ngram_pass_threshold(self, ngram):
         """
         Returns true if each item in a ngram passes the threshold, otherwise False.
@@ -198,6 +193,13 @@ class NGram(object):
             if current[self._timestamp_field.name] - previous[self._timestamp_field.name] > self.delta_threshold:
                 return False
         return True
+
+    def resolve_regex_field_names(self, schema):
+        """Resolve string(s) (regular expression(s)) in 'fields' and 'timestamp_field'. 
+        """
+        self._fields = {k: self.convert_fields(schema, self._fields[k]) for k in self._fields.keys()}
+        self._timestamp_field = self.convert_fields(schema, [self._timestamp_field])[0]
+
 
     def get_field_names_at_timestep(self, timestep):
         """
