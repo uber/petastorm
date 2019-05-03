@@ -540,6 +540,7 @@ def test_ngram_shuffle_drop_ratio(synthetic_dataset, reader_factory):
     assert len(unshuffled) == len(shuffled)
     assert unshuffled != shuffled
 
+
 def _test_continuous_ngram_returns(ngram_fields, ts_field, dataset_num_files_1, reader_factory):
     """Test continuous ngram of a certain length. Continuous here refers to
     that this reader will always return consecutive ngrams due to shuffle being false
@@ -556,6 +557,7 @@ def _test_continuous_ngram_returns(ngram_fields, ts_field, dataset_num_files_1, 
             expected_id = expected_id + 1
 
     return ngram
+
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
 def test_ngram_with_regex_fields(dataset_num_files_1, reader_factory):
@@ -574,7 +576,7 @@ def test_ngram_with_regex_fields(dataset_num_files_1, reader_factory):
 
     ngram = _test_continuous_ngram_returns(fields, ts_field, dataset_num_files_1, reader_factory)
 
-    #fields should get resolved after call to a reader
+    # fields should get resolved after call to a reader
     ngram_fields = ngram.fields
     for exp_field in expected_fields:
         for k in ngram_fields.keys():
