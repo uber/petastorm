@@ -115,7 +115,6 @@ class NGram(object):
             ``[{'id': 3}, {'id': 4}, {'id': 5}]``. There is no overlap of timestamps between NGrams (and each
             timestamp record should only occur once in the returned data)
         """
-
         self._fields = fields
         self._delta_threshold = delta_threshold
 
