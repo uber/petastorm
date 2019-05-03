@@ -111,13 +111,6 @@ class ReaderV2(object):
         if num_epochs is not None and (not isinstance(num_epochs, int) or num_epochs < 1):
             raise ValueError('iterations must be positive integer or None')
 
-        self.ngram = schema_fields if isinstance(schema_fields, NGram) else None
-
-        if self.ngram and not self.ngram.timestamp_overlap and shuffle_row_drop_partitions > 1:
-            raise NotImplementedError('Using timestamp_overlap=False is not implemented with'
-                                      ' shuffle_options.shuffle_row_drop_partitions > 1')
-
-        cache = cache or NullCache()
         dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
 
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
@@ -133,9 +126,21 @@ class ReaderV2(object):
 
         self._dataset = pq.ParquetDataset(dataset_path, filesystem=filesystem, validate_schema=False)
 
-        shuffle_row_drop_partitions = self._normalize_shuffle_options(shuffle_row_drop_partitions, self._dataset)
-
         stored_schema = infer_or_load_unischema(self._dataset)
+
+        if isinstance(schema_fields, NGram):
+            self.ngram = schema_fields
+            self.ngram.resolve_regex_field_names(stored_schema)
+        else:
+            self.ngram = None
+
+        if self.ngram and not self.ngram.timestamp_overlap and shuffle_row_drop_partitions > 1:
+            raise NotImplementedError('Using timestamp_overlap=False is not implemented with'
+                                      ' shuffle_options.shuffle_row_drop_partitions > 1')
+
+        cache = cache or NullCache()
+
+        shuffle_row_drop_partitions = self._normalize_shuffle_options(shuffle_row_drop_partitions, self._dataset)
 
         # Make a schema view (a view is a Unischema containing only a subset of fields
         # Will raise an exception if invalid schema fields are in schema_fields

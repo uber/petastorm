@@ -413,7 +413,17 @@ class Reader(object):
             raise ValueError('Fields must be either None, an iterable collection of Unischema fields '
                              'or an NGram object.')
 
-        self.ngram = schema_fields if isinstance(schema_fields, NGram) else None
+        # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
+        self.dataset = pq.ParquetDataset(dataset_path, filesystem=pyarrow_filesystem,
+                                         validate_schema=False)
+
+        stored_schema = infer_or_load_unischema(self.dataset)
+
+        if isinstance(schema_fields, NGram):
+            self.ngram = schema_fields
+            self.ngram.resolve_regex_field_names(stored_schema)
+        else:
+            self.ngram = None
 
         # By default, use original method of working with list of dictionaries and not arrow tables
         worker_class = worker_class or PyDictReaderWorker
@@ -426,11 +436,6 @@ class Reader(object):
         cache = cache or NullCache()
 
         self._workers_pool = reader_pool or ThreadPool(10)
-        # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
-        self.dataset = pq.ParquetDataset(dataset_path, filesystem=pyarrow_filesystem,
-                                         validate_schema=False)
-
-        stored_schema = infer_or_load_unischema(self.dataset)
 
         # Make a schema view (a view is a Unischema containing only a subset of fields
         # Will raise an exception if invalid schema fields are in schema_fields
