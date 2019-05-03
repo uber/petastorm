@@ -13,7 +13,7 @@
 # limitations under the License.
 import numbers
 
-from petastorm.unischema import Unischema, UnischemaField, match_unischema_fields
+from petastorm.unischema import UnischemaField, match_unischema_fields
 from six import string_types
 
 
@@ -106,7 +106,6 @@ class NGram(object):
         :param fields: A dictionary, with consecutive integers as keys and each value is an array of Unischema fields.
         :param delta_threshold: The maximum threshold of delta between timestamp_field.
         :param timestamp_field: The field that represents the timestamp.
-        :param schema: The :class:`petastorm.unischema.Unischema` definition of your dataset
         :param timestamp_overlap: Whether timestamps in sequences are allowed to overlap (defaults to True),
             e.g., If the data consists of consecutive timestamps ``[{'id': 0}, {'id': 1}, ..., {'id': 5}]``
             and you are asking for NGram of length 3 with timestamp_overlap set to True you will receive
@@ -195,11 +194,10 @@ class NGram(object):
         return True
 
     def resolve_regex_field_names(self, schema):
-        """Resolve string(s) (regular expression(s)) in 'fields' and 'timestamp_field'. 
+        """Resolve string(s) (regular expression(s)) that were passed into 'fields' and 'timestamp_field' parameters
         """
         self._fields = {k: self.convert_fields(schema, self._fields[k]) for k in self._fields.keys()}
         self._timestamp_field = self.convert_fields(schema, [self._timestamp_field])[0]
-
 
     def get_field_names_at_timestep(self, timestep):
         """

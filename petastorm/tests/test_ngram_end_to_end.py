@@ -543,7 +543,7 @@ def test_ngram_shuffle_drop_ratio(synthetic_dataset, reader_factory):
 def _test_continuous_ngram_returns(ngram_fields, ts_field, dataset_num_files_1, reader_factory):
     """Test continuous ngram of a certain length. Continuous here refers to
     that this reader will always return consecutive ngrams due to shuffle being false
-    and partition being 1."""
+    and partition being 1. Returns the ngram object"""
 
     ngram = NGram(fields=ngram_fields, delta_threshold=10, timestamp_field=ts_field)
     with reader_factory(dataset_num_files_1.url, schema_fields=ngram, shuffle_row_groups=False) as reader:
@@ -559,7 +559,7 @@ def _test_continuous_ngram_returns(ngram_fields, ts_field, dataset_num_files_1, 
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
 def test_ngram_with_regex_fields(dataset_num_files_1, reader_factory):
-    """Tests to verify fields and timestamp field can be regular expressions
+    """Tests to verify fields and timestamp field can be regular expressions and work with a reader
     """
     fields = {
         -1: ["id*", "sensor_name", TestSchema.partition_key],
@@ -568,8 +568,6 @@ def test_ngram_with_regex_fields(dataset_num_files_1, reader_factory):
     }
 
     ts_field = 'id'
-
-    #ngram = NGram(fields=fields, delta_threshold=10, timestamp_field=ts_field)
 
     expected_fields = [TestSchema.id, TestSchema.id2, TestSchema.id_float, TestSchema.id_odd,
                        TestSchema.sensor_name, TestSchema.partition_key]
@@ -587,7 +585,7 @@ def test_ngram_with_regex_fields(dataset_num_files_1, reader_factory):
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
 def test_ngram_regex_field_resolve(dataset_num_files_1, reader_factory):
-    """Tests ngram.resolve_regex_field_names function 
+    """Tests ngram.resolve_regex_field_names function
     """
     fields = {
         -1: ["id*", "sensor_name", TestSchema.partition_key],
@@ -603,7 +601,7 @@ def test_ngram_regex_field_resolve(dataset_num_files_1, reader_factory):
                        TestSchema.sensor_name, TestSchema.partition_key]
 
     ngram.resolve_regex_field_names(TestSchema)
-    
+
     ngram_fields = ngram.fields
 
     for exp_field in expected_fields:
