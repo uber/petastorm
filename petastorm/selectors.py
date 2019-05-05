@@ -14,7 +14,6 @@
 
 import abc
 import six
-from typing import List
 
 
 @six.add_metaclass(abc.ABCMeta)
@@ -57,7 +56,10 @@ class IntersectIndexSelector(RowGroupSelectorBase):
     Select row groups containing any of the values in all given selectors.
     """
 
-    def __init__(self, single_index_selectors: List[SingleIndexSelector]):
+    def __init__(self, single_index_selectors):
+        """
+        :param single_index_selectors: List of SingleIndexSelector
+        """
         self._single_index_selectors = single_index_selectors
 
     def get_index_names(self):
@@ -79,7 +81,10 @@ class UnionIndexSelector(RowGroupSelectorBase):
     Select row groups containing any of the values in at least one selector.
     """
 
-    def __init__(self, single_index_selectors: List[SingleIndexSelector]):
+    def __init__(self, single_index_selectors):
+        """
+        :param single_index_selectors: List of SingleIndexSelector
+        """
         self._single_index_selectors = single_index_selectors
 
     def get_index_names(self):
