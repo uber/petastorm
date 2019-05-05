@@ -28,7 +28,7 @@ from petastorm.etl.dataset_metadata import materialize_dataset
 from petastorm.predicates import in_lambda
 from petastorm.reader import ReaderV2
 from petastorm.reader_impl.same_thread_executor import SameThreadExecutor
-from petastorm.selectors import SingleIndexSelector
+from petastorm.selectors import SingleIndexSelector, IntersectIndexSelector, UnionIndexSelector
 from petastorm.tests.test_common import create_test_dataset, TestSchema
 from petastorm.tests.test_end_to_end_predicates_impl import \
     PartitionKeyInSetPredicate, EqualPredicate, VectorizedEqualPredicate
@@ -542,6 +542,50 @@ def test_rowgroup_selector_string_field(synthetic_dataset, reader_factory):
 
         # Since we use artificial dataset all sensors have the same name,
         # so all row groups should be selected and all 1000 generated rows should be returned
+        assert 100 == count
+
+
+@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
+def test_rowgroup_selector_multiple_fields_intersection(synthetic_dataset, reader_factory):
+    intersect_index_selector = IntersectIndexSelector(
+        [SingleIndexSelector(TestSchema.sensor_name.name, ['test_sensor']),
+         SingleIndexSelector(TestSchema.id.name, [2, 18])]
+    )
+    with reader_factory(synthetic_dataset.url,
+                        rowgroup_selector=intersect_index_selector) as reader:
+        count = 0
+        status = [False, False, False]
+        for row in reader:
+            if row.id == 2:
+                status[0] = True
+            if row.id == 18:
+                status[1] = True
+            if row.sensor_name == 'test_sensor':
+                status[2] = True
+            count += 1
+        assert all(status)
+        assert 20 == count
+
+
+@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
+def test_rowgroup_selector_multiple_fields_union(synthetic_dataset, reader_factory):
+    union_index_selector = UnionIndexSelector(
+        [SingleIndexSelector(TestSchema.sensor_name.name, ['test_sensor']),
+         SingleIndexSelector(TestSchema.id.name, [2, 18])]
+    )
+    with reader_factory(synthetic_dataset.url,
+                        rowgroup_selector=union_index_selector) as reader:
+        count = 0
+        status = [False, False, False]
+        for row in reader:
+            if row.id == 2:
+                status[0] = True
+            if row.id == 18:
+                status[1] = True
+            if row.sensor_name == 'test_sensor':
+                status[2] = True
+            count += 1
+        assert all(status)
         assert 100 == count
 
 
