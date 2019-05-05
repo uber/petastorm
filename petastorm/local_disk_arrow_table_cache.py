@@ -19,6 +19,11 @@ from petastorm.local_disk_cache import LocalDiskCache
 
 class LocalDiskArrowTableCache(LocalDiskCache):
     """A disk cache implementation """
+    def __init__(self, *args, **kwargs):
+        super(LocalDiskArrowTableCache, self).__init__(*args, **kwargs)
+        # Workaround for https://issues.apache.org/jira/browse/ARROW-5260
+        # unless we try to serialize something before deserialize_components is called, we would crash with a sigsegv
+        pa.serialize(0)
 
     def get(self, key, fill_cache_func):
         value = self._cache.get(key, default=None)
