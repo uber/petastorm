@@ -23,6 +23,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.types import LongType, ShortType, StringType
 
 from petastorm import make_reader, make_batch_reader, TransformSpec
+from petastorm.errors import NoDataAvailableError
 from petastorm.codecs import ScalarCodec
 from petastorm.etl.dataset_metadata import materialize_dataset
 from petastorm.predicates import in_lambda
@@ -293,6 +294,22 @@ def test_predicate_on_partition(synthetic_dataset, reader_factory):
                             predicate=PartitionKeyInSetPredicate(expected_partition_keys)) as reader:
             partition_keys = set(row.partition_key for row in reader)
             assert partition_keys == expected_partition_keys
+
+
+@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
+def test_predicate_on_partition_filters_out_everything(synthetic_dataset, reader_factory):
+    with pytest.warns(UserWarning, match='No matching data is available for loading'):
+        # This predicate should filter out all rowgroups. We should raise an error in this case.
+        make_reader(synthetic_dataset.url, reader_pool_type='dummy',
+                    predicate=PartitionKeyInSetPredicate({'non existing value'}))
+
+
+@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
+def test_too_many_shards(synthetic_dataset, reader_factory):
+    with pytest.raises(NoDataAvailableError, match='Number of row-groups in the dataset'):
+        # If number of shards is greater than number of rowgroups, users might be surprised if a reader
+        # does not produce any error, hence we raise an explicit exception
+        make_reader(synthetic_dataset.url, reader_pool_type='dummy', cur_shard=0, shard_count=10000000)
 
 
 @pytest.mark.parametrize('reader_factory', SCALAR_ONLY_READER_FACTORIES)

@@ -14,15 +14,17 @@
 import collections
 import logging
 import threading
+import warnings
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
 
 import six
+from concurrent.futures import ThreadPoolExecutor
 from pyarrow import parquet as pq
 from six.moves.queue import Queue
 from six.moves.urllib.parse import urlparse
 
 from petastorm.cache import NullCache
+from petastorm.errors import NoDataAvailableError
 from petastorm.etl import dataset_metadata, rowgroup_indexing
 from petastorm.etl.dataset_metadata import infer_or_load_unischema
 from petastorm.fs_utils import FilesystemResolver
@@ -220,6 +222,11 @@ class ReaderV2(object):
             filtered_row_group_indexes = self._partition_row_groups(dataset, row_groups, num_training_partitions,
                                                                     training_partition,
                                                                     filtered_row_group_indexes)
+
+        if not filtered_row_group_indexes:
+            warnings.warn('No matching data is available for loading after rowgroup '
+                          'selector were applied and the data was sharded.')
+
         return [row_groups[i] for i in filtered_row_group_indexes], worker_predicate
 
     def _partition_row_groups(self, dataset, row_groups, num_training_partitions, training_partition,
@@ -231,6 +238,10 @@ class ReaderV2(object):
                 or not isinstance(training_partition, int) \
                 or not isinstance(num_training_partitions, int):
             raise ValueError('partition and num_partitions must be ints and both specified to use partitioning')
+
+        if num_training_partitions is not None and len(row_groups) < num_training_partitions:
+            raise NoDataAvailableError('Number of row-groups in the dataset must be greater or equal to the number of '
+                                       'requested shards. Otherwise, some of the shards will end up being empty.')
 
         # We hash on the relative path of each parquet file to guarantee consistency between different reader
         # constructions even after moving the dataset
