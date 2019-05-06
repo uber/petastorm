@@ -161,17 +161,17 @@ class NGram(object):
 
         for key in fields:
             if not isinstance(fields[key], list):
-                raise ValueError('Each field value must be a list of unischema fields/string (regular expressions)')
+                raise ValueError('Each field value must be a list of unischema fields/regular expression(s)')
             for field in fields[key]:
                 if not (isinstance(field, UnischemaField) or isinstance(field, string_types)):
-                    raise ValueError('All field values must be of type UnischemaFieldstring (regular expressions)')
+                    raise ValueError('All field values must be of type UnischemaField/regular expression')
 
         if delta_threshold is None or not isinstance(delta_threshold, numbers.Number):
             raise ValueError('delta_threshold must be a number.')
 
         if timestamp_field is None or not (isinstance(timestamp_field, UnischemaField) or
                                            isinstance(timestamp_field, string_types)):
-            raise ValueError('timestamp_field must be set and must be of type UnischemaField or string')
+            raise ValueError('timestamp_field must be set and must be of type UnischemaField or regular expression')
 
         if timestamp_overlap is None or not isinstance(timestamp_overlap, bool):
             raise ValueError('timestamp_overlap must be set and must be of type bool')
@@ -196,7 +196,11 @@ class NGram(object):
         """Resolve string(s) (regular expression(s)) that were passed into 'fields' and 'timestamp_field' parameters
         """
         self._fields = {k: self.convert_fields(schema, self._fields[k]) for k in self._fields.keys()}
-        self._timestamp_field = self.convert_fields(schema, [self._timestamp_field])[0]
+        converted_ts_field = self.convert_fields(schema, [self._timestamp_field])
+        if len(converted_ts_field) > 1:
+            raise ValueError("timestamp_field was matched to more than one unischema field")
+
+        self._timestamp_field = converted_ts_field[0]
 
     def get_field_names_at_timestep(self, timestep):
         """
@@ -314,8 +318,8 @@ class NGram(object):
         unischema_field_objects = [f for f in field_list if isinstance(f, tuple)]
 
         if len(unischema_field_objects) + len(regex_patterns) != len(field_list):
-            raise ValueError('"Elements of fields"/"timestamp field" must be either a string (regular expressions) or '
-                             'an instance of UnischemaField class.')
+            raise ValueError('"Elements of fields"/"timestamp field" must be either a string (regular expressions) or'
+                             ' an instance of UnischemaField class.')
 
         converted_fields = unischema_field_objects + match_unischema_fields(unischema, regex_patterns)
 

@@ -564,12 +564,12 @@ def test_ngram_with_regex_fields(dataset_num_files_1, reader_factory):
     """Tests to verify fields and timestamp field can be regular expressions and work with a reader
     """
     fields = {
-        -1: ["id*", "sensor_name", TestSchema.partition_key],
-        0: ["id*", "sensor_name", TestSchema.partition_key],
-        1: ["id*", "sensor_name", TestSchema.partition_key]
+        -1: ["^id.*$", "sensor_name", TestSchema.partition_key],
+        0: ["^id.*$", "sensor_name", TestSchema.partition_key],
+        1: ["^id.*$", "sensor_name", TestSchema.partition_key]
     }
 
-    ts_field = 'id'
+    ts_field = '^id$'
 
     expected_fields = [TestSchema.id, TestSchema.id2, TestSchema.id_float, TestSchema.id_odd,
                        TestSchema.sensor_name, TestSchema.partition_key]
@@ -578,9 +578,18 @@ def test_ngram_with_regex_fields(dataset_num_files_1, reader_factory):
 
     # fields should get resolved after call to a reader
     ngram_fields = ngram.fields
-    for exp_field in expected_fields:
-        for k in ngram_fields.keys():
-            assert exp_field in ngram_fields[k]
+
+
+    # Can't do direct set equality between expected fields and ngram.fields b/c of issue
+    # with `Collections.UnischemaField` (see unischema.py for more information). __hash__
+    # and __eq__ is implemented correctly for UnischemaField. However, a collections.UnischemaField
+    # object will not use the __hash__ definied in `petastorm.unischema.py`
+    for k in ngram_fields.keys():
+        assert len(expected_fields) == len(ngram_fields[k])
+
+        for curr_field in expected_fields:
+            assert curr_field in ngram_fields[k]
+
 
     assert TestSchema.id == ngram._timestamp_field
 
@@ -590,24 +599,31 @@ def test_ngram_regex_field_resolve(dataset_num_files_1, reader_factory):
     """Tests ngram.resolve_regex_field_names function
     """
     fields = {
-        -1: ["id*", "sensor_name", TestSchema.partition_key],
-        0: ["id*", "sensor_name", TestSchema.partition_key],
-        1: ["id*", "sensor_name", TestSchema.partition_key]
+        -1: ["^id.*", "sensor_name", TestSchema.partition_key],
+        0: ["^id.*", "sensor_name", TestSchema.partition_key],
+        1: ["^id.*", "sensor_name", TestSchema.partition_key]
     }
 
-    ts_field = 'id'
+    ts_field = '^id$'
 
     ngram = NGram(fields=fields, delta_threshold=10, timestamp_field=ts_field)
 
-    expected_fields = [TestSchema.id, TestSchema.id2, TestSchema.id_float, TestSchema.id_odd,
-                       TestSchema.sensor_name, TestSchema.partition_key]
+    expected_fields = {TestSchema.id, TestSchema.id2, TestSchema.id_float, TestSchema.id_odd,
+                       TestSchema.sensor_name, TestSchema.partition_key}
 
     ngram.resolve_regex_field_names(TestSchema)
 
     ngram_fields = ngram.fields
 
-    for exp_field in expected_fields:
-        for k in ngram_fields.keys():
-            assert exp_field in ngram_fields[k]
+    # Can't do direct set equality between expected fields and ngram.fields b/c of issue
+    # with `Collections.UnischemaField` (see unischema.py for more information). __hash__
+    # and __eq__ is implemented correctly for UnischemaField. However, a collections.UnischemaField
+    # object will not use the __hash__ definied in `petastorm.unischema.py`
+    for k in ngram_fields.keys():
+        assert len(expected_fields) == len(ngram_fields[k])
+
+        for curr_field in expected_fields:
+            assert curr_field in ngram_fields[k]
+
 
     assert TestSchema.id == ngram._timestamp_field
