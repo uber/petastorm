@@ -623,5 +623,4 @@ def test_ngram_regex_field_resolve(dataset_num_files_1, reader_factory):
         for curr_field in expected_fields:
             assert curr_field in ngram_fields[k]
 
-
     assert TestSchema.id == ngram._timestamp_field
