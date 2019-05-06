@@ -327,7 +327,7 @@ def insert_explicit_nulls(unischema, row_dict):
 
 def match_unischema_fields(schema, field_regex):
     """Returns a list of :class:`~petastorm.unischema.UnischemaField` objects that match a regular expression.
-    
+
     :param schema: An instance of a :class:`~petastorm.unischema.Unischema` object.
     :param field_regex: A list of regular expression patterns.
     :return: A list of :class:`~petastorm.unischema.UnischemaField` instances matching at least one of the regular
