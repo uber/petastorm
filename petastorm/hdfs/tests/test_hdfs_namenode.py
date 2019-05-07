@@ -284,6 +284,11 @@ class MockHdfs(object):
                                '{} namenode failover(s) remaining!'.format(self._n_failovers))
         return True
 
+    def __reduce__(self):
+        raise AssertionError('A connection object can not be pickled. If we try to pickle it, it means '
+                             'it leaks somehow with a closure that holds it and we need to make sure it '
+                             'does not happen.')
+
 
 class MockHdfsConnector(HdfsConnector):
     # static member for static hdfs_connect_namenode to access
