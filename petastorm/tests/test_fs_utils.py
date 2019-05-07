@@ -11,10 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-import mock
 import unittest
 
+import dill
+import mock
 from pyarrow.filesystem import LocalFileSystem, S3FSWrapper
 from pyarrow.lib import ArrowIOError
 from six.moves.urllib.parse import urlparse
@@ -78,6 +78,9 @@ class FilesystemResolverTest(unittest.TestCase):
         self.assertEqual('', suj.parsed_dataset_url().netloc)
         self.assertEqual(ABS_PATH, suj.get_dataset_path())
 
+        # Make sure we did not capture FilesystemResolver in a closure by mistake
+        dill.dumps(suj.filesystem_factory())
+
     def test_hdfs_url_with_nameservice(self):
         """ Case 3a: HDFS nameservice."""
         suj = FilesystemResolver(HC.WARP_TURTLE_PATH, self._hadoop_configuration, connector=self.mock)
@@ -86,6 +89,9 @@ class FilesystemResolverTest(unittest.TestCase):
         self.assertEqual(1, self.mock.connect_attempted(HC.WARP_TURTLE_NN2))
         self.assertEqual(0, self.mock.connect_attempted(HC.WARP_TURTLE_NN1))
         self.assertEqual(0, self.mock.connect_attempted(HC.DEFAULT_NN))
+
+        # Make sure we did not capture FilesystemResolver in a closure by mistake
+        dill.dumps(suj.filesystem_factory())
 
     def test_hdfs_url_no_nameservice(self):
         """ Case 3b: HDFS with no nameservice should connect to default namenode."""
@@ -98,6 +104,9 @@ class FilesystemResolverTest(unittest.TestCase):
         self.assertEqual(0, self.mock.connect_attempted(HC.WARP_TURTLE_NN1))
         self.assertEqual(0, self.mock.connect_attempted(HC.DEFAULT_NN))
 
+        # Make sure we did not capture FilesystemResolver in a closure by mistake
+        dill.dumps(suj.filesystem_factory())
+
     def test_hdfs_url_direct_namenode(self):
         """ Case 4: direct namenode."""
         suj = FilesystemResolver('hdfs://{}/path'.format(HC.WARP_TURTLE_NN1),
@@ -108,6 +117,18 @@ class FilesystemResolverTest(unittest.TestCase):
         self.assertEqual(0, self.mock.connect_attempted(HC.WARP_TURTLE_NN2))
         self.assertEqual(1, self.mock.connect_attempted(HC.WARP_TURTLE_NN1))
         self.assertEqual(0, self.mock.connect_attempted(HC.DEFAULT_NN))
+
+        # Make sure we did not capture FilesystemResolver in a closure by mistake
+        dill.dumps(suj.filesystem_factory())
+
+    def test_hdfs_url_direct_namenode_driver_libhdfs(self):
+        suj = FilesystemResolver('hdfs://{}/path'.format(HC.WARP_TURTLE_NN1),
+                                 self._hadoop_configuration,
+                                 connector=self.mock, hdfs_driver='libhdfs')
+        self.assertEqual(MockHdfs, type(suj.filesystem()))
+
+        # Make sure we did not capture FilesystemResolver in a closure by mistake
+        dill.dumps(suj.filesystem_factory())
 
     def test_hdfs_url_direct_namenode_retries(self):
         """ Case 4: direct namenode fails first two times thru, but 2nd retry succeeds."""
@@ -147,6 +168,9 @@ class FilesystemResolverTest(unittest.TestCase):
         self.assertTrue(isinstance(suj.filesystem(), S3FSWrapper))
         self.assertEqual('bucket', suj.parsed_dataset_url().netloc)
         self.assertEqual('bucket' + ABS_PATH, suj.get_dataset_path())
+
+        # Make sure we did not capture FilesystemResolver in a closure by mistake
+        dill.dumps(suj.filesystem_factory())
 
 
 if __name__ == '__main__':
