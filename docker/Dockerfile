@@ -23,6 +23,7 @@ RUN apt-get -qq install -y \
   python3.6-dev \
   python3.6-venv \
   virtualenv \
+  wget \
   && rm -rf /var/lib/apt/lists/*
 
 # Temporarily add files needed for env setup.
@@ -43,6 +44,13 @@ RUN virtualenv /petastorm_venv2.7
 RUN python2.7 -m pip install pip --upgrade
 RUN /petastorm_venv2.7/bin/pip2.7 install -e /petastorm/[test,tf,torch,docs,opencv]
 RUN /petastorm_venv2.7/bin/pip2.7 uninstall -y petastorm
+
+# Install Hadoop, set environment
+RUN wget http://archive.apache.org/dist/hadoop/common/hadoop-2.8.1/hadoop-2.8.1.tar.gz -O /root/hadoop-2.8.1.tar.gz
+RUN tar xzf /root/hadoop-2.8.1.tar.gz --directory /root
+RUN echo "export HADOOP_HOME=~/hadoop-2.8.1" >> ~/.bashrc
+RUN echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/" >> ~/.bashrc
+RUN echo "PATH=$PATH:~/hadoop-2.8.1/bin" >> ~/.bashrc
 
 # Clean up
 RUN rm -r /petastorm

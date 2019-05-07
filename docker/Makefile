@@ -1,3 +1,6 @@
+CONTAINER_NAME:=petastorm-test
+IMAGE_NAME:=petastorm
+
 all: rm-image build
 
 # Build the Petastorm container
@@ -8,11 +11,11 @@ all: rm-image build
 build:
 	cd .. && docker build . \
 	-f ./docker/Dockerfile \
-	--tag petastorm
+	--tag $(IMAGE_NAME)
 
 # Create the CI container for Travis use
 push_ci_container:
-	docker tag petastorm:latest selitvin/petastorm_ci:latest
+	docker tag $(IMAGE_NAME):latest selitvin/petastorm_ci:latest
 	echo "$$DOCKER_PASSWORD" | docker login -u "$$DOCKER_USERNAME" --password-stdin
 	docker push selitvin/petastorm_ci:latest
 
@@ -23,18 +26,18 @@ run:
 	docker run \
 	-dt \
 	-v `pwd`/..:/petastorm \
-	--name petastorm \
-	petastorm
+	--name $(CONTAINER_NAME) \
+	$(IMAGE_NAME)
 
 # Create a shell into a running container
 shell:
-	docker exec -it petastorm /bin/bash
+	docker exec -it $(CONTAINER_NAME) /bin/bash
 
 # Stop and remove running containers
 clean:
-	-docker stop petastorm
-	-docker rm petastorm
+	-docker stop $(CONTAINER_NAME)
+	-docker rm $(CONTAINER_NAME)
 
 # Expunge old container image
 rm-image:
-	-docker rmi petastorm
+	-docker rmi $(IMAGE_NAME)
