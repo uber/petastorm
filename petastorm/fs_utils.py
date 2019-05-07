@@ -85,7 +85,8 @@ class FilesystemResolver(object):
                     if self._filesystem is None:
                         # Case 3a1: That didn't work; try the URL as a namenode host
                         self._filesystem = connector.hdfs_connect_namenode(self._parsed_dataset_url)
-                        self._filesystem_factory = lambda: connector.hdfs_connect_namenode(self._parsed_dataset_url)
+                        self._filesystem_factory = \
+                            lambda url=self._parsed_dataset_url: connector.hdfs_connect_namenode(url)
                 else:
                     # Case 3b: No netloc, so let's try to connect to default namenode
                     # HdfsNamenodeResolver will raise exception if it fails to connect.
@@ -99,8 +100,8 @@ class FilesystemResolver(object):
                         self._filesystem = filesystem
             else:
                 self._filesystem = connector.hdfs_connect_namenode(self._parsed_dataset_url, hdfs_driver)
-                self._filesystem_factory = lambda: connector.hdfs_connect_namenode(
-                    self._parsed_dataset_url, hdfs_driver)
+                self._filesystem_factory = \
+                    lambda url=self._parsed_dataset_url: connector.hdfs_connect_namenode(url, hdfs_driver)
 
         elif self._parsed_dataset_url.scheme == 's3':
             # Case 5
@@ -154,3 +155,8 @@ class FilesystemResolver(object):
         Spark executors.
         """
         return self._filesystem_factory
+
+    def __getstate__(self):
+        raise RuntimeError('Pickling FilesystemResolver is not supported as it may contain some '
+                           'a file-system instance objects that do not support pickling but do not have '
+                           'anti-pickling protection')
