@@ -39,7 +39,7 @@ REQUIRED_PACKAGES = [
     'psutil>=4.0.0',
     'pyspark>=2.1.0',
     'pyzmq>=14.0.0',
-    'pyarrow>=0.10',
+    'pyarrow==0.12.1',  # NOTE(joshua.goller): pyarrow 0.13.1 segfaults when connecting to HDFS; use 0.12.1 for now
     'six>=1.5.0',
 ]
 
