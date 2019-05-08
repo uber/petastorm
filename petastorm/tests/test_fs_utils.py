@@ -87,6 +87,15 @@ class FilesystemResolverTest(unittest.TestCase):
         self.assertEqual(0, self.mock.connect_attempted(HC.WARP_TURTLE_NN1))
         self.assertEqual(0, self.mock.connect_attempted(HC.DEFAULT_NN))
 
+    def test_hdfs_url_with_nameservice_and_username(self):
+        """ Case 3a, but with username"""
+        suj = FilesystemResolver(HC.WARP_TURTLE_PATH, self._hadoop_configuration, connector=self.mock, username="dr.who")
+        self.assertEqual(MockHdfs, type(suj.filesystem()._hdfs))
+        self.assertEqual(HC.WARP_TURTLE, suj.parsed_dataset_url().netloc)
+        self.assertEqual(1, self.mock.connect_attempted(HC.WARP_TURTLE_NN2))
+        self.assertEqual(0, self.mock.connect_attempted(HC.WARP_TURTLE_NN1))
+        self.assertEqual(0, self.mock.connect_attempted(HC.DEFAULT_NN))
+
     def test_hdfs_url_no_nameservice(self):
         """ Case 3b: HDFS with no nameservice should connect to default namenode."""
         suj = FilesystemResolver('hdfs:///some/path', self._hadoop_configuration, connector=self.mock)
