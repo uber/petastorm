@@ -71,8 +71,6 @@ class FilesystemResolver(object):
         elif self._parsed_dataset_url.scheme == 'hdfs':
 
             if hdfs_driver == 'libhdfs3':
-                self.hdfs_username = username
-
                 # libhdfs3 does not do any namenode resolution itself so we do it manually. This is not necessary
                 # if using libhdfs
                 # Obtain singleton and force hadoop config evaluation
@@ -84,12 +82,13 @@ class FilesystemResolver(object):
                     nameservice = self._parsed_dataset_url.netloc.split(':')[0]
                     namenodes = namenode_resolver.resolve_hdfs_name_service(nameservice)
                     if namenodes:
-                        self._filesystem = connector.connect_to_either_namenode(namenodes)
-                        self._filesystem_factory = lambda: connector.connect_to_either_namenode(namenodes)
+                        self._filesystem = connector.connect_to_either_namenode(namenodes, username)
+                        self._filesystem_factory = lambda: connector.connect_to_either_namenode(namenodes, username)
                     if self._filesystem is None:
                         # Case 3a1: That didn't work; try the URL as a namenode host
-                        self._filesystem = connector.hdfs_connect_namenode(self._parsed_dataset_url)
-                        self._filesystem_factory = lambda: connector.hdfs_connect_namenode(self._parsed_dataset_url)
+                        self._filesystem = connector.hdfs_connect_namenode(self._parsed_dataset_url, username)
+                        self._filesystem_factory = lambda: connector.hdfs_connect_namenode(self._parsed_dataset_url,
+                                                                                           username)
                 else:
                     # Case 3b: No netloc, so let's try to connect to default namenode
                     # HdfsNamenodeResolver will raise exception if it fails to connect.

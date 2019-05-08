@@ -50,7 +50,7 @@ class PetastormMetadataGenerationError(Exception):
 
 @contextmanager
 def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_summary_metadata=False,
-                        filesystem_factory=None):
+                        filesystem_factory=None, username=None):
     """
     A Context Manager which handles all the initialization and finalization necessary
     to generate metadata for a petastorm dataset. This should be used around your
@@ -97,7 +97,7 @@ def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_
 
     # After job completes, add the unischema metadata and check for the metadata summary file
     if filesystem_factory is None:
-        resolver = FilesystemResolver(dataset_url, spark.sparkContext._jsc.hadoopConfiguration())
+        resolver = FilesystemResolver(dataset_url, spark.sparkContext._jsc.hadoopConfiguration(), username)
         filesystem_factory = resolver.filesystem_factory()
         dataset_path = resolver.get_dataset_path()
     else:
