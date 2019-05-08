@@ -241,7 +241,7 @@ class HdfsConnector(object):
     MAX_NAMENODES = 2
 
     @classmethod
-    def hdfs_connect_namenode(cls, url, driver='libhdfs3', username=None):
+    def hdfs_connect_namenode(cls, url, username=None, driver='libhdfs3'):
         """
         Performs HDFS connect in one place, facilitating easy change of driver and test mocking.
 
