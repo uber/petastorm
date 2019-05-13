@@ -4,6 +4,23 @@
 Release notes
 =============
 
+
+Release 0.7.4
+=============
+Thanks to our new contributor: Greg Arutiunian!
+
+New features and bug fixes
+--------------------------
+- Support uint32 type when using `tf_tensor` and `make_petastorm_dataset`.
+- Raise and error when trying to shard dataset and one of the shards end up being empty.
+- ``IntersectIndexSelector`` enables to select row groups containing any of the values in all
+  given selectors.
+- ``UnionIndexSelector`` enable to select row groups containing any of the values in at least
+  one selector.
+- Regular expression can be used to select fields in an ``NGram`` specification.
+- Fix for a crash in ``LocalDiskArrowTableCache`` occuring in some scenarios.
+
+
 Release 0.7.3
 =============
 New features and bug fixes
