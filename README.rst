@@ -1,7 +1,3 @@
-.. raw:: html
-
-    <img src="docs/images/logo-120.png" width="120px">
-    <br/>
 
 Petastorm
 =========
