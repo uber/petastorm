@@ -214,6 +214,15 @@ class UnischemaTest(unittest.TestCase):
         view = TestSchema.create_schema_view(['int.*$', TestSchema.string_field])
         self.assertEqual(set(view.fields.keys()), {'int_field', 'string_field'})
 
+    def test_create_schema_view_using_regex_and_unischema_fields_with_duplicates(self):
+        TestSchema = Unischema('TestSchema', [
+            UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
+            UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
+            UnischemaField('other_string_field', np.string_, (), ScalarCodec(StringType()), False),
+        ])
+        view = TestSchema.create_schema_view(['int.*$', TestSchema.int_field])
+        self.assertEqual(set(view.fields.keys()), {'int_field'})
+
     def test_create_schema_view_no_field_matches_regex(self):
         TestSchema = Unischema('TestSchema', [
             UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
