@@ -12,17 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Must import pyarrow before torch. See: https://github.com/uber/petastorm/blob/master/docs/troubleshoot.rst
-import re
-
-import pyarrow  # noqa: F401 pylint: disable=W0611
-
 import collections
 import decimal
+# Must import pyarrow before torch. See: https://github.com/uber/petastorm/blob/master/docs/troubleshoot.rst
+import re
 
 import numpy as np
 from six import PY2
 from torch.utils.data.dataloader import default_collate
+
+from petastorm.reader_impl.shuffling_buffer import RandomShufflingBuffer, NoopShufflingBuffer
 
 if PY2:
     _string_classes = basestring  # noqa: F821
@@ -97,19 +96,41 @@ class DataLoader(object):
     runs out of samples.
     """
 
-    def __init__(self, reader, batch_size=1, collate_fn=decimal_friendly_collate):
+    def __init__(self, reader, batch_size=1, collate_fn=decimal_friendly_collate,
+                 shuffling_queue_capacity=0):
         """
         Initializes a data loader object, with a default collate.
 
         Number of epochs is defined by the configuration of the reader argument.
 
+        An optional shuffling queue is created if shuffling_queue_capacity is greater than 0. No samples will be
+        returned to a user by the ``DataLoader`` until the queue is full. After that, batches of `batch_size`
+        will be created by uniformly sampling the shuffling queue. Once no more samples are available from the data
+        reader, the shuffling queue is allowed to be consumed till no further samples are available.
+
+        Note that the last returned batch could have less then ``batch_size`` samples.
+
+        NOTE: if you are using ``make_batch_reader``, this shuffling queue will be randomizing the order of the
+        entire batches and not changing the order of elements within a batch. This is likely not what you intend to do.
+
         :param reader: petastorm Reader instance
         :param batch_size: the number of items to return per batch; factored into the len() of this reader
         :param collate_fn: an optional callable to merge a list of samples to form a mini-batch.
+        :param shuffling_queue_capacity: Queue capacity is passed to the underlying :class:`tf.RandomShuffleQueue`
+          instance. If set to 0, no suffling will be done.
         """
         self.reader = reader
         self.batch_size = batch_size
         self.collate_fn = collate_fn
+        if shuffling_queue_capacity > 0:
+            # We always add and remove one sample from the shuffling buffer in the steady state. min_after_dequeue
+            # is important when enqueue and dequeue rates are not the same.
+            # By setting `min_after_dequeue = shuffling_queue_capacity - 1` we will just keep the buffer full.
+            min_after_dequeue = shuffling_queue_capacity - 1
+            self._shuffling_buffer = RandomShufflingBuffer(shuffling_queue_capacity,
+                                                           min_after_retrieve=min_after_dequeue, extra_capacity=0)
+        else:
+            self._shuffling_buffer = NoopShufflingBuffer()
 
     def __iter__(self):
         """
@@ -120,11 +141,39 @@ class DataLoader(object):
             # Default collate does not work nicely on namedtuples and treat them as lists
             # Using dict will result in the yielded structures being dicts as well
             row_as_dict = row._asdict()
+
+            # Promote some types that are incompatible with pytorch to be pytorch friendly.
             _sanitize_pytorch_types(row_as_dict)
-            batch.append(row_as_dict)
+
+            # Add rows to shuffling buffer
+            self._shuffling_buffer.add_many([row_as_dict])
+
+            # If the shuffling buffer is ready, pull the resampled rows out and try add to our accumulated batch
+            while self._shuffling_buffer.can_retrieve():
+                post_shuffled_row = self._shuffling_buffer.retrieve()
+                batch.append(post_shuffled_row)
+
+                # Batch is ready? Collate and emmit
+                if len(batch) == self.batch_size:
+                    yield self.collate_fn(batch)
+                    batch = []
+
+        # Once reader can not emit new rows, we might still have a bunch of rows waiting in the shuffling buffer.
+        # Telling shuffling buffer thatt we are finished allows to deplete the buffer completely, regardless its
+        # min_after_dequeue setting.
+        self._shuffling_buffer.finish()
+
+        # Some code duplication with the main reading loop. Not sure how to reorganize to avoid this without
+        # overcomplicating the code too much.
+        while self._shuffling_buffer.can_retrieve():
+            post_shuffled_row = self._shuffling_buffer.retrieve()
+            batch.append(post_shuffled_row)
+
+            # Batch is ready? Collate and emmit
             if len(batch) == self.batch_size:
                 yield self.collate_fn(batch)
                 batch = []
+
         if batch:
             yield self.collate_fn(batch)
 

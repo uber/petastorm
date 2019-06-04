@@ -3,7 +3,6 @@ from decimal import Decimal
 import numpy as np
 import pytest
 # Must import pyarrow before torch. See: https://github.com/uber/petastorm/blob/master/docs/troubleshoot.rst
-import pyarrow  # noqa: F401 pylint: disable=W0611
 import torch
 
 from petastorm import make_reader, TransformSpec
@@ -127,3 +126,28 @@ def test_decimal_friendly_collate_input_has_decimals_in_tuple():
     assert len(actual) == 2
     assert desired[0] == actual[0]
     np.testing.assert_equal(desired[1], actual[1].numpy())
+
+
+@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
+def test_no_shuffling(synthetic_dataset, reader_factory):
+    with DataLoader(reader_factory(synthetic_dataset.url, schema_fields=['^id$'], workers_count=1,
+                                   shuffle_row_groups=False)) as loader:
+        ids = [row['id'][0].numpy() for row in loader]
+        # expected_ids would be [0, 1, 2, ...]
+        expected_ids = [row['id'] for row in synthetic_dataset.data]
+        np.testing.assert_array_equal(expected_ids, ids)
+
+
+@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
+def test_with_shuffling_buffer(synthetic_dataset, reader_factory):
+    with DataLoader(reader_factory(synthetic_dataset.url, schema_fields=['^id$'], workers_count=1,
+                                   shuffle_row_groups=False),
+                    shuffling_queue_capacity=51) as loader:
+        ids = [row['id'][0].numpy() for row in loader]
+
+        assert len(ids) == len(synthetic_dataset.data), 'All samples should be returned after reshuffling'
+
+        # diff(ids) would return all-'1' for the seqeunce (note that we used shuffle_row_groups=False)
+        # We assume we get less then 10% of consequent elements for the sake of the test (this probability is very
+        # close to zero)
+        assert sum(np.diff(ids) == 1) < len(synthetic_dataset.data) / 10.0
