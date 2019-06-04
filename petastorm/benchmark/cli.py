@@ -22,7 +22,7 @@ import logging
 import sys
 
 from petastorm.benchmark.throughput import reader_throughput, \
-    reader_v2_throughput, WorkerPoolType, ReadMethod
+    WorkerPoolType, ReadMethod
 
 logger = logging.getLogger(__name__)
 
@@ -40,12 +40,10 @@ def _parse_args(args):
                              'be used during the benchmark.')
 
     parser.add_argument('-w', '--workers-count', type=int, default=3,
-                        help='Number of workers used by the reader (number of loading threads if the experimental '
-                             'reader (ReaderV2) is used. See --experimental-reader argument).')
+                        help='Number of workers used by the reader')
     parser.add_argument('-p', '--pool-type', type=WorkerPoolType, default=WorkerPoolType.THREAD,
                         choices=list(WorkerPoolType),
-                        help='Type of a worker pool used by the reader (decoding pool, if the experimental reader '
-                             '(ReaderV2) is used). See --experimental-reader argument.')
+                        help='Type of a worker pool used by the reader')
 
     parser.add_argument('-m', '--warmup-cycles', type=int, default=200,
                         help='Number of warmup read cycles. Warmup read cycles run before measurement cycles and '
@@ -69,11 +67,6 @@ def _parse_args(args):
                         help='Minimum number of elements in a shuffling queue before entries can be read from it. '
                              'Default value is set to {}%% of the --shuffling-queue-size '
                              'parameter'.format(100 * DEFAULT_MIN_AFTER_DEQUEUE_TO_QUEUE_SIZE_RATIO))
-
-    parser.add_argument('--experimental-reader', action='store_true', default=False, required=False,
-                        help='If set, a new, experimental version of the reader (ReaderV2) is used.')
-    parser.add_argument('--experimental-decoders-count', type=int, default=3, required=False,
-                        help='Number of decoder threads/processes. Used only if --experimental-reader is set.')
 
     parser.add_argument('--pyarrow-serialize', action='store_true', required=False,
                         help='When specified, faster pyarrow.serialize library is used. However, it does not support '
@@ -100,25 +93,15 @@ def _main(args):
     if args.vv:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    if args.experimental_reader:
-        results = reader_v2_throughput(args.dataset_path, args.field_regex, warmup_cycles_count=args.warmup_cycles,
-                                       measure_cycles_count=args.measure_cycles, pool_type=args.pool_type,
-                                       loaders_count=args.workers_count,
-                                       decoders_count=args.experimental_decoders_count, read_method=args.read_method,
-                                       shuffling_queue_size=args.shuffling_queue_size,
-                                       min_after_dequeue=args.min_after_dequeue,
-                                       pyarrow_serialize=args.pyarrow_serialize)
-
-    else:
-        results = reader_throughput(args.dataset_path, args.field_regex, warmup_cycles_count=args.warmup_cycles,
-                                    measure_cycles_count=args.measure_cycles, pool_type=args.pool_type,
-                                    loaders_count=args.workers_count, profile_threads=args.profile_threads,
-                                    read_method=args.read_method, shuffling_queue_size=args.shuffling_queue_size,
-                                    min_after_dequeue=args.min_after_dequeue, pyarrow_serialize=args.pyarrow_serialize)
+    results = reader_throughput(args.dataset_path, args.field_regex, warmup_cycles_count=args.warmup_cycles,
+                                measure_cycles_count=args.measure_cycles, pool_type=args.pool_type,
+                                loaders_count=args.workers_count, profile_threads=args.profile_threads,
+                                read_method=args.read_method, shuffling_queue_size=args.shuffling_queue_size,
+                                min_after_dequeue=args.min_after_dequeue, pyarrow_serialize=args.pyarrow_serialize)
 
     logger.info('Done')
     print('Average sample read rate: {:1.2f} samples/sec; RAM {:1.2f} MB (rss); '
-          'CPU {:1.2f}%'.format(results.samples_per_second, results.memory_info.rss / 2**20, results.cpu))
+          'CPU {:1.2f}%'.format(results.samples_per_second, results.memory_info.rss / 2 ** 20, results.cpu))
 
 
 def main():
