@@ -17,8 +17,6 @@ BATCHABLE_FIELDS = set(TestSchema.fields.values()) - \
 # pylint: disable=unnecessary-lambda
 MINIMAL_READER_FLAVOR_FACTORIES = [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
-    # Disabling v2 since it does not support transform_spec which is needed in reading data into pytorch
-    # lambda url, **kwargs: make_reader(url, reader_engine='experimental_reader_v2', **kwargs)
 ]
 
 # pylint: disable=unnecessary-lambda
@@ -27,9 +25,6 @@ ALL_READER_FLAVOR_FACTORIES = MINIMAL_READER_FLAVOR_FACTORIES + [
     lambda url, **kwargs: make_reader(url, reader_pool_type='process', pyarrow_serialize=False, **kwargs),
     lambda url, **kwargs: make_reader(url, reader_pool_type='process', workers_count=1, pyarrow_serialize=True,
                                       **kwargs),
-    # Disabling v2 since it does not support transform_spec which is needed in reading data into pytorch
-    # lambda url, **kwargs: make_reader(url, reader_engine='experimental_reader_v2', reader_pool_type='process',
-    # **kwargs)
 ]
 
 

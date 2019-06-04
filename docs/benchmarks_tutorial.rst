@@ -22,15 +22,8 @@ Now, let's run ``petastorm-throughput``:
 
 Typically, you would want to find an optimal throughput for your system by varying the following parameters:
 
- - ``-w``: number of workers the reader is using to load and decode data. Could be either number of threads or processes, depends on the ``-p`` argument [#note]_.
+ - ``-w``: number of workers the reader is using to load and decode data. Could be either number of threads or processes, depends on the ``-p`` argument.
  - ``-p``: thread or process based parallelism.
-
-.. [#note] If ``--experimental-reader``, then :class:`~petastorm.reader_impl.reader_v2.ReaderV2` is used and ``-w`` controls number of threads or processes used in the decoding pool.
-
-If testing the experimental :class:`~petastorm.reader_impl.reader_v2.ReaderV2` implementation
-(``--experimental-reader`` command line argument):
-
- - ``--experimental-decoders-count``: defines the number of decoding threads.
 
 
 Before actual throughput measurement is conducted, a number of warmup readings are executed to bring the system into a
