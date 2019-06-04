@@ -45,7 +45,7 @@ spark-submit \\
 
 
 def generate_petastorm_metadata(spark, dataset_url, unischema_class=None, use_summary_metadata=False,
-                                hdfs_driver='libhdfs3'):
+                                hdfs_driver='libhdfs3', user=None):
     """
     Generates metadata necessary to read a petastorm dataset to an existing dataset.
 
@@ -56,10 +56,11 @@ def generate_petastorm_metadata(spark, dataset_url, unischema_class=None, use_su
         :class:`examples.hello_world.generate_hello_world_dataset.HelloWorldSchema`)
     :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
         libhdfs (java through JNI) or libhdfs3 (C++)
+    :param user: String denoting username when connecting to HDFS
     """
     sc = spark.sparkContext
 
-    resolver = FilesystemResolver(dataset_url, sc._jsc.hadoopConfiguration(), hdfs_driver=hdfs_driver)
+    resolver = FilesystemResolver(dataset_url, sc._jsc.hadoopConfiguration(), hdfs_driver=hdfs_driver, user=user)
     fs = resolver.filesystem()
     dataset = pq.ParquetDataset(
         resolver.get_dataset_path(),
@@ -84,7 +85,7 @@ def generate_petastorm_metadata(spark, dataset_url, unischema_class=None, use_su
     arrow_metadata = dataset.common_metadata or None
 
     with materialize_dataset(spark, dataset_url, schema, use_summary_metadata=use_summary_metadata,
-                             filesystem_factory=resolver.filesystem_factory()):
+                             filesystem_factory=resolver.filesystem_factory(), user=user):
         if use_summary_metadata:
             # Inside the materialize dataset context we just need to write the metadata file as the schema will
             # be written by the context manager.
@@ -132,6 +133,8 @@ def _main(args):
     parser.add_argument('--hdfs-driver', type=str, default='libhdfs3',
                         help='A string denoting the hdfs driver to use (if using a dataset on hdfs). '
                              'Current choices are libhdfs (java through JNI) or libhdfs3 (C++)')
+    parser.add_argument('--user', type=str, default=None, required=False,
+                        help='Username given when connecting to hdfs')
     args = parser.parse_args(args)
 
     # Open Spark Session
@@ -145,7 +148,7 @@ def _main(args):
     spark = spark_session.getOrCreate()
 
     generate_petastorm_metadata(spark, args.dataset_url, args.unischema_class, args.use_summary_metadata,
-                                hdfs_driver=args.hdfs_driver)
+                                hdfs_driver=args.hdfs_driver, user=args.user)
 
     # Shut down the spark sessions and context
     spark.stop()
