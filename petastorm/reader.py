@@ -17,7 +17,6 @@ import logging
 import warnings
 
 import six
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from pyarrow import parquet as pq
 
 from petastorm.arrow_reader_worker import ArrowReaderWorker
@@ -34,9 +33,6 @@ from petastorm.py_dict_reader_worker import PyDictReaderWorker
 from petastorm.reader_impl.arrow_table_serializer import ArrowTableSerializer
 from petastorm.reader_impl.pickle_serializer import PickleSerializer
 from petastorm.reader_impl.pyarrow_serializer import PyArrowSerializer
-from petastorm.reader_impl.reader_v2 import ReaderV2
-from petastorm.reader_impl.same_thread_executor import SameThreadExecutor
-from petastorm.reader_impl.shuffling_buffer import NoopShufflingBuffer, RandomShufflingBuffer
 from petastorm.selectors import RowGroupSelectorBase
 from petastorm.transform import transform_schema
 from petastorm.workers_pool.dummy_pool import DummyPool
@@ -45,9 +41,6 @@ from petastorm.workers_pool.thread_pool import ThreadPool
 from petastorm.workers_pool.ventilator import ConcurrentVentilator
 
 logger = logging.getLogger(__name__)
-
-# Make it easier to import as "from petastorm.reader import ReaderV2"
-ReaderV2 = ReaderV2
 
 # Ventilator guarantees that no more than workers + _VENTILATE_EXTRA_ROWGROUPS are processed at a moment by a
 # worker pool. This guarantees that we don't run out of memory if data consumer is slower than the Reader.
@@ -65,7 +58,6 @@ def make_reader(dataset_url,
                 cache_type='null', cache_location=None, cache_size_limit=None,
                 cache_row_size_estimate=None, cache_extra_settings=None,
                 hdfs_driver='libhdfs3',
-                reader_engine='reader_v1', reader_engine_params=None,
                 transform_spec=None):
     """
     Creates an instance of Reader for reading Petastorm datasets. A Petastorm dataset is a dataset generated using
@@ -113,11 +105,6 @@ def make_reader(dataset_url,
     :param cache_extra_settings: A dictionary of extra settings to pass to the cache implementation,
     :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
         libhdfs (java through JNI) or libhdfs3 (C++)
-    :param reader_engine: Multiple engine implementations exist ('reader_v1' and 'experimental_reader_v2'). 'reader_v1'
-        (the default value) selects a stable reader implementation.
-    :param reader_engine_params: For advanced usage: a dictionary with arguments passed directly to a reader
-        implementation constructor chosen by ``reader_engine`` argument.  You should not use this parameter, unless you
-        fine-tuning of a reader.
     :param transform_spec: An instance of :class:`~petastorm.transform.TransformSpec` object defining how a record
         is transformed after it is loaded and decoded. The transformation occurs on a worker thread/process (depends
         on the ``reader_pool_type`` value).
@@ -141,99 +128,49 @@ def make_reader(dataset_url,
     else:
         raise ValueError('Unknown cache_type: {}'.format(cache_type))
 
-    # Fail if this is a non-petastorm dataset. Typically, a Parquet store will have hundred thousands rows in a single
-    # rowgroup. Using PyDictReaderWorker or ReaderV2 implementation is very inefficient as it processes data on a
-    # row by row basis. ArrowReaderWorker (used by make_batch_reader) is much more efficient in these cases.
     try:
         dataset_metadata.get_schema_from_dataset_url(dataset_url, hdfs_driver=hdfs_driver)
     except PetastormMetadataError:
         raise RuntimeError('Currently make_reader supports reading only Petastorm datasets. '
                            'To read from a non-Petastorm Parquet store use make_batch_reader')
 
-    if reader_engine == 'reader_v1':
-        if reader_pool_type == 'thread':
-            reader_pool = ThreadPool(workers_count, results_queue_size)
-        elif reader_pool_type == 'process':
-            if pyarrow_serialize:
-                serializer = PyArrowSerializer()
-            else:
-                serializer = PickleSerializer()
-            reader_pool = ProcessPool(workers_count, serializer)
-        elif reader_pool_type == 'dummy':
-            reader_pool = DummyPool()
+    if reader_pool_type == 'thread':
+        reader_pool = ThreadPool(workers_count, results_queue_size)
+    elif reader_pool_type == 'process':
+        if pyarrow_serialize:
+            serializer = PyArrowSerializer()
         else:
-            raise ValueError('Unknown reader_pool_type: {}'.format(reader_pool_type))
-
-        # Create a dictionary with all ReaderV2 parameters, so we can merge with reader_engine_params if specified
-        kwargs = {
-            'schema_fields': schema_fields,
-            'reader_pool': reader_pool,
-            'shuffle_row_groups': shuffle_row_groups,
-            'shuffle_row_drop_partitions': shuffle_row_drop_partitions,
-            'predicate': predicate,
-            'rowgroup_selector': rowgroup_selector,
-            'num_epochs': num_epochs,
-            'cur_shard': cur_shard,
-            'shard_count': shard_count,
-            'cache': cache,
-            'transform_spec': transform_spec,
-        }
-
-        if reader_engine_params:
-            kwargs.update(reader_engine_params)
-
-        try:
-            return Reader(filesystem, dataset_path,
-                          worker_class=PyDictReaderWorker,
-                          **kwargs)
-        except PetastormMetadataError as e:
-            logger.error('Unexpected exception: %s', str(e))
-            raise RuntimeError('make_reader has failed. If you were trying to open a Parquet store that was not '
-                               'created using Petastorm materialize_dataset and it contains only scalar columns, '
-                               'you may use make_batch_reader to read it.\n'
-                               'Inner exception: %s', str(e))
-
-    elif reader_engine == 'experimental_reader_v2':
-        if transform_spec:
-            raise NotImplementedError('experimental_reader_v2 reader engine does not support transforms for now.')
-
-        if reader_pool_type == 'thread':
-            decoder_pool = ThreadPoolExecutor(workers_count)
-        elif reader_pool_type == 'process':
-            decoder_pool = ProcessPoolExecutor(workers_count)
-        elif reader_pool_type == 'dummy':
-            decoder_pool = SameThreadExecutor()
-        else:
-            raise ValueError('Unknown reader_pool_type: {}'.format(reader_pool_type))
-
-        # TODO(yevgeni): once ReaderV2 is ready to be out of experimental status, we should extend
-        # the make_reader interfaces to take shuffling buffer parameters explicitly
-        shuffling_queue = RandomShufflingBuffer(1000, 800) if shuffle_row_groups else NoopShufflingBuffer()
-
-        # Create a dictionary with all ReaderV2 parameters, so we can merge with reader_engine_params if specified
-        kwargs = {
-            'schema_fields': schema_fields,
-            'predicate': predicate,
-            'rowgroup_selector': rowgroup_selector,
-            'num_epochs': num_epochs,
-            'cur_shard': cur_shard,
-            'shard_count': shard_count,
-            'cache': cache,
-            'decoder_pool': decoder_pool,
-            'shuffling_queue': shuffling_queue,
-            'shuffle_row_groups': shuffle_row_groups,
-            'shuffle_row_drop_partitions': shuffle_row_drop_partitions,
-        }
-
-        if reader_engine_params:
-            kwargs.update(reader_engine_params)
-
-        return ReaderV2(dataset_url, **kwargs)
-
+            serializer = PickleSerializer()
+        reader_pool = ProcessPool(workers_count, serializer)
+    elif reader_pool_type == 'dummy':
+        reader_pool = DummyPool()
     else:
-        raise ValueError('Unexpected value of reader_engine argument \'%s\'. '
-                         'Supported reader_engine values are \'reader_v1\' and \'experimental_reader_v2\'',
-                         reader_engine)
+        raise ValueError('Unknown reader_pool_type: {}'.format(reader_pool_type))
+
+    kwargs = {
+        'schema_fields': schema_fields,
+        'reader_pool': reader_pool,
+        'shuffle_row_groups': shuffle_row_groups,
+        'shuffle_row_drop_partitions': shuffle_row_drop_partitions,
+        'predicate': predicate,
+        'rowgroup_selector': rowgroup_selector,
+        'num_epochs': num_epochs,
+        'cur_shard': cur_shard,
+        'shard_count': shard_count,
+        'cache': cache,
+        'transform_spec': transform_spec,
+    }
+
+    try:
+        return Reader(filesystem, dataset_path,
+                      worker_class=PyDictReaderWorker,
+                      **kwargs)
+    except PetastormMetadataError as e:
+        logger.error('Unexpected exception: %s', str(e))
+        raise RuntimeError('make_reader has failed. If you were trying to open a Parquet store that was not '
+                           'created using Petastorm materialize_dataset and it contains only scalar columns, '
+                           'you may use make_batch_reader to read it.\n'
+                           'Inner exception: %s', str(e))
 
 
 def make_batch_reader(dataset_url,

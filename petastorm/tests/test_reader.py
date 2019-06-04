@@ -16,13 +16,12 @@ from time import sleep
 import pyarrow.parquet as pq
 import pytest
 
-from petastorm import make_reader, TransformSpec
+from petastorm import make_reader
 from petastorm.reader import Reader
 
 # pylint: disable=unnecessary-lambda
 READER_FACTORIES = [
     make_reader,
-    lambda url, **kwargs: make_reader(url, reader_engine='experimental_reader_v2', **kwargs),
 ]
 
 
@@ -40,14 +39,6 @@ def test_dataset_url_must_be_string(reader_factory):
 
 def test_diagnostics_reader_v1(synthetic_dataset):
     with make_reader(synthetic_dataset.url) as reader:
-        next(reader)
-        diags = reader.diagnostics
-        # Hard to make a meaningful assert on the content of the diags without potentially introducing a race
-        assert 'output_queue_size' in diags
-
-
-def test_diagnostics_reader_v2(synthetic_dataset):
-    with make_reader(synthetic_dataset.url, reader_engine='experimental_reader_v2') as reader:
         next(reader)
         diags = reader.diagnostics
         # Hard to make a meaningful assert on the content of the diags without potentially introducing a race
@@ -88,16 +79,3 @@ def test_invalid_cache_type(synthetic_dataset, reader_factory):
 def test_invalid_reader_pool_type(synthetic_dataset, reader_factory):
     with pytest.raises(ValueError, match='Unknown reader_pool_type'):
         reader_factory(synthetic_dataset.url, reader_pool_type='bogus_pool_type')
-
-
-@pytest.mark.parametrize('reader_factory', READER_FACTORIES)
-def test_invalid_reader_engine(synthetic_dataset, reader_factory):
-    with pytest.raises(ValueError, match='Supported reader_engine values'):
-        make_reader(synthetic_dataset.url, reader_engine='bogus reader engine')
-
-
-@pytest.mark.parametrize('reader_factory', READER_FACTORIES)
-def test_reader_engine_v2_with_transform_is_not_supported(synthetic_dataset, reader_factory):
-    with pytest.raises(NotImplementedError):
-        make_reader(synthetic_dataset.url, reader_engine='experimental_reader_v2',
-                    transform_spec=TransformSpec(lambda x: x))
