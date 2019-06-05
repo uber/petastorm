@@ -11,13 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import itertools
 
 import numpy as np
 import pytest
 
 from petastorm import make_batch_reader
-
 # pylint: disable=unnecessary-lambda
+from petastorm.tests.test_common import create_test_scalar_dataset
+
 _D = [lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', **kwargs)]
 
 # pylint: disable=unnecessary-lambda
@@ -70,4 +72,17 @@ def test_many_columns_non_petastorm_dataset(many_columns_non_petastorm_dataset, 
         sample = next(reader)
         assert set(sample._fields) == set(many_columns_non_petastorm_dataset.data[0].keys())
 
+
 # TODO(yevgeni): missing tests: https://github.com/uber/petastorm/issues/257
+
+@pytest.mark.parametrize('reader_factory', _D)
+@pytest.mark.parametrize('partition_by', [['string'], ['id'], ['string', 'id']])
+def test_string_partition(reader_factory, tmpdir, partition_by):
+    """Try datasets partitioned by a string, integer and string+integer fields"""
+    url = 'file://' + tmpdir.strpath
+
+    data = create_test_scalar_dataset(url, 10, partition_by=partition_by)
+    with reader_factory(url) as reader:
+        row_ids_batched = [row.id for row in reader]
+    actual_row_ids = list(itertools.chain(*row_ids_batched))
+    assert len(data) == len(actual_row_ids)
