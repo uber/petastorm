@@ -25,13 +25,12 @@ from io import BytesIO
 
 try:
     import cv2
+
     OPENCV_AVAILABLE = True
 except ImportError:
     OPENCV_AVAILABLE = False
 
 import numpy as np
-from pyspark.sql.types import BinaryType, LongType, IntegerType, ShortType, ByteType, StringType, \
-    FloatType, DoubleType, BooleanType
 
 
 class DataframeColumnCodec(object):
@@ -107,7 +106,11 @@ class CompressedImageCodec(DataframeColumnCodec):
                              'Got {}'.format(image_bgr_or_gray.shape))
 
     def spark_dtype(self):
-        return BinaryType()
+        # Lazy loading pyspark to avoid creating pyspark dependency on data reading code path
+        # (currently works only with make_batch_reader). We should move all pyspark related code into a separate module
+        import pyspark.sql.types as sql_types
+
+        return sql_types.BinaryType()
 
 
 class NdarrayCodec(DataframeColumnCodec):
@@ -137,7 +140,11 @@ class NdarrayCodec(DataframeColumnCodec):
         return np.load(memfile)
 
     def spark_dtype(self):
-        return BinaryType()
+        # Lazy loading pyspark to avoid creating pyspark dependency on data reading code path
+        # (currently works only with make_batch_reader). We should move all pyspark related code into a separate module
+        import pyspark.sql.types as sql_types
+
+        return sql_types.BinaryType()
 
 
 class CompressedNdarrayCodec(DataframeColumnCodec):
@@ -167,7 +174,11 @@ class CompressedNdarrayCodec(DataframeColumnCodec):
         return np.load(memfile)['arr']
 
     def spark_dtype(self):
-        return BinaryType()
+        # Lazy loading pyspark to avoid creating pyspark dependency on data reading code path
+        # (currently works only with make_batch_reader). We should move all pyspark related code into a separate module
+        import pyspark.sql.types as sql_types
+
+        return sql_types.BinaryType()
 
 
 class ScalarCodec(DataframeColumnCodec):
@@ -181,17 +192,22 @@ class ScalarCodec(DataframeColumnCodec):
         self._spark_type = spark_type
 
     def encode(self, unischema_field, value):
+        # Lazy loading pyspark to avoid creating pyspark dependency on data reading code path
+        # (currently works only with make_batch_reader). We should move all pyspark related code into a separate module
+        import pyspark.sql.types as sql_types
+
         if unischema_field.shape:
             raise ValueError('The shape field of unischema_field \'%s\' must be an empty tuple (i.e. \'()\' '
                              'to indicate a scalar. However, the actual shape is %s',
                              unischema_field.name, unischema_field.shape)
-        if isinstance(self._spark_type, (ByteType, ShortType, IntegerType, LongType)):
+        if isinstance(self._spark_type, (sql_types.ByteType, sql_types.ShortType, sql_types.IntegerType,
+                                         sql_types.LongType)):
             return int(value)
-        if isinstance(self._spark_type, (FloatType, DoubleType)):
+        if isinstance(self._spark_type, (sql_types.FloatType, sql_types.DoubleType)):
             return float(value)
-        if isinstance(self._spark_type, BooleanType):
+        if isinstance(self._spark_type, sql_types.BooleanType):
             return bool(value)
-        if isinstance(self._spark_type, StringType):
+        if isinstance(self._spark_type, sql_types.StringType):
             if not isinstance(value, str):
                 raise ValueError(
                     'Expected a string value for field {}. Got type {}'.format(unischema_field.name, type(value)))

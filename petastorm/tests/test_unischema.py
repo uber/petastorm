@@ -19,6 +19,7 @@ from decimal import Decimal
 
 import numpy as np
 import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
 from pyspark import Row
 from pyspark.sql.types import StringType, IntegerType, DecimalType, ShortType, LongType
@@ -33,19 +34,22 @@ except ImportError:
     from mock import mock
 
 
-def _mock_parquet_dataset(partition_names, schema):
+def _mock_parquet_dataset(partitions, arrow_schema):
     """Creates a pyarrow.ParquetDataset mock capable of returning:
 
         parquet_dataset.pieces[0].get_metadata(parquet_dataset.fs.open).schema.to_arrow_schema() == schema
-        parquet_dataset.partition_names.partition_names = partition_names
+        parquet_dataset.partitions = partitions
 
+    :param partitions: expected to be a list of pa.parquet.PartitionSet
+    :param arrow_schema: an instance of pa.arrow_schema to be assumed by the mock parquet dataset object.
+    :return:
     """
     piece_mock = mock.Mock()
-    piece_mock.get_metadata().schema.to_arrow_schema.return_value = schema
+    piece_mock.get_metadata().schema.to_arrow_schema.return_value = arrow_schema
 
     dataset_mock = mock.Mock()
     type(dataset_mock).pieces = mock.PropertyMock(return_value=[piece_mock])
-    type(dataset_mock.partitions).partition_names = mock.PropertyMock(return_value=partition_names)
+    type(dataset_mock).partitions = partitions
 
     return dataset_mock
 
@@ -281,22 +285,33 @@ class UnischemaTest(unittest.TestCase):
         unischema = Unischema.from_arrow_schema(mock_dataset)
         for name in arrow_schema.names:
             assert getattr(unischema, name).name == name
-            assert isinstance(getattr(unischema, name).codec, ScalarCodec)
+            assert getattr(unischema, name).codec is None
             if name == 'bool':
                 assert not getattr(unischema, name).nullable
             else:
                 assert getattr(unischema, name).nullable
 
-    def test_arrow_schema_convertion_with_partitions(self):
+    def test_arrow_schema_convertion_with_string_partitions(self):
 
         arrow_schema = pa.schema([
             pa.field('int8', pa.int8()),
         ])
 
-        mock_dataset = _mock_parquet_dataset(['part_name'], arrow_schema)
+        mock_dataset = _mock_parquet_dataset([pq.PartitionSet('part_name', ['a', 'b'])], arrow_schema)
 
         unischema = Unischema.from_arrow_schema(mock_dataset)
-        assert unischema.part_name.codec.spark_dtype().typeName() == 'string'
+        assert unischema.part_name.numpy_dtype == np.str_
+
+    def test_arrow_schema_convertion_with_int_partitions(self):
+
+        arrow_schema = pa.schema([
+            pa.field('int8', pa.int8()),
+        ])
+
+        mock_dataset = _mock_parquet_dataset([pq.PartitionSet('part_name', ['0', '1', '2'])], arrow_schema)
+
+        unischema = Unischema.from_arrow_schema(mock_dataset)
+        assert unischema.part_name.numpy_dtype == np.int64
 
     def test_arrow_schema_convertion_fail(self):
         arrow_schema = pa.schema([

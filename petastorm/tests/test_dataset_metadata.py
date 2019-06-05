@@ -18,9 +18,10 @@ import pyarrow
 from pyspark.sql import SparkSession
 from pyspark.sql.types import IntegerType
 
+from petastorm.codecs import ScalarCodec
 from petastorm.etl.dataset_metadata import get_schema_from_dataset_url, materialize_dataset
 from petastorm.tests.test_common import TestSchema
-from petastorm.unischema import Unischema, UnischemaField, ScalarCodec, dict_to_spark_row
+from petastorm.unischema import Unischema, UnischemaField, dict_to_spark_row
 
 
 def test_get_schema_from_dataset_url(synthetic_dataset):
