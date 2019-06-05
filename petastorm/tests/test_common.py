@@ -156,7 +156,21 @@ def create_test_dataset(tmp_url, rows, num_files=2, spark=None):
     return dataset_dicts
 
 
-def create_test_scalar_dataset(tmp_url, num_rows, num_files=4, spark=None):
+def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None, partition_by=None):
+    """Creates a dataset in tmp_url location. The dataset emulates non-petastorm dataset, i.e. contains only native
+    parquet types.
+
+    These are the fields with mock data:
+      'id', 'int_fixed_size_list', 'datetime', 'timestamp', 'string', 'string2', 'float64'
+
+    :param output_url: Url specifying the location the parquet store is written to
+    :param num_rows: Number of rows in the generated dataset
+    :param num_files: Number of parquet files that will be written into the parquet store
+    :param spark: An instance of spark session object. If `None` (default), a new spark session is created.
+    :param partition_by: A list of fields to partition the parquet store by.
+    :return: A list of records with a copy of the data written to the dataset.
+    """
+    partition_by = partition_by or []
     shutdown = False
     if not spark:
         spark_session = SparkSession \
@@ -203,7 +217,8 @@ def create_test_scalar_dataset(tmp_url, num_rows, num_files=4, spark=None):
         coalesce(num_files). \
         write.option('compression', 'none'). \
         mode('overwrite'). \
-        parquet(tmp_url)
+        partitionBy(*partition_by). \
+        parquet(output_url)
 
     if shutdown:
         spark.stop()

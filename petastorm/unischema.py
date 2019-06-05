@@ -23,17 +23,11 @@ from collections import namedtuple, OrderedDict
 from decimal import Decimal
 
 import numpy as np
+import pyarrow as pa
 import six
 from pyarrow.lib import ListType
 from pyarrow.lib import StructType as pyStructType
-from pyspark import Row
-from pyspark.sql.types import StringType, ShortType, LongType, IntegerType, BooleanType, DoubleType, \
-    ByteType, \
-    FloatType, DecimalType, DateType, TimestampType
-from pyspark.sql.types import StructField, StructType
 from six import string_types
-
-from petastorm.codecs import ScalarCodec
 
 
 def _fields_as_tuple(field):
@@ -209,12 +203,16 @@ class Unischema(object):
         >>> spark.createDataFrame(dataset_rows,
         >>>                       SomeSchema.as_spark_schema())
         """
+        # Lazy loading pyspark to avoid creating pyspark dependency on data reading code path
+        # (currently works only with make_batch_reader)
+        import pyspark.sql.types as sql_types
+
         schema_entries = [
-            StructField(
+            sql_types.StructField(
                 f.name,
                 f.codec.spark_dtype(),
                 f.nullable) for f in self._fields.values()]
-        return StructType(schema_entries)
+        return sql_types.StructType(schema_entries)
 
     def make_namedtuple(self, **kargs):
         """Returns schema as a namedtuple type intialized with arguments passed to this method.
@@ -243,6 +241,9 @@ class Unischema(object):
         throw an exception.
         When the warn_only parameter is turned to True, unsupported column types prints only warnings.
 
+        We do not set codec field in the generated fields since all parquet fields are out-of-the-box supported
+        by pyarrow and we do not need perform any custom decoding.
+
         :param arrow_schema: :class:`pyarrow.lib.Schema`
         :param omit_unsupported_fields: :class:`Boolean`
         :return: A :class:`Unischema` object.
@@ -251,8 +252,17 @@ class Unischema(object):
         arrow_schema = meta.schema.to_arrow_schema()
         unischema_fields = []
 
-        for partition_name in parquet_dataset.partitions.partition_names:
-            unischema_fields.append(UnischemaField(partition_name, np.str_, (), ScalarCodec(StringType()), False))
+        for partition in parquet_dataset.partitions:
+            if (pa.types.is_binary(partition.dictionary.type) and six.PY2) or \
+                    (pa.types.is_string(partition.dictionary.type) and six.PY3):
+                numpy_dtype = np.str_
+            elif pa.types.is_int64(partition.dictionary.type):
+                numpy_dtype = np.int64
+            else:
+                raise RuntimeError(('Expected partition type to be one of currently supported types: string or int64. '
+                                    'Got {}').format(partition.dictionary.type))
+
+            unischema_fields.append(UnischemaField(partition.name, numpy_dtype, (), None, False))
 
         for column_name in arrow_schema.names:
             arrow_field = arrow_schema.field_by_name(column_name)
@@ -263,7 +273,7 @@ class Unischema(object):
                                   % (field_type, column_name))
                     continue
             try:
-                codec, np_type = _numpy_and_codec_from_arrow_type(field_type)
+                np_type = _numpy_and_codec_from_arrow_type(field_type)
             except ValueError:
                 if omit_unsupported_fields:
                     warnings.warn('Column %r has an unsupported field %r. Ignoring...'
@@ -271,7 +281,7 @@ class Unischema(object):
                     continue
                 else:
                     raise
-            unischema_fields.append(UnischemaField(column_name, np_type, (), codec, arrow_field.nullable))
+            unischema_fields.append(UnischemaField(column_name, np_type, (), None, arrow_field.nullable))
         return Unischema('inferred_schema', unischema_fields)
 
 
@@ -287,6 +297,11 @@ def dict_to_spark_row(unischema, row_dict):
     :param row_dict: a dictionary where the keys match name of fields in the unischema.
     :return: a single pyspark.Row object
     """
+
+    # Lazy loading pyspark to avoid creating pyspark dependency on data reading code path
+    # (currently works only with make_batch_reader)
+    import pyspark
+
     assert isinstance(unischema, Unischema)
     # Add null fields. Be careful not to mutate the input dictionary - that would be an unexpected side effect
     copy_row_dict = copy.copy(row_dict)
@@ -304,7 +319,7 @@ def dict_to_spark_row(unischema, row_dict):
                 raise ValueError('Field {} is not "nullable", but got passes a None value')
         encoded_dict[field_name] = schema_field.codec.encode(schema_field, value) if value is not None else None
 
-    return Row(**encoded_dict)
+    return pyspark.Row(**encoded_dict)
 
 
 def insert_explicit_nulls(unischema, row_dict):
@@ -348,46 +363,32 @@ def _numpy_and_codec_from_arrow_type(field_type):
 
     if types.is_int8(field_type):
         np_type = np.int8
-        codec = ScalarCodec(ByteType())
     elif types.is_int16(field_type):
         np_type = np.int16
-        codec = ScalarCodec(ShortType())
     elif types.is_int32(field_type):
         np_type = np.int32
-        codec = ScalarCodec(IntegerType())
     elif types.is_int64(field_type):
         np_type = np.int64
-        codec = ScalarCodec(LongType())
     elif types.is_string(field_type):
         np_type = np.unicode_
-        codec = ScalarCodec(StringType())
     elif types.is_boolean(field_type):
         np_type = np.bool_
-        codec = ScalarCodec(BooleanType())
     elif types.is_float32(field_type):
         np_type = np.float32
-        codec = ScalarCodec(FloatType())
     elif types.is_float64(field_type):
         np_type = np.float64
-        codec = ScalarCodec(DoubleType())
     elif types.is_decimal(field_type):
         np_type = Decimal
-        codec = ScalarCodec(DecimalType(field_type.precision, field_type.scale))
     elif types.is_binary(field_type):
-        codec = ScalarCodec(StringType())
         np_type = np.string_
     elif types.is_fixed_size_binary(field_type):
-        codec = ScalarCodec(StringType())
         np_type = np.string_
     elif types.is_date(field_type):
         np_type = np.datetime64
-        codec = ScalarCodec(DateType())
     elif types.is_timestamp(field_type):
         np_type = np.datetime64
-        codec = ScalarCodec(TimestampType())
     elif types.is_list(field_type):
-        _, np_type = _numpy_and_codec_from_arrow_type(field_type.value_type)
-        codec = None
+        np_type = _numpy_and_codec_from_arrow_type(field_type.value_type)
     else:
         raise ValueError('Cannot auto-create unischema due to unsupported column type {}'.format(field_type))
-    return codec, np_type
+    return np_type
