@@ -34,7 +34,7 @@ ROWGROUPS_INDEX_KEY = b'dataset-toolkit.rowgroups_index.v1'
 PieceInfo = namedtuple('PieceInfo', ['piece_index', 'path', 'row_group', 'partition_keys'])
 
 
-def build_rowgroup_index(dataset_url, spark_context, indexers, hdfs_driver='libhdfs3', user=None):
+def build_rowgroup_index(dataset_url, spark_context, indexers, hdfs_driver='libhdfs3'):
     """
     Build index for given list of fields to use for fast rowgroup selection
     :param dataset_url: (str) the url for the dataset (or a path if you would like to use the default hdfs config)
@@ -42,7 +42,6 @@ def build_rowgroup_index(dataset_url, spark_context, indexers, hdfs_driver='libh
     :param indexers: list of objects to build row groups indexes. Should support RowGroupIndexerBase interface
     :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
     libhdfs (java through JNI) or libhdfs3 (C++)
-    :param user: String denoting username when connecting to HDFS. None implies login user.
     :return: None, upon successful completion the rowgroup predicates will be saved to _metadata file
     """
 
@@ -51,7 +50,7 @@ def build_rowgroup_index(dataset_url, spark_context, indexers, hdfs_driver='libh
 
     # Create pyarrow file system
     resolver = FilesystemResolver(dataset_url, spark_context._jsc.hadoopConfiguration(),
-                                  hdfs_driver=hdfs_driver, user=user)
+                                  hdfs_driver=hdfs_driver, user=sparkContext.sparkUser())
     dataset = pq.ParquetDataset(resolver.get_dataset_path(), filesystem=resolver.filesystem(),
                                 validate_schema=False)
 
