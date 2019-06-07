@@ -56,10 +56,12 @@ def generate_petastorm_metadata(spark, dataset_url, unischema_class=None, use_su
         :class:`examples.hello_world.generate_hello_world_dataset.HelloWorldSchema`)
     :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
         libhdfs (java through JNI) or libhdfs3 (C++)
+    :param user: String denoting username when connecting to HDFS
     """
     sc = spark.sparkContext
 
-    resolver = FilesystemResolver(dataset_url, sc._jsc.hadoopConfiguration(), hdfs_driver=hdfs_driver)
+    resolver = FilesystemResolver(dataset_url, sc._jsc.hadoopConfiguration(), hdfs_driver=hdfs_driver,
+                                  user=spark.sparkContext.sparkUser())
     fs = resolver.filesystem()
     dataset = pq.ParquetDataset(
         resolver.get_dataset_path(),

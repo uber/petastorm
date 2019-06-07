@@ -49,7 +49,8 @@ def build_rowgroup_index(dataset_url, spark_context, indexers, hdfs_driver='libh
         dataset_url = dataset_url[:-1]
 
     # Create pyarrow file system
-    resolver = FilesystemResolver(dataset_url, spark_context._jsc.hadoopConfiguration(), hdfs_driver=hdfs_driver)
+    resolver = FilesystemResolver(dataset_url, spark_context._jsc.hadoopConfiguration(),
+                                  hdfs_driver=hdfs_driver, user=spark_context.sparkUser())
     dataset = pq.ParquetDataset(resolver.get_dataset_path(), filesystem=resolver.filesystem(),
                                 validate_schema=False)
 

@@ -51,6 +51,7 @@ def copy_dataset(spark, source_url, target_url, field_regex, not_null_fields, ov
     :param row_group_size_mb: The size of the rowgroup in the target dataset. Specified in megabytes.
     :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
         libhdfs (java through JNI) or libhdfs3 (C++)
+    :param user: String denoting username when connecting to HDFS. None implies login user.
     :return: None
     """
     schema = get_schema_from_dataset_url(source_url, hdfs_driver=hdfs_driver)
@@ -66,7 +67,8 @@ def copy_dataset(spark, source_url, target_url, field_regex, not_null_fields, ov
     else:
         subschema = schema
 
-    resolver = FilesystemResolver(target_url, spark.sparkContext._jsc.hadoopConfiguration(), hdfs_driver=hdfs_driver)
+    resolver = FilesystemResolver(target_url, spark.sparkContext._jsc.hadoopConfiguration(),
+                                  hdfs_driver=hdfs_driver, user=spark.sparkContext.sparkUser())
     with materialize_dataset(spark, target_url, subschema, row_group_size_mb,
                              filesystem_factory=resolver.filesystem_factory()):
         data_frame = spark.read \

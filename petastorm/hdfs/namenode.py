@@ -210,29 +210,32 @@ def failover_all_class_methods(decorator):
 
 @failover_all_class_methods(namenode_failover)
 class HAHdfsClient(HadoopFileSystem):
-    def __init__(self, connector_cls, list_of_namenodes):
+    def __init__(self, connector_cls, list_of_namenodes, user=None):
         """
         Attempt HDFS connection operation, storing the hdfs object for intercepted calls.
 
         :param connector_cls: HdfsConnector class, so connector logic resides in one place, and
             also facilitates testing.
         :param list_of_namenodes: List of name nodes to failover, cached to enable un-/pickling
+        :param user: String denoting username when connecting to HDFS. None implies login user.
+        :return: None
         """
         # Use protected attribute to prevent mistaken decorator application
         self._connector_cls = connector_cls
         self._list_of_namenodes = list_of_namenodes
+        self._user = user
         # Ensure that a retry will attempt a different name node in the list
         self._index_of_nn = -1
         self._do_connect()
 
     def __reduce__(self):
         """ Returns object state for pickling. """
-        return self.__class__, (self._connector_cls, self._list_of_namenodes)
+        return self.__class__, (self._connector_cls, self._list_of_namenodes, self._user)
 
     def _do_connect(self):
         """ Makes a new connection attempt, caching the new namenode index and HDFS connection. """
         self._index_of_nn, self._hdfs = \
-            self._connector_cls._try_next_namenode(self._index_of_nn, self._list_of_namenodes)
+            self._connector_cls._try_next_namenode(self._index_of_nn, self._list_of_namenodes, user=self._user)
 
 
 class HdfsConnector(object):
@@ -241,12 +244,13 @@ class HdfsConnector(object):
     MAX_NAMENODES = 2
 
     @classmethod
-    def hdfs_connect_namenode(cls, url, driver='libhdfs3'):
+    def hdfs_connect_namenode(cls, url, driver='libhdfs3', user=None):
         """
         Performs HDFS connect in one place, facilitating easy change of driver and test mocking.
 
         :param url: An parsed URL object to the HDFS end point
         :param driver: An optional driver identifier
+        :param user: String denoting username when connecting to HDFS. None implies login user.
         :return: Pyarrow HDFS connection object.
         """
 
@@ -259,10 +263,10 @@ class HdfsConnector(object):
         else:
             hostname = six.text_type(url.hostname or 'default')
             driver = six.text_type(driver)
-        return pyarrow.hdfs.connect(hostname, url.port or 8020, driver=driver)
+        return pyarrow.hdfs.connect(hostname, url.port or 8020, driver=driver, user=user)
 
     @classmethod
-    def connect_to_either_namenode(cls, list_of_namenodes):
+    def connect_to_either_namenode(cls, list_of_namenodes, user=None):
         """
         Returns a wrapper HadoopFileSystem "high-availability client" object that enables
         name node failover.
@@ -270,21 +274,23 @@ class HdfsConnector(object):
         Raises a HdfsConnectError if no successful connection can be established.
 
         :param list_of_namenodes: a required list of name node URLs to connect to.
+        :param user: String denoting username when connecting to HDFS. None implies login user.
         :return: the wrapped HDFS connection object
         """
         assert list_of_namenodes is not None and len(list_of_namenodes) <= cls.MAX_NAMENODES, \
             "Must supply a list of namenodes, but HDFS only supports up to {} namenode URLs" \
             .format(cls.MAX_NAMENODES)
-        return HAHdfsClient(cls, list_of_namenodes)
+        return HAHdfsClient(cls, list_of_namenodes, user=user)
 
     @classmethod
-    def _try_next_namenode(cls, index_of_nn, list_of_namenodes):
+    def _try_next_namenode(cls, index_of_nn, list_of_namenodes, user=None):
         """
         Instead of returning an inline function, this protected class method implements the
         failover logic: circling between namenodes using the supplied index as the last
         index into the name nodes list.
 
         :param list_of_namenodes: a required list of name node URLs to connect to.
+        :param user: String denoting username when connecting to HDFS. None implies login user.
         :return: a tuple of (new index into list, actual pyarrow HDFS connection object), or raise
                 a HdfsConnectError if no successful connection can be established.
         """
@@ -297,7 +303,7 @@ class HdfsConnector(object):
                 host = list_of_namenodes[idx]
                 try:
                     return idx, \
-                        cls.hdfs_connect_namenode(urlparse('hdfs://' + str(host or 'default')))
+                        cls.hdfs_connect_namenode(urlparse('hdfs://' + str(host or 'default')), user=user)
                 except ArrowIOError:
                     # This is an expected error if the namenode we are trying to connect to is
                     # not the active one
