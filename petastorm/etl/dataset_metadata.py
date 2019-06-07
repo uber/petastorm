@@ -94,7 +94,7 @@ def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_
     spark_config = {}
     _init_spark(spark, spark_config, row_group_size_mb, use_summary_metadata)
     yield
-
+    print ("testing")
     # After job completes, add the unischema metadata and check for the metadata summary file
     if filesystem_factory is None:
         resolver = FilesystemResolver(dataset_url, spark.sparkContext._jsc.hadoopConfiguration(), user=spark.sparkContext.sparkUser())
