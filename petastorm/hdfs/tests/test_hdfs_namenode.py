@@ -253,8 +253,9 @@ class MockHdfs(object):
     True after those N calls.
     """
 
-    def __init__(self, n_failovers=0):
+    def __init__(self, n_failovers=0, user=None):
         self._n_failovers = n_failovers
+        self._user = user
 
     def __getattribute__(self, attr):
         """
@@ -318,7 +319,7 @@ class MockHdfsConnector(HdfsConnector):
             return 0
 
     @classmethod
-    def hdfs_connect_namenode(cls, url, driver='libhdfs3'):
+    def hdfs_connect_namenode(cls, url, driver='libhdfs3', user=None):
         netloc = '{}:{}'.format(url.hostname or 'default', url.port or 8020)
         if netloc not in cls._connect_attempted:
             cls._connect_attempted[netloc] = 0
@@ -333,7 +334,7 @@ class MockHdfsConnector(HdfsConnector):
                                .format(netloc, driver, cls._fail_n_next_connect))
         # Return a mock HDFS object with optional failovers, so that this connector mock can
         # be shared for the HAHdfsClient failover tests below.
-        hdfs = MockHdfs(cls._n_failovers)
+        hdfs = MockHdfs(cls._n_failovers, user=user)
         if cls._n_failovers > 0:
             cls._n_failovers -= 1
         return hdfs
@@ -357,6 +358,11 @@ class HdfsConnectorTest(unittest.TestCase):
         self.assertEqual(0, self.suj.connect_attempted(HC.DEFAULT_NN))
         self.assertEqual(1, self.suj.connect_attempted(HC.WARP_TURTLE_NN1))
         self.assertEqual(0, self.suj.connect_attempted(HC.WARP_TURTLE_NN2))
+
+    def test_connect_to_either_with_user(self):
+        mock_name = "mock-manager"
+        mocked_hdfs = self.suj.connect_to_either_namenode(self.NAMENODES, user=mock_name)
+        self.assertEqual(mocked_hdfs._user, mock_name)
 
     def test_connect_to_either_namenode_ok_one_failed(self):
         """ With one failver, test that both namenode URLS are attempted, with 2nd connected. """
@@ -426,11 +432,13 @@ class HAHdfsClientTest(unittest.TestCase):
         Check that all attributes are equal, with the exception of the HDFS object, which is fine
         as long as the types are the same.
         """
-        client = HAHdfsClient(MockHdfsConnector, self.NAMENODES)
+        mock_name = "mock-manager"
+        client = HAHdfsClient(MockHdfsConnector, self.NAMENODES, user=mock_name)
         client_unpickled = pickle.loads(pickle.dumps(client))
         self.assertEqual(client._connector_cls, client_unpickled._connector_cls)
         self.assertEqual(client._list_of_namenodes, client_unpickled._list_of_namenodes)
         self.assertEqual(client._index_of_nn, client_unpickled._index_of_nn)
+        self.assertEqual(client._user, client_unpickled._user)
         self.assertEqual(type(client._hdfs), type(client_unpickled._hdfs))
 
     def _try_failover_combos(self, func, *args, **kwargs):

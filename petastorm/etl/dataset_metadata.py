@@ -89,15 +89,14 @@ def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_
       indexing method. The custom indexing method is more scalable for very large datasets.
     :param pyarrow_filesystem: A pyarrow filesystem object to be used when saving Petastorm specific metadata to the
       Parquet store.
-
     """
     spark_config = {}
     _init_spark(spark, spark_config, row_group_size_mb, use_summary_metadata)
     yield
-
     # After job completes, add the unischema metadata and check for the metadata summary file
     if filesystem_factory is None:
-        resolver = FilesystemResolver(dataset_url, spark.sparkContext._jsc.hadoopConfiguration())
+        resolver = FilesystemResolver(dataset_url, spark.sparkContext._jsc.hadoopConfiguration(),
+                                      user=spark.sparkContext.sparkUser())
         filesystem_factory = resolver.filesystem_factory()
         dataset_path = resolver.get_dataset_path()
     else:

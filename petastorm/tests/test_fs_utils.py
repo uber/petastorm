@@ -34,6 +34,7 @@ class FilesystemResolverTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.mock = MockHdfsConnector()
+        cls.mock_name = "mock-manager"
 
     def setUp(self):
         """Initializes a mock hadoop config and populate with basic properties."""
@@ -83,8 +84,10 @@ class FilesystemResolverTest(unittest.TestCase):
 
     def test_hdfs_url_with_nameservice(self):
         """ Case 3a: HDFS nameservice."""
-        suj = FilesystemResolver(HC.WARP_TURTLE_PATH, self._hadoop_configuration, connector=self.mock)
+        suj = FilesystemResolver(HC.WARP_TURTLE_PATH, self._hadoop_configuration, connector=self.mock,
+                                 user=self.mock_name)
         self.assertEqual(MockHdfs, type(suj.filesystem()._hdfs))
+        self.assertEqual(self.mock_name, suj.filesystem()._user)
         self.assertEqual(HC.WARP_TURTLE, suj.parsed_dataset_url().netloc)
         self.assertEqual(1, self.mock.connect_attempted(HC.WARP_TURTLE_NN2))
         self.assertEqual(0, self.mock.connect_attempted(HC.WARP_TURTLE_NN1))
@@ -95,8 +98,10 @@ class FilesystemResolverTest(unittest.TestCase):
 
     def test_hdfs_url_no_nameservice(self):
         """ Case 3b: HDFS with no nameservice should connect to default namenode."""
-        suj = FilesystemResolver('hdfs:///some/path', self._hadoop_configuration, connector=self.mock)
+        suj = FilesystemResolver('hdfs:///some/path', self._hadoop_configuration, connector=self.mock,
+                                 user=self.mock_name)
         self.assertEqual(MockHdfs, type(suj.filesystem()._hdfs))
+        self.assertEqual(self.mock_name, suj.filesystem()._user)
         self.assertEqual(HC.WARP_TURTLE, suj.parsed_dataset_url().netloc)
         # ensure path is preserved in parsed URL
         self.assertEqual('/some/path', suj.get_dataset_path())
@@ -111,8 +116,10 @@ class FilesystemResolverTest(unittest.TestCase):
         """ Case 4: direct namenode."""
         suj = FilesystemResolver('hdfs://{}/path'.format(HC.WARP_TURTLE_NN1),
                                  self._hadoop_configuration,
-                                 connector=self.mock)
+                                 connector=self.mock,
+                                 user=self.mock_name)
         self.assertEqual(MockHdfs, type(suj.filesystem()))
+        self.assertEqual(self.mock_name, suj.filesystem()._user)
         self.assertEqual(HC.WARP_TURTLE_NN1, suj.parsed_dataset_url().netloc)
         self.assertEqual(0, self.mock.connect_attempted(HC.WARP_TURTLE_NN2))
         self.assertEqual(1, self.mock.connect_attempted(HC.WARP_TURTLE_NN1))
@@ -124,9 +131,9 @@ class FilesystemResolverTest(unittest.TestCase):
     def test_hdfs_url_direct_namenode_driver_libhdfs(self):
         suj = FilesystemResolver('hdfs://{}/path'.format(HC.WARP_TURTLE_NN1),
                                  self._hadoop_configuration,
-                                 connector=self.mock, hdfs_driver='libhdfs')
+                                 connector=self.mock, hdfs_driver='libhdfs', user=self.mock_name)
         self.assertEqual(MockHdfs, type(suj.filesystem()))
-
+        self.assertEqual(self.mock_name, suj.filesystem()._user)
         # Make sure we did not capture FilesystemResolver in a closure by mistake
         dill.dumps(suj.filesystem_factory())
 
@@ -136,7 +143,7 @@ class FilesystemResolverTest(unittest.TestCase):
         with self.assertRaises(ArrowIOError):
             suj = FilesystemResolver('hdfs://{}/path'.format(HC.WARP_TURTLE_NN2),
                                      self._hadoop_configuration,
-                                     connector=self.mock)
+                                     connector=self.mock, user=self.mock_name)
         self.assertEqual(1, self.mock.connect_attempted(HC.WARP_TURTLE_NN2))
         self.assertEqual(0, self.mock.connect_attempted(HC.WARP_TURTLE_NN1))
         self.assertEqual(0, self.mock.connect_attempted(HC.DEFAULT_NN))
@@ -150,8 +157,9 @@ class FilesystemResolverTest(unittest.TestCase):
         # this one should connect "successfully"
         suj = FilesystemResolver('hdfs://{}/path'.format(HC.WARP_TURTLE_NN2),
                                  self._hadoop_configuration,
-                                 connector=self.mock)
+                                 connector=self.mock, user=self.mock_name)
         self.assertEqual(MockHdfs, type(suj.filesystem()))
+        self.assertEqual(self.mock_name, suj.filesystem()._user)
         self.assertEqual(HC.WARP_TURTLE_NN2, suj.parsed_dataset_url().netloc)
         self.assertEqual(3, self.mock.connect_attempted(HC.WARP_TURTLE_NN2))
         self.assertEqual(0, self.mock.connect_attempted(HC.WARP_TURTLE_NN1))
