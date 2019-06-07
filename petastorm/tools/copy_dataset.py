@@ -32,7 +32,7 @@ from petastorm.fs_utils import FilesystemResolver
 
 
 def copy_dataset(spark, source_url, target_url, field_regex, not_null_fields, overwrite_output, partitions_count,
-                 row_group_size_mb, hdfs_driver='libhdfs3', user=None):
+                 row_group_size_mb, hdfs_driver='libhdfs3'):
     """
     Creates a copy of a dataset. A new dataset will optionally contain a subset of columns. Rows that have NULL
     values in fields defined by ``not_null_fields`` argument are filtered out.
@@ -68,9 +68,9 @@ def copy_dataset(spark, source_url, target_url, field_regex, not_null_fields, ov
         subschema = schema
 
     resolver = FilesystemResolver(target_url, spark.sparkContext._jsc.hadoopConfiguration(),
-                                  hdfs_driver=hdfs_driver, user=user)
+                                  hdfs_driver=hdfs_driver, user=spark.sparkContext.sparkUser())
     with materialize_dataset(spark, target_url, subschema, row_group_size_mb,
-                             filesystem_factory=resolver.filesystem_factory(), user=user):
+                             filesystem_factory=resolver.filesystem_factory(), user=spark.sparkContext.sparkUser()):
         data_frame = spark.read \
             .parquet(source_url)
 
@@ -121,8 +121,6 @@ def args_parser():
     parser.add_argument('--hdfs-driver', type=str, default='libhdfs3',
                         help='A string denoting the hdfs driver to use (if using a dataset on hdfs). '
                              'Current choices are libhdfs (java through JNI) or libhdfs3 (C++)')
-    parser.add_argument('--user', type=str, default=None, required=False,
-                        help='Username given when connecting to hdfs')
 
     add_configure_spark_arguments(parser)
 
@@ -142,7 +140,7 @@ def _main(sys_argv):
         .getOrCreate()
 
     copy_dataset(spark, args.source_url, args.target_url, args.field_regex, args.not_null_fields, args.overwrite_output,
-                 args.partition_count, args.row_group_size_mb, hdfs_driver=args.hdfs_driver, user=args.user)
+                 args.partition_count, args.row_group_size_mb, hdfs_driver=args.hdfs_driver)
 
     spark.stop()
 
