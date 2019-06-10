@@ -11,7 +11,8 @@ New features and bug fixes
 - Deadcode removal: ReaderV2 implementation is removed from the codebase.
 - Avoid accidentally capturing FilesystemResolver when dataset metadata is generated
   (a call from ``materialize_dataset``)
-- Use spark name acquired from spark context as a user name for hdfs connect call.
+- When possible, use spark name acquired from spark context as a username for hdfs connect call.
+- Allow username to be passed to filesystem resolver and HdfsConnector/HAHdfsClient that they can provide to pyarrow hdfs connect call.
 
 
 Release 0.7.4
