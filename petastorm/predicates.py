@@ -178,5 +178,5 @@ class in_pseudorandom_split(PredicateBase):
     def do_include(self, values):
         if self._predicate_field not in values.keys():
             raise ValueError('Tested values does not have split key: %s' % self._predicate_field)
-        bucket_idx = _string_to_bucket(values[self._predicate_field], sys.maxsize)
+        bucket_idx = _string_to_bucket(str(values[self._predicate_field]), sys.maxsize)
         return self._bucket_low <= bucket_idx < self._bucket_high
