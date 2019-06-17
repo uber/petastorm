@@ -107,14 +107,28 @@ def test_or_argegarion(all_values):
             assert included_values == values1.union(values2)
 
 
-def test_pseudorandom_split(all_values):
+def test_pseudorandom_split_on_string_field(all_values):
     split_list = [0.3, 0.4, 0.1, 0.0, 0.2]
     values_num = len(all_values)
     for idx in range(len(split_list)):
-        test_predicate = in_pseudorandom_split(split_list, idx, 'volume_guid')
+        test_predicate = in_pseudorandom_split(split_list, idx, 'string_partition_field')
         included_values = set()
         for val in all_values:
-            if test_predicate.do_include({'volume_guid': val}):
+            if test_predicate.do_include({'string_partition_field': val}):
+                included_values.add(val)
+        expected_num = values_num * split_list[idx]
+        assert pytest.approx(len(included_values), expected_num * 0.1) == expected_num
+
+
+def test_pseudorandom_split_on_integer_field():
+    split_list = [0.3, 0.4, 0.1, 0.0, 0.2]
+    int_values = list(range(1000))
+    values_num = len(int_values)
+    for idx, _ in enumerate(split_list):
+        test_predicate = in_pseudorandom_split(split_list, idx, 'int_partitioning_field')
+        included_values = set()
+        for val in int_values:
+            if test_predicate.do_include({'int_partitioning_field': val}):
                 included_values.add(val)
         expected_num = values_num * split_list[idx]
         assert pytest.approx(len(included_values), expected_num * 0.1) == expected_num
