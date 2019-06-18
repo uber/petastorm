@@ -127,6 +127,26 @@ def test_transform_function(synthetic_dataset, reader_factory):
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
 ])
+def test_transform_function_with_predicate(synthetic_dataset, reader_factory):
+    """Make sure we apply transform only after we apply the predicate"""
+
+    def delete_id2(sample):
+        del sample['id2']
+        return sample
+
+    with reader_factory(synthetic_dataset.url, schema_fields=[TestSchema.id, TestSchema.id2],
+                        predicate=in_lambda(['id2'], lambda id2: id2 == 1),
+                        transform_spec=TransformSpec(delete_id2, removed_fields=['id2'])) as reader:
+        actual_ids = np.asarray(list(row.id for row in reader))
+        assert actual_ids.size > 0
+        # In the test data id2 = id % 2, which means we expect only odd ids to remain after
+        # we apply lambda id2: id2 == 1 predicate.
+        assert np.all(actual_ids % 2 == 1)
+
+
+@pytest.mark.parametrize('reader_factory', [
+    lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
+])
 def test_transform_function_new_field(synthetic_dataset, reader_factory):
     """"""
 

@@ -192,9 +192,8 @@ class PyDictReaderWorker(WorkerBase):
                                                           shuffle_row_drop_partition)
 
         # Decode values
-        transform_func = self._transform_spec.func if self._transform_spec else (lambda x: x)
         decoded_predicate_rows = [
-            transform_func(utils.decode_row(_select_cols(row, predicate_column_names), self._schema))
+            utils.decode_row(_select_cols(row, predicate_column_names), self._schema)
             for row in predicate_rows]
 
         # Use the predicate to filter
@@ -221,9 +220,14 @@ class PyDictReaderWorker(WorkerBase):
 
             # Merge predicate needed columns with the remaining
             all_cols = [_merge_two_dicts(a, b) for a, b in zip(decoded_other_rows, filtered_decoded_predicate_rows)]
-            return all_cols
+            result = all_cols
         else:
-            return filtered_decoded_predicate_rows
+            result = filtered_decoded_predicate_rows
+
+        if self._transform_spec and self._transform_spec.func:
+            result = [self._transform_spec.func(row) for row in result]
+
+        return result
 
     def _read_with_shuffle_row_drop(self, piece, pq_file, column_names, shuffle_row_drop_partition):
         # If integer_object_nulls is set to False, nullable integer fields are return as floats
