@@ -109,7 +109,9 @@ def mnist_data_to_petastorm_dataset(download_dir, output_url, spark_master=None,
     # The MNIST data is small enough to do everything here in Python
     for dset, data in mnist_data.items():
         dset_output_url = '{}/{}'.format(output_url, dset)
-        with materialize_dataset(spark, dset_output_url, MnistSchema):
+        # Using row_group_size_mb=1 to avoid having just a single rowgroup in this example. In a real store, the value
+        # should be similar to an HDFS block size.
+        with materialize_dataset(spark, dset_output_url, MnistSchema, row_group_size_mb=1):
             # List of [(idx, image, digit), ...]
             # where image is shaped as a 28x28 numpy matrix
             idx_image_digit_list = map(lambda idx_image_digit: {
