@@ -18,15 +18,8 @@ with petastorm. Generates a sample dataset from random data.
 """
 
 import random
+
 from pyspark.sql import SparkSession, Row
-from pyspark.sql.types import StructType, StructField, IntegerType
-
-
-NON_PETASTORM_SCHEMA = StructType([
-    StructField("id", IntegerType(), True),
-    StructField("value1", IntegerType(), True),
-    StructField("value2", IntegerType(), True)
-])
 
 
 def row_generator(x):
@@ -36,18 +29,18 @@ def row_generator(x):
 
 def generate_external_dataset(output_url='file:///tmp/external_dataset'):
     """Creates an example dataset at output_url in Parquet format"""
-    spark = SparkSession.builder\
-        .master('local[2]')\
+    spark = SparkSession.builder \
+        .master('local[2]') \
         .getOrCreate()
     sc = spark.sparkContext
 
     rows_count = 10
-    rows_rdd = sc.parallelize(range(rows_count))\
+    rows_rdd = sc.parallelize(range(rows_count)) \
         .map(row_generator)
 
-    spark.createDataFrame(rows_rdd).\
-        write.\
-        mode('overwrite').\
+    spark.createDataFrame(rows_rdd). \
+        write. \
+        mode('overwrite'). \
         parquet(output_url)
 
 
