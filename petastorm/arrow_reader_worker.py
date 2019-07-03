@@ -61,7 +61,7 @@ class ArrowReaderWorkerResultsQueueReader(object):
                     try:
                         result_dict[column.name] = np.vstack(list_of_lists.tolist())
                     except ValueError:
-                        raise RuntimeError('Length of all values in column \'{}\' are expected to be the same length. ' 
+                        raise RuntimeError('Length of all values in column \'{}\' are expected to be the same length. '
                                            'Got the following set of lengths: \'{}\''
                                            .format(column.name,
                                                    ', '.join(str(value.shape[0]) for value in list_of_lists)))
