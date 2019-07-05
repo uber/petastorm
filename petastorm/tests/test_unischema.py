@@ -273,7 +273,6 @@ class UnischemaTest(unittest.TestCase):
             pa.field('timestamp_ns', pa.timestamp('ns')),
             pa.field('date_32', pa.date32()),
             pa.field('date_64', pa.date64()),
-            pa.field('timestamp_ns', pa.timestamp('ns')),
         ])
 
         mock_dataset = _mock_parquet_dataset([], arrow_schema)
