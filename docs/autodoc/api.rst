@@ -11,6 +11,10 @@ Reader
 .. automodule:: petastorm.weighted_sampling_reader
 .. automodule:: petastorm.ngram
 
+TransformSpec
+-------------
+.. automodule:: petastorm.transform
+
 Tensorflow
 ----------
 .. automodule:: petastorm.tf_utils
