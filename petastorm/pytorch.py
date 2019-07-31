@@ -54,7 +54,8 @@ def _sanitize_pytorch_types(row_as_dict):
             elif value.dtype == np.bool_:
                 row_as_dict[name] = value.astype(np.uint8)
             elif re.search('[SaUO]', value.dtype.str):
-                raise TypeError('Pytorch does not support arrays of string classes. Found in field {}'.format(name))
+                raise TypeError('Pytorch does not support arrays of string or object classes. '
+                                'Found in field {}.'.format(name))
         elif isinstance(value, np.bool_):
             row_as_dict[name] = np.uint8(value)
         elif value is None:
@@ -122,13 +123,16 @@ class DataLoader(object):
         self.reader = reader
         self.batch_size = batch_size
         self.collate_fn = collate_fn
+
+        # _batch_acc accumulates samples for a single batch.
+        self._batch_acc = []
         if shuffling_queue_capacity > 0:
-            # We always add and remove one sample from the shuffling buffer in the steady state. min_after_dequeue
-            # is important when enqueue and dequeue rates are not the same.
-            # By setting `min_after_dequeue = shuffling_queue_capacity - 1` we will just keep the buffer full.
+            # We can not know what is the reasonable number to use for the extra capacity, so we set a huge number
+            # and give up on the unbound growth protection mechanism.
             min_after_dequeue = shuffling_queue_capacity - 1
             self._shuffling_buffer = RandomShufflingBuffer(shuffling_queue_capacity,
-                                                           min_after_retrieve=min_after_dequeue, extra_capacity=0)
+                                                           min_after_retrieve=min_after_dequeue,
+                                                           extra_capacity=100000000)
         else:
             self._shuffling_buffer = NoopShufflingBuffer()
 
@@ -136,46 +140,67 @@ class DataLoader(object):
         """
         The Data Loader iterator stops the for-loop when reader runs out of samples.
         """
-        batch = []
+        # As we iterate over incoming samples, we are going to store them in `self._batch_acc`, until we have a batch of
+        # the requested batch_size ready.
+
+        keys = None
+
         for row in self.reader:
             # Default collate does not work nicely on namedtuples and treat them as lists
             # Using dict will result in the yielded structures being dicts as well
             row_as_dict = row._asdict()
 
+            keys = row_as_dict.keys()
+
             # Promote some types that are incompatible with pytorch to be pytorch friendly.
             _sanitize_pytorch_types(row_as_dict)
 
             # Add rows to shuffling buffer
-            self._shuffling_buffer.add_many([row_as_dict])
+            if not self.reader.is_batched_reader:
+                self._shuffling_buffer.add_many([row_as_dict])
+            else:
+                # Transposition:
+                #   row_as_dict:        {'a': [1,2,3], 'b':[4,5,6]}
+                #   row_group_as_tuple: [(1, 4), (2, 5), (3, 6)]
+                # The order within a tuple is defined by key order in 'keys'
+                row_group_as_tuple = list(zip(*(row_as_dict[k] for k in keys)))
 
-            # If the shuffling buffer is ready, pull the resampled rows out and try add to our accumulated batch
-            while self._shuffling_buffer.can_retrieve():
-                post_shuffled_row = self._shuffling_buffer.retrieve()
-                batch.append(post_shuffled_row)
+                # Adding data as 'row-by-row' into a shuffling buffer. This is a pretty
+                # slow implementation though. Probably can comeup with a faster way to shuffle,
+                # perhaps at the expense of a larger memory consumption...
+                self._shuffling_buffer.add_many(row_group_as_tuple)
 
-                # Batch is ready? Collate and emmit
-                if len(batch) == self.batch_size:
-                    yield self.collate_fn(batch)
-                    batch = []
+            # _yield_batches will emit as much batches as are allowed by the shuffling_buffer (RandomShufflingBuffer
+            # will avoid underflowing below a certain number of samples to guarantee some samples decorrelation)
+            for batch in self._yield_batches(keys):
+                yield batch
 
-        # Once reader can not emit new rows, we might still have a bunch of rows waiting in the shuffling buffer.
-        # Telling shuffling buffer thatt we are finished allows to deplete the buffer completely, regardless its
+        # Once reader can not read new rows, we might still have a bunch of rows waiting in the shuffling buffer.
+        # Telling shuffling buffer that we are finished allows to deplete the buffer completely, regardless its
         # min_after_dequeue setting.
         self._shuffling_buffer.finish()
 
-        # Some code duplication with the main reading loop. Not sure how to reorganize to avoid this without
-        # overcomplicating the code too much.
+        for batch in self._yield_batches(keys):
+            yield batch
+
+        # Yield the last and partial batch
+        if self._batch_acc:
+            yield self.collate_fn(self._batch_acc)
+
+    def _yield_batches(self, keys):
         while self._shuffling_buffer.can_retrieve():
             post_shuffled_row = self._shuffling_buffer.retrieve()
-            batch.append(post_shuffled_row)
+            if not isinstance(post_shuffled_row, dict):
+                # This is for the case of batched reads. Here we restore back the
+                # dictionary format of records
+                post_shuffled_row = dict(zip(keys, post_shuffled_row))
+
+            self._batch_acc.append(post_shuffled_row)
 
             # Batch is ready? Collate and emmit
-            if len(batch) == self.batch_size:
-                yield self.collate_fn(batch)
-                batch = []
-
-        if batch:
-            yield self.collate_fn(batch)
+            if len(self._batch_acc) == self.batch_size:
+                yield self.collate_fn(self._batch_acc)
+                self._batch_acc = []
 
     # Functions needed to treat data loader as a context manager
     def __enter__(self):

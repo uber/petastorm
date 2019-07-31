@@ -164,6 +164,7 @@ def make_reader(dataset_url,
     try:
         return Reader(filesystem, dataset_path,
                       worker_class=PyDictReaderWorker,
+                      is_batched_reader=False,
                       **kwargs)
     except PetastormMetadataError as e:
         logger.error('Unexpected exception: %s', str(e))
@@ -284,7 +285,8 @@ def make_batch_reader(dataset_url,
                   cur_shard=cur_shard,
                   shard_count=shard_count,
                   cache=cache,
-                  transform_spec=transform_spec)
+                  transform_spec=transform_spec,
+                  is_batched_reader=True)
 
 
 class Reader(object):
@@ -297,7 +299,7 @@ class Reader(object):
                  shuffle_row_groups=True, shuffle_row_drop_partitions=1,
                  predicate=None, rowgroup_selector=None, reader_pool=None, num_epochs=1,
                  cur_shard=None, shard_count=None, cache=None, worker_class=None,
-                 transform_spec=None):
+                 transform_spec=None, is_batched_reader=False):
         """Initializes a reader object.
 
         :param pyarrow_filesystem: An instance of ``pyarrow.FileSystem`` that will be used. If not specified,
@@ -350,6 +352,7 @@ class Reader(object):
             raise ValueError('Fields must be either None, an iterable collection of Unischema fields '
                              'or an NGram object.')
 
+        self.is_batched_reader = is_batched_reader
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
         self.dataset = pq.ParquetDataset(dataset_path, filesystem=pyarrow_filesystem,
                                          validate_schema=False)
