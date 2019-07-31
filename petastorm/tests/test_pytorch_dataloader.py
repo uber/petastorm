@@ -5,7 +5,7 @@ import pytest
 # Must import pyarrow before torch. See: https://github.com/uber/petastorm/blob/master/docs/troubleshoot.rst
 import torch
 
-from petastorm import make_reader, TransformSpec
+from petastorm import make_reader, TransformSpec, make_batch_reader
 from petastorm.pytorch import _sanitize_pytorch_types, DataLoader, decimal_friendly_collate
 from petastorm.tests.test_common import TestSchema
 
@@ -151,3 +151,16 @@ def test_with_shuffling_buffer(synthetic_dataset, reader_factory):
         # We assume we get less then 10% of consequent elements for the sake of the test (this probability is very
         # close to zero)
         assert sum(np.diff(ids) == 1) < len(synthetic_dataset.data) / 10.0
+
+
+@pytest.mark.parametrize('shuffling_queue_capacity', [0, 2, 10, 1000])
+def test_with_batch_reader(scalar_dataset, shuffling_queue_capacity):
+    """See if we are getting correct batch sizes when using DataLoader with make_batch_reader"""
+    pytorch_compatible_fields = [k for k, v in scalar_dataset.data[0].items()
+                                 if not isinstance(v, (np.datetime64, np.unicode_))]
+    with DataLoader(make_batch_reader(scalar_dataset.url, schema_fields=pytorch_compatible_fields),
+                    batch_size=3, shuffling_queue_capacity=shuffling_queue_capacity) as loader:
+        batches = list(loader)
+        assert len(scalar_dataset.data) == sum(batch['id'].shape[0] for batch in batches)
+        assert len(scalar_dataset.data) == sum(batch['int_fixed_size_list'].shape[0] for batch in batches)
+        assert batches[0]['int_fixed_size_list'].shape[1] == len(scalar_dataset.data[0]['int_fixed_size_list'])
