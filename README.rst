@@ -254,7 +254,7 @@ SQL can be used to query a Petastorm dataset:
       'SELECT count(id) '
       'from parquet.`file:///tmp/hello_world_dataset`').collect()
 
-You can find a full code sample here: `pyspark_hello_world.py <examples/hello_world/petastorm_dataset/pyspark_hello_world.py>`_,
+You can find a full code sample here: `pyspark_hello_world.py <https://github.com/uber/petastorm/blob/master/examples/hello_world/petastorm_dataset/pyspark_hello_world.py>`_,
 
 Non Petastorm Parquet Stores
 ----------------------------
