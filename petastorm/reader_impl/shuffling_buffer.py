@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import abc
+from collections import deque
 
 import numpy as np
 import six
@@ -23,6 +24,7 @@ class ShufflingBufferBase(object):
     """Shuffling implements a shuffling algorithm. Items can be added to the shuffling buffer and removed in a
     different order as defined by the concrete shuffling algorithm. A shuffling buffer is intended to be used from
     a single thread, hence, not thread safe."""
+
     @abc.abstractmethod
     def add_many(self, items):
         """Adds multiple items to the buffer.
@@ -76,13 +78,13 @@ class NoopShufflingBuffer(ShufflingBufferBase):
     """
 
     def __init__(self):
-        self.store = []
+        self.store = deque()
 
     def add_many(self, items):
         self.store.extend(items)
 
     def retrieve(self):
-        return self.store.pop(0)
+        return self.store.popleft()
 
     def can_retrieve(self):
         return len(self.store) > 0
