@@ -157,7 +157,20 @@ class ArrowReaderWorker(WorkerBase):
         result = self._read_with_shuffle_row_drop(piece, pq_file, column_names, shuffle_row_drop_range)
 
         if self._transform_spec:
-            result = pa.Table.from_pandas(self._transform_spec.func(result.to_pandas()), preserve_index=False)
+            result_as_pandas = result.to_pandas()
+            # A user may omit `func` value if they intend just to delete some fields using the TransformSpec
+            if self._transform_spec.func:
+                transformed_result = self._transform_spec.func(result_as_pandas)
+            else:
+                transformed_result = result_as_pandas
+
+            # If transform function left a field that is listed in transform_spec's remove_fields, we remove it
+            # ourselves. Allows for the following transform-spec objects to be created:
+            # TransformSpec(removed_fields=['some field'])
+            for field_to_remove in set(transformed_result.columns) & set(self._transform_spec.removed_fields):
+                del transformed_result[field_to_remove]
+
+            result = pa.Table.from_pandas(transformed_result, preserve_index=False)
 
         return result
 
