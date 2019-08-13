@@ -127,17 +127,45 @@ def test_transform_function(synthetic_dataset, reader_factory):
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
 ])
+def test_transform_function_returns_a_new_dict(synthetic_dataset, reader_factory):
+    """"""
+
+    def double_matrix(sample):
+        return {'id': -1}
+
+    with reader_factory(synthetic_dataset.url, schema_fields=[TestSchema.id],
+                        transform_spec=TransformSpec(double_matrix)) as reader:
+        all_samples = list(reader)
+        actual_ids = list(map(lambda x: x.id, all_samples))
+
+        np.testing.assert_equal(actual_ids, [-1] * len(synthetic_dataset.data))
+
+
+@pytest.mark.parametrize('reader_factory', [
+    lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
+])
+def test_transform_remove_field(synthetic_dataset, reader_factory):
+    """Make sure we apply transform only after we apply the predicate"""
+
+    with reader_factory(synthetic_dataset.url, schema_fields=[TestSchema.id, TestSchema.id2],
+                        transform_spec=TransformSpec(removed_fields=['id2'])) as reader:
+        row = next(reader)
+        assert 'id2' not in row._fields
+        assert 'id' in row._fields
+
+
+@pytest.mark.parametrize('reader_factory', [
+    lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
+])
 def test_transform_function_with_predicate(synthetic_dataset, reader_factory):
     """Make sure we apply transform only after we apply the predicate"""
 
-    def delete_id2(sample):
-        del sample['id2']
-        return sample
-
     with reader_factory(synthetic_dataset.url, schema_fields=[TestSchema.id, TestSchema.id2],
                         predicate=in_lambda(['id2'], lambda id2: id2 == 1),
-                        transform_spec=TransformSpec(delete_id2, removed_fields=['id2'])) as reader:
-        actual_ids = np.asarray(list(row.id for row in reader))
+                        transform_spec=TransformSpec(removed_fields=['id2'])) as reader:
+        rows = list(reader)
+        assert 'id2' not in rows[0]._fields
+        actual_ids = np.asarray(list(row.id for row in rows))
         assert actual_ids.size > 0
         # In the test data id2 = id % 2, which means we expect only odd ids to remain after
         # we apply lambda id2: id2 == 1 predicate.
@@ -176,6 +204,24 @@ def test_transform_function_batched(scalar_dataset):
             original_sample = next(d for d in scalar_dataset.data if d['id'] == actual_id)
             expected_matrix = original_sample['float64'] * 2
             np.testing.assert_equal(expected_matrix, actual_float64)
+
+
+def test_transform_function_batched_deleting_column(scalar_dataset):
+    def double_float64(sample):
+        del sample['float64']
+        return sample
+
+    with make_batch_reader(scalar_dataset.url,
+                           transform_spec=TransformSpec(double_float64, removed_fields=['float64'])) as reader:
+        actual = next(reader)
+        assert 'float64' not in actual._fields
+
+
+def test_transform_function_batched_auto_deleting_column(scalar_dataset):
+    with make_batch_reader(scalar_dataset.url,
+                           transform_spec=TransformSpec(removed_fields=['float64'])) as reader:
+        actual = next(reader)
+        assert 'float64' not in actual._fields
 
 
 def test_transform_function_with_predicate_batched(scalar_dataset):
