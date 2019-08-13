@@ -34,8 +34,25 @@ def _merge_two_dicts(a, b):
     return result
 
 
+def _apply_transform_spec(all_rows, transform_spec):
+    """Applies transform_spec.func to all rows in all_rows (if func is specified). Removes all fields as specified by
+    transform_spec.removed_fields, unless the fields were already deleted by transform_spec.func.
+
+    All modifications are performed in-place.
+    """
+    if transform_spec.func:
+        all_rows = [transform_spec.func(row) for row in all_rows]
+
+    for field_to_remove in transform_spec.removed_fields:
+        for row in all_rows:
+            if field_to_remove in row:
+                del row[field_to_remove]
+
+    return all_rows
+
+
 def _select_cols(a_dict, keys):
-    """Filteres out entries in a dictionary that have a key which is not part of 'keys' argument. `a_dict` is not
+    """Filters out entries in a dictionary that have a key which is not part of 'keys' argument. `a_dict` is not
     modified and a new dictionary is returned."""
     if keys == list(a_dict.keys()):
         return a_dict
@@ -160,8 +177,12 @@ class PyDictReaderWorker(WorkerBase):
 
         all_rows = self._read_with_shuffle_row_drop(piece, pq_file, column_names, shuffle_row_drop_range)
 
-        transform_func = self._transform_spec.func if self._transform_spec else (lambda x: x)
-        return [transform_func(utils.decode_row(row, self._schema)) for row in all_rows]
+        all_rows = [utils.decode_row(row, self._schema) for row in all_rows]
+
+        if self._transform_spec:
+            all_rows = _apply_transform_spec(all_rows, self._transform_spec)
+
+        return all_rows
 
     def _load_rows_with_predicate(self, pq_file, piece, worker_predicate, shuffle_row_drop_partition):
         """Loads all rows that match a predicate from a piece"""
@@ -224,8 +245,8 @@ class PyDictReaderWorker(WorkerBase):
         else:
             result = filtered_decoded_predicate_rows
 
-        if self._transform_spec and self._transform_spec.func:
-            result = [self._transform_spec.func(row) for row in result]
+        if self._transform_spec:
+            _apply_transform_spec(result, self._transform_spec)
 
         return result
 

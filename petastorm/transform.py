@@ -16,7 +16,7 @@ from petastorm.unischema import UnischemaField, Unischema
 
 
 class TransformSpec(object):
-    def __init__(self, func, edit_fields=None, removed_fields=None):
+    def __init__(self, func=None, edit_fields=None, removed_fields=None):
         """TransformSpec defines a user transformation that is applied to a loaded row on a worker thread/process.
 
         The object defines the function (callable) that perform the transform as well as the
@@ -26,8 +26,10 @@ class TransformSpec(object):
         ``edit_fields`` and ``removed_fields`` define mutating operations performed on the original schema that
         produce a post-transform schema. ``func`` return value must comply to this post-transform schema.
 
-        :param func: A callable. The function is called on the worker thread. It takes a dictionary that complies to
-          the input schema and must return a dictionary that complies to a post-transform schema.
+        :param func: Optional. A callable. The function is called on the worker thread. It takes a dictionary that
+          complies to the input schema and must return a dictionary that complies to a post-transform schema. User may
+          In case the user wants to only remove certain fields, the user may omit this argument and specify only
+          `remove_fields` argument.
         :param edit_fields: Optional. A list of 4-tuples with the following fields:
           ``(name, numpy_dtype, shape, is_nullable)``
         :param removed_fields: Optional. A list of field names that will be removed from the original schema.
