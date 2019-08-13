@@ -30,7 +30,7 @@ class TransformSpec(object):
           the input schema and must return a dictionary that complies to a post-transform schema.
         :param edit_fields: Optional. A list of 4-tuples with the following fields:
           ``(name, numpy_dtype, shape, is_nullable)``
-        :param removed_fields: Optional. A list of field names that will be removed from the original schema.
+        :param removed_fields: Optional[list]. A list of field names that will be removed from the original schema.
         """
         self.func = func
         self.edit_fields = edit_fields or []
@@ -47,9 +47,9 @@ def transform_schema(schema, transform_spec):
     removed_fields = set(transform_spec.removed_fields)
     unknown_field_names = removed_fields - set(schema.fields.keys())
     if unknown_field_names:
-        raise ValueError('Unexpected field names found in TransformSpec remove_fields list: "%s". '
-                         'Valid values are "%s".',
-                         ', '.join(removed_fields), ', '.join(schema.fields.keys()))
+        raise ValueError('Unexpected field names found in TransformSpec remove_fields list: "{}". '
+                         'Valid values are "{}".'
+                         .format(', '.join(removed_fields), ', '.join(schema.fields.keys())))
 
     exclude_fields = {f[0] for f in transform_spec.edit_fields} | removed_fields
     fields = [v for k, v in schema.fields.items() if k not in exclude_fields]
