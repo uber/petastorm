@@ -4,6 +4,26 @@
 Release notes
 =============
 
+Release 0.7.6
+=============
+Thanks to our new contributor: Michael Noronha and Praateek Mahajan!
+
+New features and bug fixes
+--------------------------
+- Adding shuffling queue support to Petastorm's ``DataLoader``. Reordering of samples will occure when
+  Petastorm's ``DataLoader`` is instantiated with ``shuffling_queue_capacity`` argument.
+- Apply transform function after predicate was evaluated (with make_reader). It was reported in #391, that having the
+  transform applied before predicate does not allow us to get rid of string fields that can not be forwarded
+  to PyTorch. This PR changes the order of predicate/transform so that the scenario described in #391 works.
+- Make sure ``in_pseudorandom_split`` works also with non-string fields.
+- Improve support of reading from a partitioned dataset: interpret types of the partition-by scalars properly.
+- Remove dependency on pyspark while reading using ``make_batch_reader``.
+- Automatically delete columns when ``TransformSpec(..., removed_fields=..)`` is specified. Now user does not need
+  to guarantee that the field is removed by the transform-spec function implementation.
+- Read proper batches when using ``petastorm.pytorch.DataLoader`` with ``make_batch_reader``. Before this fix, batches
+  were not formed properly.
+
+
 Release 0.7.5
 =============
 New features and bug fixes
