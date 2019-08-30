@@ -70,14 +70,41 @@ def test_as_spark_schema():
     TestSchema = Unischema('TestSchema', [
         UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
         UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
+        UnischemaField('string_field_implicit', np.string_, ()),
     ])
 
     spark_schema = TestSchema.as_spark_schema()
     assert spark_schema.fields[0].name == 'int_field'
+
     assert spark_schema.fields[1].name == 'string_field'
+    assert spark_schema.fields[1].dataType == StringType()
+
+    assert spark_schema.fields[2].name == 'string_field_implicit'
+    assert spark_schema.fields[2].dataType == StringType()
 
     assert TestSchema.fields['int_field'].name == 'int_field'
     assert TestSchema.fields['string_field'].name == 'string_field'
+
+
+def test_as_spark_schema_unspecified_codec_type_for_non_scalars_raises():
+    """Do not currently support choosing spark type automatically for non-scalar types."""
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('int_vector_unspecified_codec', np.int8, (1,)),
+    ])
+
+    with pytest.raises(ValueError, match='has codec set to None'):
+        TestSchema.as_spark_schema()
+
+
+def test_as_spark_schema_unspecified_codec_type_unknown_scalar_type_raises():
+    """We have a limited list of scalar types we can automatically map from numpy (+Decimal) types to spark types.
+    Make sure that a ValueError is raised if an unknown type is used."""
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('int_vector_unspecified_codec', object, ()),
+    ])
+
+    with pytest.raises(ValueError, match='Was not able to map type'):
+        TestSchema.as_spark_schema()
 
 
 def test_dict_to_spark_row_field_validation_scalar_types():
@@ -374,33 +401,37 @@ def test_arrow_schema_convertion_ignore():
 
 
 @pytest.fixture()
-def equality_hash_fields():
+def equality_fields():
     class Fixture(object):
-        TestField1a = UnischemaField('random', np.string_, (), ScalarCodec(StringType()), False)
-        TestField1b = UnischemaField('random', np.string_, (), ScalarCodec(StringType()), False)
-        TestField1c = UnischemaField('Random', np.string_, (), ScalarCodec(StringType()), False)
-
-        TestField2a = UnischemaField('id', np.int32, (), ScalarCodec(ShortType()), False)
-        TestField2b = UnischemaField('id', np.int32, (), ScalarCodec(ShortType()), False)
-        TestField2c = UnischemaField('ID', np.int32, (), ScalarCodec(ShortType()), False)
+        string1 = UnischemaField('random', np.string_, (), ScalarCodec(StringType()), False)
+        string2 = UnischemaField('random', np.string_, (), ScalarCodec(StringType()), False)
+        string_implicit = UnischemaField('random', np.string_, ())
+        string_nullable = UnischemaField('random', np.string_, (), nullable=True)
+        other_string = UnischemaField('Random', np.string_, (), ScalarCodec(StringType()), False)
+        int1 = UnischemaField('id', np.int32, (), ScalarCodec(ShortType()), False)
+        int2 = UnischemaField('id', np.int32, (), ScalarCodec(ShortType()), False)
+        other_int = UnischemaField('ID', np.int32, (), ScalarCodec(ShortType()), False)
 
     return Fixture()
 
 
-def test_equality(equality_hash_fields):
+def test_equality(equality_fields):
     # Use assertTrue instead of assertEqual/assertNotEqual so we don't depend on which operator (__eq__ or __ne__)
     # actual implementation of assert uses
-    assert equality_hash_fields.TestField1a == equality_hash_fields.TestField1b
-    assert equality_hash_fields.TestField2a == equality_hash_fields.TestField2b
-    assert equality_hash_fields.TestField1a != equality_hash_fields.TestField1c
-    assert equality_hash_fields.TestField2a != equality_hash_fields.TestField2c
+    assert equality_fields.string1 == equality_fields.string2
+    assert equality_fields.string1 == equality_fields.string_implicit
+    assert equality_fields.int1 == equality_fields.int2
+    assert equality_fields.string1 != equality_fields.other_string
+    assert equality_fields.other_string != equality_fields.string_implicit
+    assert equality_fields.int1 != equality_fields.other_int
+    assert equality_fields.string_nullable != equality_fields.string_implicit
 
 
-def test_hash(equality_hash_fields):
-    assert hash(equality_hash_fields.TestField1a) == hash(equality_hash_fields.TestField1b)
-    assert hash(equality_hash_fields.TestField2a) == hash(equality_hash_fields.TestField2b)
-    assert hash(equality_hash_fields.TestField1a) != hash(equality_hash_fields.TestField1c)
-    assert hash(equality_hash_fields.TestField2a) != hash(equality_hash_fields.TestField2c)
+def test_hash(equality_fields):
+    assert hash(equality_fields.string1) == hash(equality_fields.string2)
+    assert hash(equality_fields.int1) == hash(equality_fields.int2)
+    assert hash(equality_fields.string1) != hash(equality_fields.other_string)
+    assert hash(equality_fields.int1) != hash(equality_fields.other_int)
 
 
 def test_new_gt_255_compatible_namedtuple():

@@ -60,8 +60,12 @@ def decode_row(row, schema):
         if field_name in schema.fields:
             try:
                 if row[field_name] is not None:
+                    field = schema.fields[field_name]
                     codec = schema.fields[field_name].codec
-                    decoded_row[field_name] = codec.decode(schema.fields[field_name], row[field_name])
+                    if codec:
+                        decoded_row[field_name] = codec.decode(field, row[field_name])
+                    else:
+                        decoded_row[field_name] = field.numpy_dtype(row[field_name])
                 else:
                     decoded_row[field_name] = None
             except Exception:  # pylint: disable=broad-except

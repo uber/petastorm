@@ -22,7 +22,7 @@ import numpy as np
 import pytz
 from pyspark import Row
 from pyspark.sql import SparkSession
-from pyspark.sql.types import StringType, ShortType, LongType, DecimalType, DoubleType, BooleanType, StructField, \
+from pyspark.sql.types import StringType, DecimalType, DoubleType, StructField, \
     IntegerType, StructType, DateType, TimestampType, ArrayType
 
 from petastorm.codecs import CompressedImageCodec, NdarrayCodec, \
@@ -35,12 +35,12 @@ from petastorm.unischema import Unischema, UnischemaField, dict_to_spark_row
 _DEFAULT_IMAGE_SIZE = (32, 16, 3)
 
 TestSchema = Unischema('TestSchema', [
-    UnischemaField('partition_key', np.unicode_, (), ScalarCodec(StringType()), False),
-    UnischemaField('id', np.int64, (), ScalarCodec(LongType()), False),
-    UnischemaField('id2', np.int32, (), ScalarCodec(ShortType()), False),
-    UnischemaField('id_float', np.float64, (), ScalarCodec(DoubleType()), False),
-    UnischemaField('id_odd', np.bool_, (), ScalarCodec(BooleanType()), False),
-    UnischemaField('python_primitive_uint8', np.uint8, (), ScalarCodec(ShortType()), False),
+    UnischemaField('partition_key', np.unicode_, ()),
+    UnischemaField('id', np.int64, ()),
+    UnischemaField('id2', np.int32, ()),
+    UnischemaField('id_float', np.float64, ()),
+    UnischemaField('id_odd', np.bool_, ()),
+    UnischemaField('python_primitive_uint8', np.uint8, ()),
     UnischemaField('image_png', np.uint8, _DEFAULT_IMAGE_SIZE, CompressedImageCodec('png'), False),
     UnischemaField('matrix', np.float32, _DEFAULT_IMAGE_SIZE, NdarrayCodec(), False),
     UnischemaField('decimal', Decimal, (), ScalarCodec(DecimalType(10, 9)), False),
@@ -51,7 +51,7 @@ TestSchema = Unischema('TestSchema', [
     UnischemaField('matrix_nullable', np.uint16, _DEFAULT_IMAGE_SIZE, NdarrayCodec(), True),
     UnischemaField('sensor_name', np.unicode_, (1,), NdarrayCodec(), False),
     UnischemaField('string_array_nullable', np.unicode_, (None,), NdarrayCodec(), True),
-    UnischemaField('integer_nullable', np.int32, (), ScalarCodec(ShortType()), True),
+    UnischemaField('integer_nullable', np.int32, (), nullable=True),
 ])
 
 
@@ -79,8 +79,8 @@ def _randomize_row(id_num):
         TestSchema.image_png.name: np.random.randint(0, 255, _DEFAULT_IMAGE_SIZE).astype(np.uint8),
         TestSchema.matrix.name: np.random.random(size=_DEFAULT_IMAGE_SIZE).astype(np.float32),
         TestSchema.decimal.name: Decimal(np.random.randint(0, 255) / Decimal(100)),
-        TestSchema.matrix_uint16.name: np.random.randint(0, 2**16 - 1, _DEFAULT_IMAGE_SIZE).astype(np.uint16),
-        TestSchema.matrix_uint32.name: np.random.randint(0, 2**32 - 1, _DEFAULT_IMAGE_SIZE).astype(np.uint32),
+        TestSchema.matrix_uint16.name: np.random.randint(0, 2 ** 16 - 1, _DEFAULT_IMAGE_SIZE).astype(np.uint16),
+        TestSchema.matrix_uint32.name: np.random.randint(0, 2 ** 32 - 1, _DEFAULT_IMAGE_SIZE).astype(np.uint32),
         TestSchema.matrix_string.name: np.asarray(_random_binary_string_matrix(2, 3, 10)).astype(np.bytes_),
         TestSchema.empty_matrix_string.name: np.asarray([], dtype=np.string_),
         TestSchema.matrix_nullable.name: None,
