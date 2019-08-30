@@ -34,11 +34,11 @@ def _fields_as_tuple(field):
     """Common representation of UnischemaField for equality and hash operators.
     Defined outside class because the method won't be accessible otherwise.
 
-    The only difference is that the type name of the ``codec`` field is returned
-    so that the codec object ID won't differentiate two otherwise identifcial
-    UniSchema fields.
+    Today codec instance also responsible for defining spark dataframe type. This knowledge should move
+    to a different class in order to support backends other than Apache Parquet. For now we ignore the codec
+    in comparison. From the checks does not seem that it should negatively effect the rest of the code.
     """
-    return tuple([type(f) if f == field.codec else f for f in field])
+    return (field.name, field.numpy_dtype, field.shape, field.nullable)
 
 
 class UnischemaField(namedtuple('UnischemaField', ['name', 'numpy_dtype', 'shape', 'codec', 'nullable'])):
@@ -71,6 +71,11 @@ class UnischemaField(namedtuple('UnischemaField', ['name', 'numpy_dtype', 'shape
 
     def __hash__(self):
         return hash(_fields_as_tuple(self))
+
+
+# Defines default arguments for UnischemaField namedtuple:
+# Makes the signature equivalent to UnischemaField(name, numpy_dtype, shape, codec=None, nullable=False)
+UnischemaField.__new__.__defaults__ = (None, False)
 
 
 class _NamedtupleCache(object):
@@ -110,8 +115,52 @@ def _new_gt_255_compatible_namedtuple(*args, **kwargs):
     return namedtuple_cls(*args, **kwargs)
 
 
+def _numpy_to_spark_mapping():
+    """Returns a mapping from numpy to pyspark.sql type. Caches the mapping dictionary inorder to avoid instantiation
+    of multiple objects in each call."""
+
+    # Refer to the attribute of the function we use to cache the map using a name in the variable instead of a 'dot'
+    # notation to avoid copy/paste/typo mistakes
+    cache_attr_name = 'cached_numpy_to_pyspark_types_map'
+    if not hasattr(_numpy_to_spark_mapping, cache_attr_name):
+        import pyspark.sql.types as T
+
+        setattr(_numpy_to_spark_mapping, cache_attr_name,
+                {
+                    np.int8: T.ByteType(),
+                    np.uint8: T.ShortType(),
+                    np.int16: T.ShortType(),
+                    np.uint16: T.IntegerType(),
+                    np.int32: T.IntegerType(),
+                    np.int64: T.LongType(),
+                    np.float32: T.FloatType(),
+                    np.float64: T.DoubleType(),
+                    np.string_: T.StringType(),
+                    np.str_: T.StringType(),
+                    np.unicode_: T.StringType(),
+                    np.bool_: T.BooleanType(),
+                })
+
+    return getattr(_numpy_to_spark_mapping, cache_attr_name)
+
+
 # TODO: Changing fields in this class or the UnischemaField will break reading due to the schema being pickled next to
 # the dataset on disk
+def _field_spark_dtype(field):
+    if field.codec is None:
+        if field.shape == ():
+            spark_type = _numpy_to_spark_mapping().get(field.numpy_dtype, None)
+            if not spark_type:
+                raise ValueError('Was not able to map type {} to a spark type.'.format(str(field.numpy_dtype)))
+        else:
+            raise ValueError('An instance of non-scalar UnischemaField \'{}\' has codec set to None. '
+                             'Don\'t know how to guess a Spark type for it'.format(field.name))
+    else:
+        spark_type = field.codec.spark_dtype()
+
+    return spark_type
+
+
 class Unischema(object):
     """Describes a schema of a data structure which can be rendered as native schema/data-types objects
     in several different python libraries. Currently supported are pyspark, tensorflow, and numpy.
@@ -207,11 +256,11 @@ class Unischema(object):
         # (currently works only with make_batch_reader)
         import pyspark.sql.types as sql_types
 
-        schema_entries = [
-            sql_types.StructField(
-                f.name,
-                f.codec.spark_dtype(),
-                f.nullable) for f in self._fields.values()]
+        schema_entries = []
+        for field in self._fields.values():
+            spark_type = _field_spark_dtype(field)
+            schema_entries.append(sql_types.StructField(field.name, spark_type, field.nullable))
+
         return sql_types.StructType(schema_entries)
 
     def make_namedtuple(self, **kargs):
@@ -317,7 +366,13 @@ def dict_to_spark_row(unischema, row_dict):
         if value is None:
             if not schema_field.nullable:
                 raise ValueError('Field {} is not "nullable", but got passes a None value')
-        encoded_dict[field_name] = schema_field.codec.encode(schema_field, value) if value is not None else None
+        if schema_field.codec:
+            encoded_dict[field_name] = schema_field.codec.encode(schema_field, value) if value is not None else None
+        else:
+            if isinstance(value, (np.generic,)):
+                encoded_dict[field_name] = value.tolist()
+            else:
+                encoded_dict[field_name] = value
 
     return pyspark.Row(**encoded_dict)
 
