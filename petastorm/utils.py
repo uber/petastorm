@@ -14,8 +14,10 @@
 
 import logging
 import os
+from decimal import Decimal
 from multiprocessing import Pool
 
+import numpy as np
 import pyarrow
 from future.utils import raise_with_traceback
 from pyarrow.filesystem import LocalFileSystem
@@ -50,6 +52,13 @@ class DecodeFieldError(RuntimeError):
 def decode_row(row, schema):
     """
     Decode dataset row according to coding spec from unischema object
+
+    If a codec is set, we use codec.decode() to produce decoded value.
+
+    For scalar fields, the codec maybe set to `None`. In that case:
+     - If the numpy_dtype is a numpy scalar or a Decimal, cast the 'encoded' value before returning.
+     - In any other case, return the value 'as is'.
+
     :param row: dictionary with encodded values
     :param schema: unischema object
     :return:
@@ -60,8 +69,14 @@ def decode_row(row, schema):
         if field_name in schema.fields:
             try:
                 if row[field_name] is not None:
+                    field = schema.fields[field_name]
                     codec = schema.fields[field_name].codec
-                    decoded_row[field_name] = codec.decode(schema.fields[field_name], row[field_name])
+                    if codec:
+                        decoded_row[field_name] = codec.decode(field, row[field_name])
+                    elif field.numpy_dtype and issubclass(field.numpy_dtype, (np.generic, Decimal)):
+                        decoded_row[field_name] = field.numpy_dtype(row[field_name])
+                    else:
+                        decoded_row[field_name] = row[field_name]
                 else:
                     decoded_row[field_name] = None
             except Exception:  # pylint: disable=broad-except

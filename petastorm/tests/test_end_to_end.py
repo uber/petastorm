@@ -498,12 +498,10 @@ def test_invalid_schema_field(synthetic_dataset, reader_factory):
         UnischemaField('bogus_key', np.int32, (), ScalarCodec(ShortType()), False)])
 
     expected_values = {'bogus_key': 11, 'id': 1}
-    with pytest.raises(ValueError) as e:
+    with pytest.raises(ValueError, match='bogus_key'):
         reader_factory(synthetic_dataset.url, schema_fields=BogusSchema.fields.values(),
                        shuffle_row_groups=False,
                        predicate=EqualPredicate(expected_values))
-
-    assert 'bogus_key' in str(e)
 
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
