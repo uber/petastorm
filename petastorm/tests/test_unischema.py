@@ -14,7 +14,6 @@
 
 from __future__ import division
 
-import unittest
 from decimal import Decimal
 
 import numpy as np
@@ -54,337 +53,354 @@ def _mock_parquet_dataset(partitions, arrow_schema):
     return dataset_mock
 
 
-class UnischemaTest(unittest.TestCase):
+def test_fields():
+    """Try using 'fields' getter"""
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
+        UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
+    ])
 
-    def test_fields(self):
-        """Try using 'fields' getter"""
-        TestSchema = Unischema('TestSchema', [
-            UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
-            UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
-        ])
+    assert len(TestSchema.fields) == 2
+    assert TestSchema.fields['int_field'].name == 'int_field'
+    assert TestSchema.fields['string_field'].name == 'string_field'
 
-        self.assertEqual(len(TestSchema.fields), 2)
-        self.assertEqual(TestSchema.fields['int_field'].name, 'int_field')
-        self.assertEqual(TestSchema.fields['string_field'].name, 'string_field')
 
-    def test_as_spark_schema(self):
-        """Try using 'as_spark_schema' function"""
-        TestSchema = Unischema('TestSchema', [
-            UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
-            UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
-        ])
+def test_as_spark_schema():
+    """Try using 'as_spark_schema' function"""
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
+        UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
+    ])
 
-        spark_schema = TestSchema.as_spark_schema()
-        self.assertEqual(spark_schema.fields[0].name, 'int_field')
-        self.assertEqual(spark_schema.fields[1].name, 'string_field')
+    spark_schema = TestSchema.as_spark_schema()
+    assert spark_schema.fields[0].name == 'int_field'
+    assert spark_schema.fields[1].name == 'string_field'
 
-        self.assertEqual(TestSchema.fields['int_field'].name, 'int_field')
-        self.assertEqual(TestSchema.fields['string_field'].name, 'string_field')
+    assert TestSchema.fields['int_field'].name == 'int_field'
+    assert TestSchema.fields['string_field'].name == 'string_field'
 
-    def test_dict_to_spark_row_field_validation_scalar_types(self):
-        """Test various validations done on data types when converting a dictionary to a spark row"""
-        TestSchema = Unischema('TestSchema', [
-            UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
-        ])
 
-        self.assertTrue(isinstance(dict_to_spark_row(TestSchema, {'string_field': 'abc'}), Row))
+def test_dict_to_spark_row_field_validation_scalar_types():
+    """Test various validations done on data types when converting a dictionary to a spark row"""
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
+    ])
 
-        # Not a nullable field
-        with self.assertRaises(ValueError):
-            isinstance(dict_to_spark_row(TestSchema, {'string_field': None}), Row)
+    assert isinstance(dict_to_spark_row(TestSchema, {'string_field': 'abc'}), Row)
 
-        # Wrong field type
-        with self.assertRaises(ValueError):
-            isinstance(dict_to_spark_row(TestSchema, {'string_field': []}), Row)
+    # Not a nullable field
+    with pytest.raises(ValueError):
+        isinstance(dict_to_spark_row(TestSchema, {'string_field': None}), Row)
 
-    def test_dict_to_spark_row_field_validation_scalar_nullable(self):
-        """Test various validations done on data types when converting a dictionary to a spark row"""
-        TestSchema = Unischema('TestSchema', [
-            UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), True),
-            UnischemaField('nullable_implicitly_set', np.string_, (), ScalarCodec(StringType()), True),
-        ])
+    # Wrong field type
+    with pytest.raises(ValueError):
+        isinstance(dict_to_spark_row(TestSchema, {'string_field': []}), Row)
 
-        self.assertTrue(isinstance(dict_to_spark_row(TestSchema, {'string_field': None}), Row))
 
-    def test_dict_to_spark_row_field_validation_ndarrays(self):
-        """Test various validations done on data types when converting a dictionary to a spark row"""
-        TestSchema = Unischema('TestSchema', [
-            UnischemaField('tensor3d', np.float32, (10, 20, 30), NdarrayCodec(), False),
-        ])
+def test_dict_to_spark_row_field_validation_scalar_nullable():
+    """Test various validations done on data types when converting a dictionary to a spark row"""
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), True),
+        UnischemaField('nullable_implicitly_set', np.string_, (), ScalarCodec(StringType()), True),
+    ])
 
-        self.assertTrue(isinstance(dict_to_spark_row(TestSchema,
-                                                     {'tensor3d': np.zeros((10, 20, 30), dtype=np.float32)}), Row))
+    assert isinstance(dict_to_spark_row(TestSchema, {'string_field': None}), Row)
 
-        # Null value into not nullable field
-        with self.assertRaises(ValueError):
-            isinstance(dict_to_spark_row(TestSchema, {'string_field': None}), Row)
 
-        # Wrong dimensions
-        with self.assertRaises(ValueError):
-            isinstance(dict_to_spark_row(TestSchema, {'string_field': np.zeros((1, 2, 3), dtype=np.float32)}), Row)
+def test_dict_to_spark_row_field_validation_ndarrays():
+    """Test various validations done on data types when converting a dictionary to a spark row"""
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('tensor3d', np.float32, (10, 20, 30), NdarrayCodec(), False),
+    ])
 
-    def test_make_named_tuple(self):
-        TestSchema = Unischema('TestSchema', [
-            UnischemaField('string_scalar', np.string_, (), ScalarCodec(StringType()), True),
-            UnischemaField('int32_scalar', np.int32, (), ScalarCodec(ShortType()), False),
-            UnischemaField('uint8_scalar', np.uint8, (), ScalarCodec(ShortType()), False),
-            UnischemaField('int32_matrix', np.float32, (10, 20, 3), NdarrayCodec(), True),
-            UnischemaField('decimal_scalar', Decimal, (10, 20, 3), ScalarCodec(DecimalType(10, 9)), False),
-        ])
+    assert isinstance(dict_to_spark_row(TestSchema, {'tensor3d': np.zeros((10, 20, 30), dtype=np.float32)}), Row)
 
-        TestSchema.make_namedtuple(string_scalar='abc', int32_scalar=10, uint8_scalar=20,
-                                   int32_matrix=np.int32((10, 20, 3)), decimal_scalar=Decimal(123) / Decimal(10))
+    # Null value into not nullable field
+    with pytest.raises(ValueError):
+        isinstance(dict_to_spark_row(TestSchema, {'string_field': None}), Row)
 
-        TestSchema.make_namedtuple(string_scalar=None, int32_scalar=10, uint8_scalar=20,
-                                   int32_matrix=None, decimal_scalar=Decimal(123) / Decimal(10))
+    # Wrong dimensions
+    with pytest.raises(ValueError):
+        isinstance(dict_to_spark_row(TestSchema, {'string_field': np.zeros((1, 2, 3), dtype=np.float32)}), Row)
 
-    def test_insert_explicit_nulls(self):
-        TestSchema = Unischema('TestSchema', [
-            UnischemaField('nullable', np.int32, (), ScalarCodec(StringType()), True),
-            UnischemaField('not_nullable', np.int32, (), ScalarCodec(ShortType()), False),
-        ])
 
-        # Insert_explicit_nulls to leave the dictionary as is.
-        row_dict = {'nullable': 0, 'not_nullable': 1}
+def test_make_named_tuple():
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('string_scalar', np.string_, (), ScalarCodec(StringType()), True),
+        UnischemaField('int32_scalar', np.int32, (), ScalarCodec(ShortType()), False),
+        UnischemaField('uint8_scalar', np.uint8, (), ScalarCodec(ShortType()), False),
+        UnischemaField('int32_matrix', np.float32, (10, 20, 3), NdarrayCodec(), True),
+        UnischemaField('decimal_scalar', Decimal, (10, 20, 3), ScalarCodec(DecimalType(10, 9)), False),
+    ])
+
+    TestSchema.make_namedtuple(string_scalar='abc', int32_scalar=10, uint8_scalar=20,
+                               int32_matrix=np.int32((10, 20, 3)), decimal_scalar=Decimal(123) / Decimal(10))
+
+    TestSchema.make_namedtuple(string_scalar=None, int32_scalar=10, uint8_scalar=20,
+                               int32_matrix=None, decimal_scalar=Decimal(123) / Decimal(10))
+
+
+def test_insert_explicit_nulls():
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('nullable', np.int32, (), ScalarCodec(StringType()), True),
+        UnischemaField('not_nullable', np.int32, (), ScalarCodec(ShortType()), False),
+    ])
+
+    # Insert_explicit_nulls to leave the dictionary as is.
+    row_dict = {'nullable': 0, 'not_nullable': 1}
+    insert_explicit_nulls(TestSchema, row_dict)
+    assert len(row_dict) == 2
+    assert row_dict['nullable'] == 0
+    assert row_dict['not_nullable'] == 1
+
+    # Insert_explicit_nulls to leave the dictionary as is.
+    row_dict = {'nullable': None, 'not_nullable': 1}
+    insert_explicit_nulls(TestSchema, row_dict)
+    assert len(row_dict) == 2
+    assert row_dict['nullable'] is None
+    assert row_dict['not_nullable'] == 1
+
+    # We are missing a nullable field here. insert_explicit_nulls should add a None entry.
+    row_dict = {'not_nullable': 1}
+    insert_explicit_nulls(TestSchema, row_dict)
+    assert len(row_dict) == 2
+    assert row_dict['nullable'] is None
+    assert row_dict['not_nullable'] == 1
+
+    # We are missing a not_nullable field here. Should raise an ValueError.
+    row_dict = {'nullable': 0}
+    with pytest.raises(ValueError):
         insert_explicit_nulls(TestSchema, row_dict)
-        self.assertEqual(len(row_dict), 2)
-        self.assertEqual(row_dict['nullable'], 0)
-        self.assertEqual(row_dict['not_nullable'], 1)
-
-        # Insert_explicit_nulls to leave the dictionary as is.
-        row_dict = {'nullable': None, 'not_nullable': 1}
-        insert_explicit_nulls(TestSchema, row_dict)
-        self.assertEqual(len(row_dict), 2)
-        self.assertEqual(row_dict['nullable'], None)
-        self.assertEqual(row_dict['not_nullable'], 1)
-
-        # We are missing a nullable field here. insert_explicit_nulls should add a None entry.
-        row_dict = {'not_nullable': 1}
-        insert_explicit_nulls(TestSchema, row_dict)
-        self.assertEqual(len(row_dict), 2)
-        self.assertEqual(row_dict['nullable'], None)
-        self.assertEqual(row_dict['not_nullable'], 1)
-
-        # We are missing a not_nullable field here. Should raise an ValueError.
-        row_dict = {'nullable': 0}
-        with self.assertRaises(ValueError):
-            insert_explicit_nulls(TestSchema, row_dict)
-
-    def test_create_schema_view_fails_validate(self):
-        """ Exercises code paths unischema.create_schema_view ValueError, and unischema.__str__."""
-        TestSchema = Unischema('TestSchema', [
-            UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
-            UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
-        ])
-        with self.assertRaises(ValueError) as ex:
-            TestSchema.create_schema_view([UnischemaField('id', np.int64, (), ScalarCodec(LongType()), False)])
-        self.assertTrue('does not belong to the schema' in str(ex.exception))
-
-    def test_create_schema_view_using_invalid_type(self):
-        """ Exercises code paths unischema.create_schema_view ValueError, and unischema.__str__."""
-        TestSchema = Unischema('TestSchema', [
-            UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
-            UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
-        ])
-        with self.assertRaises(ValueError) as ex:
-            TestSchema.create_schema_view([42])
-        self.assertTrue('must be either a string' in str(ex.exception))
-
-    def test_create_schema_view_using_unischema_fields(self):
-        TestSchema = Unischema('TestSchema', [
-            UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
-            UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
-        ])
-        view = TestSchema.create_schema_view([TestSchema.int_field])
-        self.assertEqual(set(view.fields.keys()), {'int_field'})
-
-    def test_create_schema_view_using_regex(self):
-        TestSchema = Unischema('TestSchema', [
-            UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
-            UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
-        ])
-        view = TestSchema.create_schema_view(['int.*$'])
-        self.assertEqual(set(view.fields.keys()), {'int_field'})
-
-        view = TestSchema.create_schema_view([u'int.*$'])
-        self.assertEqual(set(view.fields.keys()), {'int_field'})
-
-    def test_create_schema_view_using_regex_and_unischema_fields(self):
-        TestSchema = Unischema('TestSchema', [
-            UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
-            UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
-            UnischemaField('other_string_field', np.string_, (), ScalarCodec(StringType()), False),
-        ])
-        view = TestSchema.create_schema_view(['int.*$', TestSchema.string_field])
-        self.assertEqual(set(view.fields.keys()), {'int_field', 'string_field'})
-
-    def test_create_schema_view_using_regex_and_unischema_fields_with_duplicates(self):
-        TestSchema = Unischema('TestSchema', [
-            UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
-            UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
-            UnischemaField('other_string_field', np.string_, (), ScalarCodec(StringType()), False),
-        ])
-        view = TestSchema.create_schema_view(['int.*$', TestSchema.int_field])
-        self.assertEqual(set(view.fields.keys()), {'int_field'})
-
-    def test_create_schema_view_no_field_matches_regex(self):
-        TestSchema = Unischema('TestSchema', [
-            UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
-            UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
-        ])
-        view = TestSchema.create_schema_view(['bogus'])
-        self.assertEqual(len(view.fields), 0)
-
-    def test_name_property(self):
-        TestSchema = Unischema('TestSchema', [
-            UnischemaField('nullable', np.int32, (), ScalarCodec(StringType()), True),
-        ])
-
-        self.assertEqual('TestSchema', TestSchema._name)
-
-    def test_field_name_conflict_with_unischema_attribute(self):
-        # fields is an existing attribute of Unischema
-        with pytest.warns(UserWarning, match='Can not create dynamic property'):
-            Unischema('TestSchema', [UnischemaField('fields', np.int32, (), ScalarCodec(StringType()), True)])
-
-    def test_filter_schema_fields_from_url(self):
-        TestSchema = Unischema('TestSchema', [
-            UnischemaField('int32', np.int32, (), None, False),
-            UnischemaField('uint8', np.uint8, (), None, False),
-            UnischemaField('uint16', np.uint16, (), None, False),
-        ])
-
-        assert match_unischema_fields(TestSchema, ['.*nt.*6']) == [TestSchema.uint16]
-        assert match_unischema_fields(TestSchema, ['nomatch']) == []
-        assert match_unischema_fields(TestSchema, ['.*']) == list(TestSchema.fields.values())
-        assert match_unischema_fields(TestSchema, ['int32', 'uint8']) == [TestSchema.int32, TestSchema.uint8]
-
-    def test_arrow_schema_convertion(self):
-
-        arrow_schema = pa.schema([
-            pa.field('string', pa.string()),
-            pa.field('int8', pa.int8()),
-            pa.field('int16', pa.int16()),
-            pa.field('int32', pa.int32()),
-            pa.field('int64', pa.int64()),
-            pa.field('float', pa.float32()),
-            pa.field('double', pa.float64()),
-            pa.field('bool', pa.bool_(), False),
-            pa.field('fixed_size_binary', pa.binary(10)),
-            pa.field('variable_size_binary', pa.binary()),
-            pa.field('decimal', pa.decimal128(3, 4)),
-            pa.field('timestamp_s', pa.timestamp('s')),
-            pa.field('timestamp_ns', pa.timestamp('ns')),
-            pa.field('date_32', pa.date32()),
-            pa.field('date_64', pa.date64()),
-            pa.field('timestamp_ns', pa.timestamp('ns')),
-        ])
-
-        mock_dataset = _mock_parquet_dataset([], arrow_schema)
-
-        unischema = Unischema.from_arrow_schema(mock_dataset)
-        for name in arrow_schema.names:
-            assert getattr(unischema, name).name == name
-            assert getattr(unischema, name).codec is None
-            if name == 'bool':
-                assert not getattr(unischema, name).nullable
-            else:
-                assert getattr(unischema, name).nullable
-
-    def test_arrow_schema_convertion_with_string_partitions(self):
-
-        arrow_schema = pa.schema([
-            pa.field('int8', pa.int8()),
-        ])
-
-        mock_dataset = _mock_parquet_dataset([pq.PartitionSet('part_name', ['a', 'b'])], arrow_schema)
-
-        unischema = Unischema.from_arrow_schema(mock_dataset)
-        assert unischema.part_name.numpy_dtype == np.str_
-
-    def test_arrow_schema_convertion_with_int_partitions(self):
-
-        arrow_schema = pa.schema([
-            pa.field('int8', pa.int8()),
-        ])
-
-        mock_dataset = _mock_parquet_dataset([pq.PartitionSet('part_name', ['0', '1', '2'])], arrow_schema)
-
-        unischema = Unischema.from_arrow_schema(mock_dataset)
-        assert unischema.part_name.numpy_dtype == np.int64
-
-    def test_arrow_schema_convertion_fail(self):
-        arrow_schema = pa.schema([
-            pa.field('list_of_int', pa.float16()),
-        ])
-
-        mock_dataset = _mock_parquet_dataset([], arrow_schema)
-
-        with self.assertRaises(ValueError) as ex:
-            Unischema.from_arrow_schema(mock_dataset)
-
-        assert 'Cannot auto-create unischema due to unsupported column type' in str(ex.exception)
-
-    def test_arrow_schema_arrow_1644_list_of_struct(self):
-        arrow_schema = pa.schema([
-            pa.field('id', pa.string()),
-            pa.field('list_of_struct', pa.list_(pa.struct([pa.field('a', pa.string()), pa.field('b', pa.int32())])))
-        ])
-
-        mock_dataset = _mock_parquet_dataset([], arrow_schema)
-
-        unischema = Unischema.from_arrow_schema(mock_dataset)
-        assert getattr(unischema, 'id').name == 'id'
-        assert not hasattr(unischema, 'list_of_struct')
-
-    def test_arrow_schema_arrow_1644_list_of_list(self):
-        arrow_schema = pa.schema([
-            pa.field('id', pa.string()),
-            pa.field('list_of_list',
-                     pa.list_(pa.list_(pa.struct([pa.field('a', pa.string()), pa.field('b', pa.int32())]))))
-        ])
-
-        mock_dataset = _mock_parquet_dataset([], arrow_schema)
-
-        unischema = Unischema.from_arrow_schema(mock_dataset)
-        assert getattr(unischema, 'id').name == 'id'
-        assert not hasattr(unischema, 'list_of_list')
-
-    def test_arrow_schema_convertion_ignore(self):
-        arrow_schema = pa.schema([
-            pa.field('list_of_int', pa.float16()),
-            pa.field('struct', pa.struct([pa.field('a', pa.string()), pa.field('b', pa.int32())])),
-        ])
-
-        mock_dataset = _mock_parquet_dataset([], arrow_schema)
-
-        unischema = Unischema.from_arrow_schema(mock_dataset, omit_unsupported_fields=True)
-        assert not hasattr(unischema, 'list_of_int')
 
 
-class UnischemaFieldTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls._TestField1a = UnischemaField('random', np.string_, (), ScalarCodec(StringType()), False)
-        cls._TestField1b = UnischemaField('random', np.string_, (), ScalarCodec(StringType()), False)
-        cls._TestField1c = UnischemaField('Random', np.string_, (), ScalarCodec(StringType()), False)
-        cls._TestField2a = UnischemaField('id', np.int32, (), ScalarCodec(ShortType()), False)
-        cls._TestField2b = UnischemaField('id', np.int32, (), ScalarCodec(ShortType()), False)
-        cls._TestField2c = UnischemaField('ID', np.int32, (), ScalarCodec(ShortType()), False)
+def test_create_schema_view_fails_validate():
+    """ Exercises code paths unischema.create_schema_view ValueError, and unischema.__str__."""
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
+        UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
+    ])
+    with pytest.raises(ValueError, match='does not belong to the schema'):
+        TestSchema.create_schema_view([UnischemaField('id', np.int64, (), ScalarCodec(LongType()), False)])
 
-    def test_equality(self):
-        # Use assertTrue instead of assertEqual/assertNotEqual so we don't depend on which operator (__eq__ or __ne__)
-        # actual implementation of assert uses
-        self.assertTrue(self._TestField1a == self._TestField1b)
-        self.assertTrue(self._TestField2a == self._TestField2b)
-        self.assertTrue(self._TestField1a != self._TestField1c)
-        self.assertTrue(self._TestField2a != self._TestField2c)
 
-    def test_hash(self):
-        self.assertEqual(hash(self._TestField1a), hash(self._TestField1b))
-        self.assertEqual(hash(self._TestField2a), hash(self._TestField2b))
-        self.assertNotEqual(hash(self._TestField1a), hash(self._TestField1c))
-        self.assertNotEqual(hash(self._TestField2a), hash(self._TestField2c))
+def test_create_schema_view_using_invalid_type():
+    """ Exercises code paths unischema.create_schema_view ValueError, and unischema.__str__."""
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
+        UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
+    ])
+    with pytest.raises(ValueError, match='must be either a string'):
+        TestSchema.create_schema_view([42])
+
+
+def test_create_schema_view_using_unischema_fields():
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
+        UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
+    ])
+    view = TestSchema.create_schema_view([TestSchema.int_field])
+    assert set(view.fields.keys()) == {'int_field'}
+
+
+def test_create_schema_view_using_regex():
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
+        UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
+    ])
+    view = TestSchema.create_schema_view(['int.*$'])
+    assert set(view.fields.keys()) == {'int_field'}
+
+    view = TestSchema.create_schema_view([u'int.*$'])
+    assert set(view.fields.keys()) == {'int_field'}
+
+
+def test_create_schema_view_using_regex_and_unischema_fields():
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
+        UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
+        UnischemaField('other_string_field', np.string_, (), ScalarCodec(StringType()), False),
+    ])
+    view = TestSchema.create_schema_view(['int.*$', TestSchema.string_field])
+    assert set(view.fields.keys()) == {'int_field', 'string_field'}
+
+
+def test_create_schema_view_using_regex_and_unischema_fields_with_duplicates():
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
+        UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
+        UnischemaField('other_string_field', np.string_, (), ScalarCodec(StringType()), False),
+    ])
+    view = TestSchema.create_schema_view(['int.*$', TestSchema.int_field])
+    assert set(view.fields.keys()) == {'int_field'}
+
+
+def test_create_schema_view_no_field_matches_regex():
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('int_field', np.int8, (), ScalarCodec(IntegerType()), False),
+        UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
+    ])
+    view = TestSchema.create_schema_view(['bogus'])
+    assert not view.fields
+
+
+def test_name_property():
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('nullable', np.int32, (), ScalarCodec(StringType()), True),
+    ])
+
+    assert 'TestSchema' == TestSchema._name
+
+
+def test_field_name_conflict_with_unischema_attribute():
+    # fields is an existing attribute of Unischema
+    with pytest.warns(UserWarning, match='Can not create dynamic property'):
+        Unischema('TestSchema', [UnischemaField('fields', np.int32, (), ScalarCodec(StringType()), True)])
+
+
+def test_filter_schema_fields_from_url():
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('int32', np.int32, (), None, False),
+        UnischemaField('uint8', np.uint8, (), None, False),
+        UnischemaField('uint16', np.uint16, (), None, False),
+    ])
+
+    assert match_unischema_fields(TestSchema, ['.*nt.*6']) == [TestSchema.uint16]
+    assert match_unischema_fields(TestSchema, ['nomatch']) == []
+    assert match_unischema_fields(TestSchema, ['.*']) == list(TestSchema.fields.values())
+    assert match_unischema_fields(TestSchema, ['int32', 'uint8']) == [TestSchema.int32, TestSchema.uint8]
+
+
+def test_arrow_schema_convertion():
+    arrow_schema = pa.schema([
+        pa.field('string', pa.string()),
+        pa.field('int8', pa.int8()),
+        pa.field('int16', pa.int16()),
+        pa.field('int32', pa.int32()),
+        pa.field('int64', pa.int64()),
+        pa.field('float', pa.float32()),
+        pa.field('double', pa.float64()),
+        pa.field('bool', pa.bool_(), False),
+        pa.field('fixed_size_binary', pa.binary(10)),
+        pa.field('variable_size_binary', pa.binary()),
+        pa.field('decimal', pa.decimal128(3, 4)),
+        pa.field('timestamp_s', pa.timestamp('s')),
+        pa.field('timestamp_ns', pa.timestamp('ns')),
+        pa.field('date_32', pa.date32()),
+        pa.field('date_64', pa.date64()),
+    ])
+
+    mock_dataset = _mock_parquet_dataset([], arrow_schema)
+
+    unischema = Unischema.from_arrow_schema(mock_dataset)
+    for name in arrow_schema.names:
+        assert getattr(unischema, name).name == name
+        assert getattr(unischema, name).codec is None
+        if name == 'bool':
+            assert not getattr(unischema, name).nullable
+        else:
+            assert getattr(unischema, name).nullable
+
+
+def test_arrow_schema_convertion_with_string_partitions():
+    arrow_schema = pa.schema([
+        pa.field('int8', pa.int8()),
+    ])
+
+    mock_dataset = _mock_parquet_dataset([pq.PartitionSet('part_name', ['a', 'b'])], arrow_schema)
+
+    unischema = Unischema.from_arrow_schema(mock_dataset)
+    assert unischema.part_name.numpy_dtype == np.str_
+
+
+def test_arrow_schema_convertion_with_int_partitions():
+    arrow_schema = pa.schema([
+        pa.field('int8', pa.int8()),
+    ])
+
+    mock_dataset = _mock_parquet_dataset([pq.PartitionSet('part_name', ['0', '1', '2'])], arrow_schema)
+
+    unischema = Unischema.from_arrow_schema(mock_dataset)
+    assert unischema.part_name.numpy_dtype == np.int64
+
+
+def test_arrow_schema_convertion_fail():
+    arrow_schema = pa.schema([
+        pa.field('list_of_int', pa.float16()),
+    ])
+
+    mock_dataset = _mock_parquet_dataset([], arrow_schema)
+
+    with pytest.raises(ValueError, match='Cannot auto-create unischema due to unsupported column type'):
+        Unischema.from_arrow_schema(mock_dataset)
+
+
+def test_arrow_schema_arrow_1644_list_of_struct():
+    arrow_schema = pa.schema([
+        pa.field('id', pa.string()),
+        pa.field('list_of_struct', pa.list_(pa.struct([pa.field('a', pa.string()), pa.field('b', pa.int32())])))
+    ])
+
+    mock_dataset = _mock_parquet_dataset([], arrow_schema)
+
+    unischema = Unischema.from_arrow_schema(mock_dataset)
+    assert getattr(unischema, 'id').name == 'id'
+    assert not hasattr(unischema, 'list_of_struct')
+
+
+def test_arrow_schema_arrow_1644_list_of_list():
+    arrow_schema = pa.schema([
+        pa.field('id', pa.string()),
+        pa.field('list_of_list',
+                 pa.list_(pa.list_(pa.struct([pa.field('a', pa.string()), pa.field('b', pa.int32())]))))
+    ])
+
+    mock_dataset = _mock_parquet_dataset([], arrow_schema)
+
+    unischema = Unischema.from_arrow_schema(mock_dataset)
+    assert getattr(unischema, 'id').name == 'id'
+    assert not hasattr(unischema, 'list_of_list')
+
+
+def test_arrow_schema_convertion_ignore():
+    arrow_schema = pa.schema([
+        pa.field('list_of_int', pa.float16()),
+        pa.field('struct', pa.struct([pa.field('a', pa.string()), pa.field('b', pa.int32())])),
+    ])
+
+    mock_dataset = _mock_parquet_dataset([], arrow_schema)
+
+    unischema = Unischema.from_arrow_schema(mock_dataset, omit_unsupported_fields=True)
+    assert not hasattr(unischema, 'list_of_int')
+
+
+@pytest.fixture()
+def equality_hash_fields():
+    class Fixture(object):
+        TestField1a = UnischemaField('random', np.string_, (), ScalarCodec(StringType()), False)
+        TestField1b = UnischemaField('random', np.string_, (), ScalarCodec(StringType()), False)
+        TestField1c = UnischemaField('Random', np.string_, (), ScalarCodec(StringType()), False)
+
+        TestField2a = UnischemaField('id', np.int32, (), ScalarCodec(ShortType()), False)
+        TestField2b = UnischemaField('id', np.int32, (), ScalarCodec(ShortType()), False)
+        TestField2c = UnischemaField('ID', np.int32, (), ScalarCodec(ShortType()), False)
+
+    return Fixture()
+
+
+def test_equality(equality_hash_fields):
+    # Use assertTrue instead of assertEqual/assertNotEqual so we don't depend on which operator (__eq__ or __ne__)
+    # actual implementation of assert uses
+    assert equality_hash_fields.TestField1a == equality_hash_fields.TestField1b
+    assert equality_hash_fields.TestField2a == equality_hash_fields.TestField2b
+    assert equality_hash_fields.TestField1a != equality_hash_fields.TestField1c
+    assert equality_hash_fields.TestField2a != equality_hash_fields.TestField2c
+
+
+def test_hash(equality_hash_fields):
+    assert hash(equality_hash_fields.TestField1a) == hash(equality_hash_fields.TestField1b)
+    assert hash(equality_hash_fields.TestField2a) == hash(equality_hash_fields.TestField2b)
+    assert hash(equality_hash_fields.TestField1a) != hash(equality_hash_fields.TestField1c)
+    assert hash(equality_hash_fields.TestField2a) != hash(equality_hash_fields.TestField2c)
 
 
 def test_new_gt_255_compatible_namedtuple():
@@ -395,8 +411,3 @@ def test_new_gt_255_compatible_namedtuple():
     huge_tuple_instance = huge_tuple(**dict(zip(field_names, values)))
     assert len(huge_tuple_instance) == fields_count
     assert huge_tuple_instance.f764 == 764
-
-
-if __name__ == '__main__':
-    # Delegate to the test framework.
-    unittest.main()
