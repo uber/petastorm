@@ -23,7 +23,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.types import LongType, ShortType, StringType
 
 from petastorm import make_reader, make_batch_reader, TransformSpec
-from petastorm.codecs import ScalarCodec
+from petastorm.codecs import ScalarCodec, CompressedImageCodec
 from petastorm.errors import NoDataAvailableError
 from petastorm.etl.dataset_metadata import materialize_dataset
 from petastorm.predicates import in_lambda
@@ -504,6 +504,18 @@ def test_invalid_schema_field(synthetic_dataset, reader_factory):
                        predicate=EqualPredicate(expected_values))
 
     assert 'bogus_key' in str(e)
+
+
+@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
+def test_use_persisted_codec_and_not_provided_by_user(synthetic_dataset, reader_factory):
+    """In order to start using new codec for some field while maintain the ability to read old datasets that were
+    written using an old codec, we need to make sure we are using stored UnischemaField.codec object (that contains
+    an old codec/shape)."""
+    new_unischema_instance = UnischemaField('matrix_uint16', np.uint16, (2, 3, 4), CompressedImageCodec('png'), False)
+
+    with reader_factory(synthetic_dataset.url, schema_fields=[new_unischema_instance]) as reader:
+        row = next(reader)
+    assert row.matrix_uint16.shape == (32, 16, 3)
 
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
