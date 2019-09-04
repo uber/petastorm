@@ -139,7 +139,7 @@ class Unischema(object):
 
         Fields can be either UnischemaField objects or regular expression patterns.
 
-        If one of the fields is not part of the schema an error is raised.
+        If one of the fields does not exist in this schema, an error is raised.
 
         The example returns a schema, with field_1 and any other field matching ``other.*$`` pattern.
 
@@ -152,24 +152,28 @@ class Unischema(object):
         """
 
         # Split fields parameter to regex pattern strings and UnischemaField objects
-        regex_patterns = [f for f in fields if isinstance(f, string_types)]
+        regex_patterns = [field for field in fields if isinstance(field, string_types)]
         # We can not check type against UnischemaField because the artifact introduced by
         # pickling, since depickled UnischemaField are of type collections.UnischemaField
         # while withing depickling they are of petastorm.unischema.UnischemaField
         # Since UnischemaField is a tuple, we check against it since it is invariant to
         # pickling
-        unischema_field_objects = [f for f in fields if isinstance(f, tuple)]
+        unischema_field_objects = [field for field in fields if isinstance(field, tuple)]
         if len(unischema_field_objects) + len(regex_patterns) != len(fields):
             raise ValueError('Elements of "fields" must be either a string (regular expressions) or '
                              'an instance of UnischemaField class.')
 
-        view_fields = unischema_field_objects + match_unischema_fields(self, regex_patterns)
+        # For fields that are specified as instances of Unischema: make sure that this schema contains fields
+        # with these names.
+        exact_field_names = [field.name for field in unischema_field_objects]
+        unknown_field_names = set(exact_field_names) - set(self.fields.keys())
+        if unknown_field_names:
+            raise ValueError('field {} does not belong to the schema {}'.format(unknown_field_names, self))
 
-        for field in unischema_field_objects:
-            # Comparing by field names. Prevoiusly was looking for `field not in self._fields.values()`, but it breaks
-            # due to faulty pickling: T223683
-            if field.name not in self._fields:
-                raise ValueError('field {} does not belong to the schema {}'.format(field, self))
+        # Do not use instances of Unischema fields passed as an argument as it could contain codec/shape
+        # info that is different from the one stored in this schema object
+        exact_fields = [self._fields[name] for name in exact_field_names]
+        view_fields = exact_fields + match_unischema_fields(self, regex_patterns)
 
         return Unischema('{}_view'.format(self._name), view_fields)
 
