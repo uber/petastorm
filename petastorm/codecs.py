@@ -136,6 +136,8 @@ class NdarrayCodec(DataframeColumnCodec):
         return bytearray(memfile.getvalue())
 
     def decode(self, unischema_field, value):
+        if type(value) is np.ndarray:
+            return value
         memfile = BytesIO(value)
         return np.load(memfile)
 
@@ -170,6 +172,8 @@ class CompressedNdarrayCodec(DataframeColumnCodec):
         return bytearray(memfile.getvalue())
 
     def decode(self, unischema_field, value):
+        if type(value) is np.ndarray:
+            return value
         memfile = BytesIO(value)
         return np.load(memfile)['arr']
 
