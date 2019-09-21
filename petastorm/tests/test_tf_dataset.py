@@ -167,6 +167,29 @@ def test_non_petastorm_with_many_colums_with_one_shot_iterator(many_columns_non_
 
         # Read a bunch of entries from the dataset and compare the data to reference
         with tf.Session() as sess:
-            iterator = iterator.get_next()
-            sample = sess.run(iterator)._asdict()
+            get_next = iterator.get_next()
+            sample = sess.run(get_next)._asdict()
             assert set(sample.keys()) == set(many_columns_non_petastorm_dataset.data[0].keys())
+
+
+@pytest.mark.forked
+def test_non_petastorm_with_many_colums_epoch_count(many_columns_non_petastorm_dataset):
+    """Just a bunch of read and compares of all values to the expected values"""
+    expected_num_epochs = 4
+    with make_batch_reader(many_columns_non_petastorm_dataset.url, workers_count=1,
+                           num_epochs=expected_num_epochs) as reader:
+        dataset = make_petastorm_dataset(reader)
+        iterator = dataset.make_one_shot_iterator()
+
+        # Read a bunch of entries from the dataset and compare the data to reference
+        with tf.Session() as sess:
+            get_next = iterator.get_next()
+            rows_count = 0
+            while True:
+                try:
+                    sample = sess.run(get_next)._asdict()
+                    rows_count += sample['col_0'].shape[0]
+                except tf.errors.OutOfRangeError:
+                    break
+
+            assert expected_num_epochs * len(many_columns_non_petastorm_dataset.data) == rows_count
