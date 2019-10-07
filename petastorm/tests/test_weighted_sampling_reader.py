@@ -17,10 +17,13 @@ from __future__ import division
 import numpy as np
 import pytest
 import six
+import tensorflow as tf
 
 from petastorm import make_reader
+from petastorm.ngram import NGram
 from petastorm.predicates import in_lambda
 from petastorm.test_util.reader_mock import ReaderMock
+from petastorm.tf_utils import tf_tensors
 from petastorm.unischema import Unischema, UnischemaField
 from petastorm.weighted_sampling_reader import WeightedSamplingReader
 
@@ -93,3 +96,69 @@ def test_real_reader(synthetic_dataset):
 def test_bad_arguments():
     with pytest.raises(ValueError):
         WeightedSamplingReader([reader1], [0.1, 0.9])
+
+
+def test_with_tf_tensors(synthetic_dataset):
+    fields_to_read = ['id.*', 'image_png']
+    readers = [make_reader(synthetic_dataset.url, schema_fields=fields_to_read, workers_count=1),
+               make_reader(synthetic_dataset.url, schema_fields=fields_to_read, workers_count=1)]
+
+    with WeightedSamplingReader(readers, [0.5, 0.5]) as mixer:
+        mixed_tensors = tf_tensors(mixer)
+
+    with tf.Session() as sess:
+        sess.run(mixed_tensors)
+
+
+def test_schema_mismatch(synthetic_dataset):
+    readers = [make_reader(synthetic_dataset.url, schema_fields=['id'], workers_count=1),
+               make_reader(synthetic_dataset.url, schema_fields=['image_png'], workers_count=1)]
+
+    with pytest.raises(ValueError, match='.*should have the same schema.*'):
+        WeightedSamplingReader(readers, [0.5, 0.5])
+
+
+def test_ngram_mix(synthetic_dataset):
+    ngram1_fields = {
+        -1: ['id', ],
+        0: ['id', 'image_png'],
+    }
+
+    ts_field = '^id$'
+
+    ngram1 = NGram(fields=ngram1_fields, delta_threshold=10, timestamp_field=ts_field)
+    ngram2 = NGram(fields=ngram1_fields, delta_threshold=10, timestamp_field=ts_field)
+
+    readers = [make_reader(synthetic_dataset.url, schema_fields=ngram1, workers_count=1),
+               make_reader(synthetic_dataset.url, schema_fields=ngram2, workers_count=1)]
+
+    with WeightedSamplingReader(readers, [0.5, 0.5]) as mixer:
+        mixed_tensors = tf_tensors(mixer)
+
+    with tf.Session() as sess:
+        for _ in range(10):
+            actual = sess.run(mixed_tensors)
+            assert set(actual.keys()) == {-1, 0}
+
+
+def test_ngram_mismsatch(synthetic_dataset):
+    ngram1_fields = {
+        -1: ['id', ],
+        0: ['id', 'image_png'],
+    }
+
+    ngram2_fields = {
+        -1: ['id', 'image_png'],
+        0: ['id', ],
+    }
+
+    ts_field = '^id$'
+
+    ngram1 = NGram(fields=ngram1_fields, delta_threshold=10, timestamp_field=ts_field)
+    ngram2 = NGram(fields=ngram2_fields, delta_threshold=10, timestamp_field=ts_field)
+
+    readers = [make_reader(synthetic_dataset.url, schema_fields=ngram1, workers_count=1),
+               make_reader(synthetic_dataset.url, schema_fields=ngram2, workers_count=1)]
+
+    with pytest.raises(ValueError, match='.*ngram.*'):
+        WeightedSamplingReader(readers, [0.5, 0.5])
