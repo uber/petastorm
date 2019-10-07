@@ -411,6 +411,7 @@ class Reader(object):
         logger.debug('Workers pool started')
 
         self.last_row_consumed = False
+        self.stopped = False
 
     def reset(self):
         """Resets ``Reader`` state and allows to fetch more samples once the ``Reader`` finished reading all epochs,
@@ -586,6 +587,7 @@ class Reader(object):
     def stop(self):
         """Stops all worker threads/processes."""
         self._workers_pool.stop()
+        self.stopped = True
 
     def join(self):
         """Joins all worker threads/processes. Will block until all worker workers have been fully terminated."""
@@ -599,6 +601,11 @@ class Reader(object):
         return self
 
     def __next__(self):
+        if self.stopped:
+            raise RuntimeError('Trying to read a sample after a reader created by '
+                               'make_reader/make_batch_reader has stopped. This may happen if the '
+                               'make_reader/make_batch_reader context manager has exited but you try to '
+                               'fetch a sample from it anyway')
         try:
             return self._results_queue_reader.read_next(self._workers_pool, self.schema, self.ngram)
         except StopIteration:
