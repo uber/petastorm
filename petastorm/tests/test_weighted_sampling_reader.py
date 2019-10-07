@@ -103,11 +103,12 @@ def test_with_tf_tensors(synthetic_dataset):
     readers = [make_reader(synthetic_dataset.url, schema_fields=fields_to_read, workers_count=1),
                make_reader(synthetic_dataset.url, schema_fields=fields_to_read, workers_count=1)]
 
-    with WeightedSamplingReader(readers, [0.5, 0.5]) as mixer:
-        mixed_tensors = tf_tensors(mixer)
+    with tf.Graph().as_default():
+        with WeightedSamplingReader(readers, [0.5, 0.5]) as mixer:
+            mixed_tensors = tf_tensors(mixer)
 
-    with tf.Session() as sess:
-        sess.run(mixed_tensors)
+            with tf.Session() as sess:
+                sess.run(mixed_tensors)
 
 
 def test_schema_mismatch(synthetic_dataset):
@@ -135,10 +136,10 @@ def test_ngram_mix(synthetic_dataset):
     with WeightedSamplingReader(readers, [0.5, 0.5]) as mixer:
         mixed_tensors = tf_tensors(mixer)
 
-    with tf.Session() as sess:
-        for _ in range(10):
-            actual = sess.run(mixed_tensors)
-            assert set(actual.keys()) == {-1, 0}
+        with tf.Session() as sess:
+            for _ in range(10):
+                actual = sess.run(mixed_tensors)
+                assert set(actual.keys()) == {-1, 0}
 
 
 def test_ngram_mismsatch(synthetic_dataset):

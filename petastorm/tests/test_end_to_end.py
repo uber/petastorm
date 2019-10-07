@@ -778,3 +778,20 @@ def test_multithreaded_reads(synthetic_dataset):
             results = [f.result() for f in futures]
             assert len(results) == len(synthetic_dataset.data)
             assert set(r.id for r in results) == set(d['id'] for d in synthetic_dataset.data)
+
+
+def test_should_fail_if_reading_out_of_context_manager(synthetic_dataset):
+    with make_reader(synthetic_dataset.url, workers_count=1) as reader:
+        next(reader)
+
+    with pytest.raises(RuntimeError, match='Trying to read a sample.*'):
+        next(reader)
+
+
+def test_should_fail_if_reading_after_stop(synthetic_dataset):
+    reader = make_reader(synthetic_dataset.url, workers_count=1)
+    next(reader)
+    reader.stop()
+
+    with pytest.raises(RuntimeError, match='Trying to read a sample.*'):
+        next(reader)
