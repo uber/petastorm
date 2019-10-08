@@ -15,7 +15,8 @@ from decimal import Decimal
 
 import numpy as np
 import pytest
-from pyspark.sql.types import StringType, ByteType, ShortType, IntegerType, LongType, DecimalType
+from pyspark.sql.types import StringType, ByteType, ShortType, IntegerType, LongType, DecimalType, BooleanType, \
+    FloatType
 
 from petastorm.codecs import ScalarCodec
 from petastorm.unischema import UnischemaField
@@ -76,3 +77,41 @@ def test_bad_unischema_field_shape():
     field = UnischemaField(name='field_int', numpy_dtype=np.int32, shape=(1,), codec=codec, nullable=False)
     with pytest.raises(ValueError, match='must be an empty tuple'):
         codec.encode(field, np.int32(1))
+
+
+def test_encode_scalar_bool():
+    codec = ScalarCodec(BooleanType())
+    field = UnischemaField(name='field_bool', numpy_dtype=np.bool, shape=(), codec=codec, nullable=False)
+
+    encoded = codec.encode(field, np.bool_(True))
+    assert isinstance(codec.encode(field, encoded), bool)
+    assert encoded
+
+    encoded = codec.encode(field, np.bool_(False))
+    assert not encoded
+
+
+def test_encode_scalar_int():
+    codec = ScalarCodec(IntegerType())
+    field = UnischemaField(name='field_int', numpy_dtype=np.int32, shape=(), codec=codec, nullable=False)
+    encoded = codec.encode(field, np.int32(42))
+    assert isinstance(encoded, int)
+    assert 42 == encoded
+
+
+def test_encode_scalar_float():
+    codec = ScalarCodec(FloatType())
+    expected = np.random.random(()).astype(np.float64)
+    field = UnischemaField(name='field_float', numpy_dtype=np.float32, shape=(), codec=codec, nullable=False)
+    encoded = codec.encode(field, expected)
+    assert isinstance(encoded, float)
+    assert expected == encoded
+
+
+def test_encode_scalar_string():
+    codec = ScalarCodec(StringType())
+    expected = 'surprise'
+    field = UnischemaField(name='field_string', numpy_dtype=np.unicode_, shape=(), codec=codec, nullable=False)
+    encoded = codec.encode(field, expected)
+    assert isinstance(encoded, str)
+    assert expected == encoded
