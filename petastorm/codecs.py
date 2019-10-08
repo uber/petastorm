@@ -211,6 +211,8 @@ class ScalarCodec(DataframeColumnCodec):
             if not isinstance(value, str):
                 raise ValueError(
                     'Expected a string value for field {}. Got type {}'.format(unischema_field.name, type(value)))
+            return str(value)
+
         return value
 
     def decode(self, unischema_field, value):
