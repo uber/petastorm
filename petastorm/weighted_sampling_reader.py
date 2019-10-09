@@ -66,7 +66,7 @@ class WeightedSamplingReader(object):
                 raise ValueError('All readers passed to WeightedSamplingReader should have the same value of '
                                  '"batched_output" attribute')
 
-            if readers[0].schema.fields != readers[other_idx].schema.fields:
+            if set(readers[0].schema.fields.keys()) != set(readers[other_idx].schema.fields.keys()):
                 raise ValueError('All readers passed to WeightedSamplingReader should have the same schema')
 
             # If either of ngram attribute is not None, or the ngrams are different, then we can not mix
