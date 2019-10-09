@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import numpy as np
+import pytest
 
 from petastorm.transform import transform_schema, TransformSpec
 from petastorm.unischema import Unischema, UnischemaField
@@ -51,3 +52,10 @@ def test_change_field_transform():
                                  TransformSpec(lambda x: x,
                                                edit_fields=[UnischemaField('double', np.float16, (), None, False)]))
     assert one_added.fields['double'].numpy_dtype == np.float16
+
+
+def test_unknown_fields_in_remove_field_transform():
+    with pytest.warns(UserWarning, match='not part of the schema.*unknown_1'):
+        one_removed = transform_schema(TestSchema, TransformSpec(lambda x: x, edit_fields=None,
+                                                                 removed_fields=['int', 'unknown_1', 'unknown_2']))
+    assert set(one_removed.fields.keys()) == {'string', 'double'}
