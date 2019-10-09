@@ -324,3 +324,16 @@ class NGram(object):
         converted_fields = unischema_field_objects + match_unischema_fields(unischema, regex_patterns)
 
         return converted_fields
+
+    def __eq__(self, other):
+        if set(self.fields.keys()) != set(other.fields.keys()):
+            return False
+
+        for key in self.fields.keys():
+            if set(self.fields[key]) != set(other.fields[key]):
+                return False
+
+        return True
+
+    def __ne__(self, other):
+        return not self == other
