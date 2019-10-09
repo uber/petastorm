@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import warnings
 
 from petastorm.unischema import UnischemaField, Unischema
 
@@ -49,9 +50,8 @@ def transform_schema(schema, transform_spec):
     removed_fields = set(transform_spec.removed_fields)
     unknown_field_names = removed_fields - set(schema.fields.keys())
     if unknown_field_names:
-        raise ValueError('Unexpected field names found in TransformSpec remove_fields list: "{}". '
-                         'Valid values are "{}".'
-                         .format(', '.join(removed_fields), ', '.join(schema.fields.keys())))
+        warnings.warn('remove_fields specified some field names that are not part of the schema. '
+                      'These field names will be ignored "{}". '.format(', '.join(unknown_field_names)))
 
     exclude_fields = {f[0] for f in transform_spec.edit_fields} | removed_fields
     fields = [v for k, v in schema.fields.items() if k not in exclude_fields]
