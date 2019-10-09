@@ -70,9 +70,10 @@ class WeightedSamplingReader(object):
                 raise ValueError('All readers passed to WeightedSamplingReader should have the same schema')
 
             # If either of ngram attribute is not None, or the ngrams are different, then we can not mix
-            if (readers[0].ngram is not None and readers[other_idx].ngram is not None) \
-                    and (readers[0].ngram.fields != readers[other_idx].ngram.fields) \
-                    or (readers[0].ngram is None != readers[other_idx].ngram is None):  # noqa
+            both_have_ngram = (readers[0].ngram is not None) and (readers[other_idx].ngram is not None)
+            ngram_differ = both_have_ngram and readers[0].ngram != readers[other_idx].ngram
+            only_one_have_ngram = (readers[0].ngram is None) != (readers[other_idx].ngram is None)
+            if only_one_have_ngram or ngram_differ:
                 raise ValueError('All readers passed to WeightedSamplingReader should have the same ngram spec')
 
         self.batched_output = readers[0].batched_output
