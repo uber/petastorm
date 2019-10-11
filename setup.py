@@ -35,11 +35,12 @@ REQUIRED_PACKAGES = [
     'future>=0.10.2',
     'futures>=2.0; python_version == "2.7"',  # TODO(yevgeni): check if 2.0 is the minimum
     'numpy>=1.13.3',
+    'packaging>=15.0',
     'pandas>=0.19.0',
     'psutil>=4.0.0',
     'pyspark>=2.1.0',
     'pyzmq>=14.0.0',
-    'pyarrow>=0.10',
+    'pyarrow>=0.11.1',
     'six>=1.5.0',
 ]
 
