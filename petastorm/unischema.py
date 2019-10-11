@@ -29,6 +29,8 @@ from pyarrow.lib import ListType
 from pyarrow.lib import StructType as pyStructType
 from six import string_types
 
+from petastorm.compat import compat_get_metadata
+
 
 def _fields_as_tuple(field):
     """Common representation of UnischemaField for equality and hash operators.
@@ -301,7 +303,7 @@ class Unischema(object):
         :param omit_unsupported_fields: :class:`Boolean`
         :return: A :class:`Unischema` object.
         """
-        meta = parquet_dataset.pieces[0].get_metadata(parquet_dataset.fs.open)
+        meta = compat_get_metadata(parquet_dataset.pieces[0], parquet_dataset.fs.open)
         arrow_schema = meta.schema.to_arrow_schema()
         unischema_fields = []
 
