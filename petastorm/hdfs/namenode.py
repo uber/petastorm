@@ -304,10 +304,10 @@ class HdfsConnector(object):
                 try:
                     return idx, \
                         cls.hdfs_connect_namenode(urlparse('hdfs://' + str(host or 'default')), user=user)
-                except ArrowIOError:
+                except ArrowIOError as e:
                     # This is an expected error if the namenode we are trying to connect to is
                     # not the active one
-                    logger.debug('Attempted to connect to namenode %s but failed', host)
+                    logger.debug('Attempted to connect to namenode %s but failed: %e', host, str(e))
         # It is a problem if we cannot connect to either of the namenodes when tried back-to-back,
         # so better raise an error.
         raise HdfsConnectError("Unable to connect to HDFS cluster!")

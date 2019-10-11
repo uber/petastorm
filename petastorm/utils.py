@@ -22,6 +22,8 @@ import pyarrow
 from future.utils import raise_with_traceback
 from pyarrow.filesystem import LocalFileSystem
 
+from petastorm.compat import compat_get_metadata
+
 logger = logging.getLogger(__name__)
 
 
@@ -110,7 +112,7 @@ def add_to_dataset_metadata(dataset, key, value):
         with dataset.fs.open(metadata_file_path) as f:
             arrow_metadata = pyarrow.parquet.read_metadata(f)
     else:
-        arrow_metadata = dataset.pieces[0].get_metadata(dataset.fs.open)
+        arrow_metadata = compat_get_metadata(dataset.pieces[0], dataset.fs.open)
 
     base_schema = arrow_metadata.schema.to_arrow_schema()
 
