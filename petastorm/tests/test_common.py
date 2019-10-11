@@ -19,11 +19,12 @@ from decimal import Decimal
 from functools import partial
 
 import numpy as np
+import pyarrow as pa
 import pytz
 from pyspark import Row
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StringType, DecimalType, DoubleType, StructField, \
-    IntegerType, StructType, DateType, TimestampType, ArrayType, ShortType
+    IntegerType, StructType, DateType, TimestampType, ShortType, ArrayType
 
 from petastorm.codecs import CompressedImageCodec, NdarrayCodec, \
     ScalarCodec
@@ -170,6 +171,9 @@ def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None, pa
     :param partition_by: A list of fields to partition the parquet store by.
     :return: A list of records with a copy of the data written to the dataset.
     """
+
+    is_list_of_scalar_broken = pa.__version__ == '0.15.0'
+
     partition_by = partition_by or []
     shutdown = False
     if not spark:
@@ -181,36 +185,47 @@ def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None, pa
         spark = spark_session.getOrCreate()
         shutdown = True
 
-    expected_data = [{'id': np.int32(i),
-                      'int_fixed_size_list': np.arange(1 + i, 10 + i).astype(np.int32),
-                      'datetime': np.datetime64('2019-01-02'),
-                      'timestamp': np.datetime64('2005-02-25T03:30'),
-                      'string': np.unicode_('hello_{}'.format(i)),
-                      'string2': np.unicode_('world_{}'.format(i)),
-                      'float64': np.float64(i) * .66} for i in range(num_rows)]
+    def expected_row(i):
+        result = {'id': np.int32(i),
+                  'datetime': np.datetime64('2019-01-02'),
+                  'timestamp': np.datetime64('2005-02-25T03:30'),
+                  'string': np.unicode_('hello_{}'.format(i)),
+                  'string2': np.unicode_('world_{}'.format(i)),
+                  'float64': np.float64(i) * .66}
+        if not is_list_of_scalar_broken:
+            result['int_fixed_size_list'] = np.arange(1 + i, 10 + i).astype(np.int32)
+        return result
 
-    expected_data_as_scalars = [{k: np.asscalar(v) if isinstance(v, np.generic) else v for k, v in row.items()} for row
+    expected_data = [expected_row(i) for i in range(num_rows)]
+
+    expected_data_as_scalars = [{k: v.item() if isinstance(v, np.generic) else v for k, v in row.items()} for row
                                 in expected_data]
 
     # np.datetime64 is converted to a timezone unaware datetime instances. Working explicitly in UTC so we don't need
     # to think about local timezone in the tests
     for row in expected_data_as_scalars:
         row['timestamp'] = row['timestamp'].replace(tzinfo=pytz.UTC)
-        row['int_fixed_size_list'] = row['int_fixed_size_list'].tolist()
+        if not is_list_of_scalar_broken:
+            row['int_fixed_size_list'] = row['int_fixed_size_list'].tolist()
 
     rows = [Row(**row) for row in expected_data_as_scalars]
 
+    maybe_int_fixed_size_list_field = [StructField('int_fixed_size_list', ArrayType(IntegerType(), False), False)] \
+        if not is_list_of_scalar_broken else []
+
     # WARNING: surprisingly, schema fields and row fields are matched only by order and not name.
     # We must maintain alphabetical order of the struct fields for the code to work!!!
-    schema = StructType([
-        StructField('datetime', DateType(), False),
-        StructField('float64', DoubleType(), False),
-        StructField('id', IntegerType(), False),
-        StructField('int_fixed_size_list', ArrayType(IntegerType(), False), False),
-        StructField('string', StringType(), False),
-        StructField('string2', StringType(), False),
-        StructField('timestamp', TimestampType(), False),
-    ])
+    schema = StructType(
+        [
+            StructField('datetime', DateType(), False),
+            StructField('float64', DoubleType(), False),
+            StructField('id', IntegerType(), False),
+        ] + maybe_int_fixed_size_list_field +
+        [
+            StructField('string', StringType(), False),
+            StructField('string2', StringType(), False),
+            StructField('timestamp', TimestampType(), False),
+        ])
 
     dataframe = spark.createDataFrame(rows, schema)
     dataframe. \

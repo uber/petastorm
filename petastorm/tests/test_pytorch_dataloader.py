@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 import numpy as np
+import pyarrow as pa
 import pytest
 # Must import pyarrow before torch. See: https://github.com/uber/petastorm/blob/master/docs/troubleshoot.rst
 import torch
@@ -162,5 +163,8 @@ def test_with_batch_reader(scalar_dataset, shuffling_queue_capacity):
                     batch_size=3, shuffling_queue_capacity=shuffling_queue_capacity) as loader:
         batches = list(loader)
         assert len(scalar_dataset.data) == sum(batch['id'].shape[0] for batch in batches)
-        assert len(scalar_dataset.data) == sum(batch['int_fixed_size_list'].shape[0] for batch in batches)
-        assert batches[0]['int_fixed_size_list'].shape[1] == len(scalar_dataset.data[0]['int_fixed_size_list'])
+
+        # list types are broken in pyarrow 0.15.0. Don't test list-of-int field
+        if pa.__version__ != '0.15.0':
+            assert len(scalar_dataset.data) == sum(batch['int_fixed_size_list'].shape[0] for batch in batches)
+            assert batches[0]['int_fixed_size_list'].shape[1] == len(scalar_dataset.data[0]['int_fixed_size_list'])

@@ -24,6 +24,7 @@ from six.moves import cPickle as pickle
 from six.moves.urllib.parse import urlparse
 
 from petastorm import utils
+from petastorm.compat import compat_get_metadata, compat_make_parquet_piece
 from petastorm.etl.legacy import depickle_legacy_package_name_compatible
 from petastorm.fs_utils import FilesystemResolver
 from petastorm.unischema import Unischema
@@ -267,8 +268,8 @@ def load_row_groups(dataset):
         # looking up the number of row groups.
         row_groups_key = os.path.relpath(piece.path, dataset.paths)
         for row_group in range(row_groups_per_file[row_groups_key]):
-            rowgroups.append(pq.ParquetDatasetPiece(piece.path, row_group=row_group,
-                                                    partition_keys=piece.partition_keys))
+            rowgroups.append(compat_make_parquet_piece(piece.path, dataset.fs.open, row_group=row_group,
+                                                       partition_keys=piece.partition_keys))
     return rowgroups
 
 
@@ -304,7 +305,8 @@ def _split_row_groups(dataset):
             continue
 
         for row_group in range(row_groups_per_file[relative_path]):
-            split_piece = pq.ParquetDatasetPiece(piece.path, row_group=row_group, partition_keys=piece.partition_keys)
+            split_piece = compat_make_parquet_piece(piece.path, dataset.fs.open, row_group=row_group,
+                                                    partition_keys=piece.partition_keys)
             split_pieces.append(split_piece)
 
     return split_pieces
@@ -321,10 +323,10 @@ def _split_row_groups_from_footers(dataset):
     thread_pool = futures.ThreadPoolExecutor()
 
     def split_piece(piece):
-        metadata = piece.get_metadata(dataset.fs.open)
-        return [pq.ParquetDatasetPiece(piece.path,
-                                       row_group=row_group,
-                                       partition_keys=piece.partition_keys)
+        metadata = compat_get_metadata(dataset.pieces[0], dataset.fs.open)
+        return [compat_make_parquet_piece(piece.path, dataset.fs.open,
+                                          row_group=row_group,
+                                          partition_keys=piece.partition_keys)
                 for row_group in range(metadata.num_row_groups)]
 
     futures_list = [thread_pool.submit(split_piece, piece) for piece in dataset.pieces]

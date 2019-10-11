@@ -23,6 +23,7 @@ from pyarrow import parquet as pq
 from pyarrow.parquet import ParquetFile
 
 from petastorm.cache import NullCache
+from petastorm.compat import compat_piece_read, compat_table_columns_gen, compat_column_num_chunks
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.worker_base import WorkerBase
 
@@ -44,29 +45,36 @@ class ArrowReaderWorkerResultsQueueReader(object):
             # Convert arrow table columns into numpy. Strings are handled differently since to_pandas() returns
             # numpy array of dtype=object.
             result_dict = dict()
-            for column in result_table.columns:
+            for column_name, column in compat_table_columns_gen(result_table):
                 # Assume we get only one chunk since reader worker reads one rowgroup at a time
 
                 # `to_pandas` works slower when called on the entire `data` rather directly on a chunk.
-                if result_table.column(0).data.num_chunks == 1:
+                if compat_column_num_chunks(result_table.column(0)) == 1:
                     column_as_pandas = column.data.chunks[0].to_pandas()
                 else:
                     column_as_pandas = column.data.to_pandas()
 
+                # pyarrow < 0.15.0 would always return a numpy array. Starting 0.15 we get pandas series, hence we
+                # convert it into numpy array
+                if isinstance(column_as_pandas, pd.Series):
+                    column_as_numpy = column_as_pandas.as_matrix()
+                else:
+                    column_as_numpy = column_as_pandas
+
                 if pa.types.is_string(column.type):
-                    result_dict[column.name] = column_as_pandas.astype(np.unicode_)
+                    result_dict[column_name] = column_as_numpy.astype(np.unicode_)
                 elif pa.types.is_list(column.type):
                     # Assuming all lists are of the same length, hence we can collate them into a matrix
-                    list_of_lists = column_as_pandas
+                    list_of_lists = column_as_numpy
                     try:
-                        result_dict[column.name] = np.vstack(list_of_lists.tolist())
+                        result_dict[column_name] = np.vstack(list_of_lists.tolist())
                     except ValueError:
                         raise RuntimeError('Length of all values in column \'{}\' are expected to be the same length. '
                                            'Got the following set of lengths: \'{}\''
-                                           .format(column.name,
+                                           .format(column_name,
                                                    ', '.join(str(value.shape[0]) for value in list_of_lists)))
                 else:
-                    result_dict[column.name] = column_as_pandas
+                    result_dict[column_name] = column_as_numpy
 
             return schema.make_namedtuple(**result_dict)
 
@@ -236,11 +244,7 @@ class ArrowReaderWorker(WorkerBase):
         return pa.Table.from_pandas(result, preserve_index=False)
 
     def _read_with_shuffle_row_drop(self, piece, pq_file, column_names, shuffle_row_drop_partition):
-        table = piece.read(
-            open_file_func=lambda _: pq_file,
-            columns=column_names,
-            partitions=self._dataset.partitions
-        )
+        table = compat_piece_read(piece, lambda _: pq_file, columns=column_names, partitions=self._dataset.partitions)
 
         num_rows = len(table)
         num_partitions = shuffle_row_drop_partition[1]
