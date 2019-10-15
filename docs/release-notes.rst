@@ -4,6 +4,21 @@
 Release notes
 =============
 
+Release 0.7.7
+=============
+
+New features and bug fixes
+--------------------------
+ - Bug fix: use shape/type/codec information stored in the dataset even if a user passes a ``UnischemaField`` instance as
+   ``make_reader``'s ``schema_field`` argument that may have contradicting shape/type/codec setup.
+ - Resurrected ``WeightedSamplingReader`` class.
+ - Make ``codec`` and ``nullable`` parameters of ``UnischemaField`` constructor optional (the codec can be automatically
+   configured based on the ``numpy_dtype`` value).
+ - Issue a warning if ``TransformSpec`` is configured with non-existing field names in ``remove_fields``.
+ - Raise an error if trying to read from a ``Reader`` if reading after it was stopped (or goes out of context_manager
+   scope).
+ - Resolved pyarrow 0.15.0 compatibility issues.
+
 Release 0.7.6
 =============
 Thanks to our new contributor: Michael Noronha and Praateek Mahajan!
