@@ -40,7 +40,7 @@ REQUIRED_PACKAGES = [
     'psutil>=4.0.0',
     'pyspark>=2.1.0',
     'pyzmq>=14.0.0',
-    'pyarrow>=0.11.1',
+    'pyarrow>=0.11.0',
     'six>=1.5.0',
 ]
 
