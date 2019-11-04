@@ -55,7 +55,7 @@ def compat_column_num_chunks(column):
     else:
         # Latest PyArrow (015) still seems to use data.num_chunks, doesn't have column.num_chunks.
         return column.data.num_chunks
-        #return column.num_chunks
+        # return column.num_chunks
 
 
 def compat_make_parquet_piece(path, open_file_func, **kwargs):

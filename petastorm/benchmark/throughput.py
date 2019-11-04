@@ -115,12 +115,12 @@ def _time_warmup_and_work_tf(reader, warmup_cycles_count, measure_cycles_count, 
 
 
 def _time_warmup_and_work_pytorch(reader, warmup_cycles_count, measure_cycles_count, shuffling_queue_size,
-                             min_after_dequeue):
-    with DataLoader(reader=reader, shuffling_queue_capacity=shuffling_queue_size, 
+                                  min_after_dequeue):
+    with DataLoader(reader=reader, shuffling_queue_capacity=shuffling_queue_size,
                     min_after_dequeue=min_after_dequeue) as my_loader:
         myIter = iter(my_loader)
-        result = _time_warmup_and_work( reader, warmup_cycles_count, measure_cycles_count,
-                                       lambda: next(myIter) )
+        result = _time_warmup_and_work(reader, warmup_cycles_count, measure_cycles_count,
+                                       lambda: next(myIter))
 
     return result
 
@@ -185,7 +185,7 @@ def reader_throughput(dataset_url, field_regex=None, warmup_cycles_count=300, me
                                               shuffling_queue_size, min_after_dequeue)
         elif read_method == ReadMethod.PYTORCH:
             result = _time_warmup_and_work_pytorch(reader, warmup_cycles_count, measure_cycles_count,
-                                              shuffling_queue_size, min_after_dequeue)
+                                                   shuffling_queue_size, min_after_dequeue)
         else:
             raise RuntimeError('Unexpected reader_type value: %s', str(read_method))
 
