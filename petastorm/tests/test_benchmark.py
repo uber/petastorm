@@ -40,6 +40,11 @@ def test_tf_thread_pool_run(synthetic_dataset):
                       pool_type=WorkerPoolType.THREAD, loaders_count=1, read_method=ReadMethod.TF)
 
 
+def test_pytorch_thread_pool_run(synthetic_dataset):
+    reader_throughput(synthetic_dataset.url, ['id', 'id2'], warmup_cycles_count=5, measure_cycles_count=5,
+                      pool_type=WorkerPoolType.THREAD, loaders_count=1, read_method=ReadMethod.PYTORCH)
+
+
 def test_pure_python_thread_pool_run(synthetic_dataset):
     # Use a regex to match field name ('i.' instead of 'id')
     reader_throughput(synthetic_dataset.url, ['i.'], warmup_cycles_count=5, measure_cycles_count=5,

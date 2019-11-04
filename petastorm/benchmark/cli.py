@@ -58,7 +58,8 @@ def _parse_args(args):
     parser.add_argument('-d', '--read-method', type=ReadMethod, choices=list(ReadMethod),
                         default=ReadMethod.PYTHON,
                         help='Which read mode to use: \'python\': using python implementation. '
-                             '\'tf\': constructing a small TF graph streaming data from pure python implementation.')
+                             '\'tf\': constructing a small TF graph streaming data from pure python implementation. '
+                             '\'pytorch\': using PyTorch.DataLoader.')
 
     parser.add_argument('-q', '--shuffling-queue-size', type=int, default=500, required=False,
                         help='Size of the shuffling queue used to decorrelate row-group chunks. ')

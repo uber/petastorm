@@ -26,6 +26,7 @@ import tensorflow as tf
 
 from petastorm import make_reader
 from petastorm.etl.dataset_metadata import get_schema_from_dataset_url
+from petastorm.pytorch import DataLoader
 from petastorm.reader_impl.pickle_serializer import PickleSerializer
 from petastorm.reader_impl.pyarrow_serializer import PyArrowSerializer
 from petastorm.tf_utils import tf_tensors
@@ -61,6 +62,9 @@ class ReadMethod(Enum):
 
     PYTHON = 'python'
     """Pure python reading method will be used during the benchmark (``next(reader)``)"""
+
+    PYTORCH = 'pytorch'
+    """Pytorch reading method will be used during the benchmark (``PyTorch.DataLoader`` method)"""
 
     def __str__(self):
         return self.value
@@ -106,6 +110,17 @@ def _time_warmup_and_work_tf(reader, warmup_cycles_count, measure_cycles_count, 
 
         coord.request_stop()
         coord.join(threads)
+
+    return result
+
+
+def _time_warmup_and_work_pytorch(reader, warmup_cycles_count, measure_cycles_count, shuffling_queue_size,
+                             min_after_dequeue):
+    with DataLoader(reader=reader, shuffling_queue_capacity=shuffling_queue_size, 
+                    min_after_dequeue=min_after_dequeue) as my_loader:
+        myIter = iter(my_loader)
+        result = _time_warmup_and_work( reader, warmup_cycles_count, measure_cycles_count,
+                                       lambda: next(myIter) )
 
     return result
 
@@ -167,6 +182,9 @@ def reader_throughput(dataset_url, field_regex=None, warmup_cycles_count=300, me
             result = _time_warmup_and_work(reader, warmup_cycles_count, measure_cycles_count)
         elif read_method == ReadMethod.TF:
             result = _time_warmup_and_work_tf(reader, warmup_cycles_count, measure_cycles_count,
+                                              shuffling_queue_size, min_after_dequeue)
+        elif read_method == ReadMethod.PYTORCH:
+            result = _time_warmup_and_work_pytorch(reader, warmup_cycles_count, measure_cycles_count,
                                               shuffling_queue_size, min_after_dequeue)
         else:
             raise RuntimeError('Unexpected reader_type value: %s', str(read_method))
