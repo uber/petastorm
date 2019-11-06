@@ -25,7 +25,9 @@ from pyspark.sql.types import StringType, IntegerType, DecimalType, ShortType, L
 
 from petastorm.codecs import ScalarCodec, NdarrayCodec
 from petastorm.unischema import Unischema, UnischemaField, dict_to_spark_row, \
-    insert_explicit_nulls, match_unischema_fields, _new_gt_255_compatible_namedtuple, _fullmatch
+    insert_explicit_nulls, match_unischema_fields, _new_gt_255_compatible_namedtuple, _fullmatch, encode_row
+
+from concurrent.futures import ThreadPoolExecutor
 
 try:
     from unittest import mock
@@ -105,6 +107,28 @@ def test_as_spark_schema_unspecified_codec_type_unknown_scalar_type_raises():
 
     with pytest.raises(ValueError, match='Was not able to map type'):
         TestSchema.as_spark_schema()
+
+
+@pytest.mark.parametrize("pool_executor", [None, ThreadPoolExecutor(2)])
+def test_encode_row(pool_executor):
+    """Test various validations done on data types when converting a dictionary to a spark row"""
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('string_field', np.string_, (), ScalarCodec(StringType()), False),
+        UnischemaField('int8_matrix', np.int8, (2, 2), NdarrayCodec(), False),
+    ])
+
+    row = {'string_field': 'abc', 'int8_matrix': np.asarray([[1, 2], [3, 4]], dtype=np.int8)}
+    encoded_row = encode_row(TestSchema, row, pool_executor)
+    assert set(row.keys()) == set(encoded_row)
+    assert isinstance(encoded_row['int8_matrix'], bytearray)
+
+    extra_field_row = {'string_field': 'abc', 'int8_matrix': [[1, 2], [3, 4]], 'bogus': 'value'}
+    with pytest.raises(ValueError, match='.*not found.*bogus.*'):
+        encode_row(TestSchema, extra_field_row, pool_executor)
+
+    extra_field_row = {'string_field': 'abc'}
+    with pytest.raises(ValueError, match='int8_matrix is not found'):
+        encode_row(TestSchema, extra_field_row, pool_executor)
 
 
 def test_dict_to_spark_row_field_validation_scalar_types():
