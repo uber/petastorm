@@ -20,6 +20,7 @@ from petastorm import make_batch_reader
 # pylint: disable=unnecessary-lambda
 from petastorm.tests.test_common import create_test_scalar_dataset
 
+
 _D = [lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', **kwargs)]
 
 # pylint: disable=unnecessary-lambda
@@ -73,8 +74,6 @@ def test_many_columns_non_petastorm_dataset(many_columns_non_petastorm_dataset, 
         assert set(sample._fields) == set(many_columns_non_petastorm_dataset.data[0].keys())
 
 
-# TODO(yevgeni): missing tests: https://github.com/uber/petastorm/issues/257
-
 @pytest.mark.parametrize('reader_factory', _D)
 @pytest.mark.parametrize('partition_by', [['string'], ['id'], ['string', 'id']])
 def test_string_partition(reader_factory, tmpdir, partition_by):
@@ -86,3 +85,41 @@ def test_string_partition(reader_factory, tmpdir, partition_by):
         row_ids_batched = [row.id for row in reader]
     actual_row_ids = list(itertools.chain(*row_ids_batched))
     assert len(data) == len(actual_row_ids)
+
+
+@pytest.mark.parametrize('reader_factory', _D)
+def test_column_subset(scalar_dataset, reader_factory):
+    """ Request subset of columns from reader, confirm that receive those columns and only those columns."""
+
+    # Create field subset, by picking even-numbered fields from the available fields, counting from 0.
+    # Since schema_fields is a list of regex patterns, not plain strings of field names, am keeping two
+    # lists - one of decorated field_names to avoid undesired matches (i.e. getting "string" and "string2" when
+    # request "string"), and one non-decorated to compare to returned fields.
+    all_fields = sorted(scalar_dataset.data[0].keys())
+    requested_fields = []
+    requested_fields_as_regex = []
+    for n in range(0, len(all_fields), 2):
+        requested_fields.append(all_fields[n])
+        requested_fields_as_regex.append("^" + all_fields[n] + "$")
+
+    with reader_factory(scalar_dataset.url, schema_fields=requested_fields_as_regex) as reader:
+        sample = next(reader)
+        assert sorted(sample._asdict().keys()) == requested_fields
+
+
+@pytest.mark.parametrize('reader_factory', _D)
+def test_invalid_column_name(scalar_dataset, reader_factory):
+    """ Request a column that doesn't exist, confirm that get exception."""
+
+    # Grab first field from expected dataset, append random characters to it to get an invalid field name.
+    all_fields = list(scalar_dataset.data[0].keys())
+    bad_field = all_fields[0]
+    while bad_field in all_fields:
+        bad_field += "VR46"
+    requested_fields = [bad_field]
+
+    with pytest.raises(StopIteration):
+        with reader_factory(scalar_dataset.url, schema_fields=requested_fields) as reader:
+            sample = next(reader)
+
+
