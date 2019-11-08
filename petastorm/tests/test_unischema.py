@@ -25,7 +25,7 @@ from pyspark.sql.types import StringType, IntegerType, DecimalType, ShortType, L
 
 from petastorm.codecs import ScalarCodec, NdarrayCodec
 from petastorm.unischema import Unischema, UnischemaField, dict_to_spark_row, \
-    insert_explicit_nulls, match_unischema_fields, _new_gt_255_compatible_namedtuple
+    insert_explicit_nulls, match_unischema_fields, _new_gt_255_compatible_namedtuple, _fullmatch
 
 try:
     from unittest import mock
@@ -284,7 +284,7 @@ def test_field_name_conflict_with_unischema_attribute():
         Unischema('TestSchema', [UnischemaField('fields', np.int32, (), ScalarCodec(StringType()), True)])
 
 
-def test_filter_schema_fields_from_url():
+def test_match_unischema_fields():
     TestSchema = Unischema('TestSchema', [
         UnischemaField('int32', np.int32, (), None, False),
         UnischemaField('uint8', np.uint8, (), None, False),
@@ -295,6 +295,23 @@ def test_filter_schema_fields_from_url():
     assert match_unischema_fields(TestSchema, ['nomatch']) == []
     assert match_unischema_fields(TestSchema, ['.*']) == list(TestSchema.fields.values())
     assert match_unischema_fields(TestSchema, ['int32', 'uint8']) == [TestSchema.int32, TestSchema.uint8]
+
+
+def test_match_unischema_fields_legacy_warning():
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('int32', np.int32, (), None, False),
+        UnischemaField('uint8', np.uint8, (), None, False),
+        UnischemaField('uint16', np.uint16, (), None, False),
+    ])
+
+    # Check that no warnings are shown if the legacy and the new way of filtering produce the same results.
+    with pytest.warns(None) as unexpected_warnings:
+        match_unischema_fields(TestSchema, ['uint8'])
+    assert not unexpected_warnings
+
+    # uint8 and uint16 would have been matched using the old method, but not the new one
+    with pytest.warns(UserWarning, match=r'schema_fields behavior has changed.*uint16, uint8'):
+        assert match_unischema_fields(TestSchema, ['uint']) == []
 
 
 def test_arrow_schema_convertion():
@@ -442,3 +459,17 @@ def test_new_gt_255_compatible_namedtuple():
     huge_tuple_instance = huge_tuple(**dict(zip(field_names, values)))
     assert len(huge_tuple_instance) == fields_count
     assert huge_tuple_instance.f764 == 764
+
+
+def test_fullmatch():
+    assert _fullmatch('abc', 'abc')
+    assert _fullmatch('^abc', 'abc')
+    assert _fullmatch('abc$', 'abc')
+    assert _fullmatch('a.c', 'abc')
+    assert _fullmatch('.*abcdef', 'abcdef')
+    assert _fullmatch('abc.*', 'abcdef')
+    assert _fullmatch('.*c.*', 'abcdef')
+    assert _fullmatch('', '')
+    assert not _fullmatch('abc', 'xyz')
+    assert not _fullmatch('abc', 'abcx')
+    assert not _fullmatch('abc', 'xabc')
