@@ -120,6 +120,6 @@ def test_invalid_column_name(scalar_dataset, reader_factory):
 
     with pytest.raises(StopIteration):
         with reader_factory(scalar_dataset.url, schema_fields=requested_fields) as reader:
+            # Have to do something with sample to avoid build error.
             sample = next(reader)
-
-
+            assert len(sample) > 0
