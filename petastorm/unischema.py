@@ -401,19 +401,41 @@ def insert_explicit_nulls(unischema, row_dict):
                 raise ValueError('Field {} is not found in the row_dict, but is not nullable.'.format(field_name))
 
 
+def _fullmatch(regex, string, flags=0):
+    """Emulate python-3.4 re.fullmatch()."""
+    if six.PY2:
+        m = re.match(regex, string, flags=flags)
+        if m and (m.span() == (0, len(string))):
+            return m
+    else:
+        return re.fullmatch(regex, string, flags)
+
+
 def match_unischema_fields(schema, field_regex):
     """Returns a list of :class:`~petastorm.unischema.UnischemaField` objects that match a regular expression.
 
     :param schema: An instance of a :class:`~petastorm.unischema.Unischema` object.
-    :param field_regex: A list of regular expression patterns.
+    :param field_regex: A list of regular expression patterns. A field is matched if the regular expression matches
+      the entire field name.
     :return: A list of :class:`~petastorm.unischema.UnischemaField` instances matching at least one of the regular
       expression patterns given by ``field_regex``.
     """
     if field_regex:
         unischema_fields = []
+        legacy_unischema_fields = []
         for pattern in field_regex:
             unischema_fields.extend(
-                [field for field_name, field in schema.fields.items() if re.match(pattern, field_name)])
+                [field for field_name, field in schema.fields.items() if _fullmatch(pattern, field_name)])
+            legacy_unischema_fields.extend([field for field_name, field in schema.fields.items()
+                                            if re.match(pattern, field_name)])
+        if unischema_fields != legacy_unischema_fields:
+            field_names = {f.name for f in unischema_fields}
+            legacy_field_names = {f.name for f in legacy_unischema_fields}
+            # Sorting list of diff_names so it's easier to unit-test the message
+            diff_names = sorted(list((field_names | legacy_field_names) - (field_names & legacy_field_names)))
+            warnings.warn('schema_fields behavior has changed. Now, regular expression pattern must match'
+                          ' the entire field name. The change in the behavior affects '
+                          'the following fields: {}'.format(', '.join(diff_names)))
     else:
         unischema_fields = field_regex
     return unischema_fields
