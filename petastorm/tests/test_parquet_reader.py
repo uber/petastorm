@@ -126,7 +126,7 @@ def test_asymetric_parquet_pieces(reader_factory, tmpdir):
 
 
 def test_column_subset(scalar_dataset, reader_factory):
-    """ Request subset of columns from reader, confirm that receive those columns and only those columns."""
+    """Request subset of columns from reader, confirm that receive those columns and only those columns."""
 
     # Create field subset, by picking even-numbered fields from the available fields, counting from 0.
     all_fields = sorted(scalar_dataset.data[0].keys())
@@ -141,8 +141,7 @@ def test_column_subset(scalar_dataset, reader_factory):
 
 @pytest.mark.parametrize('reader_factory', _D)
 def test_invalid_column_name(scalar_dataset, reader_factory):
-    """ Request a column that doesn't exist, confirm that get exception."""
-
+    """Request a column that doesn't exist, confirm that get exception."""
     # Grab first field from expected dataset, append random characters to it to get an invalid field name.
     all_fields = list(scalar_dataset.data[0].keys())
     bad_field = all_fields[0]
