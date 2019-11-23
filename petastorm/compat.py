@@ -24,7 +24,6 @@ _PYARROW_BEFORE_014 = version.parse(pa.__version__) < version.parse('0.14.0')
 _PYARROW_BEFORE_015 = version.parse(pa.__version__) < version.parse('0.15.0')
 
 
-
 def compat_get_metadata(piece, open_func):
     if _PYARROW_BEFORE_013:
         arrow_metadata = piece.get_metadata(open_func)
