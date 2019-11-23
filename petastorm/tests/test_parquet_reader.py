@@ -92,17 +92,12 @@ def test_column_subset(scalar_dataset, reader_factory):
     """ Request subset of columns from reader, confirm that receive those columns and only those columns."""
 
     # Create field subset, by picking even-numbered fields from the available fields, counting from 0.
-    # Since schema_fields is a list of regex patterns, not plain strings of field names, am keeping two
-    # lists - one of decorated field_names to avoid undesired matches (i.e. getting "string" and "string2" when
-    # request "string"), and one non-decorated to compare to returned fields.
     all_fields = sorted(scalar_dataset.data[0].keys())
     requested_fields = []
-    requested_fields_as_regex = []
     for n in range(0, len(all_fields), 2):
         requested_fields.append(all_fields[n])
-        requested_fields_as_regex.append("^" + all_fields[n] + "$")
 
-    with reader_factory(scalar_dataset.url, schema_fields=requested_fields_as_regex) as reader:
+    with reader_factory(scalar_dataset.url, schema_fields=requested_fields) as reader:
         sample = next(reader)
         assert sorted(sample._asdict().keys()) == requested_fields
 
