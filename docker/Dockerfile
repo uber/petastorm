@@ -1,4 +1,4 @@
-FROM ubuntu:16.04
+FROM ubuntu:18.04
 # This container installs all of Petastorm's dependencies and can
 # be used via the Makefile as an isolated workspace for Petastorm development.
 
@@ -9,15 +9,15 @@ RUN add-apt-repository -y ppa:deadsnakes/ppa
 RUN apt-get update -qq
 RUN apt-get -qq install -y \
   build-essential \
-  default-jre \
+  openjdk-8-jre-headless \
   git \
   libglib2.0-0 \
-  libsm6 \
   libxrender1 \
-  python-pip \
-  python-software-properties \
+  libsm6 \
+  python \
   python2.7 \
   python2.7-dev \
+  python-pip \
   python3-pip \
   python3.6 \
   python3.6-dev \
@@ -46,3 +46,5 @@ RUN /petastorm_venv2.7/bin/pip2.7 uninstall -y petastorm
 
 # Clean up
 RUN rm -r /petastorm
+
+ADD docker/run_in_venv.sh /
