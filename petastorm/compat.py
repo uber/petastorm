@@ -51,11 +51,11 @@ def compat_table_columns_gen(table):
             yield name, column
 
 
-def compat_column_num_chunks(column):
+def compat_column_data(column):
     if _PYARROW_BEFORE_015:
-        return column.data.num_chunks
+        return column.data
     else:
-        return column.num_chunks
+        return column
 
 
 def compat_make_parquet_piece(path, open_file_func, **kwargs):
