@@ -22,7 +22,6 @@ from petastorm import make_batch_reader
 from petastorm.compat import compat_get_metadata
 from petastorm.tests.test_common import create_test_scalar_dataset
 
-
 _D = [lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', **kwargs)]
 
 # pylint: disable=unnecessary-lambda
@@ -50,6 +49,15 @@ def _check_simple_reader(reader, expected_data):
         count += len(actual['id'])
 
     assert count == len(expected_data)
+
+
+def _get_bad_field_name(field_list):
+    """ Grab first name from list of valid fields, append random characters to it to get an invalid
+    field name. """
+    bad_field = field_list[0]
+    while bad_field in field_list:
+        bad_field += "VR46"
+    return bad_field
 
 
 @pytest.mark.parametrize('reader_factory', _D + _TP)
@@ -125,32 +133,31 @@ def test_asymetric_parquet_pieces(reader_factory, tmpdir):
     assert ROWS_COUNT == len(actual_row_ids)
 
 
-def test_column_subset(scalar_dataset, reader_factory):
-    """Request subset of columns from reader, confirm that receive those columns and only those columns."""
-
-    # Create field subset, by picking even-numbered fields from the available fields, counting from 0.
-    all_fields = sorted(scalar_dataset.data[0].keys())
-    requested_fields = []
-    for n in range(0, len(all_fields), 2):
-        requested_fields.append(all_fields[n])
+def test_invalid_column_name(scalar_dataset, reader_factory):
+    """Request a column that doesn't exist. Appears that when request only invalid fields,
+    DummyPool returns an EmptyResultError, which then causes a StopIteration in 
+    ArrowReaderWorkerResultsQueueReader."""
+    all_fields = list(scalar_dataset.data[0].keys())
+    bad_field = _get_bad_field_name(all_fields)
+    requested_fields = [bad_field]
 
     with reader_factory(scalar_dataset.url, schema_fields=requested_fields) as reader:
-        sample = next(reader)
-        assert sorted(sample._asdict().keys()) == requested_fields
+        with pytest.raises(StopIteration):
+            sample = next(reader)._asdict()
+            # Have to do something with sample to avoid build error.
+            assert len(sample) == 0
 
 
 @pytest.mark.parametrize('reader_factory', _D)
-def test_invalid_column_name(scalar_dataset, reader_factory):
-    """Request a column that doesn't exist, confirm that get exception."""
-    # Grab first field from expected dataset, append random characters to it to get an invalid field name.
+def test_invalid_and_valid_column_names(scalar_dataset, reader_factory):
+    """Request one column that doesn't exist and one that does. Confirm that only get one field back and 
+    that get exception when try to read from invalid field."""
     all_fields = list(scalar_dataset.data[0].keys())
-    bad_field = all_fields[0]
-    while bad_field in all_fields:
-        bad_field += "VR46"
-    requested_fields = [bad_field]
+    bad_field = _get_bad_field_name(all_fields)
+    requested_fields = [bad_field, all_fields[1]]
 
-    with pytest.raises(StopIteration):
-        with reader_factory(scalar_dataset.url, schema_fields=requested_fields) as reader:
-            # Have to do something with sample to avoid build error.
-            sample = next(reader)
-            assert sample
+    with reader_factory(scalar_dataset.url, schema_fields=requested_fields) as reader:
+        sample = next(reader)._asdict()
+        assert len(sample) == 1
+        with pytest.raises(KeyError):
+            assert sample[bad_field] == ""
