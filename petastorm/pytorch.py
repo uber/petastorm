@@ -98,7 +98,7 @@ class DataLoader(object):
     """
 
     def __init__(self, reader, batch_size=1, collate_fn=decimal_friendly_collate,
-                 shuffling_queue_capacity=0, min_after_dequeue=0):
+                 shuffling_queue_capacity=0, min_after_dequeue=None):
         """
         Initializes a data loader object, with a default collate.
 
@@ -118,7 +118,9 @@ class DataLoader(object):
         :param batch_size: the number of items to return per batch; factored into the len() of this reader
         :param collate_fn: an optional callable to merge a list of samples to form a mini-batch.
         :param shuffling_queue_capacity: Queue capacity is passed to the underlying :class:`tf.RandomShuffleQueue`
-          instance. If set to 0, no suffling will be done.
+          instance. If set to 0, no shuffling will be done.
+        :param min_after_dequeue: Minimum number of items in the buffer that allows retrieval. If not passed, defaults
+          to shuffling_queue_capacity-1.
         """
         self.reader = reader
         self.batch_size = batch_size
@@ -129,7 +131,7 @@ class DataLoader(object):
         if shuffling_queue_capacity > 0:
             # We can not know what is the reasonable number to use for the extra capacity, so we set a huge number
             # and give up on the unbound growth protection mechanism.
-            if min_after_dequeue == 0:
+            if not min_after_dequeue:
                 min_after_dequeue = shuffling_queue_capacity - 1
             self._shuffling_buffer = RandomShufflingBuffer(shuffling_queue_capacity,
                                                            min_after_retrieve=min_after_dequeue,
