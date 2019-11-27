@@ -145,7 +145,7 @@ def test_invalid_column_name(scalar_dataset, reader_factory):
         with pytest.raises(StopIteration):
             sample = next(reader)._asdict()
             # Have to do something with sample to avoid build error.
-            assert len(sample) == 0
+            assert sample == False
 
 
 @pytest.mark.parametrize('reader_factory', _D)
