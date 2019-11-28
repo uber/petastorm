@@ -54,7 +54,7 @@ def test_size_limit_constraint(tmpdir):
         cache.get('some_key_{}'.format(i), lambda: a_record)
 
     # Check that we are more or less within the size limit
-    assert _recursive_folder_size(tmpdir.strpath) < 2 * MB
+    assert _recursive_folder_size(tmpdir.strpath) < 3 * MB
 
 
 def _should_never_be_called():
