@@ -1,4 +1,5 @@
 from decimal import Decimal
+from packaging import version
 
 import numpy as np
 import pyarrow as pa
@@ -68,10 +69,16 @@ def test_simple_read(synthetic_dataset, reader_factory):
 
 
 def test_sanitize_pytorch_types_int8():
+    _TORCH_BEFORE_1_1 = version.parse(torch.__version__) < version.parse('1.1.0')
+
     dict_to_sanitize = {'a': np.asarray([-1, 1], dtype=np.int8)}
     _sanitize_pytorch_types(dict_to_sanitize)
+
     np.testing.assert_array_equal(dict_to_sanitize['a'], [-1, 1])
-    assert dict_to_sanitize['a'].dtype == np.int16
+    if _TORCH_BEFORE_1_1:
+        assert dict_to_sanitize['a'].dtype == np.int16
+    else:
+        assert dict_to_sanitize['a'].dtype == np.int8
 
 
 def test_decimal_friendly_collate_empty_input():
