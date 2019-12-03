@@ -46,7 +46,8 @@ class TestWorkersPool(unittest.TestCase):
         pool.join()
 
     def test_passing_args_processes(self):
-        self._passing_args_impl(lambda: ProcessPool(10))
+        for zmq_copy_buffers in [False, True]:
+            self._passing_args_impl(lambda do_copy=zmq_copy_buffers: ProcessPool(10, zmq_copy_buffers=do_copy))
 
     def test_passing_args_threads(self):
         self._passing_args_impl(lambda: ThreadPool(10))

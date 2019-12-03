@@ -108,7 +108,7 @@ def _keep_retrying_while_zmq_again(timeout, func, allowed_failures=3):
 
 
 class ProcessPool(object):
-    def __init__(self, workers_count, serializer=None):
+    def __init__(self, workers_count, serializer=None, zmq_copy_buffers=True):
         """Initializes a ProcessPool.
 
         This pool is different from standard Python pool implementations by the fact that the workers are spawned
@@ -121,6 +121,10 @@ class ProcessPool(object):
           :class:`petastorm.reader_impl.PyarrowSerializer` or
           :class:`petastorm.reader_impl.ArrowTableSerializer` (should be used together with
           :class:`petastorm.reader.ArrowReader`)
+        :param zmq_copy_buffers: When set to False, we will use a zero-memory-copy feature of recv_multipart.
+          A downside of using this zero memory copy feature is that it does not play nice with Python GC and cases
+          were observed when it resulted in wild memory footprint swings. Having the buffers copied is typically a
+          safer alternative.
         """
         self._workers = []
         self._ventilator_send = None
@@ -133,6 +137,7 @@ class ProcessPool(object):
         self._ventilated_items_processed = 0
         self._ventilator = None
         self._serializer = serializer or PickleSerializer()
+        self._zmq_copy_buffers = zmq_copy_buffers
 
     def _create_local_socket_on_random_port(self, context, socket_type):
         """Creates a zmq socket on a random port.
@@ -242,7 +247,7 @@ class ProcessPool(object):
             # Result message is a tuple containing data payload and possible exception (or None).
             # By specifying pyarrow_serialize=True, we may choose to use pyarrow serializer which is faster, but
             # does not support all data types correctly.
-            fast_serialized, pickle_serialized = self._results_receiver.recv_multipart(copy=False)
+            fast_serialized, pickle_serialized = self._results_receiver.recv_multipart(copy=self._zmq_copy_buffers)
             pickle_serialized = pickle.loads(pickle_serialized)
 
             if pickle_serialized:
@@ -257,7 +262,10 @@ class ProcessPool(object):
                     raise pickle_serialized
             else:
                 logger.debug('get_results received new results')
-                deserialized_result = self._serializer.deserialize(fast_serialized.buffer)
+                if self._zmq_copy_buffers:
+                    deserialized_result = self._serializer.deserialize(fast_serialized)
+                else:
+                    deserialized_result = self._serializer.deserialize(fast_serialized.buffer)
                 return deserialized_result
 
     def stop(self):
