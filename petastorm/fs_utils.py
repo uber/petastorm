@@ -88,8 +88,8 @@ class FilesystemResolver(object):
                         # Case 3a1: That didn't work; try the URL as a namenode host
                         self._filesystem = connector.hdfs_connect_namenode(self._parsed_dataset_url, user=user)
                         self._filesystem_factory = \
-                            lambda url=self._parsed_dataset_url, user=user: \
-                            connector.hdfs_connect_namenode(url, user=user)
+                            lambda url=self._dataset_url, user=user: \
+                            connector.hdfs_connect_namenode(urlparse(url), user=user)
                 else:
                     # Case 3b: No netloc, so let's try to connect to default namenode
                     # HdfsNamenodeResolver will raise exception if it fails to connect.
@@ -104,8 +104,8 @@ class FilesystemResolver(object):
             else:
                 self._filesystem = connector.hdfs_connect_namenode(self._parsed_dataset_url, hdfs_driver, user=user)
                 self._filesystem_factory = \
-                    lambda url=self._parsed_dataset_url, user=user: \
-                    connector.hdfs_connect_namenode(url, hdfs_driver, user=user)
+                    lambda url=self._dataset_url, user=user: \
+                    connector.hdfs_connect_namenode(urlparse(url), hdfs_driver, user=user)
 
         elif self._parsed_dataset_url.scheme == 's3':
             # Case 5
