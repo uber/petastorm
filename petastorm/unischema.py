@@ -19,7 +19,7 @@ import copy
 import re
 import sys
 import warnings
-from collections import namedtuple, OrderedDict
+from collections import namedtuple, OrderedDict, KeysView
 from decimal import Decimal
 
 import numpy as np
@@ -102,6 +102,24 @@ class _NamedtupleCache(object):
                 _new_gt_255_compatible_namedtuple('{}_view'.format(parent_schema_name), sorted_names)
         return _NamedtupleCache._store[key]
 
+def _get_namedtuple(name, field_names):
+    return _NamedtupleCache.get(name, field_names)
+
+def make_namedtuple(**kargs):
+    """Returns data as a namedtuple type intialized with arguments passed to this method.
+
+    Example:
+
+    >>> make_namedtuple(field1=10, field2='abc')
+    """
+    # TODO(yevgeni): verify types
+    typed_dict = dict()
+    for key in kargs.keys():
+        if kargs[key] is not None:
+            typed_dict[key] = kargs[key]
+        else:
+            typed_dict[key] = None
+    return _get_namedtuple("fixed", typed_dict.keys())(**typed_dict)
 
 def _new_gt_255_compatible_namedtuple(*args, **kwargs):
     # Between Python 3 - 3.6.8 namedtuple can not have more than 255 fields. We use
@@ -228,9 +246,6 @@ class Unischema(object):
 
         return Unischema('{}_view'.format(self._name), view_fields)
 
-    def _get_namedtuple(self):
-        return _NamedtupleCache.get(self._name, self._fields.keys())
-
     def __str__(self):
         """Represent this as the following form:
 
@@ -269,24 +284,71 @@ class Unischema(object):
 
         return sql_types.StructType(schema_entries)
 
-    def make_namedtuple(self, **kargs):
-        """Returns schema as a namedtuple type intialized with arguments passed to this method.
-
-        Example:
-
-        >>> some_schema.make_namedtuple(field1=10, field2='abc')
+    def _get_field_names(self, results):
+        """ Figure out the field names from the returned results. Seems like can receive a namedtuple or a dictionary.
+        The dictionary may be nested, in which case need to check unique fields from each nested element - i.e. if
+        two nested elements contain the same field name, only include it in the final list once.
         """
-        # TODO(yevgeni): verify types
-        typed_dict = dict()
-        for key in kargs.keys():
-            if kargs[key] is not None:
-                typed_dict[key] = kargs[key]
-            else:
-                typed_dict[key] = None
-        return self._get_namedtuple()(**typed_dict)
+        if "_fields" in dir(results):
+            field_names = results._fields
+        else:
+            field_names = results.keys()
+            if isinstance(field_names, KeysView):
+                # If received a dictionary, rather than a list of keys, grab keys each item in the dictionary,
+                # then remove duplicates.
+                field_names = []
+                for key in results.keys():
+                    field_names = field_names + list(results[key]._fields)
+                # Remove duplicates.
+                field_names = list(set(field_names))
+        return field_names
+
+
+    def verify_fields(self, results, expected_fields=None):
+        """ Confirm that actual data matches layout that we expected. If not, warn user about differences.
+        I.e. if data doesn't contain fields that we expect, or does have fields that didn't expect, emit warning.
+        """
+        if not "_is_verified" in self.__dict__:
+            # Can happen if read older version from a file.
+            self._is_verified = False
+
+        if self._is_verified == False:
+            # Can only verify if have some data.
+            if results:
+                actual_field_names = self._get_field_names(results)
+                missing_fields = []
+                # See if there are fields in Unischema that we didn't receive in the returned data
+                for field in self._fields:
+                    if not field in actual_field_names:
+                        missing_fields.append(field)
+
+                # Then, see if there are any fields in the returned data that aren't in the schema.
+                unexpected_fields = []
+                for field in actual_field_names:
+                    if not field in self._fields:
+                        unexpected_fields.append(field)
+
+                # If found any mismatches, warn user.
+                msg = ""
+                if missing_fields:
+                    msg = msg + "The following field(s) were expected but not found in the returned data: " \
+                          + str(missing_fields) + "\n"
+                if unexpected_fields:
+                    msg = msg + "The following field(s) were found in the returned data, but were not expected: " \
+                          + str(unexpected_fields)
+                if msg:
+                    msghdr = "It seems that the transform function changed the fields that are returned, and these " \
+                             "changes weren't listed in the TransformSpec.edit_fields and removed_fields properties." \
+                             "If running under TensorFlow this will result in a crash, so please use these " \
+                             "parameters to avoid this crash. If not running under TensorFlow, please feel free to " \
+                             "ignore this warning.\n"
+                    warnings.warn(msghdr + msg)
+
+                self._is_verified = True
+
 
     def make_namedtuple_tf(self, *args, **kargs):
-        return self._get_namedtuple()(*args, **kargs)
+        return _get_namedtuple(self._name, self._fields.keys())(*args, **kargs)
 
     @classmethod
     def from_arrow_schema(cls, parquet_dataset, omit_unsupported_fields=False):

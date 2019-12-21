@@ -23,6 +23,8 @@ from pyarrow.parquet import ParquetFile
 from petastorm import utils
 from petastorm.cache import NullCache
 from petastorm.compat import compat_piece_read
+from petastorm.transform import TransformSpec
+from petastorm.unischema import make_namedtuple
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.worker_base import WorkerBase
 
@@ -35,19 +37,22 @@ def _merge_two_dicts(a, b):
     return result
 
 
-def _apply_transform_spec(all_rows, transform_spec):
-    """Applies transform_spec.func to all rows in all_rows (if func is specified). Removes all fields as specified by
-    transform_spec.removed_fields, unless the fields were already deleted by transform_spec.func.
+def _apply_transform(all_rows, transform):
+    """Applies transform (either TransformSpec.func (if specified) or transform if it is a callable) to all rows
+    in all_rows. Removes all fields as specified by TransformSpec.removed_fields, unless the fields were already
+    deleted by transform.
 
     All modifications are performed in-place.
     """
-    if transform_spec.func:
-        all_rows = [transform_spec.func(row) for row in all_rows]
-
-    for field_to_remove in transform_spec.removed_fields:
-        for row in all_rows:
-            if field_to_remove in row:
-                del row[field_to_remove]
+    if isinstance(transform, TransformSpec):
+        if transform.func:
+            all_rows = [transform.func(row) for row in all_rows]
+        for field_to_remove in transform.removed_fields:
+            for row in all_rows:
+                if field_to_remove in row:
+                    del row[field_to_remove]
+    elif callable(transform):
+        all_rows = [transform(row) for row in all_rows]
 
     return all_rows
 
@@ -70,7 +75,7 @@ class PyDictReaderWorkerResultsQueueReader(object):
     def batched_output(self):
         return False
 
-    def read_next(self, workers_pool, schema, ngram):
+    def read_next(self, workers_pool, ngram):
         try:
             # We are receiving decoded rows from the worker in chunks. We store the list internally
             # and return a single item upon each consequent call to __next__
@@ -84,12 +89,10 @@ class PyDictReaderWorkerResultsQueueReader(object):
                         for ngram_row in list_of_rows:
                             for timestamp in ngram_row.keys():
                                 row = ngram_row[timestamp]
-                                schema_at_timestamp = ngram.get_schema_at_timestep(schema, timestamp)
-
-                                ngram_row[timestamp] = schema_at_timestamp.make_namedtuple(**row)
+                                ngram_row[timestamp] = make_namedtuple(**row)
                         self._result_buffer = list_of_rows
                     else:
-                        self._result_buffer = [schema.make_namedtuple(**row) for row in list_of_rows]
+                        self._result_buffer = [make_namedtuple(**row) for row in list_of_rows]
 
                 return self._result_buffer.pop()
 
@@ -107,7 +110,7 @@ class PyDictReaderWorker(WorkerBase):
         self._ngram = args[3]
         self._split_pieces = args[4]
         self._local_cache = args[5]
-        self._transform_spec = args[6]
+        self._transform = args[6]
 
         # We create datasets lazily in the first invocation of 'def process'. This speeds up startup time since
         # all Worker constructors are serialized
@@ -180,8 +183,8 @@ class PyDictReaderWorker(WorkerBase):
 
         all_rows = [utils.decode_row(row, self._schema) for row in all_rows]
 
-        if self._transform_spec:
-            all_rows = _apply_transform_spec(all_rows, self._transform_spec)
+        if self._transform:
+            all_rows = _apply_transform(all_rows, self._transform)
 
         return all_rows
 
@@ -246,8 +249,8 @@ class PyDictReaderWorker(WorkerBase):
         else:
             result = filtered_decoded_predicate_rows
 
-        if self._transform_spec:
-            _apply_transform_spec(result, self._transform_spec)
+        if self._transform:
+            _apply_transform(result, self._transform)
 
         return result
 

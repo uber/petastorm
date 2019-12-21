@@ -15,6 +15,8 @@
 from decimal import Decimal
 import numpy as np
 
+from petastorm.unischema import make_namedtuple
+
 
 class ReaderMock(object):
     """Reads a unischema based mock dataset."""
@@ -40,7 +42,7 @@ class ReaderMock(object):
         :return: named tuple data according to schema.
         """
         fields_as_dict = self.schema_data_generator(self.schema)
-        return self.schema.make_namedtuple(**fields_as_dict)
+        return make_namedtuple(**fields_as_dict)
 
     def __iter__(self):
         return self

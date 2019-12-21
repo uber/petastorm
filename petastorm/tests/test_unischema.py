@@ -21,11 +21,12 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from pyspark import Row
-from pyspark.sql.types import StringType, IntegerType, DecimalType, ShortType, LongType
+from pyspark.sql.types import StringType, IntegerType, ShortType, LongType
 
 from petastorm.codecs import ScalarCodec, NdarrayCodec
 from petastorm.unischema import Unischema, UnischemaField, dict_to_spark_row, \
-    insert_explicit_nulls, match_unischema_fields, _new_gt_255_compatible_namedtuple, _fullmatch
+    insert_explicit_nulls, match_unischema_fields, _new_gt_255_compatible_namedtuple, \
+    _fullmatch, make_namedtuple
 
 try:
     from unittest import mock
@@ -152,19 +153,11 @@ def test_dict_to_spark_row_field_validation_ndarrays():
 
 
 def test_make_named_tuple():
-    TestSchema = Unischema('TestSchema', [
-        UnischemaField('string_scalar', np.string_, (), ScalarCodec(StringType()), True),
-        UnischemaField('int32_scalar', np.int32, (), ScalarCodec(ShortType()), False),
-        UnischemaField('uint8_scalar', np.uint8, (), ScalarCodec(ShortType()), False),
-        UnischemaField('int32_matrix', np.float32, (10, 20, 3), NdarrayCodec(), True),
-        UnischemaField('decimal_scalar', Decimal, (10, 20, 3), ScalarCodec(DecimalType(10, 9)), False),
-    ])
+    make_namedtuple(string_scalar='abc', int32_scalar=10, uint8_scalar=20,
+                    int32_matrix=np.int32((10, 20, 3)), decimal_scalar=Decimal(123) / Decimal(10))
 
-    TestSchema.make_namedtuple(string_scalar='abc', int32_scalar=10, uint8_scalar=20,
-                               int32_matrix=np.int32((10, 20, 3)), decimal_scalar=Decimal(123) / Decimal(10))
-
-    TestSchema.make_namedtuple(string_scalar=None, int32_scalar=10, uint8_scalar=20,
-                               int32_matrix=None, decimal_scalar=Decimal(123) / Decimal(10))
+    make_namedtuple(string_scalar=None, int32_scalar=10, uint8_scalar=20,
+                    int32_matrix=None, decimal_scalar=Decimal(123) / Decimal(10))
 
 
 def test_insert_explicit_nulls():

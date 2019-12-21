@@ -26,6 +26,7 @@ from petastorm import make_reader
 from petastorm.ngram import NGram
 from petastorm.tests.conftest import SyntheticDataset, maybe_cached_dataset
 from petastorm.tests.test_common import create_test_dataset, TestSchema
+from petastorm.unischema import make_namedtuple
 from petastorm.tf_utils import tf_tensors
 
 # Tests in this module will run once for each entry in the READER_FACTORIES
@@ -101,11 +102,9 @@ def _get_named_tuple_from_ngram(ngram, dataset_dicts, starting_index):
             current_field_names = [field.name for field in ngram.fields[key]]
         else:
             current_field_names = []
-        new_schema = TestSchema.create_schema_view([
-            TestSchema.fields.get(field) for field in TestSchema.fields if field in current_field_names])
         current_dict = dataset_dicts[starting_index + index]
         new_dict = {k: current_dict[k] for k in current_dict if k in current_field_names}
-        expected_ngram[key] = new_schema.make_namedtuple(**new_dict)
+        expected_ngram[key] = make_namedtuple(**new_dict)
     return expected_ngram
 
 

@@ -62,9 +62,29 @@ def _sensor_name_to_int(row):
 
 
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
-def test_simple_read(synthetic_dataset, reader_factory):
+def test_simple_read_transformspec(synthetic_dataset, reader_factory):
+    """ Pass a TransformSpec to transform_spec.
+    """
     with DataLoader(reader_factory(synthetic_dataset.url, schema_fields=BATCHABLE_FIELDS,
                                    transform_spec=TransformSpec(_sensor_name_to_int))) as loader:
+        _check_simple_reader(loader, synthetic_dataset.data, BATCHABLE_FIELDS - {TestSchema.sensor_name})
+
+
+@pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
+def test_simple_read_transform_as_spec(synthetic_dataset, reader_factory):
+    """ Pass a TransformSpec to transform.
+    """
+    with DataLoader(reader_factory(synthetic_dataset.url, schema_fields=BATCHABLE_FIELDS,
+                                   transform=TransformSpec(_sensor_name_to_int))) as loader:
+        _check_simple_reader(loader, synthetic_dataset.data, BATCHABLE_FIELDS - {TestSchema.sensor_name})
+
+
+@pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
+def test_simple_read_transform(synthetic_dataset, reader_factory):
+    """ Pass function directly as transform.
+    """
+    with DataLoader(reader_factory(synthetic_dataset.url, schema_fields=BATCHABLE_FIELDS,
+                                   transform=_sensor_name_to_int)) as loader:
         _check_simple_reader(loader, synthetic_dataset.data, BATCHABLE_FIELDS - {TestSchema.sensor_name})
 
 

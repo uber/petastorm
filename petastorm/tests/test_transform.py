@@ -40,6 +40,14 @@ def test_remove_field_transform():
     assert set(two_removed.fields.keys()) == {'string'}
 
 
+def test_remove_field_transform_no_func():
+    one_removed = transform_schema(TestSchema, TransformSpec(edit_fields=None, removed_fields=['int']))
+    assert set(one_removed.fields.keys()) == {'string', 'double'}
+
+    two_removed = transform_schema(TestSchema, TransformSpec(edit_fields=None, removed_fields=['int', 'double']))
+    assert set(two_removed.fields.keys()) == {'string'}
+
+
 def test_add_field_transform():
     one_added = transform_schema(TestSchema,
                                  TransformSpec(lambda x: x,
@@ -57,5 +65,12 @@ def test_change_field_transform():
 def test_unknown_fields_in_remove_field_transform():
     with pytest.warns(UserWarning, match='not part of the schema.*unknown_1'):
         one_removed = transform_schema(TestSchema, TransformSpec(lambda x: x, edit_fields=None,
+                                                                 removed_fields=['int', 'unknown_1', 'unknown_2']))
+    assert set(one_removed.fields.keys()) == {'string', 'double'}
+
+
+def test_unknown_fields_in_remove_field_transform_no_func():
+    with pytest.warns(UserWarning, match='not part of the schema.*unknown_1'):
+        one_removed = transform_schema(TestSchema, TransformSpec(edit_fields=None,
                                                                  removed_fields=['int', 'unknown_1', 'unknown_2']))
     assert set(one_removed.fields.keys()) == {'string', 'double'}

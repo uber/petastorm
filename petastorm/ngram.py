@@ -269,7 +269,7 @@ class NGram(object):
 
         return result
 
-    def make_namedtuple(self, schema, ngram_as_dicts):
+    def make_namedtuple(self, ngram_as_dicts):
         """Converts a ngram structure where mapped values are dictionaries to a mapped structure where mapped values
         are namedtuples.
 
@@ -292,8 +292,7 @@ class NGram(object):
         ngram_as_tuples = {}
         for timestamp in ngram_as_dicts.keys():
             data_as_dict = ngram_as_dicts[timestamp]
-            current_schema = self.get_schema_at_timestep(schema=schema, timestep=timestamp)
-            ngram_as_tuples[timestamp] = current_schema.make_namedtuple(**data_as_dict)
+            ngram_as_tuples[timestamp] = petastorm.unischema.make_namedtuple(**data_as_dict)
         return ngram_as_tuples
 
     def get_field_names_at_all_timesteps(self):

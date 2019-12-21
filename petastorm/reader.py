@@ -34,7 +34,7 @@ from petastorm.reader_impl.arrow_table_serializer import ArrowTableSerializer
 from petastorm.reader_impl.pickle_serializer import PickleSerializer
 from petastorm.reader_impl.pyarrow_serializer import PyArrowSerializer
 from petastorm.selectors import RowGroupSelectorBase
-from petastorm.transform import transform_schema
+from petastorm.transform import transform_schema, TransformSpec
 from petastorm.workers_pool.dummy_pool import DummyPool
 from petastorm.workers_pool.process_pool import ProcessPool
 from petastorm.workers_pool.thread_pool import ThreadPool
@@ -58,7 +58,8 @@ def make_reader(dataset_url,
                 cache_type='null', cache_location=None, cache_size_limit=None,
                 cache_row_size_estimate=None, cache_extra_settings=None,
                 hdfs_driver='libhdfs3',
-                transform_spec=None):
+                transform_spec=None,
+                transform=None):
     """
     Creates an instance of Reader for reading Petastorm datasets. A Petastorm dataset is a dataset generated using
     :func:`~petastorm.etl.dataset_metadata.materialize_dataset` context manager as explained
@@ -105,9 +106,13 @@ def make_reader(dataset_url,
     :param cache_extra_settings: A dictionary of extra settings to pass to the cache implementation,
     :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
         libhdfs (java through JNI) or libhdfs3 (C++)
-    :param transform_spec: An instance of :class:`~petastorm.transform.TransformSpec` object defining how a record
-        is transformed after it is loaded and decoded. The transformation occurs on a worker thread/process (depends
-        on the ``reader_pool_type`` value).
+    :param transform_spec: Deprecated - use transform instead. An instance of
+        :class:`~petastorm.transform.TransformSpec` object defining how a record is transformed after it is loaded
+        and decoded. The transformation occurs on a worker thread/process (depends on the ``reader_pool_type``
+        value).
+    :param transform: Either an instance of :class:`~petastorm.transform.TransformSpec` object or a callable (e.g. a
+        function), defining how a record is transformed after it is loaded and decoded. The transformation occurs on
+        a worker thread/process (depends on the ``reader_pool_type`` value).
     :return: A :class:`Reader` object
     """
 
@@ -159,6 +164,7 @@ def make_reader(dataset_url,
         'shard_count': shard_count,
         'cache': cache,
         'transform_spec': transform_spec,
+        'transform': transform,
     }
 
     try:
@@ -185,7 +191,8 @@ def make_batch_reader(dataset_url,
                       cache_type='null', cache_location=None, cache_size_limit=None,
                       cache_row_size_estimate=None, cache_extra_settings=None,
                       hdfs_driver='libhdfs3',
-                      transform_spec=None):
+                      transform_spec=None,
+                      transform=None):
     """
     Creates an instance of Reader for reading batches out of a non-Petastorm Parquet store.
 
@@ -230,9 +237,13 @@ def make_batch_reader(dataset_url,
     :param cache_extra_settings: A dictionary of extra settings to pass to the cache implementation,
     :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
         libhdfs (java through JNI) or libhdfs3 (C++)
-    :param transform_spec: An instance of :class:`~petastorm.transform.TransformSpec` object defining how a record
-        is transformed after it is loaded and decoded. The transformation occurs on a worker thread/process (depends
-        on the ``reader_pool_type`` value).
+    :param transform_spec: Deprecated - use transform instead. An instance of
+        :class:`~petastorm.transform.TransformSpec` object defining how a record is transformed after it is loaded
+        and decoded. The transformation occurs on a worker thread/process (depends on the ``reader_pool_type``
+        value).
+    :param transform: Either an instance of :class:`~petastorm.transform.TransformSpec` object or a callable (e.g. a
+        function), defining how a record is transformed after it is loaded and decoded. The transformation occurs on
+        a worker thread/process (depends on the ``reader_pool_type`` value).
     :return: A :class:`Reader` object
     """
 
@@ -286,6 +297,7 @@ def make_batch_reader(dataset_url,
                   shard_count=shard_count,
                   cache=cache,
                   transform_spec=transform_spec,
+                  transform=transform,
                   is_batched_reader=True)
 
 
@@ -299,7 +311,7 @@ class Reader(object):
                  shuffle_row_groups=True, shuffle_row_drop_partitions=1,
                  predicate=None, rowgroup_selector=None, reader_pool=None, num_epochs=1,
                  cur_shard=None, shard_count=None, cache=None, worker_class=None,
-                 transform_spec=None, is_batched_reader=False):
+                 transform_spec=None, transform=None, is_batched_reader=False):
         """Initializes a reader object.
 
         :param pyarrow_filesystem: An instance of ``pyarrow.FileSystem`` that will be used. If not specified,
@@ -334,9 +346,14 @@ class Reader(object):
             to the main data store is either slow or expensive and the local machine has large enough storage
             to store entire dataset (or a partition of a dataset if shards are used).
             By default, use the :class:`.NullCache` implementation.
-
         :param worker_class: This is the class that will be instantiated on a different thread/process. It's
             responsibility is to load and filter the data.
+        :param transform_spec: Deprecated. An instance of :class:`~petastorm.transform.TransformSpec` object defining
+            how a record is transformed after it is loaded and decoded. The transformation occurs on a worker
+            thread/process (depends on the ``reader_pool_type`` value).
+        :param transform: Either an instance of :class:`~petastorm.transform.TransformSpec` object or a callable (e.g.
+            a function), defining how a record is transformed after it is loaded and decoded. The transformation occurs
+            on a worker thread/process (depends on the ``reader_pool_type`` value).
         """
 
         # 1. Open the parquet storage (dataset)
@@ -351,6 +368,10 @@ class Reader(object):
                 or schema_fields is None):
             raise ValueError('Fields must be either None, an iterable collection of Unischema fields '
                              'or an NGram object.')
+
+        if not transform_spec is None:
+            warnings.warn('The transform_spec parameter is deprecated, please use the transform parameter instead. It '
+                          'can accept either a full TransformSpec or any callable.')
 
         self.is_batched_reader = is_batched_reader
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
@@ -384,11 +405,19 @@ class Reader(object):
         else:
             fields = schema_fields if isinstance(schema_fields, collections.Iterable) else None
 
+        # Only create self._schema if have a TransformSpec.
         storage_schema = stored_schema.create_schema_view(fields) if fields else stored_schema
-        if transform_spec:
-            self.schema = transform_schema(storage_schema, transform_spec)
+        if transform_spec is None and transform is None:
+            self._schema = storage_schema
+        elif transform_spec:
+            self._schema = transform_schema(storage_schema, transform_spec)
+        elif isinstance(transform, TransformSpec):
+            self._schema = transform_schema(storage_schema, transform)
         else:
-            self.schema = storage_schema
+            # Always want copy of schema so can compare expected format to actual format, issue appropriate warnings.
+            self._schema = storage_schema
+
+        self._transform_is_callable = callable(transform)
 
         # 2. Get a list of all row groups
         row_groups = dataset_metadata.load_row_groups(self.dataset)
@@ -405,8 +434,11 @@ class Reader(object):
                                                   self._workers_pool.workers_count + _VENTILATE_EXTRA_ROWGROUPS)
 
         # 5. Start workers pool
+        this_transform = transform
+        if not transform_spec is None:
+            this_transform = transform_spec
         self._workers_pool.start(worker_class, (pyarrow_filesystem, dataset_path, storage_schema, self.ngram,
-                                                row_groups, cache, transform_spec),
+                                                row_groups, cache, this_transform),
                                  ventilator=self.ventilator)
         logger.debug('Workers pool started')
 
@@ -442,6 +474,13 @@ class Reader(object):
     @property
     def batched_output(self):
         return self._results_queue_reader.batched_output
+
+    @property
+    def schema(self):
+        if self._transform_is_callable:
+            raise RuntimeError('Unischema.schema is not available when a callable transform is provided.')
+        else:
+            return self._schema
 
     def _filter_row_groups(self, dataset, row_groups, predicate, rowgroup_selector, cur_shard,
                            shard_count):
@@ -607,7 +646,10 @@ class Reader(object):
                                'make_reader/make_batch_reader context manager has exited but you try to '
                                'fetch a sample from it anyway')
         try:
-            return self._results_queue_reader.read_next(self._workers_pool, self.schema, self.ngram)
+            results = self._results_queue_reader.read_next(self._workers_pool, self.ngram)
+            if '_schema' in self.__dict__:
+                self._schema.verify_fields(results)
+            return results
         except StopIteration:
             self.last_row_consumed = True
             raise

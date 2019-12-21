@@ -18,6 +18,7 @@ from six.moves.urllib.parse import urlparse
 from petastorm import utils
 from petastorm.etl.dataset_metadata import get_schema_from_dataset_url
 from petastorm.fs_utils import FilesystemResolver
+from petastorm.unischema import make_namedtuple
 
 
 def dataset_as_rdd(dataset_url, spark_session, schema_fields=None, hdfs_driver='libhdfs3'):
@@ -47,6 +48,6 @@ def dataset_as_rdd(dataset_url, spark_session, schema_fields=None, hdfs_driver='
 
     dataset_rows = dataset_df.rdd \
         .map(lambda row: utils.decode_row(row.asDict(), schema)) \
-        .map(lambda record: schema.make_namedtuple(**record))
+        .map(lambda record: make_namedtuple(**record))
 
     return dataset_rows

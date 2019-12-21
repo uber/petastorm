@@ -318,7 +318,9 @@ def test_shuffling_queue_with_make_batch_reader(scalar_dataset):
             tf_tensors(reader, 100, 90)
 
 
-def test_transform_function_new_field(synthetic_dataset):
+def test_transformspec_function_new_field(synthetic_dataset):
+    """ Use TransformSpec passed as transform_spec to add a new field, remove existing.
+    """
     def double_matrix(sample):
         sample['double_matrix'] = sample['matrix'] * 2
         del sample['matrix']
@@ -335,9 +337,36 @@ def test_transform_function_new_field(synthetic_dataset):
         original_sample = next(d for d in synthetic_dataset.data if d['id'] == actual.id)
         expected_matrix = original_sample['matrix'] * 2
         np.testing.assert_equal(expected_matrix, actual.double_matrix)
+        assert 'matrix' not in actual._fields
+        assert 'double_matrix' in actual._fields
 
 
-def test_transform_function_new_field_batched(scalar_dataset):
+def test_transform_as_spec_function_new_field(synthetic_dataset):
+    """ Use TransformSpec passed as transform to add a new field, remove existing.
+    """
+    def double_matrix(sample):
+        sample['double_matrix'] = sample['matrix'] * 2
+        del sample['matrix']
+        return sample
+
+    with make_reader(synthetic_dataset.url, reader_pool_type='dummy', schema_fields=[TestSchema.id, TestSchema.matrix],
+                     transform=TransformSpec(double_matrix,
+                                             [('double_matrix', np.float32, (32, 16, 3), False)],
+                                             ['matrix'])) as reader:
+        row_tensors = tf_tensors(reader)
+        with _tf_session() as sess:
+            actual = sess.run(row_tensors)
+
+        original_sample = next(d for d in synthetic_dataset.data if d['id'] == actual.id)
+        expected_matrix = original_sample['matrix'] * 2
+        np.testing.assert_equal(expected_matrix, actual.double_matrix)
+        assert 'matrix' not in actual._fields
+        assert 'double_matrix' in actual._fields
+
+
+def test_transformspec_function_new_field_batched(scalar_dataset):
+    """ With batch_reader, use TransformSpec passed as transform_spec to add a new field, remove existing.
+    """
     def double_float64(sample):
         sample['new_float64'] = sample['float64'] * 2
         del sample['float64']
@@ -355,3 +384,101 @@ def test_transform_function_new_field_batched(scalar_dataset):
             original_sample = next(d for d in scalar_dataset.data if d['id'] == actual_id)
             expected = original_sample['float64'] * 2
             np.testing.assert_equal(expected, actual_float64)
+        assert 'float64' not in actual._fields
+        assert 'new_float64' in actual._fields
+
+
+def test_transform_function_new_field_batched(scalar_dataset):
+    """ With batch_reader, use TransformSpec passed as transform to add a new field, remove existing.
+    """
+    def double_float64(sample):
+        sample['new_float64'] = sample['float64'] * 2
+        del sample['float64']
+        return sample
+
+    with make_batch_reader(scalar_dataset.url, reader_pool_type='dummy',
+                           transform=TransformSpec(double_float64,
+                                                   [('new_float64', np.float64, (), False)],
+                                                   ['float64'])) as reader:
+        row_tensors = tf_tensors(reader)
+        with _tf_session() as sess:
+            actual = sess.run(row_tensors)
+
+        for actual_id, actual_float64 in zip(actual.id, actual.new_float64):
+            original_sample = next(d for d in scalar_dataset.data if d['id'] == actual_id)
+            expected = original_sample['float64'] * 2
+            np.testing.assert_equal(expected, actual_float64)
+        assert 'float64' not in actual._fields
+        assert 'new_float64' in actual._fields
+
+def test_transform_no_function_remove_field_batched(scalar_dataset):
+    with make_batch_reader(scalar_dataset.url, reader_pool_type='dummy',
+                           transform=TransformSpec(removed_fields=['float64'])) as reader:
+        row_tensors = tf_tensors(reader)
+        with _tf_session() as sess:
+            actual = sess.run(row_tensors)
+
+        assert 'float64' not in actual._fields
+
+
+def test_transform_function_unexpected_new_field_batched(scalar_dataset):
+    """ Adding a new field to the returned data, without telling make_batch_reader.
+    Expect a crash.
+    """
+    def double_float64(sample):
+        sample['new_float64'] = sample['float64'] * 2
+        return sample
+
+    with make_batch_reader(scalar_dataset.url, reader_pool_type='dummy',
+                           transform=TransformSpec(double_float64)) as reader:
+        row_tensors = tf_tensors(reader)
+        with _tf_session() as sess:
+            with pytest.raises(tf.errors.InvalidArgumentError):
+                with pytest.warns(UserWarning, match=r" not expected: \['new_float64'\]"):
+                    for _ in range(1):
+                        actual = sess.run(row_tensors)
+                        assert row_tensors.id is not None
+                        assert 'new_float64' in actual._fields
+
+
+def test_transform_function_unexpected_removed_field_batched(scalar_dataset):
+    """ Removing a field from the returned data, without telling make_batch_reader.
+    Expect a crash.
+    """
+    def double_float64(sample):
+        del sample['float64']
+        return sample
+
+    with make_batch_reader(scalar_dataset.url, reader_pool_type='dummy',
+                           transform_spec=TransformSpec(double_float64)) as reader:
+        row_tensors = tf_tensors(reader)
+        with _tf_session() as sess:
+            with pytest.raises(tf.errors.InvalidArgumentError):
+                with pytest.warns(UserWarning, match=r"returned data: \['float64'\]"):
+                    for _ in range(1):
+                        actual = sess.run(row_tensors)
+                        assert row_tensors.id is not None
+                        assert 'float64' not in actual._fields
+
+
+def test_transform_function_unexpected_new_field_removed_field_batched(scalar_dataset):
+    """ Adding a new field to and removing a field from the returned data, without telling make_batch_reader.
+    Expect a crash.
+    """
+    def double_float64(sample):
+        sample['new_float64'] = sample['float64'] * 2
+        del sample['float64']
+        return sample
+
+    with make_batch_reader(scalar_dataset.url, reader_pool_type='dummy',
+                           transform=TransformSpec(double_float64)) as reader:
+        row_tensors = tf_tensors(reader)
+        with _tf_session() as sess:
+            with pytest.raises(tf.errors.InvalidArgumentError):
+                with pytest.warns(UserWarning, match=r".* returned data: \['float64'\]\W.* not "
+                                  r"expected: \['new_float64'\]"):
+                    for _ in range(1):
+                        actual = sess.run(row_tensors)
+                        assert row_tensors.id is not None
+                        assert 'float64' not in actual._fields
+                        assert 'double_float64' in actual._fields

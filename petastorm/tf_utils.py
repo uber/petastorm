@@ -179,7 +179,7 @@ def make_namedtuple_tf_ngram(unischema, ngram, *args, **kargs):
         args_timestep = args[previous_args_end:new_args_end]
         previous_args_end = new_args_end
         kargs_timestep = (kargs[str(timestep)] if str(timestep) in kargs else {})
-        ngram_result[timestep] = new_schema._get_namedtuple()(*args_timestep, **kargs_timestep)
+        ngram_result[timestep] = new_schema.make_namedtuple_tf(*args_timestep, **kargs_timestep)
     return ngram_result
 
 

@@ -24,8 +24,35 @@ from pyarrow.parquet import ParquetFile
 
 from petastorm.cache import NullCache
 from petastorm.compat import compat_piece_read, compat_table_columns_gen, compat_column_data
+from petastorm.transform import TransformSpec
+from petastorm.unischema import make_namedtuple
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.worker_base import WorkerBase
+
+
+def _apply_transform(data_as_pandas, transform):
+    """Applies transform (either TransformSpec.func (if specified) or transform if it is a callable) to provided
+    data. Removes all fields as specified by TransformSpec.removed_fields, unless the fields were already
+    deleted by transform.
+    """
+    if isinstance(transform, TransformSpec):
+        # A user may omit `func` value if they intend just to delete some fields using the TransformSpec
+        if transform.func:
+            transformed_result = transform.func(data_as_pandas)
+        else:
+            transformed_result = data_as_pandas
+
+        # If transform function left a field that is listed in transform_spec's remove_fields, we remove it
+        # ourselves. Allows for the following transform-spec objects to be created:
+        # TransformSpec(removed_fields=['some_field'])
+        for field_to_remove in set(transformed_result.columns) & set(transform.removed_fields):
+            del transformed_result[field_to_remove]
+    elif callable(transform):
+        transformed_result = transform(data_as_pandas)
+    else:
+        transformed_result = data_as_pandas
+
+    return transformed_result
 
 
 class ArrowReaderWorkerResultsQueueReader(object):
@@ -36,7 +63,7 @@ class ArrowReaderWorkerResultsQueueReader(object):
     def batched_output(self):
         return True
 
-    def read_next(self, workers_pool, schema, ngram):
+    def read_next(self, workers_pool, ngram):
         try:
             assert not ngram, 'ArrowReader does not support ngrams for now'
 
@@ -76,7 +103,7 @@ class ArrowReaderWorkerResultsQueueReader(object):
                 else:
                     result_dict[column_name] = column_as_numpy
 
-            return schema.make_namedtuple(**result_dict)
+            return make_namedtuple(**result_dict)
 
         except EmptyResultError:
             raise StopIteration
@@ -92,7 +119,7 @@ class ArrowReaderWorker(WorkerBase):
         self._ngram = args[3]
         self._split_pieces = args[4]
         self._local_cache = args[5]
-        self._transform_spec = args[6]
+        self._transform = args[6]
 
         if self._ngram:
             raise NotImplementedError('ngrams are not supported by ArrowReaderWorker')
@@ -164,20 +191,9 @@ class ArrowReaderWorker(WorkerBase):
 
         result = self._read_with_shuffle_row_drop(piece, pq_file, column_names, shuffle_row_drop_range)
 
-        if self._transform_spec:
+        if self._transform:
             result_as_pandas = result.to_pandas()
-            # A user may omit `func` value if they intend just to delete some fields using the TransformSpec
-            if self._transform_spec.func:
-                transformed_result = self._transform_spec.func(result_as_pandas)
-            else:
-                transformed_result = result_as_pandas
-
-            # If transform function left a field that is listed in transform_spec's remove_fields, we remove it
-            # ourselves. Allows for the following transform-spec objects to be created:
-            # TransformSpec(removed_fields=['some field'])
-            for field_to_remove in set(transformed_result.columns) & set(self._transform_spec.removed_fields):
-                del transformed_result[field_to_remove]
-
+            transformed_result = _apply_transform(result_as_pandas, self._transform)
             result = pa.Table.from_pandas(transformed_result, preserve_index=False)
 
         return result
@@ -238,8 +254,8 @@ class ArrowReaderWorker(WorkerBase):
 
         result = result_data_frame[match_predicate_mask]
 
-        if self._transform_spec:
-            result = self._transform_spec.func(result)
+        if self._transform:
+            result = _apply_transform(result, self._transform)
 
         return pa.Table.from_pandas(result, preserve_index=False)
 
