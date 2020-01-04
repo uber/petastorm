@@ -102,8 +102,10 @@ class _NamedtupleCache(object):
                 _new_gt_255_compatible_namedtuple('{}_view'.format(parent_schema_name), sorted_names)
         return _NamedtupleCache._store[key]
 
+
 def _get_namedtuple(name, field_names):
     return _NamedtupleCache.get(name, field_names)
+
 
 def make_namedtuple(**kargs):
     """Returns data as a namedtuple type intialized with arguments passed to this method.
@@ -120,6 +122,7 @@ def make_namedtuple(**kargs):
         else:
             typed_dict[key] = None
     return _get_namedtuple("fixed", typed_dict.keys())(**typed_dict)
+
 
 def _new_gt_255_compatible_namedtuple(*args, **kwargs):
     # Between Python 3 - 3.6.8 namedtuple can not have more than 255 fields. We use
@@ -303,29 +306,28 @@ class Unischema(object):
                 field_names = list(set(field_names))
         return field_names
 
-
     def verify_fields(self, results, expected_fields=None):
         """ Confirm that actual data matches layout that we expected. If not, warn user about differences.
         I.e. if data doesn't contain fields that we expect, or does have fields that didn't expect, emit warning.
         """
-        if not "_is_verified" in self.__dict__:
+        if "_is_verified" not in self.__dict__:
             # Can happen if read older version from a file.
             self._is_verified = False
 
-        if self._is_verified == False:
+        if not self._is_verified:
             # Can only verify if have some data.
             if results:
                 actual_field_names = self._get_field_names(results)
                 missing_fields = []
                 # See if there are fields in Unischema that we didn't receive in the returned data
                 for field in self._fields:
-                    if not field in actual_field_names:
+                    if field not in actual_field_names:
                         missing_fields.append(field)
 
                 # Then, see if there are any fields in the returned data that aren't in the schema.
                 unexpected_fields = []
                 for field in actual_field_names:
-                    if not field in self._fields:
+                    if field not in self._fields:
                         unexpected_fields.append(field)
 
                 # If found any mismatches, warn user.
@@ -345,7 +347,6 @@ class Unischema(object):
                     warnings.warn(msghdr + msg)
 
                 self._is_verified = True
-
 
     def make_namedtuple_tf(self, *args, **kargs):
         return _get_namedtuple(self._name, self._fields.keys())(*args, **kargs)

@@ -52,6 +52,7 @@ SCALAR_ONLY_READER_FACTORIES = [
     lambda url, **kwargs: make_batch_reader(url, reader_pool_type='process', workers_count=2, **kwargs),
 ]
 
+
 def _check_simple_reader(reader, expected_data, expected_rows_count=None, check_types=True, limit_checked_rows=None):
     # Read a bunch of entries from the dataset and compare the data to reference
     def _type(v):
@@ -83,6 +84,7 @@ def _check_simple_reader(reader, expected_data, expected_rows_count=None, check_
     else:
         assert count == expected_rows_count
 
+
 def _readout_all_ids(reader, limit=None):
     ids = []
     for i, row in enumerate(reader):
@@ -96,6 +98,7 @@ def _readout_all_ids(reader, limit=None):
 
     return ids
 
+
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
 def test_simple_read(synthetic_dataset, reader_factory):
     """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
@@ -108,7 +111,6 @@ def test_simple_read(synthetic_dataset, reader_factory):
 ])
 def test_transformspec_function(synthetic_dataset, reader_factory):
     """"""
-
     def double_matrix(sample):
         sample['matrix'] *= 2
         return sample
@@ -120,13 +122,12 @@ def test_transformspec_function(synthetic_dataset, reader_factory):
         expected_matrix = original_sample['matrix'] * 2
         np.testing.assert_equal(expected_matrix, actual.matrix)
 
+
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
 ])
 def test_transform_function(synthetic_dataset, reader_factory):
-    """ Using a transform to modify an existing field.
-    """
-
+    """ Using a transform to modify an existing field."""
     def double_matrix(sample):
         sample['matrix'] *= 2
         return sample
@@ -138,13 +139,12 @@ def test_transform_function(synthetic_dataset, reader_factory):
         expected_matrix = original_sample['matrix'] * 2
         np.testing.assert_equal(expected_matrix, actual.matrix)
 
+
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
 ])
 def test_transform_as_spec_function(synthetic_dataset, reader_factory):
-    """ Passing a TransformSpec to transform, to modify an existing field.
-    """
-
+    """ Passing a TransformSpec to transform, to modify an existing field."""
     def double_matrix(sample):
         sample['matrix'] *= 2
         return sample
@@ -156,12 +156,12 @@ def test_transform_as_spec_function(synthetic_dataset, reader_factory):
         expected_matrix = original_sample['matrix'] * 2
         np.testing.assert_equal(expected_matrix, actual.matrix)
 
+
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
 ])
 def test_transformSpec_function_returns_a_new_dict(synthetic_dataset, reader_factory):
     """"""
-
     def double_matrix(sample):
         return {'id': -1}
 
@@ -172,13 +172,12 @@ def test_transformSpec_function_returns_a_new_dict(synthetic_dataset, reader_fac
 
         np.testing.assert_equal(actual_ids, [-1] * len(synthetic_dataset.data))
 
+
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
 ])
 def test_transform_function_returns_a_new_dict(synthetic_dataset, reader_factory):
-    """ Use transform to change value of existing field.
-    """
-
+    """ Use transform to change value of existing field."""
     def double_matrix(sample):
         return {'id': -1}
 
@@ -189,30 +188,30 @@ def test_transform_function_returns_a_new_dict(synthetic_dataset, reader_factory
 
         np.testing.assert_equal(actual_ids, [-1] * len(synthetic_dataset.data))
 
+
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
 ])
 def test_transformspec_remove_field(synthetic_dataset, reader_factory):
     """Make sure we apply transform only after we apply the predicate"""
-
     with reader_factory(synthetic_dataset.url, schema_fields=[TestSchema.id, TestSchema.id2],
                         transform_spec=TransformSpec(removed_fields=['id2'])) as reader:
         row = next(reader)
         assert 'id2' not in row._fields
         assert 'id' in row._fields
 
+
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
 ])
 def test_transform_as_spec_remove_field(synthetic_dataset, reader_factory):
-    """ Use TransformSpec passed as transform to remove a field.
-    """
-
+    """ Use TransformSpec passed as transform to remove a field."""
     with reader_factory(synthetic_dataset.url, schema_fields=[TestSchema.id, TestSchema.id2],
                         transform=TransformSpec(removed_fields=['id2'])) as reader:
         row = next(reader)
         assert 'id2' not in row._fields
         assert 'id' in row._fields
+
 
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
@@ -231,6 +230,7 @@ def test_transformspec_function_with_predicate(synthetic_dataset, reader_factory
         # we apply lambda id2: id2 == 1 predicate.
         assert np.all(actual_ids % 2 == 1)
 
+
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
 ])
@@ -238,7 +238,6 @@ def test_transform_as_spec_function_with_predicate(synthetic_dataset, reader_fac
     """Make sure we apply transform only after we apply the predicate. Use TransformSpec
     passed as transform to remove the field that the predicate relies on.
     """
-
     with reader_factory(synthetic_dataset.url, schema_fields=[TestSchema.id, TestSchema.id2],
                         predicate=in_lambda(['id2'], lambda id2: id2 == 1),
                         transform=TransformSpec(removed_fields=['id2'])) as reader:
@@ -249,6 +248,7 @@ def test_transform_as_spec_function_with_predicate(synthetic_dataset, reader_fac
         # In the test data id2 = id % 2, which means we expect only odd ids to remain after
         # we apply lambda id2: id2 == 1 predicate.
         assert np.all(actual_ids % 2 == 1)
+
 
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
@@ -269,12 +269,12 @@ def test_transform_function_new_field(synthetic_dataset, reader_factory):
         expected_matrix = original_sample['matrix'] * 2
         np.testing.assert_equal(expected_matrix, actual.double_matrix)
 
+
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
 ])
 def test_transform_function_new_field_no_hints(synthetic_dataset, reader_factory):
-    """ Use transform to add a field, verify that get expected warning.
-    """
+    """ Use transform to add a field, verify that get expected warning."""
     def double_matrix(sample):
         sample['double_matrix'] = sample['matrix'] * 2
         return sample
@@ -287,12 +287,12 @@ def test_transform_function_new_field_no_hints(synthetic_dataset, reader_factory
             expected_matrix = original_sample['matrix'] * 2
             np.testing.assert_equal(expected_matrix, actual.double_matrix)
 
+
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
 ])
 def test_transform_function_new_field_delete_field_no_hints(synthetic_dataset, reader_factory):
-    """ Use transform to add one field, remove another, verify that get expected warnings.
-    """
+    """ Use transform to add one field, remove another, verify that get expected warnings."""
     def double_matrix(sample):
         sample['double_matrix'] = sample['matrix'] * 2
         del sample['matrix']
@@ -307,6 +307,7 @@ def test_transform_function_new_field_delete_field_no_hints(synthetic_dataset, r
             np.testing.assert_equal(expected_matrix, actual.double_matrix)
             assert 'matrix' not in actual._fields
 
+
 def test_transformspec_function_batched(scalar_dataset):
     def double_float64(sample):
         sample['float64'] *= 2
@@ -319,9 +320,9 @@ def test_transformspec_function_batched(scalar_dataset):
             expected_matrix = original_sample['float64'] * 2
             np.testing.assert_equal(expected_matrix, actual_float64)
 
+
 def test_transform_as_spec_function_batched(scalar_dataset):
-    """ With batch_reader, use transform to change value of existing field.
-    """
+    """ With batch_reader, use transform to change value of existing field."""
     def double_float64(sample):
         sample['float64'] *= 2
         return sample
@@ -332,6 +333,7 @@ def test_transform_as_spec_function_batched(scalar_dataset):
             original_sample = next(d for d in scalar_dataset.data if d['id'] == actual_id)
             expected_matrix = original_sample['float64'] * 2
             np.testing.assert_equal(expected_matrix, actual_float64)
+
 
 def test_transform_function_batched_deleting_column(scalar_dataset):
     """ With batch_reader, use TransformSpec.func to remove field from results, .remove_fields to tell reader to
@@ -345,6 +347,7 @@ def test_transform_function_batched_deleting_column(scalar_dataset):
                            transform_spec=TransformSpec(double_float64, removed_fields=['float64'])) as reader:
         actual = next(reader)
         assert 'float64' not in actual._fields
+
 
 def test_transform_function_batched_deleting_column_expect_warning(scalar_dataset):
     """ With batch_reader, use TransformSpec.func to remove field from results, but don't tell reader to
@@ -360,11 +363,13 @@ def test_transform_function_batched_deleting_column_expect_warning(scalar_datase
             actual = next(reader)
             assert 'float64' not in actual._fields
 
+
 def test_transform_function_batched_auto_deleting_column(scalar_dataset):
     with make_batch_reader(scalar_dataset.url,
                            transform_spec=TransformSpec(removed_fields=['float64'])) as reader:
         actual = next(reader)
         assert 'float64' not in actual._fields
+
 
 def test_transformspec_function_with_predicate_batched(scalar_dataset):
     def double_float64(sample):
@@ -381,9 +386,9 @@ def test_transformspec_function_with_predicate_batched(scalar_dataset):
             expected_matrix = original_sample['float64'] * 2
             np.testing.assert_equal(expected_matrix, actual_float64)
 
+
 def test_transform_as_spec_function_with_predicate_batched(scalar_dataset):
-    """ With batch_reader, use TransformSpec to modify existing field, with predicate.
-    """
+    """ With batch_reader, use TransformSpec to modify existing field, with predicate."""
     def double_float64(sample):
         assert all(sample['id'] % 2 == 0)
         sample['float64'] *= 2
@@ -398,9 +403,9 @@ def test_transform_as_spec_function_with_predicate_batched(scalar_dataset):
             expected_matrix = original_sample['float64'] * 2
             np.testing.assert_equal(expected_matrix, actual_float64)
 
+
 def test_transform_as_function_with_predicate_batched(scalar_dataset):
-    """ With batch_reader, use transform to modify existing field, with predicate.
-    """
+    """ With batch_reader, use transform to modify existing field, with predicate."""
     def double_float64(sample):
         assert all(sample['id'] % 2 == 0)
         sample['float64'] *= 2
@@ -415,11 +420,13 @@ def test_transform_as_function_with_predicate_batched(scalar_dataset):
             expected_matrix = original_sample['float64'] * 2
             np.testing.assert_equal(expected_matrix, actual_float64)
 
+
 def test_simple_read_with_pyarrow_serialize(synthetic_dataset):
     """Same as test_simple_read, but don't check type correctness as pyarrow_serialize messes up integer types"""
     with make_reader(synthetic_dataset.url, reader_pool_type='process', workers_count=1,
                      pyarrow_serialize=True) as reader:
         _check_simple_reader(reader, synthetic_dataset.data, check_types=False)
+
 
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
 @pytest.mark.forked
@@ -434,11 +441,13 @@ def test_simple_read_with_disk_cache(synthetic_dataset, reader_factory, tmpdir):
         assert 200 == len(ids)  # We read 2 epochs
         assert set(ids) == set(range(100))
 
+
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
 def test_simple_read_with_added_slashes(synthetic_dataset, reader_factory):
     """Tests that using relative paths for the dataset metadata works as expected"""
     with reader_factory(synthetic_dataset.url + '///') as reader:
         next(reader)
+
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
 def test_simple_read_moved_dataset(synthetic_dataset, tmpdir, reader_factory):
@@ -451,6 +460,7 @@ def test_simple_read_moved_dataset(synthetic_dataset, tmpdir, reader_factory):
 
     rmtree(a_moved_path)
 
+
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
 def test_reading_subset_of_columns(synthetic_dataset, reader_factory):
     """Just a bunch of read and compares of all values to the expected values"""
@@ -460,6 +470,7 @@ def test_reading_subset_of_columns(synthetic_dataset, reader_factory):
             actual = dict(row._asdict())
             expected = next(d for d in synthetic_dataset.data if d['id'] == actual['id'])
             np.testing.assert_equal(expected['id2'], actual['id2'])
+
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
 def test_reading_subset_of_columns_using_regex(synthetic_dataset, reader_factory):
@@ -471,6 +482,7 @@ def test_reading_subset_of_columns_using_regex(synthetic_dataset, reader_factory
             assert set(actual.keys()) == {'id_float', 'id_odd', 'id', 'partition_key'}
             expected = next(d for d in synthetic_dataset.data if d['id'] == actual['id'])
             np.testing.assert_equal(expected['id_float'], actual['id_float'])
+
 
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
@@ -491,6 +503,7 @@ def test_shuffle(synthetic_dataset, reader_factory):
     with reader_factory(synthetic_dataset.url, shuffle_row_groups=True) as shuffled_reader:
         shuffled_readout = _readout_all_ids(shuffled_reader)
     assert np.any(np.not_equal(first_readout, shuffled_readout))
+
 
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
@@ -513,6 +526,7 @@ def test_shuffle_drop_ratio(synthetic_dataset, reader_factory):
         assert jumps_not_1 > prev_jumps_not_1
         prev_jumps_not_1 = jumps_not_1
 
+
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
 def test_predicate_on_partition(synthetic_dataset, reader_factory):
     for expected_partition_keys in [{'p_0', 'p_2'}, {'p_0'}, {'p_1', 'p_2'}]:
@@ -521,6 +535,7 @@ def test_predicate_on_partition(synthetic_dataset, reader_factory):
             partition_keys = set(row.partition_key for row in reader)
             assert partition_keys == expected_partition_keys
 
+
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
 def test_predicate_on_partition_filters_out_everything(synthetic_dataset, reader_factory):
     with pytest.warns(UserWarning, match='No matching data is available for loading'):
@@ -528,12 +543,14 @@ def test_predicate_on_partition_filters_out_everything(synthetic_dataset, reader
         make_reader(synthetic_dataset.url, reader_pool_type='dummy',
                     predicate=PartitionKeyInSetPredicate({'non existing value'}))
 
+
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
 def test_too_many_shards(synthetic_dataset, reader_factory):
     with pytest.raises(NoDataAvailableError, match='Number of row-groups in the dataset'):
         # If number of shards is greater than number of rowgroups, users might be surprised if a reader
         # does not produce any error, hence we raise an explicit exception
         make_reader(synthetic_dataset.url, reader_pool_type='dummy', cur_shard=0, shard_count=10000000)
+
 
 @pytest.mark.parametrize('reader_factory', SCALAR_ONLY_READER_FACTORIES)
 def test_predicate_on_partition_batched(synthetic_dataset, reader_factory):
@@ -548,10 +565,10 @@ def test_predicate_on_partition_batched(synthetic_dataset, reader_factory):
                 partition_keys |= set(row.partition_key)
             assert partition_keys == expected_partition_keys
 
+
 @pytest.mark.parametrize('reader_factory', SCALAR_ONLY_READER_FACTORIES)
 def test_predicate_on_partition_batched_with_removed_fields(synthetic_dataset, reader_factory):
-    """ Add a TransformSpec that removes a field, ensure that field disappears.
-    """
+    """ Add a TransformSpec that removes a field, ensure that field disappears."""
     for expected_partition_keys in [{'p_0', 'p_2'}, {'p_0'}, {'p_1', 'p_2'}]:
         # TODO(yevgeni): scalar only reader takes 'vectorized' predicate that processes entire columns. Not
         # yet implemented for the case of a prediction on partition, hence we use a non-vectorized
@@ -564,6 +581,7 @@ def test_predicate_on_partition_batched_with_removed_fields(synthetic_dataset, r
                 assert 'id2' not in row._fields
             assert partition_keys == expected_partition_keys
 
+
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
 def test_predicate_on_multiple_fields(synthetic_dataset, reader_factory):
     expected_values = {'id': 11, 'id2': 1}
@@ -572,6 +590,7 @@ def test_predicate_on_multiple_fields(synthetic_dataset, reader_factory):
         actual = next(reader)
         assert actual.id == expected_values['id']
         assert actual.id2 == expected_values['id2']
+
 
 @pytest.mark.parametrize('reader_factory', SCALAR_ONLY_READER_FACTORIES)
 def test_predicate_on_multiple_fields_batched(synthetic_dataset, reader_factory):
@@ -582,6 +601,7 @@ def test_predicate_on_multiple_fields_batched(synthetic_dataset, reader_factory)
         assert actual.id.shape == (1,)
         assert actual.id[0] == expected_values['id']
         assert actual.id2[0] == expected_values['id2']
+
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
 def test_predicate_with_invalid_fields(synthetic_dataset, reader_factory):
@@ -597,6 +617,7 @@ def test_predicate_with_invalid_fields(synthetic_dataset, reader_factory):
                             predicate=EqualPredicate(predicate_spec)) as reader:
             with pytest.raises(ValueError):
                 next(reader)
+
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
 def test_partition_multi_node(synthetic_dataset, reader_factory):
@@ -620,6 +641,7 @@ def test_partition_multi_node(synthetic_dataset, reader_factory):
 
                     assert not ids_in_other_partition.intersection(results_1)
 
+
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
 def test_partition_value_error(synthetic_dataset, reader_factory):
     """Tests that the reader raises value errors when appropriate"""
@@ -642,6 +664,7 @@ def test_partition_value_error(synthetic_dataset, reader_factory):
         reader_factory(synthetic_dataset.url, cur_shard=0,
                        shard_count='5')
 
+
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
     lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', **kwargs),
@@ -661,6 +684,7 @@ def test_stable_pieces_order(synthetic_dataset, reader_factory):
 
         baseline_run = this_run
 
+
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
 def test_invalid_schema_field(synthetic_dataset, reader_factory):
     # Let's assume we are selecting columns using a schema which is different from the one
@@ -676,6 +700,7 @@ def test_invalid_schema_field(synthetic_dataset, reader_factory):
                        shuffle_row_groups=False,
                        predicate=EqualPredicate(expected_values))
 
+
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
 def test_use_persisted_codec_and_not_provided_by_user(synthetic_dataset, reader_factory):
     """In order to start using new codec for some field while maintain the ability to read old datasets that were
@@ -687,6 +712,7 @@ def test_use_persisted_codec_and_not_provided_by_user(synthetic_dataset, reader_
         row = next(reader)
     assert row.matrix_uint16.shape == (32, 16, 3)
 
+
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
 def test_single_column_predicate(synthetic_dataset, reader_factory):
     """Test quering a single column with a predicate on the same column """
@@ -695,6 +721,7 @@ def test_single_column_predicate(synthetic_dataset, reader_factory):
         all_rows = list(reader)
         assert 1 == len(all_rows)
         assert 1 == all_rows[0].id
+
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
 def test_two_column_predicate(synthetic_dataset, reader_factory):
@@ -706,6 +733,7 @@ def test_two_column_predicate(synthetic_dataset, reader_factory):
         all_partition_key = np.array(list(map(operator.attrgetter('partition_key'), all_rows)))
         assert (all_id2 == 1).all()
         assert (all_partition_key == 'p_2').all()
+
 
 @pytest.mark.parametrize('reader_factory',
                          [lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
@@ -725,6 +753,7 @@ def test_multiple_epochs(synthetic_dataset, reader_factory):
         actual_ids_in_all_epochs = _readout_all_ids(reader)
         np.testing.assert_equal(sorted(actual_ids_in_all_epochs), sorted(num_epochs * single_epoch_id_set))
 
+
 @pytest.mark.parametrize('reader_factory',
                          [lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
                           lambda url, **kwargs: make_reader(url, reader_pool_type='thread', **kwargs),
@@ -740,6 +769,7 @@ def test_fail_if_resetting_in_the_middle_of_epoch(synthetic_dataset, reader_fact
         with pytest.raises(NotImplementedError):
             reader.reset()
 
+
 # TODO(yevgeni) this test is broken for reader_v2
 @pytest.mark.parametrize('reader_factory', [MINIMAL_READER_FLAVOR_FACTORIES[0]] + SCALAR_ONLY_READER_FACTORIES)
 def test_unlimited_epochs(synthetic_dataset, reader_factory):
@@ -750,6 +780,7 @@ def test_unlimited_epochs(synthetic_dataset, reader_factory):
         expected_ids = [d['id'] for d in synthetic_dataset.data]
         assert len(actual_ids) > len(expected_ids)
         assert set(actual_ids) == set(expected_ids)
+
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
 def test_num_epochs_value_error(synthetic_dataset, reader_factory):
@@ -763,6 +794,7 @@ def test_num_epochs_value_error(synthetic_dataset, reader_factory):
 
     with pytest.raises(ValueError):
         reader_factory(synthetic_dataset.url, num_epochs='abc')
+
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
 def test_rowgroup_selector_integer_field(synthetic_dataset, reader_factory):
@@ -782,6 +814,7 @@ def test_rowgroup_selector_integer_field(synthetic_dataset, reader_factory):
         # read only 2 row groups, 100 rows per row group
         assert 20 == count
 
+
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
 def test_rowgroup_selector_string_field(synthetic_dataset, reader_factory):
     """ Select row groups to read based on dataset index for string field"""
@@ -792,6 +825,7 @@ def test_rowgroup_selector_string_field(synthetic_dataset, reader_factory):
         # Since we use artificial dataset all sensors have the same name,
         # so all row groups should be selected and all 1000 generated rows should be returned
         assert 100 == count
+
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
 def test_rowgroup_selector_multiple_fields_intersection(synthetic_dataset, reader_factory):
@@ -814,6 +848,7 @@ def test_rowgroup_selector_multiple_fields_intersection(synthetic_dataset, reade
         assert all(status)
         assert 20 == count
 
+
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
 def test_rowgroup_selector_multiple_fields_union(synthetic_dataset, reader_factory):
     union_index_selector = UnionIndexSelector(
@@ -835,6 +870,7 @@ def test_rowgroup_selector_multiple_fields_union(synthetic_dataset, reader_facto
         assert all(status)
         assert 100 == count
 
+
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
 def test_rowgroup_selector_nullable_array_field(synthetic_dataset, reader_factory):
     """ Select row groups to read based on dataset index for array field"""
@@ -849,6 +885,7 @@ def test_rowgroup_selector_nullable_array_field(synthetic_dataset, reader_factor
         # but row 100 will be skipped by ' None if id % 5 == 0' condition, so only one row group should be selected
         assert 10 == count
 
+
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
 def test_rowgroup_selector_partition_key(synthetic_dataset, reader_factory):
     """ Select row groups to read based on dataset index for array field"""
@@ -858,6 +895,7 @@ def test_rowgroup_selector_partition_key(synthetic_dataset, reader_factory):
         count = sum(1 for _ in reader)
         assert 10 == count
 
+
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
 def test_rowgroup_selector_wrong_index_name(synthetic_dataset, reader_factory):
     """ Attempt to select row groups to based on wrong dataset index,
@@ -865,6 +903,7 @@ def test_rowgroup_selector_wrong_index_name(synthetic_dataset, reader_factory):
     """
     with pytest.raises(ValueError):
         reader_factory(synthetic_dataset.url, rowgroup_selector=SingleIndexSelector('WrongIndexName', ['some_value']))
+
 
 def test_materialize_dataset_hadoop_config(synthetic_dataset):
     """Test that using materialize_dataset does not alter the hadoop_config"""
@@ -892,6 +931,7 @@ def test_materialize_dataset_hadoop_config(synthetic_dataset):
     spark.stop()
     rmtree(destination)
 
+
 def test_pass_in_pyarrow_filesystem_to_materialize_dataset(synthetic_dataset, tmpdir):
     a_moved_path = tmpdir.join('moved').strpath
     copytree(synthetic_dataset.path, a_moved_path)
@@ -910,6 +950,7 @@ def test_pass_in_pyarrow_filesystem_to_materialize_dataset(synthetic_dataset, tm
     spark.stop()
     rmtree(a_moved_path)
 
+
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
 def test_dataset_path_is_a_unicode(synthetic_dataset, reader_factory):
     """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
@@ -918,9 +959,11 @@ def test_dataset_path_is_a_unicode(synthetic_dataset, reader_factory):
     with reader_factory(unicode_in_p23) as reader:
         next(reader)
 
+
 def test_make_reader_fails_loading_non_petastrom_dataset(scalar_dataset):
     with pytest.raises(RuntimeError, match='use make_batch_reader'):
         make_reader(scalar_dataset.url)
+
 
 def test_multithreaded_reads(synthetic_dataset):
     with make_reader(synthetic_dataset.url, workers_count=5, num_epochs=1) as reader:
@@ -933,12 +976,14 @@ def test_multithreaded_reads(synthetic_dataset):
             assert len(results) == len(synthetic_dataset.data)
             assert set(r.id for r in results) == set(d['id'] for d in synthetic_dataset.data)
 
+
 def test_should_fail_if_reading_out_of_context_manager(synthetic_dataset):
     with make_reader(synthetic_dataset.url, workers_count=1) as reader:
         next(reader)
 
     with pytest.raises(RuntimeError, match='Trying to read a sample.*'):
         next(reader)
+
 
 def test_should_fail_if_reading_after_stop(synthetic_dataset):
     reader = make_reader(synthetic_dataset.url, workers_count=1)

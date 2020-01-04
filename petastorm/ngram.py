@@ -13,7 +13,7 @@
 # limitations under the License.
 import numbers
 
-from petastorm.unischema import UnischemaField, match_unischema_fields
+from petastorm.unischema import UnischemaField, match_unischema_fields, make_namedtuple as unischema_make_namedtuple
 from six import string_types
 
 
@@ -292,7 +292,7 @@ class NGram(object):
         ngram_as_tuples = {}
         for timestamp in ngram_as_dicts.keys():
             data_as_dict = ngram_as_dicts[timestamp]
-            ngram_as_tuples[timestamp] = petastorm.unischema.make_namedtuple(**data_as_dict)
+            ngram_as_tuples[timestamp] = unischema_make_namedtuple(**data_as_dict)
         return ngram_as_tuples
 
     def get_field_names_at_all_timesteps(self):

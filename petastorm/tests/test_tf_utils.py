@@ -411,6 +411,7 @@ def test_transform_function_new_field_batched(scalar_dataset):
         assert 'float64' not in actual._fields
         assert 'new_float64' in actual._fields
 
+
 def test_transform_no_function_remove_field_batched(scalar_dataset):
     with make_batch_reader(scalar_dataset.url, reader_pool_type='dummy',
                            transform=TransformSpec(removed_fields=['float64'])) as reader:

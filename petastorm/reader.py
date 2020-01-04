@@ -369,7 +369,7 @@ class Reader(object):
             raise ValueError('Fields must be either None, an iterable collection of Unischema fields '
                              'or an NGram object.')
 
-        if not transform_spec is None:
+        if transform_spec is not None:
             warnings.warn('The transform_spec parameter is deprecated, please use the transform parameter instead. It '
                           'can accept either a full TransformSpec or any callable.')
 
@@ -435,7 +435,7 @@ class Reader(object):
 
         # 5. Start workers pool
         this_transform = transform
-        if not transform_spec is None:
+        if transform_spec is not None:
             this_transform = transform_spec
         self._workers_pool.start(worker_class, (pyarrow_filesystem, dataset_path, storage_schema, self.ngram,
                                                 row_groups, cache, this_transform),
