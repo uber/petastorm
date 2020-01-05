@@ -297,8 +297,8 @@ class Unischema(object):
         else:
             field_names = results.keys()
             if isinstance(field_names, KeysView):
-                # If received a dictionary, rather than a list of keys, grab keys each item in the dictionary,
-                # then remove duplicates.
+                # If received a dictionary, rather than a list of keys, grab keys from each item in the dictionary,
+                # then remove any duplicates.
                 field_names = []
                 for key in results.keys():
                     field_names = field_names + list(results[key]._fields)
