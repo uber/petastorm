@@ -23,7 +23,7 @@ from pyarrow import parquet as pq
 from pyarrow.parquet import ParquetFile
 
 from petastorm.cache import NullCache
-from petastorm.compat import compat_piece_read, compat_table_columns_gen, compat_column_num_chunks
+from petastorm.compat import compat_piece_read, compat_table_columns_gen, compat_column_data
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.worker_base import WorkerBase
 
@@ -49,7 +49,7 @@ class ArrowReaderWorkerResultsQueueReader(object):
                 # Assume we get only one chunk since reader worker reads one rowgroup at a time
 
                 # `to_pandas` works slower when called on the entire `data` rather directly on a chunk.
-                if compat_column_num_chunks(result_table.column(0)) == 1:
+                if compat_column_data(result_table.column(0)).num_chunks == 1:
                     column_as_pandas = column.data.chunks[0].to_pandas()
                 else:
                     column_as_pandas = column.data.to_pandas()

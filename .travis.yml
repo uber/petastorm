@@ -19,6 +19,7 @@ python:
   - '3.6'
 env:
   - PYARROW_VERSION=0.11.1 TF_VERSION=1.12 DEPLOYABLE=0
+  - PYARROW_VERSION=0.12.1 TF_VERSION=1.12 DEPLOYABLE=0
   - PYARROW_VERSION=0.15.0 TF_VERSION=1.12 DEPLOYABLE=1
 services:
   - docker
@@ -28,17 +29,18 @@ install:
   # To rebuild the ci image, see docker/Makefile.The image contains all petastorm dependencies
   # installed, we do rerun dependencies installation to refresh ersions of the dependencies
   # on each build if needed
-  - docker pull selitvin/petastorm_ci:latest
+  - export CI_IMAGE=selitvin/petastorm_ci:2019-11-27_18-20-21
+  - docker pull $CI_IMAGE
   - docker images
 
 before_script:
   # run docker container for an hour. Will execute all docker commands inside this container
-  - docker run -v `pwd`:/petastorm --name petastorm_ci selitvin/petastorm_ci:latest /bin/sh -c "sleep 3600" &
+  - docker run -v `pwd`:/petastorm --name petastorm_ci $CI_IMAGE /bin/sh -c "sleep 3600" &
 
   # wait for docker to start
   - sleep 5
   - export RUN="docker exec petastorm_ci bash /run_in_venv.sh ${TRAVIS_PYTHON_VERSION}"
-  - export PYTEST="pytest --timeout=180 --duration=0 -v --cov=./  --cov-append --color=yes"
+  - export PYTEST="pytest --timeout=180 --durations=0 -v --cov=./  --cov-append --color=yes"
 
   # Refresh our dependencies' versions as in the CI image, they may go stale
   - $RUN pip install -e /petastorm/[test,tf,torch,docs,opencv]
