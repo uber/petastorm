@@ -20,8 +20,12 @@ import re
 import numpy as np
 from six import PY2
 from torch.utils.data.dataloader import default_collate
+import torch
+from packaging import version
 
 from petastorm.reader_impl.shuffling_buffer import RandomShufflingBuffer, NoopShufflingBuffer
+
+_TORCH_BEFORE_1_1 = version.parse(torch.__version__) < version.parse('1.1.0')
 
 if PY2:
     _string_classes = basestring  # noqa: F821
@@ -45,7 +49,7 @@ def _sanitize_pytorch_types(row_as_dict):
     for name, value in row_as_dict.items():
         # PyTorch supported types are: double, float, float16, int64, int32, and uint8
         if isinstance(value, np.ndarray):
-            if value.dtype == np.int8:
+            if value.dtype == np.int8 and _TORCH_BEFORE_1_1:
                 row_as_dict[name] = value.astype(np.int16)
             elif value.dtype == np.uint16:
                 row_as_dict[name] = value.astype(np.int32)

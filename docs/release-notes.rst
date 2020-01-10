@@ -4,6 +4,29 @@
 Release notes
 =============
 
+
+Release 0.8.0
+=============
+
+Breaking changes
+----------------
+ - Regex specified in ``schema_fields`` argument of ``make_reader`` and ``make_batch_reader`` must match the
+   entire field name.
+
+   - Before this change: field named ``field_123`` would be loaded from a dataset
+     by a reader ``make_reader(..., schema_fields=['123'])``.
+   - After this change, user will need to specify a regex to match the full field name, for example:
+
+     - ``make_reader(..., schema_fields=['field_123'])``; or
+     - ``make_reader(..., schema_fields=['.*123'])``
+
+
+New features and bug fixes
+--------------------------
+ - Fixed pyarrow 0.13 and 0.14 compatibility bugs.
+ - Avoid using zero-memory-copy zmq feature of ``recv_multipart``. Otherwise, wild memory footprint swings
+   in the main process are observed due to python GC behavior.
+
 Release 0.7.7
 =============
 

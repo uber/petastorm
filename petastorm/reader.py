@@ -78,7 +78,7 @@ def make_reader(dataset_url,
         thread or process pool. Defaults to 10
     :param pyarrow_serialize: Whether to use pyarrow for serialization. Currently only applicable to process pool.
         Defaults to False.
-    :param results_queue_size: Size of the results queue to store prefetched rows. Currently only applicable to
+    :param results_queue_size: Size of the results queue to store prefetched row-groups. Currently only applicable to
         thread reader pool type.
     :param shuffle_row_groups: Whether to shuffle row groups (the order in which full row groups are read)
     :param shuffle_row_drop_partitions: This is is a positive integer which determines how many partitions to

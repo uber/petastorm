@@ -20,6 +20,8 @@ from packaging import version
 from pyarrow import parquet as pq
 
 _PYARROW_BEFORE_013 = version.parse(pa.__version__) < version.parse('0.13.0')
+_PYARROW_BEFORE_014 = version.parse(pa.__version__) < version.parse('0.14.0')
+_PYARROW_BEFORE_015 = version.parse(pa.__version__) < version.parse('0.15.0')
 
 
 def compat_get_metadata(piece, open_func):
@@ -39,7 +41,7 @@ def compat_piece_read(piece, open_file_func, **kwargs):
 
 
 def compat_table_columns_gen(table):
-    if _PYARROW_BEFORE_013:
+    if _PYARROW_BEFORE_014:
         for column in table.columns:
             name = column.name
             yield name, column
@@ -49,18 +51,16 @@ def compat_table_columns_gen(table):
             yield name, column
 
 
-def compat_column_num_chunks(column):
-    if _PYARROW_BEFORE_013:
-        return column.data.num_chunks
+def compat_column_data(column):
+    if _PYARROW_BEFORE_015:
+        return column.data
     else:
-        # Latest PyArrow (015) still seems to use data.num_chunks, doesn't have column.num_chunks.
-        return column.data.num_chunks
-        # return column.num_chunks
+        return column
 
 
 def compat_make_parquet_piece(path, open_file_func, **kwargs):
     if _PYARROW_BEFORE_013:
         return pq.ParquetDatasetPiece(path, **kwargs)
     else:
-        return pq.ParquetDatasetPiece(path, open_file_func=open_file_func,   # pylint: disable=unexpected-keyword-arg
+        return pq.ParquetDatasetPiece(path, open_file_func=open_file_func,  # pylint: disable=unexpected-keyword-arg
                                       **kwargs)
