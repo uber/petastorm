@@ -135,7 +135,7 @@ class DataLoader(object):
         if shuffling_queue_capacity > 0:
             # We can not know what is the reasonable number to use for the extra capacity, so we set a huge number
             # and give up on the unbound growth protection mechanism.
-            if not min_after_dequeue:
+            if min_after_dequeue is None:
                 min_after_dequeue = shuffling_queue_capacity - 1
             self._shuffling_buffer = RandomShufflingBuffer(shuffling_queue_capacity,
                                                            min_after_retrieve=min_after_dequeue,
