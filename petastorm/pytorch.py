@@ -124,7 +124,7 @@ class DataLoader(object):
         :param shuffling_queue_capacity: Queue capacity is passed to the underlying :class:`tf.RandomShuffleQueue`
           instance. If set to 0, no shuffling will be done.
         :param min_after_dequeue: Minimum number of items in the buffer that allows retrieval. If not passed, defaults
-          to (shuffling_queue_capacity-1).
+          to shuffling_queue_capacity-1.
         """
         self.reader = reader
         self.batch_size = batch_size
