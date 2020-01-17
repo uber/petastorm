@@ -183,4 +183,4 @@ def test_simple_read_failure(synthetic_dataset):
     with DataLoader(make_reader(synthetic_dataset.url, reader_pool_type='thread', schema_fields=BATCHABLE_FIELDS,
                                 transform_spec=TransformSpec(_sensor_name_to_int))) as loader:
         rows = list(loader)
-        assert "not_a_field" in rows[0].keys()
+        assert "still_not_a_field" in rows[0].keys()
