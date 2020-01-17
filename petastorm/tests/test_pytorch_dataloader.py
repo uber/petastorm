@@ -175,3 +175,12 @@ def test_with_batch_reader(scalar_dataset, shuffling_queue_capacity):
         if pa.__version__ != '0.15.0':
             assert len(scalar_dataset.data) == sum(batch['int_fixed_size_list'].shape[0] for batch in batches)
             assert batches[0]['int_fixed_size_list'].shape[1] == len(scalar_dataset.data[0]['int_fixed_size_list'])
+
+
+def test_simple_read_failure(synthetic_dataset):
+    """ Test added to cause tests to fail. Using to test hypothesis about problem reading Travis error logs. """
+
+    with DataLoader(make_reader(synthetic_dataset.url, reader_pool_type='thread', schema_fields=BATCHABLE_FIELDS,
+                                transform_spec=TransformSpec(_sensor_name_to_int))) as loader:
+        rows = list(loader)
+        assert "not_a_field" in rows[0].keys()
