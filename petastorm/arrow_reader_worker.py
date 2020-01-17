@@ -156,13 +156,9 @@ class ArrowReaderWorker(WorkerBase):
     def _load_rows(self, pq_file, piece, shuffle_row_drop_range):
         """Loads all rows from a piece"""
 
-        # pyarrow would fail if we request a column names that the dataset is partitioned by, so we strip them from
-        # the `columns` argument.
-        partitions = self._dataset.partitions
         column_names_in_schema = set(field.name for field in self._schema.fields.values())
-        column_names = column_names_in_schema - partitions.partition_names
 
-        result = self._read_with_shuffle_row_drop(piece, pq_file, column_names, shuffle_row_drop_range)
+        result = self._read_with_shuffle_row_drop(piece, pq_file, column_names_in_schema, shuffle_row_drop_range)
 
         if self._transform_spec:
             result_as_pandas = result.to_pandas()
@@ -244,7 +240,19 @@ class ArrowReaderWorker(WorkerBase):
         return pa.Table.from_pandas(result, preserve_index=False)
 
     def _read_with_shuffle_row_drop(self, piece, pq_file, column_names, shuffle_row_drop_partition):
-        table = compat_piece_read(piece, lambda _: pq_file, columns=column_names, partitions=self._dataset.partitions)
+        partition_names = self._dataset.partitions.partition_names
+
+        # pyarrow would fail if we request a column names that the dataset is partitioned by
+        table = compat_piece_read(piece, lambda _: pq_file, columns=column_names - partition_names,
+                                  partitions=self._dataset.partitions)
+
+        # Drop columns we did not explicitly request. This may happen when a table is partitioned. Besides columns
+        # requested, pyarrow will also return partition values. Having these unexpected fields will break some
+        # downstream code.
+        loaded_column_names = set(column[0] for column in compat_table_columns_gen(table))
+        unasked_for_columns = loaded_column_names - column_names
+        if unasked_for_columns:
+            table = table.drop(unasked_for_columns)
 
         num_rows = len(table)
         num_partitions = shuffle_row_drop_partition[1]
