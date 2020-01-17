@@ -86,3 +86,15 @@ def test_string_partition(reader_factory, tmpdir, partition_by):
         row_ids_batched = [row.id for row in reader]
     actual_row_ids = list(itertools.chain(*row_ids_batched))
     assert len(data) == len(actual_row_ids)
+
+
+@pytest.mark.parametrize('reader_factory', _D)
+def test_partitioned_field_is_not_queried(reader_factory, tmpdir):
+    """Try datasets partitioned by a string, integer and string+integer fields"""
+    url = 'file://' + tmpdir.strpath
+
+    data = create_test_scalar_dataset(url, 10, partition_by=['id'])
+    with reader_factory(url, schema_fields=['string']) as reader:
+        all_rows = list(reader)
+    assert len(data) == len(all_rows)
+    assert all_rows[0]._fields == ('string',)
