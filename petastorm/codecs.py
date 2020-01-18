@@ -62,6 +62,11 @@ class CompressedImageCodec(DataframeColumnCodec):
         self._image_codec = '.' + image_codec
         self._quality = quality
 
+    @property
+    def image_codec(self):
+        """Returns image_codec type use by the codec: png or jpeg."""
+        return self._image_codec[1:]
+
     def encode(self, unischema_field, value):
         """Encodes the image using OpenCV."""
         if unischema_field.numpy_dtype != value.dtype:
