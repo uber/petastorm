@@ -41,6 +41,7 @@ def test_jpeg():
     for size in [(300, 200), (300, 200, 3)]:
         expected_image = np.random.randint(0, 255, size=size, dtype=np.uint8)
         codec = CompressedImageCodec('jpeg', quality=100)
+        assert codec.image_codec == 'jpeg'
         field = UnischemaField(name='field_image', numpy_dtype=np.uint8, shape=size, codec=codec, nullable=False)
 
         actual_image = codec.decode(field, codec.encode(field, expected_image))
@@ -77,6 +78,7 @@ def test_bad_shape():
 
 def test_bad_dtype():
     codec = CompressedImageCodec('png')
+    assert codec.image_codec == 'png'
     field = UnischemaField(name='field_image', numpy_dtype=np.uint8, shape=(10, 20), codec=codec, nullable=False)
     with pytest.raises(ValueError, match='Unexpected type'):
         codec.encode(field, np.zeros((100, 200), dtype=np.uint16))
