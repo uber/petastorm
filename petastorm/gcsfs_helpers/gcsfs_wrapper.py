@@ -29,7 +29,7 @@ class GCSFSWrapper(DaskFileSystem):
         except OSError:
             return False
 
-    def walk(self, path, refresh=False):
+    def walk(self, path):
         """
         Directory tree generator, like os.walk
 
@@ -60,5 +60,5 @@ class GCSFSWrapper(DaskFileSystem):
         yield path, directories, files
 
         for directory in directories:
-            for tup in self.walk(directory, refresh=refresh):
+            for tup in self.walk(directory):
                 yield tup
