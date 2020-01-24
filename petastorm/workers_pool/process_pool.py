@@ -18,6 +18,8 @@ without using fork. Some issues with using jvm based HDFS driver were observed w
 import logging
 import pickle
 import sys
+import os
+from psutil import process_iter
 from time import sleep, time
 from traceback import format_exc
 
@@ -181,6 +183,8 @@ class ProcessPool(object):
 
         # Control socket is used to signal termination of the pool
         self._control_sender, control_socket = self._create_local_socket_on_random_port(self._context, zmq.PUB)
+        process_monitor_sender, process_monitor_socket = self._create_local_socket_on_random_port(self._context,
+                                                                                                  zmq.PUB)
         self._results_receiver, results_sender_socket = self._create_local_socket_on_random_port(self._context,
                                                                                                  zmq.PULL)
 
@@ -190,16 +194,31 @@ class ProcessPool(object):
 
         # Start a bunch of processes
         self._workers = [
-            exec_in_new_process(_worker_bootstrap, worker_class, worker_id, control_socket, worker_receiver_socket,
-                                results_sender_socket, self._serializer, worker_setup_args)
+            exec_in_new_process(_worker_bootstrap, worker_class, worker_id, control_socket, process_monitor_socket,
+                                worker_receiver_socket, results_sender_socket, self._serializer,
+                                worker_setup_args)
             for worker_id in range(self.workers_count)]
 
         # Block until we have get a _WORKER_STARTED_INDICATOR from all our workers
         self._wait_for_workers_to_start()
 
+        # The main thread has done it's job by delegated the sockets to the workers to connect.
+        process_monitor_sender.unbind(process_monitor_socket)
+
+        # We then have a separate process to do the clean up
+        exec_in_new_process(_process_monitor_bootstrap, os.getpid(), process_monitor_socket)
+
         if ventilator:
             self._ventilator = ventilator
             self._ventilator.start()
+
+    def _worker_pids(self):
+        pids = [worker_process.pid for worker_process in self._workers]
+        number_of_pids = len(pids)
+        if number_of_pids != self.workers_count:
+            raise RuntimeError('Only {} out of {} workers  are initialized. '
+                               'Aborting!'.format(number_of_pids, self._workers))
+        return pids
 
     def _wait_for_workers_to_start(self):
         """Waits for all workers to start."""
@@ -317,8 +336,16 @@ def _serialize_result_and_send(socket, serializer, data):
     socket.send_multipart([serializer.serialize(data), pickle.dumps(None)])
 
 
-def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_socket, results_sender_socket,
-                      serializer, worker_args):
+def _shutdown_worker(worker, receiver):
+    # If the message came over the control channel, shut down the worker.
+    control_message = receiver.recv_string()
+    if control_message == _CONTROL_FINISHED:
+        worker.shutdown()
+        sys.exit(0)
+
+
+def _worker_bootstrap(worker_class, worker_id, control_socket, process_monitor_socket, worker_receiver_socket,
+                      results_sender_socket, serializer, worker_args):
     """This is the root of the spawned worker processes.
 
     :param worker_class: A class with worker implementation.
@@ -350,11 +377,17 @@ def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_s
     control_receiver.connect(control_socket)
     _setsockopt(control_receiver, zmq.SUBSCRIBE, b"")
 
+    process_monitor_receiver = context.socket(zmq.SUB)
+    process_monitor_receiver.linger = 0
+    process_monitor_receiver.connect(process_monitor_socket)
+    _setsockopt(process_monitor_receiver, zmq.SUBSCRIBE, b"")
+
     logger.debug('Setting up poller')
     # Set up a poller to multiplex the work receiver and control receiver channels
     poller = zmq.Poller()
     poller.register(work_receiver, zmq.POLLIN)
     poller.register(control_receiver, zmq.POLLIN)
+    poller.register(process_monitor_receiver, zmq.POLLIN)
 
     results_sender.send_pyobj(_WORKER_STARTED_INDICATOR)
 
@@ -389,13 +422,35 @@ def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_s
                 results_sender.send_multipart([none_marker, pickle.dumps(e)])
                 return
 
-        # If the message came over the control channel, shut down the worker.
+        if socks.get(process_monitor_receiver) == zmq.POLLIN:
+            _shutdown_worker(worker, process_monitor_receiver)
+
+        # If the message came over the process monitor channel, shut down the worker.
         if socks.get(control_receiver) == zmq.POLLIN:
-            control_message = control_receiver.recv_string()
-            logger.debug('Received control message %s', control_message)
-            if control_message == _CONTROL_FINISHED:
-                worker.shutdown()
-                break
+            _shutdown_worker(worker, control_receiver)
+
+
+def _process_monitor_bootstrap(main_process_pid, process_monitor_socket, polling_time=2):
+    logger.debug('Starting _process_monitor_bootstrap')
+    context = zmq.Context()
+
+    logger.debug('Connecting sockets')
+    process_monitor_sender = context.socket(zmq.PUB)
+    process_monitor_sender.linger = _SOCKET_LINGER_MS
+    process_monitor_sender.bind(process_monitor_socket)
+
+    while True:
+        if main_process_pid in [process.pid for process in process_iter()]:
+            sleep(polling_time)
+        else:
+            sys.stderr.write("the main process with pid: %d is dead. "
+                             "Sending %s to other petastorm workers\n"
+                             % (main_process_pid, _CONTROL_FINISHED))
+            process_monitor_sender.send_string(_CONTROL_FINISHED)
+            process_monitor_sender.close()
+            context.destroy()
+            sys.stderr.write('Process monitor for pid: %d exiting\n' % main_process_pid)
+            sys.exit(0)
 
 
 def _setsockopt(sock, option, value):
