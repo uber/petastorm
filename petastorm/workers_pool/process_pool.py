@@ -19,7 +19,6 @@ import logging
 import pickle
 import sys
 import os
-from psutil import process_iter
 from time import sleep, time
 from traceback import format_exc
 
@@ -29,13 +28,13 @@ from zmq import ZMQBaseError
 from petastorm.reader_impl.pickle_serializer import PickleSerializer
 from petastorm.workers_pool import EmptyResultError, VentilatedItemProcessedMessage
 from petastorm.workers_pool.exec_in_new_process import exec_in_new_process
+from petastorm.workers_pool.process_monitor import ProcessMonitor
+from petastorm.workers_pool.constants import LOCALHOST, SOCKET_LINGER_MS, CONTROL_FINISHED
 
-# When _CONTROL_FINISHED is passed via control socket to a worker, the worker will terminate
-_CONTROL_FINISHED = "FINISHED"
+
 # This is the amount of seconds we will wait to all processes to be created. We throw an error if can not start them
 # on time
 _WORKERS_STARTED_TIMEOUT_S = 20
-_SOCKET_LINGER_MS = 1000
 _KEEP_TRYING_WHILE_ZMQ_AGAIN_IS_RAIZED_TIMEOUT_S = 20
 
 # Amount of time we will wait on a the queue to get the next result. If no results received until then, we will
@@ -68,7 +67,7 @@ logger = logging.getLogger(__name__)
 #    is transmitted as a control. This control message is needed to count how many ventilated
 #    items are being processed at each time.
 #
-# 7. Workers are terminated by broadcasting _CONTROL_FINISHED message.
+# 7. Workers are terminated by broadcasting CONTROL_FINISHED message.
 #
 
 
@@ -110,7 +109,7 @@ def _keep_retrying_while_zmq_again(timeout, func, allowed_failures=3):
 
 
 class ProcessPool(object):
-    def __init__(self, workers_count, serializer=None, zmq_copy_buffers=True):
+    def __init__(self, workers_count, serializer=None, zmq_copy_buffers=True, process_monitor_address=None):
         """Initializes a ProcessPool.
 
         This pool is different from standard Python pool implementations by the fact that the workers are spawned
@@ -127,6 +126,8 @@ class ProcessPool(object):
           A downside of using this zero memory copy feature is that it does not play nice with Python GC and cases
           were observed when it resulted in wild memory footprint swings. Having the buffers copied is typically a
           safer alternative.
+        :param process_monitor:An object that would be used to spin up a process to monitor the main process
+          and kill the workers if the main processes dies unexpectedly.
         """
         self._workers = []
         self._ventilator_send = None
@@ -140,6 +141,7 @@ class ProcessPool(object):
         self._ventilator = None
         self._serializer = serializer or PickleSerializer()
         self._zmq_copy_buffers = zmq_copy_buffers
+        self._process_monitor = ProcessMonitor(process_monitor_address)
 
     def _create_local_socket_on_random_port(self, context, socket_type):
         """Creates a zmq socket on a random port.
@@ -148,13 +150,12 @@ class ProcessPool(object):
         :param socket_type: zmq socket type
         :return: A tuple: ``(zmq_socket, endpoint_address)``
         """
-        LOCALHOST = 'tcp://127.0.0.1'
         socket = context.socket(socket_type)
 
         # There are race conditions where the socket can close when messages are still trying to be sent by zmq.
         # This can end up causing zmq to block indefinitely when sending objects or shutting down. Having the socket
         # linger on close helps prevent this.
-        socket.linger = _SOCKET_LINGER_MS
+        socket.linger = SOCKET_LINGER_MS
 
         port = socket.bind_to_random_port(LOCALHOST)
         return socket, '{}:{}'.format(LOCALHOST, port)
@@ -183,8 +184,7 @@ class ProcessPool(object):
 
         # Control socket is used to signal termination of the pool
         self._control_sender, control_socket = self._create_local_socket_on_random_port(self._context, zmq.PUB)
-        process_monitor_sender, process_monitor_socket = self._create_local_socket_on_random_port(self._context,
-                                                                                                  zmq.PUB)
+
         self._results_receiver, results_sender_socket = self._create_local_socket_on_random_port(self._context,
                                                                                                  zmq.PULL)
 
@@ -192,21 +192,21 @@ class ProcessPool(object):
         self._results_receiver_poller = zmq.Poller()
         self._results_receiver_poller.register(self._results_receiver, zmq.POLLIN)
 
+        self._process_monitor.bind()
+
         # Start a bunch of processes
         self._workers = [
-            exec_in_new_process(_worker_bootstrap, worker_class, worker_id, control_socket, process_monitor_socket,
-                                worker_receiver_socket, results_sender_socket, self._serializer,
-                                worker_setup_args)
+            exec_in_new_process(_worker_bootstrap, worker_class, worker_id, control_socket,
+                                self._process_monitor.address, worker_receiver_socket, results_sender_socket,
+                                self._serializer, worker_setup_args)
             for worker_id in range(self.workers_count)]
 
         # Block until we have get a _WORKER_STARTED_INDICATOR from all our workers
         self._wait_for_workers_to_start()
 
-        # The main thread has done it's job by delegated the sockets to the workers to connect.
-        process_monitor_sender.unbind(process_monitor_socket)
-
-        # We then have a separate process to do the clean up
-        exec_in_new_process(_process_monitor_bootstrap, os.getpid(), process_monitor_socket)
+        self._process_monitor.unbind()
+        # We can now create a separate process to do the clean up of workers
+        exec_in_new_process(ProcessMonitor.bootstrap, os.getpid(), self._process_monitor.address, control_socket)
 
         if ventilator:
             self._ventilator = ventilator
@@ -293,7 +293,7 @@ class ProcessPool(object):
         if self._ventilator:
             self._ventilator.stop()
         try:
-            self._control_sender.send_string(_CONTROL_FINISHED)
+            self._control_sender.send_string(CONTROL_FINISHED)
         except ZMQBaseError as e:
             logger.warning('Stopping worker processes failed with \'%s\'. Does not necessary indicates an error.'
                            'This can happen if worker processes were terminated due to an error raised in that '
@@ -339,7 +339,7 @@ def _serialize_result_and_send(socket, serializer, data):
 def _shutdown_worker(worker, receiver):
     # If the message came over the control channel, shut down the worker.
     control_message = receiver.recv_string()
-    if control_message == _CONTROL_FINISHED:
+    if control_message == CONTROL_FINISHED:
         worker.shutdown()
         sys.exit(0)
 
@@ -428,29 +428,6 @@ def _worker_bootstrap(worker_class, worker_id, control_socket, process_monitor_s
         # If the message came over the process monitor channel, shut down the worker.
         if socks.get(control_receiver) == zmq.POLLIN:
             _shutdown_worker(worker, control_receiver)
-
-
-def _process_monitor_bootstrap(main_process_pid, process_monitor_socket, polling_time=2):
-    logger.debug('Starting _process_monitor_bootstrap')
-    context = zmq.Context()
-
-    logger.debug('Connecting sockets')
-    process_monitor_sender = context.socket(zmq.PUB)
-    process_monitor_sender.linger = _SOCKET_LINGER_MS
-    process_monitor_sender.bind(process_monitor_socket)
-
-    while True:
-        if main_process_pid in [process.pid for process in process_iter()]:
-            sleep(polling_time)
-        else:
-            sys.stderr.write("the main process with pid: %d is dead. "
-                             "Sending %s to other petastorm workers\n"
-                             % (main_process_pid, _CONTROL_FINISHED))
-            process_monitor_sender.send_string(_CONTROL_FINISHED)
-            process_monitor_sender.close()
-            context.destroy()
-            sys.stderr.write('Process monitor for pid: %d exiting\n' % main_process_pid)
-            sys.exit(0)
 
 
 def _setsockopt(sock, option, value):

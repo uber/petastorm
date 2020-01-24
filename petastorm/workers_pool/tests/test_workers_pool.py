@@ -17,6 +17,8 @@ import time
 import unittest
 
 import numpy as np
+import zmq
+from multiprocessing import Process
 
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.dummy_pool import DummyPool
@@ -25,6 +27,7 @@ from petastorm.workers_pool.tests.stub_workers import CoeffMultiplierWorker, \
     WorkerIdGeneratingWorker, WorkerMultiIdGeneratingWorker, SleepyWorkerIdGeneratingWorker, \
     ExceptionGeneratingWorker_5, PreprogrammedReturnValueWorker
 from petastorm.workers_pool.thread_pool import ThreadPool
+from petastorm.workers_pool.process_monitor import ProcessMonitor
 
 
 class TestWorkersPool(unittest.TestCase):
@@ -209,6 +212,42 @@ class TestWorkersPool(unittest.TestCase):
         self._test_exception_in_worker_impl(pool, 1)
         pool.stop()
         pool.join()
+
+    def test_process_workers_receive_finished_when_main_thread_dies(self):
+        """ Test that process monitor sends a FINISHED message """
+        context = zmq.Context()
+        receiver = context.socket(zmq.SUB)
+        try:
+            # Get a free port
+            pm = ProcessMonitor()
+            pm.bind()
+            address = pm.address
+
+            receiver.connect(address)
+            receiver.setsockopt(zmq.SUBSCRIBE, b"")
+            pm.unbind()
+
+            poller = zmq.Poller()
+            poller.register(receiver, zmq.POLLIN)
+
+            def run_process_pool(address):
+                pool = ProcessPool(1, None, True, address)
+                pool.start(WorkerIdGeneratingWorker)
+                # We dont call pool.stop() and hence leave workers alive
+
+            process = Process(target=run_process_pool, args=(address,))
+            process.start()
+
+            ready = dict(poller.poll(10000))
+            process.join()
+            if ready.get(receiver):
+                msg = receiver.recv_string()
+                self.assertEqual("FINISHED", msg)
+            else:
+                self.fail()
+        finally:
+            receiver.close()
+            context.destroy()
 
     def test_exception_in_all_worker_process(self):
         """ Tests that when all worker processes have exited, zmq will properly throw an exception
