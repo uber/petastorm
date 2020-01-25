@@ -4,6 +4,22 @@
 Release notes
 =============
 
+Release 0.8.1
+=============
+
+Thanks to our new contributor: Sergey Serebryakov for contributing Google Cloud Storage (GCS) filesystem implementation.
+
+New features and bug fixes
+--------------------------
+ - Google Cloud Storage (GCS) is now supported.
+ - Fixed a bug: ``AttributeError: 'ParseResult' object has no attribute 'hostname'``
+ - Fixed pyarrow 0.14.1 / PY2.7 compatibility issue: ``TypeError: __new__() got an unexpected keyword argument 'datestr'``
+ - Added ``image_codec`` property to ``CompressedImageCodec`` class.
+
+
+
+
+
 
 Release 0.8.0
 =============
