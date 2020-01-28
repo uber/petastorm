@@ -70,8 +70,8 @@ def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_
     >>> indexer = [SingleFieldIndexer(...)]
     >>> build_rowgroup_index(ds_url, spark.sparkContext, indexer)
 
-    A user may provide their own instance of pyarrow filesystem object in ``filesystem_factory`` argument (otherwise,
-    petastorm will create a default one based on the url).
+    A user may provide their own recipe for creation of pyarrow filesystem object in ``filesystem_factory``
+    argument (otherwise, petastorm will create a default one based on the url).
 
     The following example shows how a custom pyarrow HDFS filesystem, instantiated using ``libhdfs`` driver can be used
     during Petastorm dataset generation:
