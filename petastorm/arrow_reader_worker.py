@@ -57,7 +57,7 @@ class ArrowReaderWorkerResultsQueueReader(object):
                 # pyarrow < 0.15.0 would always return a numpy array. Starting 0.15 we get pandas series, hence we
                 # convert it into numpy array
                 if isinstance(column_as_pandas, pd.Series):
-                    column_as_numpy = column_as_pandas.as_matrix()
+                    column_as_numpy = column_as_pandas.values
                 else:
                     column_as_numpy = column_as_pandas
 
