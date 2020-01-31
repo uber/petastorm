@@ -19,9 +19,9 @@ RUN apt-get -qq install -y \
   python2.7-dev \
   python-pip \
   python3-pip \
-  python3.6 \
-  python3.6-dev \
-  python3.6-venv \
+  python3.7 \
+  python3.7-dev \
+  python3.7-venv \
   virtualenv \
   && rm -rf /var/lib/apt/lists/*
 
@@ -32,11 +32,11 @@ ADD README.rst /petastorm/
 ADD petastorm /petastorm/petastorm
 
 # Set up Python3 environment
-RUN python3.6 -m pip install pip --upgrade
-RUN python3.6 -m pip install wheel
-RUN python3.6 -m venv /petastorm_venv3.6
-RUN /petastorm_venv3.6/bin/pip3.6 install --no-cache -e /petastorm/[test,tf,torch,docs,opencv]
-RUN /petastorm_venv3.6/bin/pip3.6 uninstall -y petastorm
+RUN python3.7 -m pip install pip --upgrade
+RUN python3.7 -m pip install wheel
+RUN python3.7 -m venv /petastorm_venv3.7
+RUN /petastorm_venv3.7/bin/pip3.7 install --no-cache -e /petastorm/[test,tf,torch,docs,opencv]
+RUN /petastorm_venv3.7/bin/pip3.7 uninstall -y petastorm
 
 # Set up Python2 environment
 RUN virtualenv /petastorm_venv2.7
