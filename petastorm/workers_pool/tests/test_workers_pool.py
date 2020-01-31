@@ -17,6 +17,9 @@ import time
 import unittest
 
 import numpy as np
+from multiprocessing import Process, Manager
+from psutil import process_iter
+
 
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.dummy_pool import DummyPool
@@ -219,6 +222,31 @@ class TestWorkersPool(unittest.TestCase):
             for _ in range(10000):
                 pool.ventilate("Datanum")
                 time.sleep(.1)
+
+    def test_workers_die_when_main_process_dies(self):
+        """ Tests that when the main processes dies, the process workers will kill themselves """
+        manager = Manager()
+        return_list = manager.list()
+
+        def run_process_pool(return_list):
+            pool = ProcessPool(1)
+            pool.start(WorkerIdGeneratingWorker)
+            return_list.append(pool._workers[0].pid)
+            # We dont call pool.stop() and hence leave workers alive
+
+        process = Process(target=run_process_pool, args=(return_list,))
+        process.start()
+        process.join()
+        # The worker has now started
+
+        worker_pid = return_list[0]
+
+        for _ in range(20):
+            worker_is_alive = any([p.pid for p in process_iter() if p.pid == worker_pid])
+            if not worker_is_alive:
+                break
+            time.sleep(0.1)
+        self.assertFalse(worker_is_alive)
 
     def test_exception_reusing_thread_pool(self):
         WORKERS_COUNT = 10
