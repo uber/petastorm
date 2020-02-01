@@ -4,6 +4,13 @@
 Release notes
 =============
 
+Release 0.8.2
+=============
+
+New features and bug fixes
+--------------------------
+- pandas 1.0 compatibility issue resolved.
+
 Release 0.8.1
 =============
 
