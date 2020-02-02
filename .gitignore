@@ -9,3 +9,5 @@ dist
 
 # Sphinx autodoc build directory
 _build
+
+coverage.xml
