@@ -32,6 +32,7 @@ install:
   - export CI_IMAGE=selitvin/petastorm_ci_auto:ci-2020-31-01-09
   - docker pull $CI_IMAGE
   - docker images
+  - pip install -U codecov
 
 before_script:
   # run docker container for an hour. Will execute all docker commands inside this container
@@ -40,9 +41,10 @@ before_script:
   # wait for docker to start
   - sleep 5
   - export RUN="docker exec petastorm_ci bash /run_in_venv.sh ${PY}"
-  - export PYTEST="pytest --timeout=180 -v --color=yes --cov=./"
+  - export PYTEST="pytest --timeout=180 -v --color=yes --cov=./ --cov-report xml:coverage.xml"
   # Refresh our dependencies' versions as in the CI image, they may go stale
   - $RUN pip install -e /petastorm/[test,tf,torch,docs,opencv]
+
 
   # Upgrade pip to avoid weird failures, such as failing to install torchvision
   # This will use requirements from setup.py and install them in the tavis's virtual environment
@@ -89,7 +91,7 @@ script:
       petastorm/tests/test_pytorch_utils.py
 
 after_success:
-  - codecov
+  - codecov --required
   - $RUN git clean -dfx
 
 after_failure:
