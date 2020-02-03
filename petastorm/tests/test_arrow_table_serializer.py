@@ -15,7 +15,7 @@
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from pandas.util.testing import assert_frame_equal
+from pandas.testing import assert_frame_equal
 
 from petastorm.reader_impl.arrow_table_serializer import ArrowTableSerializer
 

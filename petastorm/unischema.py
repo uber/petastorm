@@ -29,7 +29,7 @@ from pyarrow.lib import ListType
 from pyarrow.lib import StructType as pyStructType
 from six import string_types
 
-from petastorm.compat import compat_get_metadata
+from petastorm.compat import compat_get_metadata, compat_field
 
 
 def _fields_as_tuple(field):
@@ -320,7 +320,7 @@ class Unischema(object):
             unischema_fields.append(UnischemaField(partition.name, numpy_dtype, (), None, False))
 
         for column_name in arrow_schema.names:
-            arrow_field = arrow_schema.field_by_name(column_name)
+            arrow_field = compat_field(arrow_schema, column_name)
             field_type = arrow_field.type
             if isinstance(field_type, ListType):
                 if isinstance(field_type.value_type, ListType) or isinstance(field_type.value_type, pyStructType):

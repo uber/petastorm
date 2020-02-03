@@ -52,6 +52,10 @@ SCALAR_ONLY_READER_FACTORIES = [
     lambda url, **kwargs: make_batch_reader(url, reader_pool_type='process', workers_count=2, **kwargs),
 ]
 
+# Some tests that cover generic functionality use make_batch_reader with a petastorm datasets.
+# This triggers a warning which we want to silence in order not to bloat test output.
+ignore_make_batch_reader_on_petastorm_dataset = pytest.mark.filterwarnings('ignore:Please use make_reader')
+
 
 def _check_simple_reader(reader, expected_data, expected_rows_count=None, check_types=True, limit_checked_rows=None):
     # Read a bunch of entries from the dataset and compare the data to reference
@@ -249,6 +253,7 @@ def test_simple_read_with_pyarrow_serialize(synthetic_dataset):
 
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
 @pytest.mark.forked
+@ignore_make_batch_reader_on_petastorm_dataset
 def test_simple_read_with_disk_cache(synthetic_dataset, reader_factory, tmpdir):
     """Try using the Reader with LocalDiskCache using different flavors of pools"""
     CACHE_SIZE = 10 * 2 ** 30  # 20GB
@@ -262,6 +267,7 @@ def test_simple_read_with_disk_cache(synthetic_dataset, reader_factory, tmpdir):
 
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
+@ignore_make_batch_reader_on_petastorm_dataset
 def test_simple_read_with_added_slashes(synthetic_dataset, reader_factory):
     """Tests that using relative paths for the dataset metadata works as expected"""
     with reader_factory(synthetic_dataset.url + '///') as reader:
@@ -269,6 +275,7 @@ def test_simple_read_with_added_slashes(synthetic_dataset, reader_factory):
 
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
+@ignore_make_batch_reader_on_petastorm_dataset
 def test_simple_read_moved_dataset(synthetic_dataset, tmpdir, reader_factory):
     """Tests that a dataset may be opened after being moved to a new location"""
     a_moved_path = tmpdir.join('moved').strpath
@@ -306,6 +313,7 @@ def test_reading_subset_of_columns_using_regex(synthetic_dataset, reader_factory
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
     lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', **kwargs)])
+@ignore_make_batch_reader_on_petastorm_dataset
 def test_shuffle(synthetic_dataset, reader_factory):
     rows_count = len(synthetic_dataset.data)
 
@@ -327,6 +335,7 @@ def test_shuffle(synthetic_dataset, reader_factory):
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
     lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', **kwargs)])
+@ignore_make_batch_reader_on_petastorm_dataset
 def test_shuffle_drop_ratio(synthetic_dataset, reader_factory):
     # Read ids twice without shuffle: assert we have the same array and all expected ids are in the array
     with reader_factory(synthetic_dataset.url, shuffle_row_groups=False, shuffle_row_drop_partitions=1) as reader:
@@ -372,6 +381,7 @@ def test_too_many_shards(synthetic_dataset, reader_factory):
 
 
 @pytest.mark.parametrize('reader_factory', SCALAR_ONLY_READER_FACTORIES)
+@ignore_make_batch_reader_on_petastorm_dataset
 def test_predicate_on_partition_batched(synthetic_dataset, reader_factory):
     for expected_partition_keys in [{'p_0', 'p_2'}, {'p_0'}, {'p_1', 'p_2'}]:
         # TODO(yevgeni): scalar only reader takes 'vectorized' predicate that processes entire columns. Not
@@ -396,6 +406,7 @@ def test_predicate_on_multiple_fields(synthetic_dataset, reader_factory):
 
 
 @pytest.mark.parametrize('reader_factory', SCALAR_ONLY_READER_FACTORIES)
+@ignore_make_batch_reader_on_petastorm_dataset
 def test_predicate_on_multiple_fields_batched(synthetic_dataset, reader_factory):
     expected_values = {'id': 11, 'id2': 1}
     with reader_factory(synthetic_dataset.url, shuffle_row_groups=False,
@@ -407,6 +418,7 @@ def test_predicate_on_multiple_fields_batched(synthetic_dataset, reader_factory)
 
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
+@ignore_make_batch_reader_on_petastorm_dataset
 def test_predicate_with_invalid_fields(synthetic_dataset, reader_factory):
     """Try passing an invalid field name from a predicate to the reader. An error should be raised."""
     TEST_CASES = [
@@ -423,6 +435,7 @@ def test_predicate_with_invalid_fields(synthetic_dataset, reader_factory):
 
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
+@ignore_make_batch_reader_on_petastorm_dataset
 def test_partition_multi_node(synthetic_dataset, reader_factory):
     """Tests that the reader only returns half of the expected data consistently"""
     with reader_factory(synthetic_dataset.url, cur_shard=0, shard_count=5) as reader:
@@ -446,6 +459,7 @@ def test_partition_multi_node(synthetic_dataset, reader_factory):
 
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
+@ignore_make_batch_reader_on_petastorm_dataset
 def test_partition_value_error(synthetic_dataset, reader_factory):
     """Tests that the reader raises value errors when appropriate"""
 
@@ -472,6 +486,7 @@ def test_partition_value_error(synthetic_dataset, reader_factory):
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
     lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', **kwargs),
 ])
+@ignore_make_batch_reader_on_petastorm_dataset
 def test_stable_pieces_order(synthetic_dataset, reader_factory):
     """Tests that the reader raises value errors when appropriate"""
 
@@ -575,6 +590,7 @@ def test_fail_if_resetting_in_the_middle_of_epoch(synthetic_dataset, reader_fact
 
 # TODO(yevgeni) this test is broken for reader_v2
 @pytest.mark.parametrize('reader_factory', [MINIMAL_READER_FLAVOR_FACTORIES[0]] + SCALAR_ONLY_READER_FACTORIES)
+@ignore_make_batch_reader_on_petastorm_dataset
 def test_unlimited_epochs(synthetic_dataset, reader_factory):
     """Tests that unlimited epochs works as expected"""
     with reader_factory(synthetic_dataset.url, num_epochs=None) as reader:
@@ -586,6 +602,7 @@ def test_unlimited_epochs(synthetic_dataset, reader_factory):
 
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
+@ignore_make_batch_reader_on_petastorm_dataset
 def test_num_epochs_value_error(synthetic_dataset, reader_factory):
     """Tests that the reader raises value errors when appropriate"""
 
@@ -755,6 +772,7 @@ def test_pass_in_pyarrow_filesystem_to_materialize_dataset(synthetic_dataset, tm
 
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
+@ignore_make_batch_reader_on_petastorm_dataset
 def test_dataset_path_is_a_unicode(synthetic_dataset, reader_factory):
     """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
     # Making sure unicode_in_p23 is a unicode both in python 2 and 3
