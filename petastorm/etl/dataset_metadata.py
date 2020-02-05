@@ -70,8 +70,8 @@ def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_
     >>> indexer = [SingleFieldIndexer(...)]
     >>> build_rowgroup_index(ds_url, spark.sparkContext, indexer)
 
-    A user may provide their own instance of pyarrow filesystem object in ``filesystem_factory`` argument (otherwise,
-    petastorm will create a default one based on the url).
+    A user may provide their own recipe for creation of pyarrow filesystem object in ``filesystem_factory``
+    argument (otherwise, petastorm will create a default one based on the url).
 
     The following example shows how a custom pyarrow HDFS filesystem, instantiated using ``libhdfs`` driver can be used
     during Petastorm dataset generation:
@@ -312,6 +312,14 @@ def _split_row_groups(dataset):
     return split_pieces
 
 
+def _split_piece(piece, fs_open):
+    metadata = compat_get_metadata(piece, fs_open)
+    return [compat_make_parquet_piece(piece.path, fs_open,
+                                      row_group=row_group,
+                                      partition_keys=piece.partition_keys)
+            for row_group in range(metadata.num_row_groups)]
+
+
 def _split_row_groups_from_footers(dataset):
     """Split the row groups by reading the footers of the parquet pieces"""
 
@@ -322,14 +330,7 @@ def _split_row_groups_from_footers(dataset):
 
     thread_pool = futures.ThreadPoolExecutor()
 
-    def split_piece(piece):
-        metadata = compat_get_metadata(dataset.pieces[0], dataset.fs.open)
-        return [compat_make_parquet_piece(piece.path, dataset.fs.open,
-                                          row_group=row_group,
-                                          partition_keys=piece.partition_keys)
-                for row_group in range(metadata.num_row_groups)]
-
-    futures_list = [thread_pool.submit(split_piece, piece) for piece in dataset.pieces]
+    futures_list = [thread_pool.submit(_split_piece, piece, dataset.fs.open) for piece in dataset.pieces]
     result = [item for f in futures_list for item in f.result()]
     thread_pool.shutdown()
     return result

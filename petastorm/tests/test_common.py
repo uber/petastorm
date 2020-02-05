@@ -184,9 +184,12 @@ def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None, pa
 
         spark = spark_session.getOrCreate()
         shutdown = True
+        hadoop_config = spark.sparkContext._jsc.hadoopConfiguration()
+        hadoop_config.setInt('parquet.block.size', 100)
 
     def expected_row(i):
         result = {'id': np.int32(i),
+                  'id_div_700': np.int32(i // 700),
                   'datetime': np.datetime64('2019-01-02'),
                   'timestamp': np.datetime64('2005-02-25T03:30'),
                   'string': np.unicode_('hello_{}'.format(i)),
@@ -220,6 +223,7 @@ def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None, pa
             StructField('datetime', DateType(), False),
             StructField('float64', DoubleType(), False),
             StructField('id', IntegerType(), False),
+            StructField('id_div_700', IntegerType(), False),
         ] + maybe_int_fixed_size_list_field +
         [
             StructField('string', StringType(), False),

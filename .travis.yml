@@ -16,11 +16,11 @@ dist: trusty
 language: python
 python:
   - '2.7'
-  - '3.6'
 env:
-  - PYARROW_VERSION=0.11.1 TF_VERSION=1.12 DEPLOYABLE=0
-  - PYARROW_VERSION=0.12.1 TF_VERSION=1.12 DEPLOYABLE=0
-  - PYARROW_VERSION=0.15.0 TF_VERSION=1.12 DEPLOYABLE=1
+  - PYARROW_VERSION=0.12.1 TF_VERSION=1.12 DEPLOYABLE=0 PY=2.7
+  - PYARROW_VERSION=0.15.1 TF_VERSION=1.12 DEPLOYABLE=0 PY=2.7
+  - PYARROW_VERSION=0.12.1 TF_VERSION=1.13.2 DEPLOYABLE=0 PY=3.7
+  - PYARROW_VERSION=0.15.1 TF_VERSION=1.13.2 DEPLOYABLE=1 PY=3.7
 services:
   - docker
 
@@ -29,9 +29,10 @@ install:
   # To rebuild the ci image, see docker/Makefile.The image contains all petastorm dependencies
   # installed, we do rerun dependencies installation to refresh ersions of the dependencies
   # on each build if needed
-  - export CI_IMAGE=selitvin/petastorm_ci:2019-11-27_18-20-21
+  - export CI_IMAGE=selitvin/petastorm_ci_auto:ci-2020-31-01-09
   - docker pull $CI_IMAGE
   - docker images
+  - pip install -U codecov
 
 before_script:
   # run docker container for an hour. Will execute all docker commands inside this container
@@ -39,11 +40,11 @@ before_script:
 
   # wait for docker to start
   - sleep 5
-  - export RUN="docker exec petastorm_ci bash /run_in_venv.sh ${TRAVIS_PYTHON_VERSION}"
-  - export PYTEST="pytest --timeout=180 --durations=0 -v --cov=./  --cov-append --color=yes"
-
+  - export RUN="docker exec petastorm_ci bash /run_in_venv.sh ${PY}"
+  - export PYTEST="pytest --timeout=180 -v --color=yes --cov=./ --cov-report xml:coverage.xml"
   # Refresh our dependencies' versions as in the CI image, they may go stale
   - $RUN pip install -e /petastorm/[test,tf,torch,docs,opencv]
+
 
   # Upgrade pip to avoid weird failures, such as failing to install torchvision
   # This will use requirements from setup.py and install them in the tavis's virtual environment
@@ -77,20 +78,20 @@ script:
     --ignore=petastorm/tests/test_pytorch_dataloader.py
     petastorm examples
 
-  - $RUN $PYTEST -m "not forked" -v -Y
+  - $RUN $PYTEST -m "not forked" -v -Y  --cov-append
       --ignore=examples/mnist/tests/test_pytorch_mnist.py
       --ignore=petastorm/tests/test_pytorch_utils.py
       --ignore=petastorm/tests/test_pytorch_dataloader.py
       petastorm examples
 
     # Tensorflow and pytorch tests confict (segfault). Split into separate runs.
-  - $RUN $PYTEST
+  - $RUN $PYTEST  --cov-append
       examples/mnist/tests/test_pytorch_mnist.py
       petastorm/tests/test_pytorch_dataloader.py
       petastorm/tests/test_pytorch_utils.py
 
 after_success:
-  - codecov
+  - codecov --required
   - $RUN git clean -dfx
 
 after_failure:
@@ -114,7 +115,6 @@ deploy:
     distributions: sdist bdist_wheel
     on:
       tags: true
-      python: 3.6
       condition: $DEPLOYABLE = 1
 
 
@@ -127,5 +127,5 @@ deploy:
 #    file: dist/*.whl
 #    on:
 #      tags: true
-#      python: 3.6
+#      python: 3.7
 #      condition: $DEPLOYABLE = 1

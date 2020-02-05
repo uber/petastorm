@@ -18,8 +18,12 @@ without using fork. Some issues with using jvm based HDFS driver were observed w
 import logging
 import pickle
 import sys
+import os
 from time import sleep, time
 from traceback import format_exc
+
+from threading import Thread
+from psutil import process_iter
 
 import zmq
 from zmq import ZMQBaseError
@@ -191,7 +195,7 @@ class ProcessPool(object):
         # Start a bunch of processes
         self._workers = [
             exec_in_new_process(_worker_bootstrap, worker_class, worker_id, control_socket, worker_receiver_socket,
-                                results_sender_socket, self._serializer, worker_setup_args)
+                                results_sender_socket, os.getpid(), self._serializer, worker_setup_args)
             for worker_id in range(self.workers_count)]
 
         # Block until we have get a _WORKER_STARTED_INDICATOR from all our workers
@@ -317,8 +321,18 @@ def _serialize_result_and_send(socket, serializer, data):
     socket.send_multipart([serializer.serialize(data), pickle.dumps(None)])
 
 
+def _monitor_thread_function(main_process_pid):
+    while True:
+        logger.debug('Monitor thread monitoring pid: %d', main_process_pid)
+        main_process_alive = any([process.pid for process in process_iter() if process.pid == main_process_pid])
+        if not main_process_alive:
+            logger.debug('Main process with pid %d is dead. Killing worker', main_process_pid)
+            os._exit(0)
+        sleep(1)
+
+
 def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_socket, results_sender_socket,
-                      serializer, worker_args):
+                      main_process_pid, serializer, worker_args):
     """This is the root of the spawned worker processes.
 
     :param worker_class: A class with worker implementation.
@@ -365,6 +379,11 @@ def _worker_bootstrap(worker_class, worker_id, control_socket, worker_receiver_s
     # Instantiate a worker
     worker = worker_class(worker_id, lambda data: _serialize_result_and_send(results_sender, serializer, data),
                           worker_args)
+
+    logger.debug('Starting monitor loop')
+    thread = Thread(target=_monitor_thread_function, args=(main_process_pid,))
+    thread.daemon = True
+    thread.start()
 
     # Loop and accept messages from both channels, acting accordingly
     logger.debug('Entering worker loop')

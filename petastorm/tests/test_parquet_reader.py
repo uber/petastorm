@@ -15,9 +15,11 @@ import itertools
 
 import numpy as np
 import pytest
+from pyarrow import parquet as pq
 
 from petastorm import make_batch_reader
 # pylint: disable=unnecessary-lambda
+from petastorm.compat import compat_get_metadata
 from petastorm.tests.test_common import create_test_scalar_dataset
 
 _D = [lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', **kwargs)]
@@ -124,3 +126,39 @@ def test_invalid_and_valid_column_names(scalar_dataset, reader_factory):
         assert len(sample) == 1
         with pytest.raises(KeyError):
             assert sample[bad_field] == ""
+
+
+@pytest.mark.parametrize('reader_factory', _D)
+def test_partitioned_field_is_not_queried(reader_factory, tmpdir):
+    """Try datasets partitioned by a string, integer and string+integer fields"""
+    url = 'file://' + tmpdir.strpath
+
+    data = create_test_scalar_dataset(url, 10, partition_by=['id'])
+    with reader_factory(url, schema_fields=['string']) as reader:
+        all_rows = list(reader)
+    assert len(data) == len(all_rows)
+    assert all_rows[0]._fields == ('string',)
+
+
+@pytest.mark.parametrize('reader_factory', _D)
+def test_asymetric_parquet_pieces(reader_factory, tmpdir):
+    """Check that datasets with parquet files that all rows in datasets that have different number of rowgroups can
+    be fully read """
+    url = 'file://' + tmpdir.strpath
+
+    ROWS_COUNT = 1000
+    # id_div_700 forces asymetric split between partitions and hopefully get us files with different number of row
+    # groups
+    create_test_scalar_dataset(url, ROWS_COUNT, partition_by=['id_div_700'])
+
+    # We verify we have pieces with different number of row-groups
+    dataset = pq.ParquetDataset(tmpdir.strpath)
+    row_group_counts = set(compat_get_metadata(piece, dataset.fs.open).num_row_groups for piece in dataset.pieces)
+    assert len(row_group_counts) > 1
+
+    # Make sure we are not missing any rows.
+    with reader_factory(url, schema_fields=['id']) as reader:
+        row_ids_batched = [row.id for row in reader]
+        actual_row_ids = list(itertools.chain(*row_ids_batched))
+
+    assert ROWS_COUNT == len(actual_row_ids)

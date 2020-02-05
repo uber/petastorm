@@ -40,7 +40,7 @@ REQUIRED_PACKAGES = [
     'psutil>=4.0.0',
     'pyspark>=2.1.0',
     'pyzmq>=14.0.0',
-    'pyarrow>=0.11.0',
+    'pyarrow>=0.12.0',
     'six>=1.5.0',
 ]
 
@@ -49,8 +49,8 @@ EXTRA_REQUIRE = {
     # Sphinx 1.3 would be desirable, but is incompatible with current ATG setup.
     # Thus the pinning of both sphinx and alabaster versions.
     'docs': [
-        'sphinx==1.2.2',
-        'alabaster==0.7.11'
+        'sphinx>=1.2.2',
+        'alabaster>=0.7.11'
     ],
     'opencv': ['opencv-python>=3.2.0.6'],
     'tf': ['tensorflow>=1.4.0'],
@@ -67,8 +67,8 @@ EXTRA_REQUIRE = {
         'pytest-forked>=0.2',
         'pytest-logger>=0.4.0',
         'pytest-timeout>=1.3.3',
-        'pytest-xdist',
         's3fs>=0.0.1',
+        'gcsfs>=0.2.0',
     ],
     'torch': ['torchvision>=0.2.1'],
 }

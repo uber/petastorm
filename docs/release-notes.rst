@@ -4,6 +4,31 @@
 Release notes
 =============
 
+Release 0.8.2
+=============
+
+New features and bug fixes
+--------------------------
+- pandas 1.0 compatibility issue resolved.
+
+Release 0.8.1
+=============
+
+Thanks to our new contributor: Sergey Serebryakov for contributing Google Cloud Storage (GCS) filesystem implementation.
+
+New features and bug fixes
+--------------------------
+- Bug fix: when ``make_batch_reader`` was used and Parquet files in a dataset have different number of row-groups. Symptoms:
+
+  - ``pyarrow.lib.ArrowIOError: The file only has <X> row groups, requested metadata for row group: <Y>`` (where <X> and <Y> are integers) error message;
+  - loss of some rows in a dataset.
+
+  The issue was introduced in petastorm 0.7.7. `PR 477 <https://github.com/uber/petastorm/pull/477>`_.
+- Google Cloud Storage (GCS) is now supported.
+- Fixed a bug: ``AttributeError: 'ParseResult' object has no attribute 'hostname'``
+- Fixed pyarrow 0.14.1 / PY2.7 compatibility issue: ``TypeError: __new__() got an unexpected keyword argument 'datestr'``
+- Added ``image_codec`` property to ``CompressedImageCodec`` class.
+
 
 Release 0.8.0
 =============

@@ -16,6 +16,7 @@ import pyarrow
 import six
 from six.moves.urllib.parse import urlparse
 
+from petastorm.gcsfs_helpers.gcsfs_wrapper import GCSFSWrapper
 from petastorm.hdfs.namenode import HdfsNamenodeResolver, HdfsConnector
 
 
@@ -37,7 +38,8 @@ class FilesystemResolver(object):
               1. If that doesn't work, try connecting directly to namenode ``hostname:port``.
            b. If no host, connect to the default name node.
         5. If ``scheme`` is ``s3``, use s3fs. The user must manually install s3fs before using s3
-        6. Fail otherwise.
+        6. If ``scheme`` is ``gs``or ``gcs``, use gcsfs. The user must manually install gcsfs before using GCS
+        7. Fail otherwise.
 
         :param dataset_url: The hdfs URL or absolute path to the dataset
         :param hadoop_configuration: an optional hadoop configuration
@@ -123,8 +125,24 @@ class FilesystemResolver(object):
             self._filesystem = pyarrow.filesystem.S3FSWrapper(fs)
             self._filesystem_factory = lambda: pyarrow.filesystem.S3FSWrapper(s3fs.S3FileSystem())
 
-        else:
+        elif self._parsed_dataset_url.scheme in ['gs', 'gcs']:
             # Case 6
+            # GCS support requires gcsfs to be installed
+            try:
+                import gcsfs
+            except ImportError:
+                raise ValueError('Must have gcsfs installed in order to use datasets on GCS. '
+                                 'Please install gcsfs and try again.')
+
+            if not self._parsed_dataset_url.netloc:
+                raise ValueError('URLs must be of the form gs://bucket/path or gcs://bucket/path')
+
+            fs = gcsfs.GCSFileSystem()
+            self._filesystem = GCSFSWrapper(fs)
+            self._filesystem_factory = lambda: GCSFSWrapper(gcsfs.GCSFileSystem())
+
+        else:
+            # Case 7
             raise ValueError('Unsupported scheme in dataset url {}. '
                              'Currently, only "file" and "hdfs" are supported.'.format(self._parsed_dataset_url.scheme))
 
@@ -140,7 +158,8 @@ class FilesystemResolver(object):
         For example s3fs expects the bucket name to be included in the path and doesn't support
         paths that start with a `/`
         """
-        if isinstance(self._filesystem, pyarrow.filesystem.S3FSWrapper):
+        if isinstance(self._filesystem, pyarrow.filesystem.S3FSWrapper) or \
+                isinstance(self._filesystem, GCSFSWrapper):
             # s3fs expects paths of the form `bucket/path`
             return self._parsed_dataset_url.netloc + self._parsed_dataset_url.path
 
