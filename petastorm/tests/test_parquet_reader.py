@@ -109,7 +109,6 @@ def test_invalid_column_name(scalar_dataset, reader_factory):
     with reader_factory(scalar_dataset.url, schema_fields=requested_fields) as reader:
         with pytest.raises(StopIteration):
             sample = next(reader)._asdict()
-            # Have to do something with sample to avoid build error.
             assert not sample
 
 
@@ -124,6 +123,7 @@ def test_invalid_and_valid_column_names(scalar_dataset, reader_factory):
     with reader_factory(scalar_dataset.url, schema_fields=requested_fields) as reader:
         sample = next(reader)._asdict()
         assert len(sample) == 1
+        assert set(sample.keys()) == {all_fields[1]}
         with pytest.raises(KeyError):
             assert sample[bad_field] == ""
 
