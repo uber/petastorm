@@ -98,37 +98,6 @@ def test_string_partition(reader_factory, tmpdir, partition_by):
 
 
 @pytest.mark.parametrize('reader_factory', _D)
-def test_invalid_column_name(scalar_dataset, reader_factory):
-    """Request a column that doesn't exist. Appears that when request only invalid fields,
-    DummyPool returns an EmptyResultError, which then causes a StopIteration in
-    ArrowReaderWorkerResultsQueueReader."""
-    all_fields = list(scalar_dataset.data[0].keys())
-    bad_field = _get_bad_field_name(all_fields)
-    requested_fields = [bad_field]
-
-    with reader_factory(scalar_dataset.url, schema_fields=requested_fields) as reader:
-        with pytest.raises(StopIteration):
-            sample = next(reader)._asdict()
-            assert not sample
-
-
-@pytest.mark.parametrize('reader_factory', _D)
-def test_invalid_and_valid_column_names(scalar_dataset, reader_factory):
-    """Request one column that doesn't exist and one that does. Confirm that only get one field back and
-    that get exception when try to read from invalid field."""
-    all_fields = list(scalar_dataset.data[0].keys())
-    bad_field = _get_bad_field_name(all_fields)
-    requested_fields = [bad_field, all_fields[1]]
-
-    with reader_factory(scalar_dataset.url, schema_fields=requested_fields) as reader:
-        sample = next(reader)._asdict()
-        assert len(sample) == 1
-        assert set(sample.keys()) == {all_fields[1]}
-        with pytest.raises(KeyError):
-            assert sample[bad_field] == ""
-
-
-@pytest.mark.parametrize('reader_factory', _D)
 def test_partitioned_field_is_not_queried(reader_factory, tmpdir):
     """Try datasets partitioned by a string, integer and string+integer fields"""
     url = 'file://' + tmpdir.strpath
