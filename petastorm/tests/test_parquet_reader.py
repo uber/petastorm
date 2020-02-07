@@ -51,6 +51,15 @@ def _check_simple_reader(reader, expected_data):
     assert count == len(expected_data)
 
 
+def _get_bad_field_name(field_list):
+    """ Grab first name from list of valid fields, append random characters to it to get an invalid
+    field name. """
+    bad_field = field_list[0]
+    while bad_field in field_list:
+        bad_field += "VR46"
+    return bad_field
+
+
 @pytest.mark.parametrize('reader_factory', _D + _TP)
 def test_simple_read(scalar_dataset, reader_factory):
     """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
@@ -124,3 +133,33 @@ def test_asymetric_parquet_pieces(reader_factory, tmpdir):
         actual_row_ids = list(itertools.chain(*row_ids_batched))
 
     assert ROWS_COUNT == len(actual_row_ids)
+
+
+@pytest.mark.parametrize('reader_factory', _D)
+def test_invalid_column_name(scalar_dataset, reader_factory):
+    """Request a column that doesn't exist. Appears that when request only invalid fields,
+    DummyPool returns an EmptyResultError, which then causes a StopIteration in
+    ArrowReaderWorkerResultsQueueReader."""
+    all_fields = list(scalar_dataset.data[0].keys())
+    bad_field = _get_bad_field_name(all_fields)
+    requested_fields = [bad_field]
+
+    with reader_factory(scalar_dataset.url, schema_fields=requested_fields) as reader:
+        with pytest.raises(StopIteration):
+            sample = next(reader)._asdict()
+            assert not sample
+
+
+@pytest.mark.parametrize('reader_factory', _D)
+def test_invalid_and_valid_column_names(scalar_dataset, reader_factory):
+    """Request one column that doesn't exist and one that does. Confirm that only get one field back and
+    that get exception when try to read from invalid field."""
+    all_fields = list(scalar_dataset.data[0].keys())
+    bad_field = _get_bad_field_name(all_fields)
+    requested_fields = [bad_field, all_fields[1]]
+
+    with reader_factory(scalar_dataset.url, schema_fields=requested_fields) as reader:
+        sample = next(reader)._asdict()
+        assert len(sample) == 1
+        with pytest.raises(KeyError):
+            assert sample[bad_field] == ""
