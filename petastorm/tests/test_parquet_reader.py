@@ -133,6 +133,7 @@ def test_asymetric_parquet_pieces(reader_factory, tmpdir):
     assert ROWS_COUNT == len(actual_row_ids)
 
 
+@pytest.mark.parametrize('reader_factory', _D)
 def test_invalid_column_name(scalar_dataset, reader_factory):
     """Request a column that doesn't exist. Appears that when request only invalid fields,
     DummyPool returns an EmptyResultError, which then causes a StopIteration in
@@ -144,7 +145,6 @@ def test_invalid_column_name(scalar_dataset, reader_factory):
     with reader_factory(scalar_dataset.url, schema_fields=requested_fields) as reader:
         with pytest.raises(StopIteration):
             sample = next(reader)._asdict()
-            # Have to do something with sample to avoid build error.
             assert not sample
 
 
