@@ -137,7 +137,7 @@ def test_asymetric_parquet_pieces(reader_factory, tmpdir):
 
 @pytest.mark.parametrize('reader_factory', _D)
 def test_invalid_column_name(scalar_dataset, reader_factory):
-    """Request a column that doesn't exist. Appears that when request only invalid fields,
+    """Request a column that doesn't exist. When request only invalid fields,
     DummyPool returns an EmptyResultError, which then causes a StopIteration in
     ArrowReaderWorkerResultsQueueReader."""
     all_fields = list(scalar_dataset.data[0].keys())
