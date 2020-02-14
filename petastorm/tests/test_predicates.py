@@ -147,6 +147,39 @@ def test_predicate_on_single_column(synthetic_dataset):
     assert counter == len(synthetic_dataset.data)
 
 
+def create_single_id_dataset(tmpdir, TestSchema):
+    """
+    Generates a partitioned dataset and ensures that readers evaluate the type of the partition
+    column according to the type given in the Unischema.
+    """
+
+    def test_row_generator(x):
+        """Returns a single entry in the generated dataset."""
+        print("x=", x)
+        return {'id': x,
+                'test_field': x*x}
+
+    rowgroup_size_mb = 256
+    dataset_url = "file://{0}/partitioned_test_dataset".format(tmpdir)
+
+    spark = SparkSession.builder.config('spark.driver.memory', '2g').master('local[2]').getOrCreate()
+    sc = spark.sparkContext
+
+    rows_count = 10
+    with materialize_dataset(spark, dataset_url, TestSchema, rowgroup_size_mb):
+
+        rows_rdd = sc.parallelize(range(rows_count))\
+            .map(test_row_generator)\
+            .map(lambda x: dict_to_spark_row(TestSchema, x))
+
+        print("rows_rdd=", rows_rdd)
+        spark.createDataFrame(rows_rdd, TestSchema.as_spark_schema()) \
+            .write \
+            .partitionBy('id') \
+            .parquet(dataset_url)
+    return dataset_url
+
+
 def test_predicate_on_partitioned_dataset(tmpdir):
     """
     Generates a partitioned dataset and ensures that readers evaluate the type of the partition
@@ -157,9 +190,26 @@ def test_predicate_on_partitioned_dataset(tmpdir):
         UnischemaField('test_field', np.int32, (), ScalarCodec(IntegerType()), False),
     ])
 
+    dataset_url = create_single_id_dataset(tmpdir, TestSchema)
+
+    # Verify that have at least one record with an id of 3, but none with '3'.
+    with make_reader(dataset_url, predicate=in_lambda(['id'], lambda x: x == 3)) as reader:
+        assert next(reader).id == 3
+    with make_reader(dataset_url, predicate=in_lambda(['id'], lambda x: x == '3')) as reader:
+        with pytest.raises(StopIteration):
+            # Predicate should have selected none, so a StopIteration should be raised.
+            next(reader)
+
+
+def _create_2_id_dataset(tmpdir, TestSchema):
+    """
+    Generates a partitioned dataset and ensures that readers evaluate the type of the partition
+    column according to the type given in the Unischema.
+    """
     def test_row_generator(x):
         """Returns a single entry in the generated dataset."""
         return {'id': x,
+                'id2': x+1,
                 'test_field': x*x}
 
     rowgroup_size_mb = 256
@@ -177,12 +227,60 @@ def test_predicate_on_partitioned_dataset(tmpdir):
 
         spark.createDataFrame(rows_rdd, TestSchema.as_spark_schema()) \
             .write \
-            .partitionBy('id') \
+            .partitionBy('id', 'id2') \
             .parquet(dataset_url)
+    return dataset_url
+
+
+Test2idSchema = Unischema('TestSchema', [
+    UnischemaField('id', np.int32, (), ScalarCodec(IntegerType()), False),
+    UnischemaField('id2', np.int32, (), ScalarCodec(IntegerType()), False),
+    UnischemaField('test_field', np.int32, (), ScalarCodec(IntegerType()), False),
+])
+predicate1 = in_lambda(['id'], lambda x: x == 3)
+predicate2 = in_lambda(['id2'], lambda x: x == 4)
+predicate3 = in_lambda(['id2'], lambda x: x == 5)
+
+
+def test_predicate_on_partitioned_dataset_2_partitions_1_predicate(tmpdir):
+    """
+    Generates a partitioned dataset and ensures that readers evaluate the type of the partition
+    column according to the type given in the Unischema.
+    """
+
+    dataset_url = _create_2_id_dataset(tmpdir, Test2idSchema)
 
     with make_reader(dataset_url, predicate=in_lambda(['id'], lambda x: x == 3)) as reader:
-        assert next(reader).id == 3
+        data = next(reader)
+        assert data.id == 3
+        assert data.id2 == 4
     with make_reader(dataset_url, predicate=in_lambda(['id'], lambda x: x == '3')) as reader:
+        with pytest.raises(StopIteration):
+            # Predicate should have selected none, so a StopIteration should be raised.
+            next(reader)
+
+
+def test_predicate_on_partitioned_dataset_2_partitions_2_predicates_find_match(tmpdir):
+    """
+    Generates a partitioned dataset and ensures that readers evaluate the type of the partition
+    column according to the type given in the Unischema.
+    """
+    dataset_url = _create_2_id_dataset(tmpdir, Test2idSchema)
+    test_predicate = in_reduce([predicate1, predicate2], all)
+    with make_reader(dataset_url, predicate=test_predicate) as reader:
+        data = next(reader)
+        assert data.id == 3
+        assert data.id2 == 4
+
+
+def test_predicate_on_partitioned_dataset_2_partitions_2_predicates_no_match(tmpdir):
+    """
+    Generates a partitioned dataset and ensures that readers evaluate the type of the partition
+    column according to the type given in the Unischema.
+    """
+    dataset_url = _create_2_id_dataset(tmpdir, Test2idSchema)
+    test_predicate = in_reduce([predicate1, predicate3], all)
+    with make_reader(dataset_url, predicate=test_predicate) as reader:
         with pytest.raises(StopIteration):
             # Predicate should have selected none, so a StopIteration should be raised.
             next(reader)

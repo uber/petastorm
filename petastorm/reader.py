@@ -523,30 +523,39 @@ class Reader(object):
         return filtered_row_group_indexes
 
     def _apply_predicate_to_row_groups(self, dataset, row_groups, predicate):
-        """Filters the list of row group indexes using rowgroup selector object. Returns a modified list of rowgroup
-        indexes and a list of worker_predicate: predicates that could not be applied at this level
-        (parquet partitioning)."""
-
+        """Optimization to skip reading entire rowgroups, by filtering the list of rowgroup indexes using the rowgroup
+        selector object. Returns a modified list of rowgroup indexes and a possibly modified worker_predicate.
+        If all of the predicate conditions have been checked here, using the rowgroup selectors, returns a blank
+        predicate, as there is no need to check again when reading in the data.
+        This optimization currently only runs if all of the predicate fields are also partition keys. If some of them
+        are not, nothing is checked here - doing so would require changing the predicate objects to check for partial
+        matches. However, if there are more partition keys than predicate fields, this function will filter correctly,
+        as long as the partition keys include all of the predicate fields."""
         if predicate:
             if not isinstance(predicate, PredicateBase):
                 raise ValueError('predicate parameter is expected to be derived from PredicateBase')
             predicate_fields = predicate.get_fields()
 
-            if set(predicate_fields) == dataset.partitions.partition_names:
-                assert len(dataset.partitions.partition_names) == 1, \
-                    'Datasets with only a single partition level supported at the moment'
-
+            if predicate_fields and set(predicate_fields).issubset(dataset.partitions.partition_names):
                 filtered_row_group_indexes = []
                 for piece_index, piece in enumerate(row_groups):
-                    partition_name, partition_index = piece.partition_keys[0]
-                    partition_value = dataset.partitions[0].keys[partition_index]
+                    # Create dict of partition key field names/values, for evaluating the predicate.
+                    partition_dict = {}
+                    for partition_level, (partition_name, partition_index) in enumerate(piece.partition_keys):
+                        if partition_name in predicate_fields:
+                            partition_value = dataset.partitions[partition_level].keys[partition_index]
 
-                    # Convert partition value to correct type per the schema
-                    partition_value = self.schema.fields[partition_name].numpy_dtype(partition_value)
-                    if predicate.do_include({partition_name: partition_value}):
+                            # Convert partition value to correct type per the schema
+                            partition_value = self.schema.fields[partition_name].numpy_dtype(partition_value)
+                            partition_dict[partition_name] = partition_value
+                    if predicate.do_include(partition_dict):
                         filtered_row_group_indexes.append(piece_index)
+
+                # We've checked all the predicates here, no need to check again when reading in actual data.
                 worker_predicate = None
             else:
+                # Not able to check all the predicates here, because the fields aren't all partition keys,
+                # so not checking anything.
                 filtered_row_group_indexes = list(range(len(row_groups)))
                 worker_predicate = predicate
 
@@ -557,7 +566,7 @@ class Reader(object):
 
     @staticmethod
     def _normalize_shuffle_options(shuffle_row_drop_partitions, dataset):
-        """Checks that shuffle_options doesnt ask for more patitions than rows in a row group.
+        """Checks that shuffle_options doesnt ask for more partitions than rows in a row group.
         This prevents sending partitions to workers which will result in not reading anything."""
         if shuffle_row_drop_partitions > 1 and dataset.metadata and dataset.metadata.num_row_groups:
             max_rows_in_row_group = 1

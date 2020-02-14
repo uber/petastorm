@@ -406,20 +406,18 @@ def test_predicate_on_multiple_fields_batched(synthetic_dataset, reader_factory)
         assert actual.id2[0] == expected_values['id2']
 
 
+@pytest.mark.parametrize('predicate_spec', [{'invalid_field_name': 1},
+                                            dict(),
+                                            {'invalid_field_name': 1, 'id': 11},
+                                            {'invalid_field_name': 1, 'invalid_field_name_2': 11}])
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
-def test_predicate_with_invalid_fields(synthetic_dataset, reader_factory):
+def test_predicate_with_invalid_fields(synthetic_dataset, reader_factory, predicate_spec):
     """Try passing an invalid field name from a predicate to the reader. An error should be raised."""
-    TEST_CASES = [
-        {'invalid_field_name': 1},
-        dict(),
-        {'invalid_field_name': 1, 'id': 11},
-        {'invalid_field_name': 1, 'invalid_field_name_2': 11}]
-
-    for predicate_spec in TEST_CASES:
-        with reader_factory(synthetic_dataset.url, shuffle_row_groups=False,
-                            predicate=EqualPredicate(predicate_spec)) as reader:
-            with pytest.raises(ValueError):
-                next(reader)
+    with reader_factory(synthetic_dataset.url, shuffle_row_groups=False,
+                        predicate=EqualPredicate(predicate_spec)) as reader:
+        with pytest.raises(ValueError):
+            next(reader)
+            print("test_predicate..., next worked.")
 
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)

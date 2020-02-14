@@ -126,7 +126,7 @@ class in_reduce(PredicateBase):
         """
         check_list = [isinstance(p, PredicateBase) for p in predicate_list]
         if not all(check_list):
-            raise ValueError('Predicate is nor derived from PredicateBase')
+            raise ValueError('Predicate is not derived from PredicateBase')
         self._predicate_list = predicate_list
         self._reduce_func = reduce_func
 
