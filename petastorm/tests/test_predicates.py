@@ -146,6 +146,7 @@ def test_predicate_on_single_column(synthetic_dataset):
         assert actual['id2'] < 2
     assert counter == len(synthetic_dataset.data)
 
+    
 def test_predicate_on_partitioned_dataset(tmpdir):
     """
     Generates a partitioned dataset and ensures that readers evaluate the type of the partition
