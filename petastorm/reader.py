@@ -532,9 +532,7 @@ class Reader(object):
                 raise ValueError('predicate parameter is expected to be derived from PredicateBase')
             predicate_fields = predicate.get_fields()
 
-            if set(predicate_fields) == dataset.partitions.partition_names:
-                assert len(dataset.partitions.partition_names) == 1, \
-                    'Datasets with only a single partition level supported at the moment'
+            if set(predicate_fields).issubset(dataset.partitions.partition_names):
 
                 filtered_row_group_indexes = []
                 for piece_index, piece in enumerate(row_groups):

@@ -146,7 +146,6 @@ def test_predicate_on_single_column(synthetic_dataset):
         assert actual['id2'] < 2
     assert counter == len(synthetic_dataset.data)
 
-
 def test_predicate_on_partitioned_dataset(tmpdir):
     """
     Generates a partitioned dataset and ensures that readers evaluate the type of the partition
@@ -154,12 +153,14 @@ def test_predicate_on_partitioned_dataset(tmpdir):
     """
     TestSchema = Unischema('TestSchema', [
         UnischemaField('id', np.int32, (), ScalarCodec(IntegerType()), False),
+        UnischemaField('id2', np.int32, (), ScalarCodec(IntegerType()), False),
         UnischemaField('test_field', np.int32, (), ScalarCodec(IntegerType()), False),
     ])
 
     def test_row_generator(x):
         """Returns a single entry in the generated dataset."""
         return {'id': x,
+                'id2': x+1,
                 'test_field': x*x}
 
     rowgroup_size_mb = 256
@@ -177,12 +178,15 @@ def test_predicate_on_partitioned_dataset(tmpdir):
 
         spark.createDataFrame(rows_rdd, TestSchema.as_spark_schema()) \
             .write \
-            .partitionBy('id') \
+            .partitionBy('id', 'id2') \
             .parquet(dataset_url)
 
     with make_reader(dataset_url, predicate=in_lambda(['id'], lambda x: x == 3)) as reader:
         assert next(reader).id == 3
+    with make_reader(dataset_url, predicate=in_lambda(['id2'], lambda x: x == 5)) as reader:
+        assert next(reader).id == 5
     with make_reader(dataset_url, predicate=in_lambda(['id'], lambda x: x == '3')) as reader:
         with pytest.raises(StopIteration):
             # Predicate should have selected none, so a StopIteration should be raised.
             next(reader)
+
