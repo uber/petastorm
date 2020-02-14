@@ -189,4 +189,3 @@ def test_predicate_on_partitioned_dataset(tmpdir):
         with pytest.raises(StopIteration):
             # Predicate should have selected none, so a StopIteration should be raised.
             next(reader)
-
