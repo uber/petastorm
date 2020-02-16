@@ -175,6 +175,28 @@ def test_transform_function_with_predicate(synthetic_dataset, reader_factory):
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
 ])
+def test_transform_function_returns_a_new_dict_with_predicate(synthetic_dataset, reader_factory):
+
+    def transform(sample):
+        return {'id': sample['id'], 'id2': -1}
+
+    with reader_factory(synthetic_dataset.url, schema_fields=[TestSchema.id, TestSchema.id2],
+                        predicate=in_lambda(['id2'], lambda id2: id2 == 1),
+                        transform_spec=TransformSpec(func=transform)) as reader:
+        rows = list(reader)
+        actual_ids = np.asarray(list(row.id for row in rows))
+        assert actual_ids.size > 0
+        # In the test data id2 = id % 2, which means we expect only odd ids to remain after
+        # we apply lambda id2: id2 == 1 predicate.
+        assert np.all(actual_ids % 2 == 1)
+
+        transformed_ids = np.asarray(list(row.id2 for row in rows))
+        assert np.all(transformed_ids == -1)
+
+
+@pytest.mark.parametrize('reader_factory', [
+    lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
+])
 def test_transform_function_new_field(synthetic_dataset, reader_factory):
     """"""
 
