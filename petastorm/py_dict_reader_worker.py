@@ -247,7 +247,7 @@ class PyDictReaderWorker(WorkerBase):
             result = filtered_decoded_predicate_rows
 
         if self._transform_spec:
-            _apply_transform_spec(result, self._transform_spec)
+            result = _apply_transform_spec(result, self._transform_spec)
 
         return result
 
