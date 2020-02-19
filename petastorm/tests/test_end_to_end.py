@@ -417,7 +417,6 @@ def test_predicate_with_invalid_fields(synthetic_dataset, reader_factory, predic
                         predicate=EqualPredicate(predicate_spec)) as reader:
         with pytest.raises(ValueError):
             next(reader)
-            print("test_predicate..., next worked.")
 
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)

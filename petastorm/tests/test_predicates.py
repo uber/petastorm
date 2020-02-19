@@ -155,7 +155,6 @@ def create_single_id_dataset(tmpdir, TestSchema):
 
     def test_row_generator(x):
         """Returns a single entry in the generated dataset."""
-        print("x=", x)
         return {'id': x,
                 'test_field': x*x}
 
@@ -172,7 +171,6 @@ def create_single_id_dataset(tmpdir, TestSchema):
             .map(test_row_generator)\
             .map(lambda x: dict_to_spark_row(TestSchema, x))
 
-        print("rows_rdd=", rows_rdd)
         spark.createDataFrame(rows_rdd, TestSchema.as_spark_schema()) \
             .write \
             .partitionBy('id') \
