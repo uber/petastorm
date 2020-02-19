@@ -82,8 +82,6 @@ def test_random_shuffling_buffer_can_add_retrieve_flags():
     # shuffling_buffer_capacity
     q.add_many([6, 7, 8, 9])
     assert not q.can_add()
-    with pytest.raises(RuntimeError):
-        q.add_many([1])
     assert q.can_retrieve()
     assert q.size == 8
 
