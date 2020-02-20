@@ -1,6 +1,7 @@
 *.pyc
 .idea
 .pytest_cache
+*.DS_Store
 
 # Repository build artifacts
 petastorm.egg-info
