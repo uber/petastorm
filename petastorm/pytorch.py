@@ -165,7 +165,6 @@ class DataLoader(object):
                     row_as_dict[k] = self.collate_fn([v])
                 else:
                     row_as_dict[k] = self.collate_fn(v)
-                row_as_dict[k] = row_as_dict[k]
             self._shuffling_buffer.add_many(row_as_dict)
 
             # _yield_batches will emit as much batches as are allowed by the shuffling_buffer (RandomShufflingBuffer
