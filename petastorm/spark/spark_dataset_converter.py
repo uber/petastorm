@@ -2,6 +2,7 @@ from petastorm import make_batch_reader
 from petastorm.tf_utils import make_petastorm_dataset
 from pyspark.sql.session import SparkSession
 
+import atexit
 import os
 import shutil
 import uuid
@@ -61,6 +62,7 @@ def _cache_df_or_retrieve_cache_path(df, cache_dir, row_group_size):
     Check whether the df is cached.
     If so, return the existing cache file path.
     If not, cache the df into the cache_dir in parquet format and return the cache file path.
+    Use atexit to delete the cache before the python interpreter exits.
     :param df:        A :class:`DataFrame` object.
     :param cache_dir: A string denoting the directory for the saved parquet file.
     :return:          A string denoting the path of the saved parquet file.
@@ -70,6 +72,7 @@ def _cache_df_or_retrieve_cache_path(df, cache_dir, row_group_size):
     df.write.mode("overwrite") \
         .option("parquet.block.size", row_group_size) \
         .parquet(save_to_dir)
+    atexit.register(shutil.rmtree, save_to_dir, True)
 
     # remove _xxx files, which will break `pyarrow.parquet` loading
     underscore_files = [f for f in os.listdir(save_to_dir) if f.startswith("_")]
