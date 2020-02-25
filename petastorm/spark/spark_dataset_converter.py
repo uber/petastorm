@@ -5,6 +5,7 @@ from pyspark.sql.session import SparkSession
 import atexit
 import os
 import shutil
+import threading
 import uuid
 
 DEFAULT_CACHE_DIR = "/tmp/spark-converter"
@@ -67,24 +68,70 @@ class tf_dataset_context_manager:
         self.reader.join()
 
 
-def _cache_df_or_retrieve_cache_path(df, cache_dir, row_group_size, compression_codec):
+def _get_df_plan(df):
+    return df._jdf.queryExecution().analyzed()
+
+
+class CachedDataFrameMeta(object):
+
+    def __init__(self, df, row_group_size, compression_codec):
+        self.row_group_size = row_group_size
+        self.compression_codec = compression_codec
+        # Note: the metadata will hold dataframe plan, but it won't
+        # hold the dataframe object (dataframe plan will not reference dataframe object),
+        # This means the dataframe can be released by spark gc.
+        self.df_plan = _get_df_plan(df)
+        self.data_path = None
+
+    @classmethod
+    def create_cached_dataframe(cls, df, parent_cache_dir, row_group_size, compression_codec):
+        meta = cls(df, row_group_size, compression_codec)
+        meta.data_path = _materialize_df(
+            df, parent_cache_dir, row_group_size, compression_codec)
+        return meta
+
+
+_cache_df_meta_list = []
+_cache_df_meta_list_lock = threading.Lock()
+
+
+def _cache_df_or_retrieve_cache_path(df, parent_cache_dir, row_group_size, compression_codec):
     """
     Check whether the df is cached.
     If so, return the existing cache file path.
     If not, cache the df into the cache_dir in parquet format and return the cache file path.
     Use atexit to delete the cache before the python interpreter exits.
     :param df:        A :class:`DataFrame` object.
-    :param cache_dir: A string denoting the directory for the saved parquet file.
+    :param parent_cache_dir: A string denoting the directory for the saved parquet file.
     :param compression_codec: Specify compression codec.
     :return:          A string denoting the path of the saved parquet file.
     """
+    # TODO
+    #  Improve the cache list by hash table (Note we need use hash(df_plan + row_group_size)
+    with _cache_df_meta_list_lock:
+        df_plan = _get_df_plan(df)
+        for meta in _cache_df_meta_list:
+            if meta.row_group_size == row_group_size and \
+                    meta.compression_codec == compression_codec and \
+                    meta.df_plan.sameResult(df_plan):
+                return meta.data_path
+        # do not find cached dataframe, start materializing.
+        cached_df_meta = CachedDataFrameMeta.create_cached_dataframe(
+            df, parent_cache_dir, row_group_size, compression_codec)
+        _cache_df_meta_list.append(cached_df_meta)
+        return cached_df_meta.data_path
+
+
+def _materialize_df(df, parent_cache_dir, row_group_size, compression_codec):
     uuid_str = str(uuid.uuid4())
-    save_to_dir = os.path.join(cache_dir, uuid_str)
+    save_to_dir = os.path.join(parent_cache_dir, uuid_str)
 
     df.write \
         .option("compression", compression_codec) \
         .option("parquet.block.size", row_group_size) \
         .parquet(save_to_dir)
+
+    # TODO: support both local fs and hdfs
     atexit.register(shutil.rmtree, save_to_dir, True)
 
     return save_to_dir
@@ -93,8 +140,8 @@ def _cache_df_or_retrieve_cache_path(df, cache_dir, row_group_size, compression_
 def make_spark_converter(
         df,
         cache_dir=None,
-        compression=None,
-        parquet_row_group_size=ROW_GROUP_SIZE):
+        parquet_row_group_size=ROW_GROUP_SIZE,
+        compression=None):
     """
     Convert a spark dataframe into a :class:`SparkDatasetConverter` object. It will materialize
     a spark dataframe to a `cache_dir` or a default cache directory.
