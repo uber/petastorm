@@ -11,6 +11,10 @@ DEFAULT_CACHE_DIR = "/tmp/spark-converter"
 ROW_GROUP_SIZE = 32 * 1024 * 1024
 
 
+def _get_spark_session():
+    return SparkSession.builder.getOrCreate()
+
+
 class SparkDatasetConverter(object):
     """
     A `SparkDatasetConverter` object holds one materialized spark dataframe and
@@ -30,24 +34,30 @@ class SparkDatasetConverter(object):
         return self.dataset_size
 
     def make_tf_dataset(self):
-        reader = make_batch_reader("file://" + self.cache_file_path)
-        return tf_dataset_context_manager(reader)
+        # TODO: make data_uri support both local fs and hdfs
+        #   1. if cache_file_path is local path, convert it into "file:///..."
+        #   2. if cache_file_path is hdfs path: "hdfs:/...", keep it unchanged
+        #   3. if other cases, raise error.
+        data_uri = "file://" + self.cache_file_path
+        return tf_dataset_context_manager(data_uri)
 
     def delete(self):
         """
         Delete cache files at self.cache_file_path.
         """
+        # TODO:
+        #   make it support both local fs and hdfs
         shutil.rmtree(self.cache_file_path, ignore_errors=True)
 
 
 class tf_dataset_context_manager:
 
-    def __init__(self, reader):
+    def __init__(self, data_uri):
         """
         :param reader: A :class:`petastorm.reader.Reader` object.
         """
-        self.reader = reader
-        self.dataset = make_petastorm_dataset(reader)
+        self.reader = make_batch_reader(data_uri)
+        self.dataset = make_petastorm_dataset(self.reader)
 
     def __enter__(self):
         return self.dataset
@@ -57,7 +67,7 @@ class tf_dataset_context_manager:
         self.reader.join()
 
 
-def _cache_df_or_retrieve_cache_path(df, cache_dir, row_group_size):
+def _cache_df_or_retrieve_cache_path(df, cache_dir, row_group_size, compression_codec):
     """
     Check whether the df is cached.
     If so, return the existing cache file path.
@@ -65,23 +75,26 @@ def _cache_df_or_retrieve_cache_path(df, cache_dir, row_group_size):
     Use atexit to delete the cache before the python interpreter exits.
     :param df:        A :class:`DataFrame` object.
     :param cache_dir: A string denoting the directory for the saved parquet file.
+    :param compression_codec: Specify compression codec.
     :return:          A string denoting the path of the saved parquet file.
     """
     uuid_str = str(uuid.uuid4())
     save_to_dir = os.path.join(cache_dir, uuid_str)
-    df.write.mode("overwrite") \
+
+    df.write \
+        .option("compression", compression_codec) \
         .option("parquet.block.size", row_group_size) \
         .parquet(save_to_dir)
     atexit.register(shutil.rmtree, save_to_dir, True)
 
-    # remove _xxx files, which will break `pyarrow.parquet` loading
-    underscore_files = [f for f in os.listdir(save_to_dir) if f.startswith("_")]
-    for f in underscore_files:
-        os.remove(os.path.join(save_to_dir, f))
     return save_to_dir
 
 
-def make_spark_converter(df, cache_dir=None, row_group_size=ROW_GROUP_SIZE):
+def make_spark_converter(
+        df,
+        cache_dir=None,
+        compression=None,
+        parquet_row_group_size=ROW_GROUP_SIZE):
     """
     Convert a spark dataframe into a :class:`SparkDatasetConverter` object. It will materialize
     a spark dataframe to a `cache_dir` or a default cache directory.
@@ -93,15 +106,26 @@ def make_spark_converter(df, cache_dir=None, row_group_size=ROW_GROUP_SIZE):
                       Default None, it will fallback to the spark config
                       "spark.petastorm.converter.default.cache.dir".
                       If the spark config is empty, it will fallback to DEFAULT_CACHE_DIR.
-    :param row_group_size: An int denoting the number of bytes in a parquet row group.
+    :param compression: True or False, specify whether to apply compression. Default None.
+                        If None, will automatically choose the best way.
+    :param parquet_row_group_size: An int denoting the number of bytes in a parquet row group.
 
     :return: a :class:`SparkDatasetConverter` object that holds the materialized dataframe and
             can be used to make one or more tensorflow datasets or torch dataloaders.
     """
-    spark = SparkSession.builder.getOrCreate()
     if cache_dir is None:
-        cache_dir = spark.conf \
+        cache_dir = _get_spark_session().conf \
             .get("spark.petastorm.converter.default.cache.dir", DEFAULT_CACHE_DIR)
-    cache_file_path = _cache_df_or_retrieve_cache_path(df, cache_dir, row_group_size)
-    dataset_size = spark.read.parquet(cache_file_path).count()
+
+    if compression is None:
+        # TODO: Improve default behavior to be automatically choosing the best way.
+        compression_codec = "uncompressed"
+    elif compression:
+        compression_codec = "snappy"
+    else:
+        compression_codec = "uncompressed"
+
+    cache_file_path = _cache_df_or_retrieve_cache_path(
+        df, cache_dir, parquet_row_group_size, compression_codec)
+    dataset_size = _get_spark_session().read.parquet(cache_file_path).count()
     return SparkDatasetConverter(cache_file_path, dataset_size)
