@@ -126,3 +126,23 @@ class TfConverterTest(unittest.TestCase):
         converter2 = make_spark_converter(df1, compression=True)
         self.assertEqual("snappy",
                          self._get_compression_type(converter2.cache_file_path).lower())
+
+    def test_df_caching(self):
+        df1 = self.spark.range(10)
+        df2 = self.spark.range(10)
+        df3 = self.spark.range(20)
+
+        converter1 = make_spark_converter(df1)
+        converter2 = make_spark_converter(df2)
+        self.assertEqual(converter1.cache_file_path, converter2.cache_file_path)
+
+        converter3 = make_spark_converter(df3)
+        self.assertNotEqual(converter1.cache_file_path, converter3.cache_file_path)
+
+        converter11 = make_spark_converter(df1, parquet_row_group_size=8 * 1024 * 1024)
+        converter21 = make_spark_converter(df1, parquet_row_group_size=16 * 1024 * 1024)
+        self.assertNotEqual(converter11.cache_file_path, converter21.cache_file_path)
+
+        converter12 = make_spark_converter(df1, compression=True)
+        converter22 = make_spark_converter(df1, compression=False)
+        self.assertNotEqual(converter12.cache_file_path, converter22.cache_file_path)
