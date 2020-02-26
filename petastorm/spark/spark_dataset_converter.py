@@ -1,19 +1,59 @@
 from petastorm import make_batch_reader
+from petastorm.fs_utils import FilesystemResolver
 from petastorm.tf_utils import make_petastorm_dataset
 from pyspark.sql.session import SparkSession
+from six.moves.urllib.parse import urlparse
 
 import atexit
 import os
 import shutil
 import threading
 import uuid
+import warnings
 
-DEFAULT_CACHE_DIR = "/tmp/spark-converter"
+DEFAULT_CACHE_DIR = "file:///tmp/spark-converter"
 ROW_GROUP_SIZE = 32 * 1024 * 1024
 
 
 def _get_spark_session():
     return SparkSession.builder.getOrCreate()
+
+
+def _check_and_add_scheme(data_url):
+    """
+    Check the scheme in the url. Only HDFS and local file system are supported.
+    Add `file://` to the url starts with `/`.
+    :param data_url: A string denoting the location of the cache files.
+                     Supported schemes: file:///..., /..., hdfs:/...
+    :return: A string of the data_url with supported scheme.
+    """
+    if data_url.startswith("/"):
+        data_url = "file://" + data_url
+    parsed = urlparse(data_url)
+    if parsed.scheme not in {"file", "hdfs"}:
+        raise NotImplementedError("Scheme {} is not supported.".format(parsed.scheme))
+    return parsed.geturl()
+
+
+def _delete_cache_data(dataset_url):
+    """
+    Get fs handler from java gateway
+    :return:
+    """
+    hdfs_driver = 'libhdfs3'
+    resolver = FilesystemResolver(dataset_url, hdfs_driver)
+    fs = resolver.filesystem()
+    parsed = urlparse(dataset_url)
+    try:
+        if parsed.scheme.lower() == "file":
+            local_path = parsed.path
+            if os.path.exists(local_path):
+                shutil.rmtree(local_path, ignore_errors=False)
+        elif parsed.scheme.lower() == "hdfs":
+            if fs.exists(dataset_url):
+                fs.delete(dataset_url, recursive=True)
+    except BaseException as e:
+        warnings.warn("Failed to delete files at {}\n{}".format(dataset_url, str(e)))
 
 
 class SparkDatasetConverter(object):
@@ -28,36 +68,29 @@ class SparkDatasetConverter(object):
         :param cache_file_path: A string denoting the path to store the cache files.
         :param dataset_size: An int denoting the number of rows in the dataframe.
         """
-        self.cache_file_path = cache_file_path
+        self.cache_file_path = _check_and_add_scheme(cache_file_path)
         self.dataset_size = dataset_size
 
     def __len__(self):
         return self.dataset_size
 
     def make_tf_dataset(self):
-        # TODO: make data_uri support both local fs and hdfs
-        #   1. if cache_file_path is local path, convert it into "file:///..."
-        #   2. if cache_file_path is hdfs path: "hdfs:/...", keep it unchanged
-        #   3. if other cases, raise error.
-        data_uri = "file://" + self.cache_file_path
-        return tf_dataset_context_manager(data_uri)
+        return tf_dataset_context_manager(self.cache_file_path)
 
     def delete(self):
         """
         Delete cache files at self.cache_file_path.
         """
-        # TODO:
-        #   make it support both local fs and hdfs
-        shutil.rmtree(self.cache_file_path, ignore_errors=True)
+        _delete_cache_data(self.cache_file_path)
 
 
 class tf_dataset_context_manager:
 
-    def __init__(self, data_uri):
+    def __init__(self, data_url):
         """
-        :param reader: A :class:`petastorm.reader.Reader` object.
+        :param data_url: A string specifying the data URI.
         """
-        self.reader = make_batch_reader(data_uri)
+        self.reader = make_batch_reader(data_url)
         self.dataset = make_petastorm_dataset(self.reader)
 
     def __enter__(self):
@@ -130,16 +163,14 @@ def _materialize_df(df, parent_cache_dir, row_group_size, compression_codec):
         .option("compression", compression_codec) \
         .option("parquet.block.size", row_group_size) \
         .parquet(save_to_dir)
-
-    # TODO: support both local fs and hdfs
-    atexit.register(shutil.rmtree, save_to_dir, True)
+    atexit.register(_delete_cache_data, save_to_dir)
 
     return save_to_dir
 
 
 def make_spark_converter(
         df,
-        cache_dir=None,
+        cache_url=None,
         parquet_row_group_size=ROW_GROUP_SIZE,
         compression=None):
     """
@@ -149,20 +180,22 @@ def make_spark_converter(
     can be used to make one or more tensorflow datasets or torch dataloaders.
 
     :param df:        The :class:`DataFrame` object to be converted.
-    :param cache_dir: A string denoting the parent directory to store intermediate files.
+    :param cache_url: A string denoting the parent directory to store intermediate files.
+                      Supported schemes: file:///..., /..., hdfs:/...
                       Default None, it will fallback to the spark config
                       "spark.petastorm.converter.default.cache.dir".
                       If the spark config is empty, it will fallback to DEFAULT_CACHE_DIR.
+    :param parquet_row_group_size: An int denoting the number of bytes in a parquet row group.
     :param compression: True or False, specify whether to apply compression. Default None.
                         If None, will automatically choose the best way.
-    :param parquet_row_group_size: An int denoting the number of bytes in a parquet row group.
 
     :return: a :class:`SparkDatasetConverter` object that holds the materialized dataframe and
             can be used to make one or more tensorflow datasets or torch dataloaders.
     """
-    if cache_dir is None:
-        cache_dir = _get_spark_session().conf \
+    if cache_url is None:
+        cache_url = _get_spark_session().conf \
             .get("spark.petastorm.converter.default.cache.dir", DEFAULT_CACHE_DIR)
+    cache_url = _check_and_add_scheme(cache_url)  # early stopping for invalid scheme
 
     if compression is None:
         # TODO: Improve default behavior to be automatically choosing the best way.
@@ -173,6 +206,6 @@ def make_spark_converter(
         compression_codec = "uncompressed"
 
     cache_file_path = _cache_df_or_retrieve_cache_path(
-        df, cache_dir, parquet_row_group_size, compression_codec)
+        df, cache_url, parquet_row_group_size, compression_codec)
     dataset_size = _get_spark_session().read.parquet(cache_file_path).count()
     return SparkDatasetConverter(cache_file_path, dataset_size)
