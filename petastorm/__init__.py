@@ -14,6 +14,7 @@
 
 from petastorm.errors import NoDataAvailableError  # noqa: F401
 from petastorm.reader import make_reader, make_batch_reader  # noqa: F401
+from petastorm.spark.spark_dataset_converter import make_spark_converter  # noqa: F401
 from petastorm.transform import TransformSpec  # noqa: F401
 
 __version__ = '0.8.2'

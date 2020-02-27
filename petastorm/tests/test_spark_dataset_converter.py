@@ -1,25 +1,42 @@
-from pathlib import Path
-from urllib.parse import urlparse
+#  Copyright (c) 2020 Databricks, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-from petastorm.spark.spark_dataset_converter import make_spark_converter, _check_and_add_scheme
-from pyspark.sql import SparkSession
-from pyspark.sql.types import StructType, StructField, \
-    BooleanType, FloatType, ShortType, IntegerType, LongType, DoubleType, StringType, BinaryType, ByteType
+import os
+from six.moves.urllib.parse import urlparse
+import subprocess
+import unittest
 
 import numpy as np
-import os
-import subprocess
 import tensorflow as tf
-import unittest
+from pyspark.sql import SparkSession
+from pyspark.sql.types import BinaryType, BooleanType, ByteType, DoubleType, \
+    FloatType, IntegerType, LongType, ShortType, StringType, StructField, \
+    StructType
+
+from petastorm.spark.spark_dataset_converter import make_spark_converter, \
+    _check_and_add_scheme
 
 
 class TfConverterTest(unittest.TestCase):
 
-    def setUp(self) -> None:
+    def setUp(self):
         self.spark = SparkSession.builder \
             .master("local[2]") \
             .appName("petastorm.spark tests") \
             .getOrCreate()
+        self.spark.conf.set("spark.petastorm.converter.default.cache.dir.url",
+                            "file:///tmp/123")
 
     def test_primitive(self):
         schema = StructType([
@@ -34,10 +51,13 @@ class TfConverterTest(unittest.TestCase):
             StructField("byte_col", ByteType(), False),
         ])
         df = self.spark.createDataFrame(
-            [(True, 0.12, 432.1, 5, 5, 0, "hello", bytearray(b"spark\x01\x02"), -128),
-             (False, 123.45, 0.987, 9, 908, 765, "petastorm", bytearray(b"\x0012345"), 127)],
+            [(True, 0.12, 432.1, 5, 5, 0, "hello",
+              bytearray(b"spark\x01\x02"), -128),
+             (False, 123.45, 0.987, 9, 908, 765, "petastorm",
+              bytearray(b"\x0012345"), 127)],
             schema=schema).coalesce(1)
-        # If we use numPartition > 1, the order of the loaded dataset would be non-deterministic.
+        # If we use numPartition > 1, the order of the loaded dataset would
+        # be non-deterministic.
         expected_df = df.collect()
 
         converter = make_spark_converter(df)
@@ -46,7 +66,8 @@ class TfConverterTest(unittest.TestCase):
             tensor = iterator.get_next()
             with tf.Session() as sess:
                 ts = sess.run(tensor)
-                # TODO: we will improve the test once the batch_size argument added.
+                # TODO: we will improve the test once the batch_size argument
+                #  added.
                 # Now we only have one batch.
             for i in range(converter.dataset_size):
                 for col in df.schema.names:
@@ -60,14 +81,22 @@ class TfConverterTest(unittest.TestCase):
 
             self.assertEqual(len(expected_df), len(converter))
 
-        self.assertEqual(np.bool_, ts.bool_col.dtype.type, "Boolean type column is not inferred correctly.")
-        self.assertEqual(np.float32, ts.float_col.dtype.type, "Float type column is not inferred correctly.")
-        self.assertEqual(np.float64, ts.double_col.dtype.type, "Double type column is not inferred correctly.")
-        self.assertEqual(np.int16, ts.short_col.dtype.type, "Short type column is not inferred correctly.")
-        self.assertEqual(np.int32, ts.int_col.dtype.type, "Integer type column is not inferred correctly.")
-        self.assertEqual(np.int64, ts.long_col.dtype.type, "Long type column is not inferred correctly.")
-        self.assertEqual(np.object_, ts.str_col.dtype.type, "String type column is not inferred correctly.")
-        self.assertEqual(np.object_, ts.bin_col.dtype.type, "Binary type column is not inferred correctly.")
+        self.assertEqual(np.bool_, ts.bool_col.dtype.type,
+                         "Boolean type column is not inferred correctly.")
+        self.assertEqual(np.float32, ts.float_col.dtype.type,
+                         "Float type column is not inferred correctly.")
+        self.assertEqual(np.float64, ts.double_col.dtype.type,
+                         "Double type column is not inferred correctly.")
+        self.assertEqual(np.int16, ts.short_col.dtype.type,
+                         "Short type column is not inferred correctly.")
+        self.assertEqual(np.int32, ts.int_col.dtype.type,
+                         "Integer type column is not inferred correctly.")
+        self.assertEqual(np.int64, ts.long_col.dtype.type,
+                         "Long type column is not inferred correctly.")
+        self.assertEqual(np.object_, ts.str_col.dtype.type,
+                         "String type column is not inferred correctly.")
+        self.assertEqual(np.object_, ts.bin_col.dtype.type,
+                         "Binary type column is not inferred correctly.")
 
     def test_delete(self):
         df = self.spark.createDataFrame([(1, 2), (4, 5)], ["col1", "col2"])
@@ -79,20 +108,21 @@ class TfConverterTest(unittest.TestCase):
         self.assertFalse(os.path.exists(local_path))
 
     def test_atexit(self):
-        cache_dir = "/tmp/123"
-        Path(cache_dir).mkdir(parents=True, exist_ok=True)
+        cache_dir = "/tmp/spark_converter_test_atexit"
+        os.makedirs(cache_dir)
         lines = """
-            from petastorm.spark.spark_dataset_converter import make_spark_converter
-            from pyspark.sql import SparkSession
-            import os
-            spark = SparkSession.builder.getOrCreate()
-            df = spark.createDataFrame([(1, 2),(4, 5)], ["col1", "col2"])
-            converter = make_spark_converter(df, 'file:///tmp/123')
-            f = open("/tmp/123/output", "w")
-            f.write(converter.cache_file_path)
-            f.close()
-            """
-        code_str = "; ".join(line.strip() for line in lines.strip().splitlines())
+        from petastorm.spark.spark_dataset_converter import make_spark_converter
+        from pyspark.sql import SparkSession
+        import os
+        spark = SparkSession.builder.getOrCreate()
+        df = spark.createDataFrame([(1, 2),(4, 5)], ["col1", "col2"])
+        converter = make_spark_converter(df, 'file:///tmp/spark_converter_test_atexit')
+        f = open("/tmp/spark_converter_test_atexit/output", "w")
+        f.write(converter.cache_file_path)
+        f.close()
+        """
+        code_str = "; ".join(
+            line.strip() for line in lines.strip().splitlines())
         self.assertTrue(os.path.exists(cache_dir))
         ret_code = subprocess.call(["python", "-c", code_str])
         self.assertEqual(0, ret_code)
@@ -115,15 +145,18 @@ class TfConverterTest(unittest.TestCase):
 
         converter1 = make_spark_converter(df1)
         self.assertEqual("uncompressed",
-                         self._get_compression_type(converter1.cache_file_path).lower())
+                         self._get_compression_type(
+                             converter1.cache_file_path).lower())
 
         converter2 = make_spark_converter(df1, compression=False)
         self.assertEqual("uncompressed",
-                         self._get_compression_type(converter2.cache_file_path).lower())
+                         self._get_compression_type(
+                             converter2.cache_file_path).lower())
 
         converter2 = make_spark_converter(df1, compression=True)
         self.assertEqual("snappy",
-                         self._get_compression_type(converter2.cache_file_path).lower())
+                         self._get_compression_type(
+                             converter2.cache_file_path).lower())
 
     def test_df_caching(self):
         df1 = self.spark.range(10)
@@ -135,22 +168,26 @@ class TfConverterTest(unittest.TestCase):
         self.assertEqual(converter1.cache_file_path, converter2.cache_file_path)
 
         converter3 = make_spark_converter(df3)
-        self.assertNotEqual(converter1.cache_file_path, converter3.cache_file_path)
+        self.assertNotEqual(converter1.cache_file_path,
+                            converter3.cache_file_path)
 
-        converter11 = make_spark_converter(df1, parquet_row_group_size=8 * 1024 * 1024)
-        converter21 = make_spark_converter(df1, parquet_row_group_size=16 * 1024 * 1024)
-        self.assertNotEqual(converter11.cache_file_path, converter21.cache_file_path)
+        converter11 = make_spark_converter(
+            df1, parquet_row_group_size_bytes=8 * 1024 * 1024)
+        converter21 = make_spark_converter(
+            df1, parquet_row_group_size_bytes=16 * 1024 * 1024)
+        self.assertNotEqual(converter11.cache_file_path,
+                            converter21.cache_file_path)
 
         converter12 = make_spark_converter(df1, compression=True)
         converter22 = make_spark_converter(df1, compression=False)
-        self.assertNotEqual(converter12.cache_file_path, converter22.cache_file_path)
+        self.assertNotEqual(converter12.cache_file_path,
+                            converter22.cache_file_path)
 
     def test_scheme(self):
         url1 = "file:///tmp/123"
         url2 = "/tmp/abc"
         url3 = "hdfs:/host:port/path/dir"
         url4 = "ftp://localhost:1234/home"
-        url5 = ""
 
         self.assertEqual(url1, _check_and_add_scheme(url1))
         self.assertEqual("file://" + url2, _check_and_add_scheme(url2))
@@ -158,6 +195,3 @@ class TfConverterTest(unittest.TestCase):
         with self.assertRaises(NotImplementedError) as cm:
             _check_and_add_scheme(url4)
         self.assertEqual("Scheme ftp is not supported.", str(cm.exception))
-        with self.assertRaises(NotImplementedError) as cm:
-            _check_and_add_scheme(url5)
-        self.assertEqual("Scheme  is not supported.", str(cm.exception))
