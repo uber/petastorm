@@ -13,19 +13,18 @@
 # limitations under the License.
 
 import os
-from six.moves.urllib.parse import urlparse
 import subprocess
 import unittest
 
 import numpy as np
 import tensorflow as tf
 from pyspark.sql import SparkSession
-from pyspark.sql.types import BinaryType, BooleanType, ByteType, DoubleType, \
-    FloatType, IntegerType, LongType, ShortType, StringType, StructField, \
-    StructType
+from pyspark.sql.types import (BinaryType, BooleanType, ByteType, DoubleType,
+                               FloatType, IntegerType, LongType, ShortType,
+                               StringType, StructField, StructType)
+from six.moves.urllib.parse import urlparse
 
-from petastorm.spark.spark_dataset_converter import make_spark_converter, \
-    _check_and_add_scheme
+from petastorm.spark.spark_dataset_converter import make_spark_converter
 
 
 class TfConverterTest(unittest.TestCase):
@@ -35,7 +34,7 @@ class TfConverterTest(unittest.TestCase):
             .master("local[2]") \
             .appName("petastorm.spark tests") \
             .getOrCreate()
-        self.spark.conf.set("spark.petastorm.converter.default.cache.dir.url",
+        self.spark.conf.set("petastorm.spark.converter.defaultCacheDirUrl",
                             "file:///tmp/123")
 
     def test_primitive(self):
@@ -184,14 +183,18 @@ class TfConverterTest(unittest.TestCase):
                             converter22.cache_file_path)
 
     def test_scheme(self):
-        url1 = "file:///tmp/123"
-        url2 = "/tmp/abc"
-        url3 = "hdfs:/host:port/path/dir"
-        url4 = "ftp://localhost:1234/home"
+        url1 = "/tmp/abc"
+        url2 = "file:///tmp/123"
+        df = self.spark.range(10)
 
-        self.assertEqual(url1, _check_and_add_scheme(url1))
-        self.assertEqual("file://" + url2, _check_and_add_scheme(url2))
-        self.assertEqual(url3, _check_and_add_scheme(url3))
-        with self.assertRaises(NotImplementedError) as cm:
-            _check_and_add_scheme(url4)
-        self.assertEqual("Scheme ftp is not supported.", str(cm.exception))
+        with self.assertRaises(ValueError) as cm:
+            converter = make_spark_converter(df, url1)
+            with converter.make_tf_dataset() as _:
+                pass
+        self.assertEqual("ERROR! A scheme-less dataset url () is no longer "
+                         "supported. Please prepend \"file://\" for local "
+                         "filesystem.", str(cm.exception))
+
+        converter = make_spark_converter(df, url2)
+        with converter.make_tf_dataset() as dataset:
+            self.assertIsNotNone(dataset)

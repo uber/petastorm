@@ -17,8 +17,8 @@ import os
 import shutil
 import threading
 import uuid
-import warnings
 
+from pyarrow import LocalFileSystem
 from pyspark.sql.session import SparkSession
 from six.moves.urllib.parse import urlparse
 
@@ -32,42 +32,23 @@ def _get_spark_session():
     return SparkSession.builder.getOrCreate()
 
 
-def _check_and_add_scheme(dataset_url):
-    """
-    Check the scheme in the url. Only HDFS and local file system are supported.
-    Add `file://` to the url starts with `/`.
-    :param dataset_url: A string denoting the location of the cache files.
-        Supported schemes: file:///..., /..., hdfs:/...
-    :return: A string of the data_url with supported scheme.
-    """
-    parsed = urlparse(dataset_url)
-    if parsed.scheme == '':
-        parsed = parsed._replace(scheme='file')  # pylint: disable=protected-access
-    if parsed.scheme.lower() not in ["file", "hdfs"]:
-        raise NotImplementedError(
-            "Scheme {} is not supported.".format(parsed.scheme))
-    return parsed.geturl()
-
-
 def _delete_cache_data(dataset_url):
     """
-    Delete the cache data in the local file system or HDFS.
+    Delete the cache data in the underlying file system.
     """
-    hdfs_driver = 'libhdfs3'
-    resolver = FilesystemResolver(dataset_url, hdfs_driver)
+    resolver = FilesystemResolver(dataset_url)
     fs = resolver.filesystem()
     parsed = urlparse(dataset_url)
-    try:
-        if parsed.scheme.lower() == "file":
-            local_path = parsed.path
-            if os.path.exists(local_path):
-                shutil.rmtree(local_path, ignore_errors=False)
-        elif parsed.scheme.lower() == "hdfs":
-            if fs.exists(dataset_url):
-                fs.delete(dataset_url, recursive=True)
-    except BaseException as e:
-        warnings.warn(
-            "Failed to delete files at {}\n{}".format(dataset_url, str(e)))
+    if isinstance(fs, LocalFileSystem):
+        # pyarrow has a bug: LocalFileSystem.delete() is not implemented.
+        # https://issues.apache.org/jira/browse/ARROW-7953
+        # We can remove this branch once ARROW-7953 is fixed.
+        local_path = parsed.path
+        if os.path.exists(local_path):
+            shutil.rmtree(local_path, ignore_errors=False)
+    else:
+        if fs.exists(dataset_url):
+            fs.delete(dataset_url, recursive=True)
 
 
 class SparkDatasetConverter(object):
@@ -86,7 +67,7 @@ class SparkDatasetConverter(object):
         :param dataset_size: An int denoting the number of rows in the
             dataframe.
         """
-        self.cache_file_path = _check_and_add_scheme(cache_file_path)
+        self.cache_file_path = cache_file_path
         self.dataset_size = dataset_size
 
     def __len__(self):
@@ -210,16 +191,15 @@ def make_spark_converter(
         compression=None):
     """
     Convert a spark dataframe into a :class:`SparkDatasetConverter` object.
-    It will materialize a spark dataframe to a `cache_dir`.
+    It will materialize a spark dataframe to a `cache_dir_url`.
     The returned `SparkDatasetConverter` object will hold the materialized
     dataframe, and can be used to make one or more tensorflow datasets or
     torch dataloaders.
 
     :param df: The :class:`DataFrame` object to be converted.
-    :param cache_dir_url: A string denoting the parent directory to store
-        intermediate files. Supported schemes: file:///..., /..., hdfs:/...
-        Default None, it will fallback to the spark config
-        "spark.petastorm.converter.default.cache.dir".
+    :param cache_dir_url: A URL string denoting the parent directory to store
+        intermediate files. Default None, it will fallback to the spark config
+        "petastorm.spark.converter.defaultCacheDirUrl".
     :param parquet_row_group_size_bytes: An int denoting the number of bytes
         in a parquet row group.
     :param compression: True or False, specify whether to apply compression.
@@ -231,15 +211,19 @@ def make_spark_converter(
     """
     if cache_dir_url is None:
         cache_dir_url = _get_spark_session().conf \
-            .get("spark.petastorm.converter.default.cache.dir.url", None)
+            .get("petastorm.spark.converter.defaultCacheDirUrl", None)
+
+    scheme = urlparse(cache_dir_url).scheme
+    if not scheme:
+        raise ValueError(
+            'ERROR! A scheme-less dataset url ({}) is no longer supported. '
+            'Please prepend "file://" for local filesystem.'.format(scheme))
+
     if cache_dir_url is None:
         raise ValueError(
-            "Please specify the parameter cache_url denoting the parent "
+            "Please specify the parameter cache_dir_url denoting the parent "
             "directory to store intermediate files, or set the spark config "
-            "`spark.petastorm.converter.default.cache.dir.url` "
-            "Supported schemes: file:///..., /..., hdfs:/...")
-
-    cache_dir_url = _check_and_add_scheme(cache_dir_url)
+            "`petastorm.spark.converter.defaultCacheDirUrl`.")
 
     if compression is None:
         # TODO: Improve default behavior to be automatically choosing the
