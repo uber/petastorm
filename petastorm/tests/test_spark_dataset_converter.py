@@ -198,3 +198,18 @@ class TfConverterTest(unittest.TestCase):
         converter = make_spark_converter(df, url2)
         with converter.make_tf_dataset() as dataset:
             self.assertIsNotNone(dataset)
+
+    def test_pickling_remotely(self):
+        df1 = self.spark.range(100, 101)
+        converter1 = make_spark_converter(df1)
+
+        def map_fn(_):
+            with converter1.make_tf_dataset() as dataset:
+                iterator = dataset.make_one_shot_iterator()
+                tensor = iterator.get_next()
+                with tf.Session() as sess:
+                    ts = sess.run(tensor)
+            return getattr(ts, 'id')[0]
+
+        result = self.spark.sparkContext.parallelize(range(1), 1).map(map_fn).collect()[0]
+        self.assertEqual(result, 100)
