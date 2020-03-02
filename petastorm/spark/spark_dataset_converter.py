@@ -17,6 +17,7 @@ import os
 import shutil
 import threading
 import uuid
+import warnings
 
 from pyarrow import LocalFileSystem
 from pyspark.sql.session import SparkSession
@@ -49,6 +50,13 @@ def _delete_cache_data(dataset_url):
     else:
         if fs.exists(dataset_url):
             fs.delete(dataset_url, recursive=True)
+
+
+def _delete_cache_data_atexit(dataset_url):
+    try:
+        _delete_cache_data(dataset_url)
+    except BaseException:
+        warnings.warn('delete cache data {url} failed.'.format(url=dataset_url))
 
 
 class SparkDatasetConverter(object):
@@ -210,7 +218,7 @@ def _materialize_df(df, parent_cache_dir, parquet_row_group_size_bytes,
         .option("compression", compression_codec) \
         .option("parquet.block.size", parquet_row_group_size_bytes) \
         .parquet(save_to_dir)
-    atexit.register(_delete_cache_data, save_to_dir)
+    atexit.register(_delete_cache_data_atexit, save_to_dir)
 
     return save_to_dir
 
