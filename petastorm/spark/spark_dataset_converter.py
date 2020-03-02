@@ -79,14 +79,28 @@ class SparkDatasetConverter(object):
         self.dataset_size = dataset_size
 
     def __len__(self):
+        """
+        :return: dataset size
+        """
         return self.dataset_size
 
     def make_tf_dataset(self):
+        """
+        Make a tensorflow dataset.
+
+        This method will do the following two steps:
+          1) Open a petastorm reader on the materialized dataset dir.
+          2) Create a tensorflow dataset based on the reader created in (1)
+
+        :return: a context manager for a `tf.data.Dataset` object.
+                 when exit the returned context manager, the reader
+                 will be closed.
+        """
         return _tf_dataset_context_manager(self.cache_dir_url)
 
     def delete(self):
         """
-        Delete cache files at self.cache_file_path.
+        Delete cache files at self.cache_dir_url.
         """
         _delete_cache_data(self.cache_dir_url)
 
