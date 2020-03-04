@@ -27,8 +27,8 @@ from petastorm import make_reader, TransformSpec
 
 logging.basicConfig(level=logging.INFO)
 
-
 # Set test image sizes and number of mock nouns/variants
+
 
 @pytest.fixture(scope="session")
 def generate_mnist_dataset(small_mock_mnist_data, tmpdir_factory):

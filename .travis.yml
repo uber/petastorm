@@ -85,10 +85,10 @@ script:
       petastorm examples
 
     # Tensorflow and pytorch tests confict (segfault). Split into separate runs.
-  - $RUN $PYTEST  --cov-append
-      examples/mnist/tests/test_pytorch_mnist.py
-      petastorm/tests/test_pytorch_dataloader.py
-      petastorm/tests/test_pytorch_utils.py
+  # - $RUN $PYTEST  --cov-append
+  #    examples/mnist/tests/test_pytorch_mnist.py
+  #    petastorm/tests/test_pytorch_dataloader.py
+  #    petastorm/tests/test_pytorch_utils.py
 
 after_success:
   - codecov --required
