@@ -119,6 +119,20 @@ class SparkDatasetConverter(object):
             preproc_parallelism=preproc_parallelism
         )
 
+    def make_torch_dataloader(self):
+        """
+        Make a PyTorch DataLoader.
+
+        This method will do the following two steps:
+          1) Open a petastorm reader on the materialized dataset dir.
+          2) Create a PyTorch DataLoader based on the reader created in (1)
+
+        :return: a context manager for a `torch.utils.data.DataLoader` object.
+                 when exit the returned context manager, the reader
+                 will be closed.
+        """
+        return _torch_dataset_context_manager(self.cache_dir_url)
+
     def delete(self):
         """
         Delete cache files at self.cache_dir_url.
@@ -173,6 +187,29 @@ class _tf_dataset_context_manager(object):
 
     def __enter__(self):
         return self.dataset
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        self.reader.stop()
+        self.reader.join()
+
+
+class _torch_dataset_context_manager(object):
+    """
+    A context manager that manages the creation and termination of a
+    :class:`petastorm.Reader`.
+    """
+
+    def __init__(self, data_url):
+        """
+        :param data_url: A string specifying the data URL.
+        """
+        from petastorm.pytorch import DataLoader
+
+        self.reader = make_batch_reader(data_url)
+        self.loader = DataLoader(reader=self.reader)
+
+    def __enter__(self):
+        return self.loader
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self.reader.stop()

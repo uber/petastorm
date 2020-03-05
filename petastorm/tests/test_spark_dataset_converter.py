@@ -33,7 +33,7 @@ class TfConverterTest(unittest.TestCase):
     def setUp(self):
         self.spark = SparkSession.builder \
             .master("local[2]") \
-            .appName("petastorm.spark tests") \
+            .appName("petastorm.spark tf tests") \
             .getOrCreate()
         self.spark.conf.set("petastorm.spark.converter.defaultCacheDirUrl",
                             "file:///tmp/123")
@@ -322,3 +322,71 @@ class TfConverterTest(unittest.TestCase):
             with tf.Session() as sess:
                 ts = sess.run(tensor)
         self.assertEqual(np.float32, ts.c1.dtype.type)
+
+
+class TorchConverterTest(unittest.TestCase):
+
+    def setUp(self):
+        self.spark = SparkSession.builder \
+            .master("local[2]") \
+            .appName("petastorm.spark torch tests") \
+            .getOrCreate()
+        self.spark.conf.set("petastorm.spark.converter.defaultCacheDirUrl",
+                            "file:///tmp/123")
+
+    def test_primitive(self):
+        import torch
+
+        schema = StructType([
+            StructField("bool_col", BooleanType(), False),
+            StructField("float_col", FloatType(), False),
+            StructField("double_col", DoubleType(), False),
+            StructField("short_col", ShortType(), False),
+            StructField("int_col", IntegerType(), False),
+            StructField("long_col", LongType(), False),
+            StructField("byte_col", ByteType(), False),
+        ])
+        df = self.spark.createDataFrame(
+            [(True, 0.12, 432.1, 5, 5, 0, -128),
+             (False, 123.45, 0.987, 9, 908, 765, 127)],
+            schema=schema).coalesce(1)
+        # If we use numPartition > 1, the order of the loaded dataset would
+        # be non-deterministic.
+        expected_df = df.collect()
+
+        converter = make_spark_converter(df)
+        batch = None
+        with converter.make_torch_dataloader() as dataloader:
+            for i, batch in enumerate(dataloader):
+                # default batch_size = 1
+                for col in df.schema.names:
+                    actual_ele = batch[col][0]
+                    expected_ele = expected_df[i][col]
+                    if col == "double_col":
+                        self.assertAlmostEqual(
+                            expected_ele, actual_ele, delta=1e-5)
+                    else:
+                        self.assertEqual(expected_ele, actual_ele)
+
+            self.assertEqual(len(expected_df), len(converter))
+        self.assertEqual(torch.uint8, batch["bool_col"].dtype)
+        self.assertEqual(torch.int8, batch["byte_col"].dtype)
+        self.assertEqual(torch.float32, batch["double_col"].dtype)
+        self.assertEqual(torch.float32, batch["float_col"].dtype)
+        self.assertEqual(torch.int32, batch["int_col"].dtype)
+        self.assertEqual(torch.int64, batch["long_col"].dtype)
+        self.assertEqual(torch.int16, batch["short_col"].dtype)
+
+    def test_pickling_remotely(self):
+        df1 = self.spark.range(100, 101)
+        converter1 = make_spark_converter(df1)
+
+        def map_fn(_):
+            with converter1.make_torch_dataloader() as dataloader:
+                for batch in dataloader:
+                    ret = batch["id"][0]
+            return ret
+
+        result = self.spark.sparkContext.parallelize(range(1), 1) \
+            .map(map_fn).collect()[0]
+        self.assertEqual(result, 100)
