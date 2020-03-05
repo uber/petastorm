@@ -19,9 +19,9 @@ import unittest
 import numpy as np
 import tensorflow as tf
 from pyspark.sql import SparkSession
-from pyspark.sql.types import (ArrayType, BinaryType, BooleanType, ByteType, DoubleType,
-                               FloatType, IntegerType, LongType, ShortType,
-                               StringType, StructField, StructType)
+from pyspark.sql.types import (ArrayType, BinaryType, BooleanType, ByteType,
+                               DoubleType, FloatType, IntegerType, LongType,
+                               ShortType, StringType, StructField, StructType)
 from six.moves.urllib.parse import urlparse
 
 from petastorm import make_spark_converter
@@ -77,7 +77,12 @@ class TfConverterTest(unittest.TestCase):
                         actual_ele = actual_ele.decode()
                     if col == "bin_col":
                         actual_ele = bytearray(actual_ele)
-                    self.assertEqual(expected_ele, actual_ele)
+
+                    if col == "float_col" or col == "double_col":
+                        # Note that the default precision is float32
+                        self.assertAlmostEqual(expected_ele, actual_ele, delta=1e-5)
+                    else:
+                        self.assertEqual(expected_ele, actual_ele)
 
             self.assertEqual(len(expected_df), len(converter))
 
@@ -85,7 +90,8 @@ class TfConverterTest(unittest.TestCase):
                          "Boolean type column is not inferred correctly.")
         self.assertEqual(np.float32, ts.float_col.dtype.type,
                          "Float type column is not inferred correctly.")
-        self.assertEqual(np.float64, ts.double_col.dtype.type,
+        # Default precision float32
+        self.assertEqual(np.float32, ts.double_col.dtype.type,
                          "Double type column is not inferred correctly.")
         self.assertEqual(np.int16, ts.short_col.dtype.type,
                          "Short type column is not inferred correctly.")
@@ -275,3 +281,44 @@ class TfConverterTest(unittest.TestCase):
                 ts = sess.run(tensor)
 
         self.assertEqual(ts[0].shape, (2, 3, 2))
+
+    def test_precision(self):
+        df = self.spark.range(10)
+        df = df.withColumn("float_col", df.id.cast(FloatType())) \
+            .withColumn("double_col", df.id.cast(DoubleType()))
+
+        converter1 = make_spark_converter(df)
+        with converter1.make_tf_dataset() as dataset:
+            iterator = dataset.make_one_shot_iterator()
+            tensor = iterator.get_next()
+            with tf.Session() as sess:
+                ts = sess.run(tensor)
+        self.assertEqual(np.float32, ts.double_col.dtype.type)
+
+        converter2 = make_spark_converter(df, precision="float64")
+        with converter2.make_tf_dataset() as dataset:
+            iterator = dataset.make_one_shot_iterator()
+            tensor = iterator.get_next()
+            with tf.Session() as sess:
+                ts = sess.run(tensor)
+        self.assertEqual(np.float64, ts.float_col.dtype.type)
+
+        with self.assertRaises(ValueError) as cm:
+            make_spark_converter(df, precision="float16")
+            self.assertIn("precision float16 is not supported. \
+                Use 'float32' or float64", str(cm.exception))
+
+    def test_array(self):
+        df = self.spark.createDataFrame(
+            [([1., 2., 3.],)],
+            StructType([
+                StructField(name='c1', dataType=ArrayType(DoubleType()))
+            ])
+        )
+        converter1 = make_spark_converter(df)
+        with converter1.make_tf_dataset() as dataset:
+            iterator = dataset.make_one_shot_iterator()
+            tensor = iterator.get_next()
+            with tf.Session() as sess:
+                ts = sess.run(tensor)
+        self.assertEqual(np.float32, ts.c1.dtype.type)

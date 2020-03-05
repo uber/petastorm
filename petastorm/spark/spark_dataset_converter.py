@@ -23,6 +23,7 @@ from distutils.version import LooseVersion
 
 from pyarrow import LocalFileSystem
 from pyspark.sql.session import SparkSession
+from pyspark.sql.types import FloatType, DoubleType, ArrayType
 from six.moves.urllib.parse import urlparse
 
 from petastorm import make_batch_reader
@@ -184,7 +185,7 @@ def _get_df_plan(df):
 
 class CachedDataFrameMeta(object):
 
-    def __init__(self, df, row_group_size, compression_codec):
+    def __init__(self, df, row_group_size, compression_codec, precision):
         self.row_group_size = row_group_size
         self.compression_codec = compression_codec
         # Note: the metadata will hold dataframe plan, but it won't
@@ -193,13 +194,21 @@ class CachedDataFrameMeta(object):
         # This means the dataframe can be released by spark gc.
         self.df_plan = _get_df_plan(df)
         self.cache_dir_url = None
+        self.precision = precision
 
     @classmethod
     def create_cached_dataframe(cls, df, parent_cache_dir_url, row_group_size,
-                                compression_codec):
-        meta = cls(df, row_group_size, compression_codec)
+                                compression_codec, precision):
+        meta = cls(df,
+                   row_group_size=row_group_size,
+                   compression_codec=compression_codec,
+                   precision=precision)
         meta.cache_dir_url = _materialize_df(
-            df, parent_cache_dir_url, row_group_size, compression_codec)
+            df,
+            parent_cache_dir=parent_cache_dir_url,
+            parquet_row_group_size_bytes=row_group_size,
+            compression_codec=compression_codec,
+            precision=precision)
         return meta
 
 
@@ -237,9 +246,9 @@ def _is_sub_dir_url(dir_url1, dir_url2):
         parsed1.path.startswith(parsed2.path + os.sep)
 
 
-def _cache_df_or_retrieve_cache_data_url(df, parent_cache_dir_url,
-                                         parquet_row_group_size_bytes,
-                                         compression_codec):
+def _cache_df_or_retrieve_cache_data_url(
+        df, parent_cache_dir_url, parquet_row_group_size_bytes,
+        compression_codec, precision):
     """
     Check whether the df is cached.
     If so, return the existing cache file path.
@@ -252,6 +261,8 @@ def _cache_df_or_retrieve_cache_data_url(df, parent_cache_dir_url,
     :param parquet_row_group_size_bytes: An int denoting the number of bytes
         in a parquet row group.
     :param compression_codec: Specify compression codec.
+    :param precision: 'float32' or 'float64', specifying the precision of the
+        output dataset.
     :return: A string denoting the path of the saved parquet file.
     """
     # TODO
@@ -263,20 +274,40 @@ def _cache_df_or_retrieve_cache_data_url(df, parent_cache_dir_url,
             if meta.row_group_size == parquet_row_group_size_bytes and \
                     meta.compression_codec == compression_codec and \
                     meta.df_plan.sameResult(df_plan) and \
+                    meta.precision == precision and \
                     _is_sub_dir_url(meta.cache_dir_url, parent_cache_dir_url):
                 return meta.cache_dir_url
         # do not find cached dataframe, start materializing.
         cached_df_meta = CachedDataFrameMeta.create_cached_dataframe(
             df, parent_cache_dir_url, parquet_row_group_size_bytes,
-            compression_codec)
+            compression_codec, precision)
         _cache_df_meta_list.append(cached_df_meta)
         return cached_df_meta.cache_dir_url
 
 
+def _convert_precision(df, precision):
+    if precision != "float32" and precision != "float64":
+        raise ValueError("precision {} is not supported. \
+            Use 'float32' or float64".format(precision))
+
+    source_type, target_type = (DoubleType, FloatType) \
+        if precision == "float32" else (FloatType, DoubleType)
+
+    for struct_field in df.schema:
+        col_name = struct_field.name
+        if isinstance(struct_field.dataType, source_type):
+            df = df.withColumn(col_name, df[col_name].cast(target_type()))
+        elif isinstance(struct_field.dataType, ArrayType) and \
+                isinstance(struct_field.dataType.elementType, source_type):
+            df = df.withColumn(col_name, df[col_name].cast(ArrayType(target_type())))
+    return df
+
+
 def _materialize_df(df, parent_cache_dir, parquet_row_group_size_bytes,
-                    compression_codec):
+                    compression_codec, precision):
     uuid_str = str(uuid.uuid4())
     save_to_dir = os.path.join(parent_cache_dir, uuid_str)
+    df = _convert_precision(df, precision)
 
     df.write \
         .option("compression", compression_codec) \
@@ -291,7 +322,8 @@ def make_spark_converter(
         df,
         cache_dir_url=None,
         parquet_row_group_size_bytes=DEFAULT_ROW_GROUP_SIZE_BYTES,
-        compression=None):
+        compression=None,
+        precision='float32'):
     """
     Convert a spark dataframe into a :class:`SparkDatasetConverter` object.
     It will materialize a spark dataframe to a `cache_dir_url`.
@@ -307,6 +339,8 @@ def make_spark_converter(
         in a parquet row group.
     :param compression: True or False, specify whether to apply compression.
         Default None. If None, it will automatically choose the best way.
+    :param precision: 'float32' or 'float64', specifying the precision of the
+        output dataset.
 
     :return: a :class:`SparkDatasetConverter` object that holds the
         materialized dataframe and can be used to make one or more tensorflow
@@ -334,6 +368,7 @@ def make_spark_converter(
         compression_codec = "uncompressed"
 
     dataset_cache_dir_url = _cache_df_or_retrieve_cache_data_url(
-        df, cache_dir_url, parquet_row_group_size_bytes, compression_codec)
+        df, cache_dir_url, parquet_row_group_size_bytes, compression_codec,
+        precision)
     dataset_size = _get_spark_session().read.parquet(dataset_cache_dir_url).count()
     return SparkDatasetConverter(dataset_cache_dir_url, dataset_size)
