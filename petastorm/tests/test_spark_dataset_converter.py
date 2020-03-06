@@ -30,18 +30,26 @@ from petastorm.spark import make_spark_converter
 from petastorm.spark.spark_dataset_converter import _check_url, _make_sub_dir_url
 
 
+class TestContex(object):
+
+    def __init__(self):
+        self.spark = SparkSession.builder \
+            .master("local[2]") \
+            .appName("petastorm.spark tests") \
+            .getOrCreate()
+        self.tempdir = tempfile.mkdtemp('_spark_converter_test')
+        self.temp_url = 'file://' + self.tempdir.replace(os.sep, '/')
+        self.spark.conf.set('petastorm.spark.converter.defaultCacheDirUrl', self.temp_url)
+
+    def tear_down(self):
+        self.spark.stop()
+
+
 @pytest.fixture(scope='module')
 def test_ctx():
-    ctx = object()
-    ctx.spark = SparkSession.builder \
-       .master("local[2]") \
-       .appName("petastorm.spark tests") \
-       .getOrCreate()
-    ctx.tempdir = tempfile.mkdtemp('_spark_converter_test')
-    ctx.temp_url = 'file://' + ctx.tempdir.replace(os.sep, '/')
-    ctx.spark.conf.set('petastorm.spark.converter.defaultCacheDirUrl', ctx.temp_url)
+    ctx = TestContex()
     yield ctx
-    ctx.spark.stop()
+    ctx.tear_down()
 
 
 def test_primitive(test_ctx):
