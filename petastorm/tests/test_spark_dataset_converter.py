@@ -14,6 +14,7 @@
 
 import os
 import subprocess
+import tempfile
 import unittest
 
 import numpy as np
@@ -24,6 +25,7 @@ from pyspark.sql.types import (BinaryType, BooleanType, ByteType, DoubleType,
                                StringType, StructField, StructType)
 from six.moves.urllib.parse import urlparse
 
+from petastorm.fs_utils import FilesystemResolver
 from petastorm.spark import make_spark_converter
 from petastorm.spark.spark_dataset_converter import _check_url, _make_sub_dir_url
 
@@ -35,8 +37,9 @@ class TfConverterTest(unittest.TestCase):
             .master("local[2]") \
             .appName("petastorm.spark tests") \
             .getOrCreate()
-        self.spark.conf.set("petastorm.spark.converter.defaultCacheDirUrl",
-                            "file:///tmp/123")
+        self.tempdir = tempfile.mkdtemp('_spark_converter_test')
+        self.spark.conf.set('petastorm.spark.converter.defaultCacheDirUrl',
+                            'file://' + self.tempdir.replace(os.sep, '/'))
 
     def test_primitive(self):
         schema = StructType([
@@ -101,34 +104,33 @@ class TfConverterTest(unittest.TestCase):
     def test_delete(self):
         df = self.spark.createDataFrame([(1, 2), (4, 5)], ["col1", "col2"])
         # TODO add test for hdfs url
-        converter = make_spark_converter(df, 'file:///tmp/123')
+        converter = make_spark_converter(df)
         local_path = urlparse(converter.cache_dir_url).path
         self.assertTrue(os.path.exists(local_path))
         converter.delete()
         self.assertFalse(os.path.exists(local_path))
 
     def test_atexit(self):
-        cache_dir = "/tmp/spark_converter_test_atexit"
-        os.makedirs(cache_dir)
         lines = """
         from petastorm.spark.spark_dataset_converter import make_spark_converter
         from pyspark.sql import SparkSession
         import os
         spark = SparkSession.builder.getOrCreate()
         df = spark.createDataFrame([(1, 2),(4, 5)], ["col1", "col2"])
-        converter = make_spark_converter(df, 'file:///tmp/spark_converter_test_atexit')
-        f = open("/tmp/spark_converter_test_atexit/output", "w")
+        converter = make_spark_converter(df)
+        f = open(os.join('{tempdir}', 'test_atexit.out'), "w")
         f.write(converter.cache_dir_url)
         f.close()
-        """
+        """.format(tempdir=self.tempdir)
         code_str = "; ".join(
             line.strip() for line in lines.strip().splitlines())
-        self.assertTrue(os.path.exists(cache_dir))
         ret_code = subprocess.call(["python", "-c", code_str])
         self.assertEqual(0, ret_code)
-        with open(os.path.join(cache_dir, "output")) as f:
+        with open(os.path.join(self.tempdir, 'test_atexit.out')) as f:
             cache_dir_url = f.read()
-        self.assertFalse(os.path.exists(cache_dir_url))
+
+        fs = FilesystemResolver(cache_dir_url).filesystem()
+        self.assertFalse(fs.exists(urlparse(cache_dir_url).path))
 
     @staticmethod
     def _get_compression_type(data_url):
@@ -148,12 +150,12 @@ class TfConverterTest(unittest.TestCase):
                          self._get_compression_type(
                              converter1.cache_dir_url).lower())
 
-        converter2 = make_spark_converter(df1, compression=False)
-        self.assertEqual("uncompressed",
+        converter2 = make_spark_converter(df1, compression="lz4")
+        self.assertEqual("lz4",
                          self._get_compression_type(
                              converter2.cache_dir_url).lower())
 
-        converter2 = make_spark_converter(df1, compression=True)
+        converter2 = make_spark_converter(df1, compression="snappy")
         self.assertEqual("snappy",
                          self._get_compression_type(
                              converter2.cache_dir_url).lower())
@@ -194,20 +196,13 @@ class TfConverterTest(unittest.TestCase):
         self.assertEquals(_make_sub_dir_url(
             'hdfs://nn1:9000/a/b', 'c'), 'hdfs://nn1:9000/a/b/c')
 
-    def test_scheme(self):
-        url1 = "/tmp/abc"
-        url2 = "file:///tmp/123"
+    def test_invalid_scheme(self):
         df = self.spark.range(10)
 
         with self.assertRaises(ValueError) as cm:
-            converter = make_spark_converter(df, url1)
-            with converter.make_tf_dataset() as _:
-                pass
-        self.assertTrue('scheme-less' in str(cm.exception))
+            make_spark_converter(df, self.tempdir)
 
-        converter = make_spark_converter(df, url2)
-        with converter.make_tf_dataset() as dataset:
-            self.assertIsNotNone(dataset)
+        self.assertTrue('scheme-less' in str(cm.exception))
 
     def test_pickling_remotely(self):
         df1 = self.spark.range(100, 101)

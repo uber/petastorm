@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import atexit
-import os
 import shutil
 import threading
 import uuid
@@ -82,7 +81,7 @@ def _delete_cache_data(dataset_url):
         local_path = parsed.path
         shutil.rmtree(local_path, ignore_errors=False)
     else:
-        fs.delete(dataset_url, recursive=True)
+        fs.delete(parsed.path, recursive=True)
 
 
 def _delete_cache_data_atexit(dataset_url):
