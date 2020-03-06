@@ -150,12 +150,12 @@ class TfConverterTest(unittest.TestCase):
                          self._get_compression_type(
                              converter1.cache_dir_url).lower())
 
-        converter2 = make_spark_converter(df1, compression="lz4")
+        converter2 = make_spark_converter(df1, compression_codec="lz4")
         self.assertEqual("lz4",
                          self._get_compression_type(
                              converter2.cache_dir_url).lower())
 
-        converter2 = make_spark_converter(df1, compression="snappy")
+        converter2 = make_spark_converter(df1, compression_codec="snappy")
         self.assertEqual("snappy",
                          self._get_compression_type(
                              converter2.cache_dir_url).lower())
@@ -180,8 +180,8 @@ class TfConverterTest(unittest.TestCase):
         self.assertNotEqual(converter11.cache_dir_url,
                             converter21.cache_dir_url)
 
-        converter12 = make_spark_converter(df1, compression=True)
-        converter22 = make_spark_converter(df1, compression=False)
+        converter12 = make_spark_converter(df1, compression_codec=True)
+        converter22 = make_spark_converter(df1, compression_codec=False)
         self.assertNotEqual(converter12.cache_dir_url,
                             converter22.cache_dir_url)
 
