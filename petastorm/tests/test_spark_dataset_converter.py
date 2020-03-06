@@ -24,8 +24,8 @@ from pyspark.sql.types import (BinaryType, BooleanType, ByteType, DoubleType,
                                StringType, StructField, StructType)
 from six.moves.urllib.parse import urlparse
 
-from petastorm import make_spark_converter
-from petastorm.spark.spark_dataset_converter import _normalize_dir_url, _is_sub_dir_url
+from petastorm.spark import make_spark_converter
+from petastorm.spark.spark_dataset_converter import _check_url, _make_sub_dir_url
 
 
 class TfConverterTest(unittest.TestCase):
@@ -183,36 +183,16 @@ class TfConverterTest(unittest.TestCase):
         self.assertNotEqual(converter12.cache_dir_url,
                             converter22.cache_dir_url)
 
-    def test_normalize_url(self):
+    def test_check_url(self):
         with self.assertRaises(ValueError) as cm:
-            _normalize_dir_url('/a/b/c')
+            _check_url('/a/b/c')
         self.assertTrue('scheme-less' in str(cm.exception))
 
-        self.assertEqual(_normalize_dir_url('file:///a/b'), 'file:///a/b')
-        self.assertEqual(_normalize_dir_url('file:///a//b'), 'file:///a/b')
-
-    def test_df_private_caching(self):
-        self.assertTrue(_is_sub_dir_url('file:///a/b/c/d', 'file:///a/b/c'))
-        self.assertTrue(_is_sub_dir_url('hdfs:///a/b/c/d', 'hdfs:///a/b/c'))
-        self.assertTrue(_is_sub_dir_url('hdfs://nn1:9000/a/b/c/d', 'hdfs://nn1:9000/a/b/c'))
-
-        self.assertFalse(_is_sub_dir_url('file:///a/b/c', 'file:///a/b/c'))
-        self.assertFalse(_is_sub_dir_url('file:///a/b/c/d', 'file:///a/b/cc'))
-        self.assertFalse(_is_sub_dir_url('file:///a/b/c', 'file:///a/b/c/d'))
-        self.assertFalse(_is_sub_dir_url('file:///a/b/c', 'hdfs:///a/b/c'))
-        self.assertFalse(_is_sub_dir_url('hdfs://nn1:9000/a/b/c/d', 'hdfs://nn1:9001/a/b/c'))
-
-        df1 = self.spark.range(10)
-        df2 = self.spark.range(10)
-
-        converter1 = make_spark_converter(df1, cache_dir_url='file:///tmp/a1/a2')
-        converter2 = make_spark_converter(df2, cache_dir_url='file:///tmp/a1/a2')
-        converter3 = make_spark_converter(df2, cache_dir_url='file:///tmp/a1/')
-        converter4 = make_spark_converter(df2, cache_dir_url='file:///tmp/a1/a3')
-
-        self.assertEqual(converter1.cache_dir_url, converter2.cache_dir_url)
-        self.assertEqual(converter1.cache_dir_url, converter3.cache_dir_url)
-        self.assertNotEqual(converter1.cache_dir_url, converter4.cache_dir_url)
+    def test_make_sub_dir_url(self):
+        self.assertEquals(_make_sub_dir_url('file:///a/b', 'c'), 'file:///a/b/c')
+        self.assertEquals(_make_sub_dir_url('hdfs:/a/b', 'c'), 'hdfs:/a/b/c')
+        self.assertEquals(_make_sub_dir_url(
+            'hdfs://nn1:9000/a/b', 'c'), 'hdfs://nn1:9000/a/b/c')
 
     def test_scheme(self):
         url1 = "/tmp/abc"
