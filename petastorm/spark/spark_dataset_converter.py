@@ -62,7 +62,7 @@ def get_parent_cache_dir_url():
         _check_url(conf_url)
         _parent_cache_dir_url = conf_url
         logging.info(
-            'Read petastorm.spark.converter.cacheDirUrl %s' % _parent_cache_dir_url)
+            'Read petastorm.spark.converter.cacheDirUrl %s', _parent_cache_dir_url)
 
     return _parent_cache_dir_url
 
@@ -253,7 +253,7 @@ def _materialize_df(df, parent_cache_dir_url, parquet_row_group_size_bytes,
         .option("parquet.block.size", parquet_row_group_size_bytes) \
         .parquet(save_to_dir_url)
 
-    logging.info('Materialize dataframe to url %s successfully.' % save_to_dir_url)
+    logging.info('Materialize dataframe to url %s successfully.', save_to_dir_url)
 
     atexit.register(_delete_cache_data_atexit, save_to_dir_url)
 
