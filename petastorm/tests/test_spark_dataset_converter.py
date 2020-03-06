@@ -38,8 +38,8 @@ class TfConverterTest(unittest.TestCase):
             .appName("petastorm.spark tests") \
             .getOrCreate()
         self.tempdir = tempfile.mkdtemp('_spark_converter_test')
-        self.spark.conf.set('petastorm.spark.converter.defaultCacheDirUrl',
-                            'file://' + self.tempdir.replace(os.sep, '/'))
+        self.temp_url = 'file://' + self.tempdir.replace(os.sep, '/')
+        self.spark.conf.set('petastorm.spark.converter.defaultCacheDirUrl', self.temp_url)
 
     def test_primitive(self):
         schema = StructType([
@@ -116,12 +116,13 @@ class TfConverterTest(unittest.TestCase):
         from pyspark.sql import SparkSession
         import os
         spark = SparkSession.builder.getOrCreate()
+        spark.conf.set('petastorm.spark.converter.defaultCacheDirUrl', '{temp_url}')
         df = spark.createDataFrame([(1, 2),(4, 5)], ["col1", "col2"])
         converter = make_spark_converter(df)
         f = open(os.join('{tempdir}', 'test_atexit.out'), "w")
         f.write(converter.cache_dir_url)
         f.close()
-        """.format(tempdir=self.tempdir)
+        """.format(tempdir=self.tempdir, temp_url=self.temp_url)
         code_str = "; ".join(
             line.strip() for line in lines.strip().splitlines())
         ret_code = subprocess.call(["python", "-c", code_str])
@@ -150,11 +151,6 @@ class TfConverterTest(unittest.TestCase):
                          self._get_compression_type(
                              converter1.cache_dir_url).lower())
 
-        converter2 = make_spark_converter(df1, compression_codec="lz4")
-        self.assertEqual("lz4",
-                         self._get_compression_type(
-                             converter2.cache_dir_url).lower())
-
         converter2 = make_spark_converter(df1, compression_codec="snappy")
         self.assertEqual("snappy",
                          self._get_compression_type(
@@ -180,8 +176,8 @@ class TfConverterTest(unittest.TestCase):
         self.assertNotEqual(converter11.cache_dir_url,
                             converter21.cache_dir_url)
 
-        converter12 = make_spark_converter(df1, compression_codec=True)
-        converter22 = make_spark_converter(df1, compression_codec=False)
+        converter12 = make_spark_converter(df1, compression_codec=None)
+        converter22 = make_spark_converter(df1, compression_codec="snappy")
         self.assertNotEqual(converter12.cache_dir_url,
                             converter22.cache_dir_url)
 
