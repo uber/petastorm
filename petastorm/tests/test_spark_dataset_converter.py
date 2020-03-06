@@ -41,6 +41,9 @@ class TfConverterTest(unittest.TestCase):
         self.temp_url = 'file://' + self.tempdir.replace(os.sep, '/')
         self.spark.conf.set('petastorm.spark.converter.defaultCacheDirUrl', self.temp_url)
 
+    def tearDown(self):
+        self.spark.stop()
+
     def test_primitive(self):
         schema = StructType([
             StructField("bool_col", BooleanType(), False),
@@ -119,7 +122,7 @@ class TfConverterTest(unittest.TestCase):
         spark.conf.set('petastorm.spark.converter.defaultCacheDirUrl', '{temp_url}')
         df = spark.createDataFrame([(1, 2),(4, 5)], ["col1", "col2"])
         converter = make_spark_converter(df)
-        f = open(os.join('{tempdir}', 'test_atexit.out'), "w")
+        f = open(os.path.join('{tempdir}', 'test_atexit.out'), "w")
         f.write(converter.cache_dir_url)
         f.close()
         """.format(tempdir=self.tempdir, temp_url=self.temp_url)
@@ -196,7 +199,7 @@ class TfConverterTest(unittest.TestCase):
         df = self.spark.range(10)
 
         with self.assertRaises(ValueError) as cm:
-            make_spark_converter(df, self.tempdir)
+            make_spark_converter(df)
 
         self.assertTrue('scheme-less' in str(cm.exception))
 
