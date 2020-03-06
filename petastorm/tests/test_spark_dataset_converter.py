@@ -32,17 +32,19 @@ from petastorm.spark.spark_dataset_converter import _check_url, _make_sub_dir_ur
 
 class TfConverterTest(unittest.TestCase):
 
-    def setUp(self):
-        self.spark = SparkSession.builder \
-            .master("local[2]") \
-            .appName("petastorm.spark tests") \
-            .getOrCreate()
-        self.tempdir = tempfile.mkdtemp('_spark_converter_test')
-        self.temp_url = 'file://' + self.tempdir.replace(os.sep, '/')
-        self.spark.conf.set('petastorm.spark.converter.defaultCacheDirUrl', self.temp_url)
+    @classmethod
+    def setUpClass(cls):
+        cls.spark = SparkSession.builder \
+           .master("local[2]") \
+           .appName("petastorm.spark tests") \
+           .getOrCreate()
+        cls.tempdir = tempfile.mkdtemp('_spark_converter_test')
+        cls.temp_url = 'file://' + cls.tempdir.replace(os.sep, '/')
+        cls.spark.conf.set('petastorm.spark.converter.defaultCacheDirUrl', cls.temp_url)
 
-    def tearDown(self):
-        self.spark.stop()
+    @classmethod
+    def tearDownClass(cls):
+        cls.spark.stop()
 
     def test_primitive(self):
         schema = StructType([
