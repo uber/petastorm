@@ -91,26 +91,18 @@ def test_primitive(test_ctx):
                     actual_ele = actual_ele.decode()
                 if col == "bin_col":
                     actual_ele = bytearray(actual_ele)
-                pytest.assertEqual(expected_ele, actual_ele)
+                assert expected_ele == actual_ele
 
-        pytest.assertEqual(len(expected_df), len(converter))
+        assert len(expected_df) == len(converter)
 
-    pytest.assertEqual(np.bool_, ts.bool_col.dtype.type,
-                       "Boolean type column is not inferred correctly.")
-    pytest.assertEqual(np.float32, ts.float_col.dtype.type,
-                       "Float type column is not inferred correctly.")
-    pytest.assertEqual(np.float64, ts.double_col.dtype.type,
-                       "Double type column is not inferred correctly.")
-    pytest.assertEqual(np.int16, ts.short_col.dtype.type,
-                       "Short type column is not inferred correctly.")
-    pytest.assertEqual(np.int32, ts.int_col.dtype.type,
-                       "Integer type column is not inferred correctly.")
-    pytest.assertEqual(np.int64, ts.long_col.dtype.type,
-                       "Long type column is not inferred correctly.")
-    pytest.assertEqual(np.object_, ts.str_col.dtype.type,
-                       "String type column is not inferred correctly.")
-    pytest.assertEqual(np.object_, ts.bin_col.dtype.type,
-                       "Binary type column is not inferred correctly.")
+    assert np.bool_ == ts.bool_col.dtype.type
+    assert np.float32 == ts.float_col.dtype.type
+    assert np.float64 == ts.double_col.dtype.type
+    assert np.int16 == ts.short_col.dtype.type
+    assert np.int32 == ts.int_col.dtype.type
+    assert np.int64 == ts.long_col.dtype.type
+    assert np.object_ == ts.str_col.dtype.type
+    assert np.object_ == ts.bin_col.dtype.type
 
 
 def test_delete(test_ctx):
@@ -118,9 +110,9 @@ def test_delete(test_ctx):
     # TODO add test for hdfs url
     converter = make_spark_converter(df)
     local_path = urlparse(converter.cache_dir_url).path
-    pytest.assertTrue(os.path.exists(local_path))
+    assert os.path.exists(local_path)
     converter.delete()
-    pytest.assertFalse(os.path.exists(local_path))
+    assert not os.path.exists(local_path)
 
 
 def test_atexit(test_ctx):
@@ -139,12 +131,12 @@ def test_atexit(test_ctx):
     code_str = "; ".join(
         line.strip() for line in lines.strip().splitlines())
     ret_code = subprocess.call(["python", "-c", code_str])
-    pytest.assertEqual(0, ret_code)
+    assert 0 == ret_code
     with open(os.path.join(test_ctx.tempdir, 'test_atexit.out')) as f:
         cache_dir_url = f.read()
 
     fs = FilesystemResolver(cache_dir_url).filesystem()
-    pytest.assertFalse(fs.exists(urlparse(cache_dir_url).path))
+    assert not fs.exists(urlparse(cache_dir_url).path)
 
 
 def _get_compression_type(data_url):
@@ -161,14 +153,12 @@ def test_compression(test_ctx):
     df1 = test_ctx.spark.range(10)
 
     converter1 = make_spark_converter(df1)
-    pytest.assertEqual(
-        "uncompressed",
-        _get_compression_type(converter1.cache_dir_url).lower())
+    assert "uncompressed" == \
+           _get_compression_type(converter1.cache_dir_url).lower()
 
     converter2 = make_spark_converter(df1, compression_codec="snappy")
-    pytest.assertEqual(
-        "snappy",
-        _get_compression_type(converter2.cache_dir_url).lower())
+    assert "snappy" == \
+           _get_compression_type(converter2.cache_dir_url).lower()
 
 
 def test_df_caching(test_ctx):
@@ -178,33 +168,31 @@ def test_df_caching(test_ctx):
 
     converter1 = make_spark_converter(df1)
     converter2 = make_spark_converter(df2)
-    pytest.assertEqual(converter1.cache_dir_url, converter2.cache_dir_url)
+    assert converter1.cache_dir_url == converter2.cache_dir_url
 
     converter3 = make_spark_converter(df3)
-    pytest.assertNotEqual(converter1.cache_dir_url, converter3.cache_dir_url)
+    assert converter1.cache_dir_url != converter3.cache_dir_url
 
     converter11 = make_spark_converter(
         df1, parquet_row_group_size_bytes=8 * 1024 * 1024)
     converter21 = make_spark_converter(
         df1, parquet_row_group_size_bytes=16 * 1024 * 1024)
-    pytest.assertNotEqual(converter11.cache_dir_url, converter21.cache_dir_url)
+    assert converter11.cache_dir_url != converter21.cache_dir_url
 
     converter12 = make_spark_converter(df1, compression_codec=None)
     converter22 = make_spark_converter(df1, compression_codec="snappy")
-    pytest.assertNotEqual(converter12.cache_dir_url, converter22.cache_dir_url)
+    assert converter12.cache_dir_url != converter22.cache_dir_url
 
 
 def test_check_url():
-    with pytest.assertRaises(ValueError) as cm:
+    with pytest.raises(ValueError, match='scheme-less'):
         _check_url('/a/b/c')
-    pytest.assertTrue('scheme-less' in str(cm.exception))
 
 
 def test_make_sub_dir_url():
-    pytest.assertEquals(_make_sub_dir_url('file:///a/b', 'c'), 'file:///a/b/c')
-    pytest.assertEquals(_make_sub_dir_url('hdfs:/a/b', 'c'), 'hdfs:/a/b/c')
-    pytest.assertEquals(_make_sub_dir_url(
-        'hdfs://nn1:9000/a/b', 'c'), 'hdfs://nn1:9000/a/b/c')
+    assert _make_sub_dir_url('file:///a/b', 'c') == 'file:///a/b/c'
+    assert _make_sub_dir_url('hdfs:/a/b', 'c') == 'hdfs:/a/b/c'
+    assert _make_sub_dir_url('hdfs://nn1:9000/a/b', 'c') == 'hdfs://nn1:9000/a/b/c'
 
 
 def test_pickling_remotely(test_ctx):
@@ -220,4 +208,4 @@ def test_pickling_remotely(test_ctx):
         return getattr(ts, 'id')[0]
 
     result = test_ctx.spark.sparkContext.parallelize(range(1), 1).map(map_fn).collect()[0]
-    pytest.assertEqual(result, 100)
+    assert result == 100
