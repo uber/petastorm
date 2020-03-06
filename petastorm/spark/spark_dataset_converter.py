@@ -41,7 +41,7 @@ def get_parent_cache_dir_url():
     Get parent cache dir url from `petastorm.spark.converter.defaultCacheDirUrl`
     We can only set the url config once.
     """
-    global _parent_cache_dir_url
+    global _parent_cache_dir_url  # pylint: disable=global-statement
 
     conf_url = _get_spark_session().conf \
         .get("petastorm.spark.converter.defaultCacheDirUrl", None)
@@ -61,8 +61,8 @@ def get_parent_cache_dir_url():
     else:
         _check_url(conf_url)
         _parent_cache_dir_url = conf_url
-        logging.info('Read petastorm.spark.converter.cacheDirUrl: {url}'
-                     .format(_parent_cache_dir_url))
+        logging.info(
+            'Read petastorm.spark.converter.cacheDirUrl %s' % _parent_cache_dir_url)
 
     return _parent_cache_dir_url
 
@@ -87,7 +87,7 @@ def _delete_cache_data(dataset_url):
 def _delete_cache_data_atexit(dataset_url):
     try:
         _delete_cache_data(dataset_url)
-    except Exception:
+    except Exception:  # pylint: disable=broad-except
         warnings.warn('delete cache data {url} failed.'.format(url=dataset_url))
 
 
@@ -253,8 +253,7 @@ def _materialize_df(df, parent_cache_dir_url, parquet_row_group_size_bytes,
         .option("parquet.block.size", parquet_row_group_size_bytes) \
         .parquet(save_to_dir_url)
 
-    logging.info('Materialize dataframe to url {url} successfully.'
-                 .format(url=save_to_dir_url))
+    logging.info('Materialize dataframe to url %s successfully.' % save_to_dir_url)
 
     atexit.register(_delete_cache_data_atexit, save_to_dir_url)
 
