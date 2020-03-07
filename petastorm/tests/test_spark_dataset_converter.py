@@ -149,6 +149,9 @@ def test_set_delete_handler(test_ctx):
     with pytest.raises(RuntimeError, match='Not implemented delete handler'):
         _delete_dir_handler(test_ctx.temp_url)
 
+    # Restore default delete handler (other test will use it)
+    register_delete_dir_handler(None)
+
 
 def _get_compression_type(data_url):
     files = os.listdir(urlparse(data_url).path)
