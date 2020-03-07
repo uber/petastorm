@@ -13,10 +13,11 @@
 # limitations under the License.
 
 import atexit
-import os
 import shutil
 import threading
+import datetime
 import uuid
+import logging
 import warnings
 
 from distutils.version import LooseVersion
@@ -36,10 +37,40 @@ def _get_spark_session():
     return SparkSession.builder.getOrCreate()
 
 
-def _delete_cache_data(dataset_url):
+_parent_cache_dir_url = None
+
+
+def _get_parent_cache_dir_url():
     """
-    Delete the cache data in the underlying file system.
+    Get parent cache dir url from `petastorm.spark.converter.parentCacheDirUrl`
+    We can only set the url config once.
     """
+    global _parent_cache_dir_url  # pylint: disable=global-statement
+
+    conf_url = _get_spark_session().conf \
+        .get("petastorm.spark.converter.parentCacheDirUrl", None)
+
+    if conf_url is None:
+        raise ValueError(
+            "Please set the spark config petastorm.spark.converter.parentCacheDirUrl.")
+
+    if _parent_cache_dir_url is not None:
+        if _parent_cache_dir_url != conf_url:
+            raise RuntimeError(
+                "petastorm.spark.converter.parentCacheDirUrl has been set to be "
+                "{url}, it can't be changed to {new_url} unless you restart spark "
+                "application."
+                .format(url=_parent_cache_dir_url, new_url=conf_url))
+    else:
+        _check_url(conf_url)
+        _parent_cache_dir_url = conf_url
+        logging.info(
+            'Read petastorm.spark.converter.parentCacheDirUrl %s', _parent_cache_dir_url)
+
+    return _parent_cache_dir_url
+
+
+def _default_delete_dir_handler(dataset_url):
     resolver = FilesystemResolver(dataset_url)
     fs = resolver.filesystem()
     parsed = urlparse(dataset_url)
@@ -48,17 +79,39 @@ def _delete_cache_data(dataset_url):
         # https://issues.apache.org/jira/browse/ARROW-7953
         # We can remove this branch once ARROW-7953 is fixed.
         local_path = parsed.path
-        if os.path.exists(local_path):
-            shutil.rmtree(local_path, ignore_errors=False)
+        shutil.rmtree(local_path, ignore_errors=False)
     else:
-        if fs.exists(dataset_url):
-            fs.delete(dataset_url, recursive=True)
+        fs.delete(parsed.path, recursive=True)
+
+
+_delete_dir_handler = _default_delete_dir_handler
+
+
+def register_delete_dir_handler(handler):
+    """
+    Register a handler for delete a directory url.
+    :param handler: A deleting function which take a argument of directory url.
+                    If None, use the default handler, note the default handler
+                    will use libhdfs3 driver.
+    """
+    global _delete_dir_handler  # pylint: disable=global-statement
+    if handler is None:
+        _delete_dir_handler = _default_delete_dir_handler
+    else:
+        _delete_dir_handler = handler
+
+
+def _delete_cache_data(dataset_url):
+    """
+    Delete the cache data in the underlying file system.
+    """
+    _delete_dir_handler(dataset_url)
 
 
 def _delete_cache_data_atexit(dataset_url):
     try:
         _delete_cache_data(dataset_url)
-    except BaseException:
+    except Exception:  # pylint: disable=broad-except
         warnings.warn('delete cache data {url} failed.'.format(url=dataset_url))
 
 
@@ -111,7 +164,7 @@ class SparkDatasetConverter(object):
                  when exit the returned context manager, the reader
                  will be closed.
         """
-        return _tf_dataset_context_manager(
+        return TFDatasetContextManager(
             self.cache_dir_url,
             batch_size=batch_size,
             prefetch=prefetch,
@@ -140,7 +193,7 @@ class SparkDatasetConverter(object):
         _delete_cache_data(self.cache_dir_url)
 
 
-class _tf_dataset_context_manager(object):
+class TFDatasetContextManager(object):
     """
     A context manager that manages the creation and termination of a
     :class:`petastorm.Reader`.
@@ -242,7 +295,7 @@ class CachedDataFrameMeta(object):
                    precision=precision)
         meta.cache_dir_url = _materialize_df(
             df,
-            parent_cache_dir=parent_cache_dir_url,
+            parent_cache_dir_url=parent_cache_dir_url,
             parquet_row_group_size_bytes=row_group_size,
             compression_codec=compression_codec,
             precision=precision)
@@ -253,34 +306,21 @@ _cache_df_meta_list = []
 _cache_df_meta_list_lock = threading.Lock()
 
 
-def _normalize_dir_url(dir_url):
+def _check_url(dir_url):
     """
-    Normalize dir url, will do:
-    * check scheme, raise error if empty scheme
-    * convert the path to be abspath, remove redundant '/' and trailing '/' in path
+    Check dir url, will check scheme, raise error if empty scheme
     """
     parsed = urlparse(dir_url)
     if not parsed.scheme:
         raise ValueError(
             'ERROR! A scheme-less directory url ({}) is no longer supported. '
             'Please prepend "file://" for local filesystem.'.format(dir_url))
-    new_parsed = parsed._replace(path=os.path.abspath(parsed.path))
-    return new_parsed.geturl()
 
 
-def _is_sub_dir_url(dir_url1, dir_url2):
-    """
-    Check whether url1 is a sub directory of url2
-    """
-    url1 = _normalize_dir_url(dir_url1)
-    url2 = _normalize_dir_url(dir_url2)
-
-    parsed1 = urlparse(url1)
-    parsed2 = urlparse(url2)
-
-    return parsed1.scheme == parsed2.scheme and \
-        parsed1.netloc == parsed2.netloc and \
-        parsed1.path.startswith(parsed2.path + os.sep)
+def _make_sub_dir_url(dir_url, name):
+    parsed = urlparse(dir_url)
+    new_path = parsed.path + '/' + name
+    return parsed._replace(path=new_path).geturl()
 
 
 def _cache_df_or_retrieve_cache_data_url(
@@ -293,8 +333,6 @@ def _cache_df_or_retrieve_cache_data_url(
     cache file path.
     Use atexit to delete the cache before the python interpreter exits.
     :param df: A :class:`DataFrame` object.
-    :param parent_cache_dir_url: A string denoting the directory for the saved
-        parquet file.
     :param parquet_row_group_size_bytes: An int denoting the number of bytes
         in a parquet row group.
     :param compression_codec: Specify compression codec.
@@ -311,8 +349,7 @@ def _cache_df_or_retrieve_cache_data_url(
             if meta.row_group_size == parquet_row_group_size_bytes and \
                     meta.compression_codec == compression_codec and \
                     meta.df_plan.sameResult(df_plan) and \
-                    meta.precision == precision and \
-                    _is_sub_dir_url(meta.cache_dir_url, parent_cache_dir_url):
+                    meta.precision == precision:
                 return meta.cache_dir_url
         # do not find cached dataframe, start materializing.
         cached_df_meta = CachedDataFrameMeta.create_cached_dataframe(
@@ -340,42 +377,64 @@ def _convert_precision(df, precision):
     return df
 
 
-def _materialize_df(df, parent_cache_dir, parquet_row_group_size_bytes,
-                    compression_codec, precision):
+def _gen_cache_dir_name():
+    """
+    Generate a random directory name for storing dataset.
+    The directory name format is:
+      {datetime}-{spark_application_id}-{uuid4}
+    This will help user to find the related spark application for a directory.
+    So that if atexit deletion failed, user can manually delete them.
+    """
     uuid_str = str(uuid.uuid4())
-    save_to_dir = os.path.join(parent_cache_dir, uuid_str)
+    time_str = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+    appid = _get_spark_session().sparkContext.applicationId
+    return '{time}-appid-{appid}-{uuid}'.format(time=time_str, appid=appid, uuid=uuid_str)
+
+
+def _materialize_df(df, parent_cache_dir_url, parquet_row_group_size_bytes,
+                    compression_codec, precision):
+    dir_name = _gen_cache_dir_name()
+    save_to_dir_url = _make_sub_dir_url(parent_cache_dir_url, dir_name)
     df = _convert_precision(df, precision)
 
     df.write \
         .option("compression", compression_codec) \
         .option("parquet.block.size", parquet_row_group_size_bytes) \
-        .parquet(save_to_dir)
-    atexit.register(_delete_cache_data_atexit, save_to_dir)
+        .parquet(save_to_dir_url)
 
-    return save_to_dir
+    logging.info('Materialize dataframe to url %s successfully.', save_to_dir_url)
+
+    atexit.register(_delete_cache_data_atexit, save_to_dir_url)
+
+    return save_to_dir_url
 
 
 def make_spark_converter(
         df,
-        cache_dir_url=None,
         parquet_row_group_size_bytes=DEFAULT_ROW_GROUP_SIZE_BYTES,
-        compression=None,
+        compression_codec=None,
         precision='float32'):
     """
     Convert a spark dataframe into a :class:`SparkDatasetConverter` object.
     It will materialize a spark dataframe to a `cache_dir_url`.
+    The dataframe will be materialized in parquet format, and we can specify
+    `parquet_row_group_size_bytes` and `compression_codec` for the parquet
+    format. See params documentation for details.
+
     The returned `SparkDatasetConverter` object will hold the materialized
     dataframe, and can be used to make one or more tensorflow datasets or
     torch dataloaders.
 
+    We can explicitly delete the materialized dataframe data, see
+    `SparkDatasetConverter.delete`, and when the spark application exit,
+    it will try best effort to delete the materialized dataframe data.
+
     :param df: The :class:`DataFrame` object to be converted.
-    :param cache_dir_url: A URL string denoting the parent directory to store
-        intermediate files. Default None, it will fallback to the spark config
-        "petastorm.spark.converter.defaultCacheDirUrl".
     :param parquet_row_group_size_bytes: An int denoting the number of bytes
         in a parquet row group.
-    :param compression: True or False, specify whether to apply compression.
-        Default None. If None, it will automatically choose the best way.
+    :param compression_codec: Specify compression codec.
+        It can be one of 'uncompressed', 'bzip2', 'gzip', 'lz4', 'snappy', 'deflate'.
+        Default None. If None, it will leave the data uncompressed.
     :param precision: 'float32' or 'float64', specifying the precision of the
         output dataset.
 
@@ -383,29 +442,23 @@ def make_spark_converter(
         materialized dataframe and can be used to make one or more tensorflow
         datasets or torch dataloaders.
     """
-    if cache_dir_url is None:
-        cache_dir_url = _get_spark_session().conf \
-            .get("petastorm.spark.converter.defaultCacheDirUrl", None)
 
-    if cache_dir_url is None:
-        raise ValueError(
-            "Please specify the parameter cache_dir_url denoting the parent "
-            "directory to store intermediate files, or set the spark config "
-            "`petastorm.spark.converter.defaultCacheDirUrl`.")
+    parent_cache_dir_url = _get_parent_cache_dir_url()
 
-    cache_dir_url = _normalize_dir_url(cache_dir_url)
+    # TODO: Improve default behavior to be automatically choosing the best way.
+    compression_codec = compression_codec or "uncompressed"
 
-    if compression is None:
-        # TODO: Improve default behavior to be automatically choosing the
-        #  best way.
-        compression_codec = "uncompressed"
-    elif compression:
-        compression_codec = "snappy"
-    else:
-        compression_codec = "uncompressed"
+    if compression_codec.lower() not in \
+            ['uncompressed', 'bzip2', 'gzip', 'lz4', 'snappy', 'deflate']:
+        raise RuntimeError(
+            "compression_codec should be None or one of the following values: "
+            "'uncompressed', 'bzip2', 'gzip', 'lz4', 'snappy', 'deflate'")
 
     dataset_cache_dir_url = _cache_df_or_retrieve_cache_data_url(
-        df, cache_dir_url, parquet_row_group_size_bytes, compression_codec,
-        precision)
+        df, parent_cache_dir_url, parquet_row_group_size_bytes, compression_codec, precision)
+
+    # TODO: improve this by read parquet file metadata to get count
+    #  Currently spark can make sure to only read the minimal column
+    #  so count will usually be fast.
     dataset_size = _get_spark_session().read.parquet(dataset_cache_dir_url).count()
     return SparkDatasetConverter(dataset_cache_dir_url, dataset_size)
