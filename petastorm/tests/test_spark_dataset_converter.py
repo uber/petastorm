@@ -143,7 +143,7 @@ def test_atexit(test_ctx):
 
 
 def test_set_delete_handler(test_ctx):
-    def test_delete_handler():
+    def test_delete_handler(dir_url):
         raise RuntimeError('Not implemented delete handler.')
     register_delete_dir_handler(test_delete_handler)
 
