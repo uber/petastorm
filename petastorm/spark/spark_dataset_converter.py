@@ -38,24 +38,22 @@ _parent_cache_dir_url = None
 
 def get_parent_cache_dir_url():
     """
-    Get parent cache dir url from `petastorm.spark.converter.defaultCacheDirUrl`
+    Get parent cache dir url from `petastorm.spark.converter.parentCacheDirUrl`
     We can only set the url config once.
     """
     global _parent_cache_dir_url  # pylint: disable=global-statement
 
     conf_url = _get_spark_session().conf \
-        .get("petastorm.spark.converter.defaultCacheDirUrl", None)
+        .get("petastorm.spark.converter.parentCacheDirUrl", None)
 
     if conf_url is None:
         raise ValueError(
-            "Please specify the parameter cache_dir_url denoting the parent "
-            "directory to store intermediate files, or set the spark config "
-            "`petastorm.spark.converter.defaultCacheDirUrl`.")
+            "Please set the spark config petastorm.spark.converter.parentCacheDirUrl.")
 
     if _parent_cache_dir_url is not None:
         if _parent_cache_dir_url != conf_url:
             raise RuntimeError(
-                "petastorm.spark.converter.cacheDirUrl has been set to be "
+                "petastorm.spark.converter.parentCacheDirUrl has been set to be "
                 "{url}, it can't be changed to {new_url} unless you restart spark "
                 "application."
                 .format(url=_parent_cache_dir_url, new_url=conf_url))
@@ -63,15 +61,12 @@ def get_parent_cache_dir_url():
         _check_url(conf_url)
         _parent_cache_dir_url = conf_url
         logging.info(
-            'Read petastorm.spark.converter.cacheDirUrl %s', _parent_cache_dir_url)
+            'Read petastorm.spark.converter.parentCacheDirUrl %s', _parent_cache_dir_url)
 
     return _parent_cache_dir_url
 
 
-def _delete_cache_data(dataset_url):
-    """
-    Delete the cache data in the underlying file system.
-    """
+def _default_delete_dir_handler(dataset_url):
     resolver = FilesystemResolver(dataset_url)
     fs = resolver.filesystem()
     parsed = urlparse(dataset_url)
@@ -83,6 +78,30 @@ def _delete_cache_data(dataset_url):
         shutil.rmtree(local_path, ignore_errors=False)
     else:
         fs.delete(parsed.path, recursive=True)
+
+
+_delete_dir_handler = _default_delete_dir_handler
+
+
+def register_delete_dir_handler(handler):
+    """
+    Register a handler for delete a directory url.
+    :param handler: A deleting function which take a argument of directory url.
+                    If None, use the default handler, note the default handler
+                    will use libhdfs3 driver.
+    """
+    global _delete_dir_handler  # pylint: disable=global-statement
+    if handler is None:
+        _delete_dir_handler = _default_delete_dir_handler
+    else:
+        _delete_dir_handler = handler
+
+
+def _delete_cache_data(dataset_url):
+    """
+    Delete the cache data in the underlying file system.
+    """
+    _delete_dir_handler(dataset_url)
 
 
 def _delete_cache_data_atexit(dataset_url):
@@ -192,9 +211,7 @@ _cache_df_meta_list_lock = threading.Lock()
 
 def _check_url(dir_url):
     """
-    Normalize dir url, will do:
-    * check scheme, raise error if empty scheme
-    * convert the path to be abspath, remove redundant '/' and trailing '/' in path
+    Check dir url, will check scheme, raise error if empty scheme
     """
     parsed = urlparse(dir_url)
     if not parsed.scheme:
@@ -219,8 +236,6 @@ def _cache_df_or_retrieve_cache_data_url(df, parent_cache_dir_url,
     cache file path.
     Use atexit to delete the cache before the python interpreter exits.
     :param df: A :class:`DataFrame` object.
-    :param parent_cache_dir_url: A string denoting the directory for the saved
-        parquet file.
     :param parquet_row_group_size_bytes: An int denoting the number of bytes
         in a parquet row group.
     :param compression_codec: Specify compression codec.
@@ -268,16 +283,21 @@ def make_spark_converter(
     """
     Convert a spark dataframe into a :class:`SparkDatasetConverter` object.
     It will materialize a spark dataframe to a `cache_dir_url`.
+    The dataframe will be materialized in parquet format, and we can specify
+    `parquet_row_group_size_bytes` and `compression_codec` for the parquet
+    format. See params documentation for details.
+
     The returned `SparkDatasetConverter` object will hold the materialized
     dataframe, and can be used to make one or more tensorflow datasets or
     torch dataloaders.
+
     We can explicitly delete the materialized dataframe data, see
     `SparkDatasetConverter.delete`, and when the spark application exit,
     it will try best effort to delete the materialized dataframe data.
 
     :param df: The :class:`DataFrame` object to be converted.
     :param parquet_row_group_size_bytes: An int denoting the number of bytes
-        in a parquet row group.
+        in a parquet row group when materializing the dataframe..
     :param compression_codec: Specify compression codec.
         It can be one of 'uncompressed', 'bzip2', 'gzip', 'lz4', 'snappy', 'deflate'.
         Default None. If None, it will leave the data uncompressed.
@@ -289,10 +309,8 @@ def make_spark_converter(
 
     parent_cache_dir_url = get_parent_cache_dir_url()
 
-    if compression_codec is None:
-        # TODO: Improve default behavior to be automatically choosing the
-        #  best way.
-        compression_codec = "uncompressed"
+    # TODO: Improve default behavior to be automatically choosing the best way.
+    compression_codec = compression_codec or "uncompressed"
 
     if compression_codec.lower() not in \
             ['uncompressed', 'bzip2', 'gzip', 'lz4', 'snappy', 'deflate']:
