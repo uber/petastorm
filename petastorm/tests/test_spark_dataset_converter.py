@@ -14,6 +14,7 @@
 
 import os
 import subprocess
+import sys
 import tempfile
 import pytest
 
@@ -27,10 +28,11 @@ from six.moves.urllib.parse import urlparse
 
 from petastorm.fs_utils import FilesystemResolver
 from petastorm.spark import make_spark_converter
-from petastorm.spark.spark_dataset_converter import _check_url, _make_sub_dir_url
+from petastorm.spark.spark_dataset_converter import \
+    register_delete_dir_handler, _delete_dir_handler, _check_url, _make_sub_dir_url
 
 
-class TestContex(object):
+class TestContext(object):
 
     def __init__(self):
         self.spark = SparkSession.builder \
@@ -39,7 +41,7 @@ class TestContex(object):
             .getOrCreate()
         self.tempdir = tempfile.mkdtemp('_spark_converter_test')
         self.temp_url = 'file://' + self.tempdir.replace(os.sep, '/')
-        self.spark.conf.set('petastorm.spark.converter.defaultCacheDirUrl', self.temp_url)
+        self.spark.conf.set('petastorm.spark.converter.parentCacheDirUrl', self.temp_url)
 
     def tear_down(self):
         self.spark.stop()
@@ -47,7 +49,7 @@ class TestContex(object):
 
 @pytest.fixture(scope='module')
 def test_ctx():
-    ctx = TestContex()
+    ctx = TestContext()
     yield ctx
     ctx.tear_down()
 
@@ -121,7 +123,7 @@ def test_atexit(test_ctx):
     from pyspark.sql import SparkSession
     import os
     spark = SparkSession.builder.getOrCreate()
-    spark.conf.set('petastorm.spark.converter.defaultCacheDirUrl', '{temp_url}')
+    spark.conf.set('petastorm.spark.converter.parentCacheDirUrl', '{temp_url}')
     df = spark.createDataFrame([(1, 2),(4, 5)], ["col1", "col2"])
     converter = make_spark_converter(df)
     f = open(os.path.join('{tempdir}', 'test_atexit.out'), "w")
@@ -130,13 +132,22 @@ def test_atexit(test_ctx):
     """.format(tempdir=test_ctx.tempdir, temp_url=test_ctx.temp_url)
     code_str = "; ".join(
         line.strip() for line in lines.strip().splitlines())
-    ret_code = subprocess.call(["python", "-c", code_str])
+    ret_code = subprocess.call([sys.executable, "-c", code_str])
     assert 0 == ret_code
     with open(os.path.join(test_ctx.tempdir, 'test_atexit.out')) as f:
         cache_dir_url = f.read()
 
     fs = FilesystemResolver(cache_dir_url).filesystem()
     assert not fs.exists(urlparse(cache_dir_url).path)
+
+
+def test_set_delete_handler(test_ctx):
+    def test_delete_handler():
+        raise RuntimeError('Not implemented delete handler.')
+    register_delete_dir_handler(test_delete_handler)
+
+    with pytest.raises(ValueError, match='Not implemented delete handler'):
+        _delete_dir_handler(test_ctx.temp_url)
 
 
 def _get_compression_type(data_url):
