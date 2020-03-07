@@ -28,8 +28,8 @@ from six.moves.urllib.parse import urlparse
 
 from petastorm.fs_utils import FilesystemResolver
 from petastorm.spark import make_spark_converter
-from petastorm.spark.spark_dataset_converter import \
-    register_delete_dir_handler, _delete_dir_handler, _check_url, _make_sub_dir_url
+from petastorm.spark.spark_dataset_converter import register_delete_dir_handler, \
+    _check_url, _delete_dir_handler, _get_parent_cache_dir_url, _make_sub_dir_url
 
 
 class TestContext(object):
@@ -146,7 +146,7 @@ def test_set_delete_handler(test_ctx):
         raise RuntimeError('Not implemented delete handler.')
     register_delete_dir_handler(test_delete_handler)
 
-    with pytest.raises(ValueError, match='Not implemented delete handler'):
+    with pytest.raises(RuntimeError, match='Not implemented delete handler'):
         _delete_dir_handler(test_ctx.temp_url)
 
 
@@ -220,3 +220,16 @@ def test_pickling_remotely(test_ctx):
 
     result = test_ctx.spark.sparkContext.parallelize(range(1), 1).map(map_fn).collect()[0]
     assert result == 100
+
+
+def test_change_cache_dir_raise_error(test_ctx):
+    temp_url2 = 'file://' + tempfile.mkdtemp('_spark_converter_test2').replace(os.sep, '/')
+    test_ctx.spark.conf.set('petastorm.spark.converter.parentCacheDirUrl', temp_url2)
+
+    with pytest.raises(
+            RuntimeError, match="petastorm.spark.converter.parentCacheDirUrl has been set to be"):
+        _get_parent_cache_dir_url()
+
+    # restore conf (other test need use it)
+    test_ctx.spark.conf.set('petastorm.spark.converter.parentCacheDirUrl', test_ctx.temp_url)
+    assert test_ctx.temp_url == _get_parent_cache_dir_url()

@@ -36,7 +36,7 @@ def _get_spark_session():
 _parent_cache_dir_url = None
 
 
-def get_parent_cache_dir_url():
+def _get_parent_cache_dir_url():
     """
     Get parent cache dir url from `petastorm.spark.converter.parentCacheDirUrl`
     We can only set the url config once.
@@ -307,7 +307,7 @@ def make_spark_converter(
         datasets or torch dataloaders.
     """
 
-    parent_cache_dir_url = get_parent_cache_dir_url()
+    parent_cache_dir_url = _get_parent_cache_dir_url()
 
     # TODO: Improve default behavior to be automatically choosing the best way.
     compression_codec = compression_codec or "uncompressed"
