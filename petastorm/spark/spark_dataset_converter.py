@@ -15,6 +15,7 @@
 import atexit
 import shutil
 import threading
+import datetime
 import uuid
 import logging
 import warnings
@@ -259,10 +260,24 @@ def _cache_df_or_retrieve_cache_data_url(df, parent_cache_dir_url,
         return cached_df_meta.cache_dir_url
 
 
+def _gen_cache_dir_name():
+    """
+    Generate a random directory name for storing dataset.
+    The directory name format is:
+      {datetime}-{spark_application_id}-{uuid4}
+    This will help user to find the related spark application for a directory.
+    So that if atexit deletion failed, user can manually delete them.
+    """
+    uuid_str = str(uuid.uuid4())
+    time_str = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+    appid = _get_spark_session().sparkContext.applicationId
+    return '{time}-appid-{appid}-{uuid}'.format(time=time_str, appid=appid, uuid=uuid_str)
+
+
 def _materialize_df(df, parent_cache_dir_url, parquet_row_group_size_bytes,
                     compression_codec):
-    uuid_str = str(uuid.uuid4())
-    save_to_dir_url = _make_sub_dir_url(parent_cache_dir_url, uuid_str)
+    dir_name = _gen_cache_dir_name()
+    save_to_dir_url = _make_sub_dir_url(parent_cache_dir_url, dir_name)
 
     df.write \
         .option("compression", compression_codec) \
