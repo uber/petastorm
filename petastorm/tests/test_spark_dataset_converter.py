@@ -318,3 +318,61 @@ def test_array(test_ctx):
         with tf.Session() as sess:
             ts = sess.run(tensor)
     assert np.float32 == ts.c1.dtype.type
+
+
+def test_torch_primitive(test_ctx):
+    import torch
+
+    schema = StructType([
+        StructField("bool_col", BooleanType(), False),
+        StructField("float_col", FloatType(), False),
+        StructField("double_col", DoubleType(), False),
+        StructField("short_col", ShortType(), False),
+        StructField("int_col", IntegerType(), False),
+        StructField("long_col", LongType(), False),
+        StructField("byte_col", ByteType(), False),
+    ])
+    df = test_ctx.spark.createDataFrame(
+        [(True, 0.12, 432.1, 5, 5, 0, -128),
+         (False, 123.45, 0.987, 9, 908, 765, 127)],
+        schema=schema).coalesce(1)
+    # If we use numPartition > 1, the order of the loaded dataset would
+    # be non-deterministic.
+    expected_df = df.collect()
+
+    converter = make_spark_converter(df)
+    batch = None
+    with converter.make_torch_dataloader() as dataloader:
+        for i, batch in enumerate(dataloader):
+            # default batch_size = 1
+            for col in df.schema.names:
+                actual_ele = batch[col][0]
+                expected_ele = expected_df[i][col]
+                if col == "double_col":
+                    assert pytest.approx(expected_ele, rel=1e-6) == actual_ele
+                else:
+                    assert expected_ele == actual_ele
+
+        assert len(expected_df) == len(converter)
+    assert torch.uint8 == batch["bool_col"].dtype
+    assert torch.int8 == batch["byte_col"].dtype
+    assert torch.float32 == batch["double_col"].dtype
+    assert torch.float32 == batch["float_col"].dtype
+    assert torch.int32 == batch["int_col"].dtype
+    assert torch.int64 == batch["long_col"].dtype
+    assert torch.int16 == batch["short_col"].dtype
+
+
+def test_torch_pickling_remotely(test_ctx):
+    df1 = test_ctx.spark.range(100, 101)
+    converter1 = make_spark_converter(df1)
+
+    def map_fn(_):
+        with converter1.make_torch_dataloader() as dataloader:
+            for batch in dataloader:
+                ret = batch["id"][0]
+        return ret
+
+    result = test_ctx.spark.sparkContext.parallelize(range(1), 1) \
+        .map(map_fn).collect()[0]
+    assert result == 100

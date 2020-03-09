@@ -184,7 +184,7 @@ class SparkDatasetConverter(object):
                  when exit the returned context manager, the reader
                  will be closed.
         """
-        return _torch_dataset_context_manager(self.cache_dir_url)
+        return TorchDatasetContextManager(self.cache_dir_url)
 
     def delete(self):
         """
@@ -246,7 +246,7 @@ class TFDatasetContextManager(object):
         self.reader.join()
 
 
-class _torch_dataset_context_manager(object):
+class TorchDatasetContextManager(object):
     """
     A context manager that manages the creation and termination of a
     :class:`petastorm.Reader`.
