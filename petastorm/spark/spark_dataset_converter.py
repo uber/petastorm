@@ -45,7 +45,7 @@ def _get_parent_cache_dir_url():
     global _parent_cache_dir_url  # pylint: disable=global-statement
 
     conf_url = _get_spark_session().conf \
-        .get("petastorm.spark.converter.parentCacheDirUrl", None)
+        .get(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, None)
 
     if conf_url is None:
         raise ValueError(
@@ -120,6 +120,8 @@ class SparkDatasetConverter(object):
     processes.
     See `make_spark_converter`
     """
+
+    PARENT_CACHE_DIR_URL_CONF = 'petastorm.spark.converter.parentCacheDirUrl'
 
     def __init__(self, cache_dir_url, dataset_size):
         """
@@ -297,7 +299,8 @@ def make_spark_converter(
         compression_codec=None):
     """
     Convert a spark dataframe into a :class:`SparkDatasetConverter` object.
-    It will materialize a spark dataframe to a `cache_dir_url`.
+    It will materialize a spark dataframe to the directory specified by
+    spark conf 'petastorm.spark.converter.parentCacheDirUrl'.
     The dataframe will be materialized in parquet format, and we can specify
     `parquet_row_group_size_bytes` and `compression_codec` for the parquet
     format. See params documentation for details.
