@@ -12,5 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .spark_dataset_converter import \
-    make_spark_converter, SparkDatasetConverter  # noqa: F401
+from .spark_dataset_converter import make_spark_converter  # noqa: F401
+from .spark_dataset_converter import SparkDatasetConverter  # noqa: F401
