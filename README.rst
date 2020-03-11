@@ -225,6 +225,37 @@ The minimalist example below assumes the definition of a ``Net`` class and
                                 transform_spec=transform), batch_size=1000) as test_loader:
         test(model, device, test_loader)
 
+Spark converter API
+-------------------
+
+To simplify data conversion from Spark to TensorFlow, you can use Spark converter API:
+
+.. code-block:: python
+
+    from petastorm import make_spark_converter
+    import tensorflow as tf
+
+    # specify a cache dir first.
+    # the dir is used to save materialized spark dataframe files
+    spark.conf.set('petastorm.spark.converter.parentCacheDirUrl', 'hdfs:/...')
+
+    df1 = ... # `df1` is a spark dataframe
+
+    # create a converter from `df1`
+    # it will materialize `df1` to cache dir.
+    converter1 = make_spark_converter(df1)
+
+    # make a tensorflow dataset from `converter1
+    with converter1.make_tf_dataset() as dataset:
+        # the `dataset` is `tf.data.Dataset` object
+        # we can train/evaluate model on `dataset`
+        # when exit the with context, the reader of the dataset will be closed
+        ...
+
+    # delete the cached files of the dataframe.
+    converter1.delete()
+
+
 PySpark and SQL
 ---------------
 
