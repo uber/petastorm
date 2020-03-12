@@ -406,7 +406,7 @@ class Reader(object):
 
         # 5. Start workers pool
         self._workers_pool.start(worker_class, (pyarrow_filesystem, dataset_path, storage_schema, self.ngram,
-                                                row_groups, cache, transform_spec),
+                                                row_groups, cache, transform_spec, self.schema),
                                  ventilator=self.ventilator)
         logger.debug('Workers pool started')
 

@@ -67,7 +67,12 @@ class ArrowReaderWorkerResultsQueueReader(object):
                     # Assuming all lists are of the same length, hence we can collate them into a matrix
                     list_of_lists = column_as_numpy
                     try:
-                        result_dict[column_name] = np.vstack(list_of_lists.tolist())
+                        col_data = np.vstack(list_of_lists.tolist())
+                        shape = schema.fields[column_name].shape
+                        if len(shape) > 1:
+                            col_data = col_data.reshape((len(list_of_lists),) + shape)
+                        result_dict[column_name] = col_data
+
                     except ValueError:
                         raise RuntimeError('Length of all values in column \'{}\' are expected to be the same length. '
                                            'Got the following set of lengths: \'{}\''
@@ -93,6 +98,7 @@ class ArrowReaderWorker(WorkerBase):
         self._split_pieces = args[4]
         self._local_cache = args[5]
         self._transform_spec = args[6]
+        self._transformed_schema = args[7]
 
         if self._ngram:
             raise NotImplementedError('ngrams are not supported by ArrowReaderWorker')
@@ -173,6 +179,20 @@ class ArrowReaderWorker(WorkerBase):
             # TransformSpec(removed_fields=['some field'])
             for field_to_remove in set(transformed_result.columns) & set(self._transform_spec.removed_fields):
                 del transformed_result[field_to_remove]
+
+            for field in self._transformed_schema.fields.values():
+                if len(field.shape) > 1:
+                    def check_and_ravel(x):
+                        if not isinstance(x, np.ndarray):
+                            raise ValueError('field {name} must be numpy array type.'.format(name=field.name))
+                        if x.shape != field.shape:
+                            raise ValueError('field {name} must be the shape {shape}'
+                                             .format(name=field.name, shape=field.shape))
+                        if not x.flags.c_contiguous:
+                            raise ValueError('Only support row major multi-dimensional array.')
+                        return x.ravel()
+
+                    transformed_result[field.name] = transformed_result[field.name].map(check_and_ravel)
 
             result = pa.Table.from_pandas(transformed_result, preserve_index=False)
 
