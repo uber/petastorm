@@ -13,18 +13,17 @@
 # limitations under the License.
 
 import atexit
+import datetime
+import logging
 import shutil
 import threading
-import datetime
 import uuid
-import logging
 import warnings
-
 from distutils.version import LooseVersion
 
 from pyarrow import LocalFileSystem
 from pyspark.sql.session import SparkSession
-from pyspark.sql.types import FloatType, DoubleType, ArrayType
+from pyspark.sql.types import ArrayType, DoubleType, FloatType
 from six.moves.urllib.parse import urlparse
 
 from petastorm import make_batch_reader
@@ -391,10 +390,35 @@ def _gen_cache_dir_name():
     return '{time}-appid-{appid}-{uuid}'.format(time=time_str, appid=appid, uuid=uuid_str)
 
 
+def _convert_vector(df, precision):
+    from pyspark.ml.linalg import Vector
+    from pyspark.mllib.linalg import Vector as OldVector
+
+    types_set = {struct_field.dataType for struct_field in df.schema}
+    found_vectors = not types_set.isdisjoint({Vector, OldVector})
+    if not found_vectors:
+        return df
+
+    import pyspark
+    if LooseVersion(pyspark.__version__) >= LooseVersion('3.0'):
+        raise ValueError("Vector columns are not supported for pyspark<3.0.0.")
+    # pylint: disable=import-error
+    from pyspark.ml.functions import vector_to_array
+    # pylint: enable=import-error
+
+    for struct_field in df.schema:
+        col_name = struct_field.name
+        if struct_field.dataType in {Vector, OldVector}:
+            df = df.withColumn(col_name,
+                               vector_to_array(df[col_name], precision))
+    return df
+
+
 def _materialize_df(df, parent_cache_dir_url, parquet_row_group_size_bytes,
                     compression_codec, precision):
     dir_name = _gen_cache_dir_name()
     save_to_dir_url = _make_sub_dir_url(parent_cache_dir_url, dir_name)
+    df = _convert_vector(df, precision)
     df = _convert_precision(df, precision)
 
     df.write \
