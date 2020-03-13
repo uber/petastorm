@@ -47,7 +47,7 @@ def _get_parent_cache_dir_url():
     global _parent_cache_dir_url  # pylint: disable=global-statement
 
     conf_url = _get_spark_session().conf \
-        .get("petastorm.spark.converter.parentCacheDirUrl", None)
+        .get(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, None)
 
     if conf_url is None:
         raise ValueError(
@@ -122,6 +122,8 @@ class SparkDatasetConverter(object):
     processes.
     See `make_spark_converter`
     """
+
+    PARENT_CACHE_DIR_URL_CONF = 'petastorm.spark.converter.parentCacheDirUrl'
 
     def __init__(self, cache_dir_url, dataset_size):
         """

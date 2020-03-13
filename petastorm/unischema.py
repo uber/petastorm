@@ -421,13 +421,13 @@ def match_unischema_fields(schema, field_regex):
       expression patterns given by ``field_regex``.
     """
     if field_regex:
-        unischema_fields = []
-        legacy_unischema_fields = []
+        unischema_fields = set()
+        legacy_unischema_fields = set()
         for pattern in field_regex:
-            unischema_fields.extend(
-                [field for field_name, field in schema.fields.items() if _fullmatch(pattern, field_name)])
-            legacy_unischema_fields.extend([field for field_name, field in schema.fields.items()
-                                            if re.match(pattern, field_name)])
+            unischema_fields |= {field for field_name, field in schema.fields.items() if
+                                 _fullmatch(pattern, field_name)}
+            legacy_unischema_fields |= {field for field_name, field in schema.fields.items()
+                                        if re.match(pattern, field_name)}
         if unischema_fields != legacy_unischema_fields:
             field_names = {f.name for f in unischema_fields}
             legacy_field_names = {f.name for f in legacy_unischema_fields}
@@ -436,9 +436,9 @@ def match_unischema_fields(schema, field_regex):
             warnings.warn('schema_fields behavior has changed. Now, regular expression pattern must match'
                           ' the entire field name. The change in the behavior affects '
                           'the following fields: {}'.format(', '.join(diff_names)))
+        return list(unischema_fields)
     else:
-        unischema_fields = field_regex
-    return unischema_fields
+        return []
 
 
 def _numpy_and_codec_from_arrow_type(field_type):
