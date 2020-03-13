@@ -184,7 +184,7 @@ class ArrowReaderWorker(WorkerBase):
             transformed_schema_column_set = set([f.name for f in self._transformed_schema.fields.values()])
 
             if transformed_result_column_set != transformed_schema_column_set:
-                raise ValueError('Transformed result columns ({rs}) do not match required schema columns({sc})'
+                raise ValueError('Transformed result columns ({rc}) do not match required schema columns({sc})'
                                  .format(rc=','.join(transformed_result_column_set),
                                          sc=','.join(transformed_schema_column_set)))
 
@@ -201,7 +201,7 @@ class ArrowReaderWorker(WorkerBase):
             for field in self._transformed_schema.fields.values():
                 if len(field.shape) > 1:
                     transformed_result[field.name] = transformed_result[field.name] \
-                        .map(lambda x: check_shape_and_ravel(x, field))
+                        .map(lambda x: check_shape_and_ravel(x, field))  # pylint: disable=cell-var-from-loop
 
             result = pa.Table.from_pandas(transformed_result, preserve_index=False)
 
