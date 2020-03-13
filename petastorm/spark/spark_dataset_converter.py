@@ -480,7 +480,8 @@ def make_spark_converter(
         precision='float32'):
     """
     Convert a spark dataframe into a :class:`SparkDatasetConverter` object.
-    It will materialize a spark dataframe to a `cache_dir_url`.
+    It will materialize a spark dataframe to the directory specified by
+    spark conf 'petastorm.spark.converter.parentCacheDirUrl'.
     The dataframe will be materialized in parquet format, and we can specify
     `parquet_row_group_size_bytes` and `compression_codec` for the parquet
     format. See params documentation for details.
@@ -495,7 +496,7 @@ def make_spark_converter(
 
     :param df: The :class:`DataFrame` object to be converted.
     :param parquet_row_group_size_bytes: An int denoting the number of bytes
-        in a parquet row group.
+        in a parquet row group when materializing the dataframe.
     :param compression_codec: Specify compression codec.
         It can be one of 'uncompressed', 'bzip2', 'gzip', 'lz4', 'snappy', 'deflate'.
         Default None. If None, it will leave the data uncompressed.
