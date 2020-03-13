@@ -183,3 +183,15 @@ def test_transform_spec_support_return_tensor(scalar_dataset, reader_factory):
         sample = next(reader)._asdict()
         assert len(sample) == 1
         assert (2, 3) == sample['tensor_col_1'].shape
+
+    def preproc_fn2(x):
+        return pd.DataFrame({'tensor_col_1': x['id'].map(lambda _: np.random.rand(2, 5))})
+
+    spec2 = TransformSpec(
+        preproc_fn2,
+        edit_fields=[('tensor_col_1', np.float32, (2, 3), False)],
+        removed_fields=list(scalar_dataset.data[0].keys())
+    )
+
+    with pytest.raises(ValueError, match='field tensor_col_1 must be the shape (2, 3)'):
+        reader_factory(scalar_dataset.url, transform_spec=spec2)
