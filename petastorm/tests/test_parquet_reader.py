@@ -182,7 +182,7 @@ def test_transform_spec_support_return_tensor(scalar_dataset, reader_factory):
     with reader_factory(scalar_dataset.url, transform_spec=spec1) as reader:
         sample = next(reader)._asdict()
         assert len(sample) == 1
-        assert (2, 3) == sample['tensor_col_1'].shape
+        assert (2, 3) == sample['tensor_col_1'].shape[1:]
 
     def preproc_fn2(x):
         return pd.DataFrame({'tensor_col_1': x['id'].map(lambda _: np.random.rand(2, 5))})
