@@ -16,14 +16,12 @@ import os
 import subprocess
 import sys
 import tempfile
-from distutils.version import LooseVersion
 
 import numpy as np
-import pyspark
 import pytest
 import tensorflow as tf
 from pyspark.sql import SparkSession
-from pyspark.sql.types import (ArrayType, BinaryType, BooleanType, ByteType,
+from pyspark.sql.types import (BinaryType, BooleanType, ByteType,
                                DoubleType, FloatType, IntegerType, LongType,
                                ShortType, StringType, StructField, StructType)
 from six.moves.urllib.parse import urlparse
@@ -279,7 +277,7 @@ def test_torch_primitive(test_ctx):
         assert len(expected_df) == len(converter)
     assert torch.uint8 == batch["bool_col"].dtype
     assert torch.int8 == batch["byte_col"].dtype
-    assert torch.float64 == batch["double_col"].dtype
+    assert torch.float32 == batch["double_col"].dtype
     assert torch.float32 == batch["float_col"].dtype
     assert torch.int32 == batch["int_col"].dtype
     assert torch.int64 == batch["long_col"].dtype

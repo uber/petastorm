@@ -19,11 +19,9 @@ import shutil
 import threading
 import uuid
 import warnings
-from distutils.version import LooseVersion
 
 from pyarrow import LocalFileSystem
 from pyspark.sql.session import SparkSession
-from pyspark.sql.types import ArrayType, DoubleType, FloatType
 from six.moves.urllib.parse import urlparse
 
 import petastorm
