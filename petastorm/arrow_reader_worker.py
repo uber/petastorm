@@ -92,7 +92,7 @@ class ArrowReaderWorker(WorkerBase):
         super(ArrowReaderWorker, self).__init__(worker_id, publish_func, args)
 
         self._filesystem = args[0]
-        self._dataset_path = args[1]
+        self._dataset_path_or_paths = args[1]
         self._schema = args[2]
         self._ngram = args[3]
         self._split_pieces = args[4]
@@ -127,7 +127,7 @@ class ArrowReaderWorker(WorkerBase):
 
         if not self._dataset:
             self._dataset = pq.ParquetDataset(
-                self._dataset_path,
+                self._dataset_path_or_paths,
                 filesystem=self._filesystem,
                 validate_schema=False)
 
@@ -151,7 +151,11 @@ class ArrowReaderWorker(WorkerBase):
             #  2. Dataset path is hashed, to make sure we don't create too long keys, which maybe incompatible with
             #     some cache implementations
             #  3. Still leave relative path and the piece_index in plain text to make it easier to debug
-            cache_key = '{}:{}:{}'.format(hashlib.md5(self._dataset_path.encode('utf-8')).hexdigest(),
+            if isinstance(self._dataset_path_or_paths, list):
+                path_str = ','.join(self._dataset_path_or_paths)
+            else:
+                path_str = self._dataset_path_or_paths
+            cache_key = '{}:{}:{}'.format(hashlib.md5(path_str.encode('utf-8')).hexdigest(),
                                           piece.path, piece_index)
             all_cols = self._local_cache.get(cache_key,
                                              lambda: self._load_rows(parquet_file, piece, shuffle_row_drop_partition))
