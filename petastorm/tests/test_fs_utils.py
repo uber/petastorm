@@ -19,7 +19,7 @@ from pyarrow.filesystem import LocalFileSystem, S3FSWrapper
 from pyarrow.lib import ArrowIOError
 from six.moves.urllib.parse import urlparse
 
-from petastorm.fs_utils import FilesystemResolver
+from petastorm.fs_utils import FilesystemResolver, get_filesystem_and_path_or_paths
 from petastorm.gcsfs_helpers.gcsfs_wrapper import GCSFSWrapper
 from petastorm.hdfs.tests.test_hdfs_namenode import HC, MockHadoopConfiguration, \
     MockHdfs, MockHdfsConnector
@@ -199,6 +199,19 @@ class FilesystemResolverTest(unittest.TestCase):
 
         # Make sure we did not capture FilesystemResolver in a closure by mistake
         dill.dumps(suj.filesystem_factory())
+
+    def test_get_filesystem_and_path_or_paths(self):
+        fs1, path1 = get_filesystem_and_path_or_paths('file:///some/path')
+        assert isinstance(fs1, LocalFileSystem) and path1 == '/some/path'
+
+        fs2, paths2 = get_filesystem_and_path_or_paths(
+            ['file:///some/path/01.parquet', 'file:///some/path/02.parquet'])
+        assert isinstance(fs2, LocalFileSystem) and \
+            paths2 == ['/some/path/01.parquet', '/some/path/02.parquet']
+
+        with self.assertRaises(ValueError):
+            get_filesystem_and_path_or_paths(
+                ['file:///some/path/01.parquet', 'hdfs:///some/path/02.parquet'])
 
 
 if __name__ == '__main__':
