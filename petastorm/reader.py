@@ -49,15 +49,17 @@ _VENTILATE_EXTRA_ROWGROUPS = 2
 
 def normalize_dataset_url(dataset_url):
     if dataset_url is None or not isinstance(dataset_url, six.string_types):
-        raise ValueError('dataset_url must be a string')
+        raise ValueError('dataset url must be a string')
 
     dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
-    logger.debug('dataset_url: %s', dataset_url)
+    logger.debug('dataset url: %s', dataset_url)
     return dataset_url
 
 
 def normalize_dataset_url_or_urls(dataset_url_or_urls):
     if isinstance(dataset_url_or_urls, list):
+        if len(dataset_url_or_urls) == 0:
+            raise ValueError('dataset url list must be non-empty.')
         return [normalize_dataset_url(url) for url in dataset_url_or_urls]
     else:
         return normalize_dataset_url(dataset_url_or_urls)
