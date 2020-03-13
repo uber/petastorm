@@ -131,6 +131,11 @@ class ArrowReaderWorker(WorkerBase):
                 filesystem=self._filesystem,
                 validate_schema=False)
 
+        if self._dataset.partitions is None:
+            # When read from parquet file list, the `dataset.partitions` will be None.
+            # But other petastorm code require at least an empty `ParquetPartitions` object.
+            self._dataset.partitions = pq.ParquetPartitions()
+
         piece = self._split_pieces[piece_index]
 
         # Create pyarrow file system
