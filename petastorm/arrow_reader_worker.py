@@ -180,19 +180,28 @@ class ArrowReaderWorker(WorkerBase):
             for field_to_remove in set(transformed_result.columns) & set(self._transform_spec.removed_fields):
                 del transformed_result[field_to_remove]
 
+            transformed_result_column_set = set(transformed_result.columns)
+            transformed_schema_column_set = set([f.name for f in self._transformed_schema.fields.values()])
+
+            if transformed_result_column_set != transformed_schema_column_set:
+                raise ValueError('Transformed result columns ({rs}) do not match required schema columns({sc})'
+                                 .format(rc=','.join(transformed_result_column_set),
+                                         sc=','.join(transformed_schema_column_set)))
+
+            def check_shape_and_ravel(x, field):
+                if not isinstance(x, np.ndarray):
+                    raise ValueError('field {name} must be numpy array type.'.format(name=field.name))
+                if x.shape != field.shape:
+                    raise ValueError('field {name} must be the shape {shape}'
+                                     .format(name=field.name, shape=field.shape))
+                if not x.flags.c_contiguous:
+                    raise ValueError('Only support row major multi-dimensional array.')
+                return x.ravel()
+
             for field in self._transformed_schema.fields.values():
                 if len(field.shape) > 1:
-                    def check_and_ravel(x):
-                        if not isinstance(x, np.ndarray):
-                            raise ValueError('field {name} must be numpy array type.'.format(name=field.name))
-                        if x.shape != field.shape:
-                            raise ValueError('field {name} must be the shape {shape}'
-                                             .format(name=field.name, shape=field.shape))
-                        if not x.flags.c_contiguous:
-                            raise ValueError('Only support row major multi-dimensional array.')
-                        return x.ravel()
-
-                    transformed_result[field.name] = transformed_result[field.name].map(check_and_ravel)
+                    transformed_result[field.name] = transformed_result[field.name] \
+                        .map(lambda x: check_shape_and_ravel(x, field))
 
             result = pa.Table.from_pandas(transformed_result, preserve_index=False)
 
