@@ -151,7 +151,7 @@ def test_invalid_column_name(scalar_dataset, reader_factory):
 @pytest.mark.parametrize('reader_factory', _D)
 def test_invalid_and_valid_column_names(scalar_dataset, reader_factory):
     """Request one column that doesn't exist and one that does. Confirm that only get one field back and
-    that get exception when try to read from the invalid field."""
+    that get exception when try to read from invalid field."""
     all_fields = list(scalar_dataset.data[0].keys())
     bad_field = _get_bad_field_name(all_fields)
     requested_fields = [bad_field, all_fields[1]]
