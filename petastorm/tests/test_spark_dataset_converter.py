@@ -99,18 +99,13 @@ def test_primitive(test_ctx):
                     actual_ele = actual_ele.decode()
                 if col == "bin_col":
                     actual_ele = bytearray(actual_ele)
-                if col == "float_col" or col == "double_col":
-                    # Note that the default precision is float32
-                    assert pytest.approx(expected_ele, rel=1e-6) == actual_ele
-                else:
-                    assert expected_ele == actual_ele
+                assert expected_ele == actual_ele
 
         assert len(expected_df) == len(converter)
 
     assert np.bool_ == ts.bool_col.dtype.type
     assert np.float32 == ts.float_col.dtype.type
-    # Default precision float32
-    assert np.float32 == ts.double_col.dtype.type
+    assert np.float64 == ts.double_col.dtype.type
     assert np.int16 == ts.short_col.dtype.type
     assert np.int32 == ts.int_col.dtype.type
     assert np.int64 == ts.long_col.dtype.type
@@ -251,108 +246,6 @@ def test_change_cache_dir_raise_error(test_ctx):
     assert test_ctx.temp_url == _get_parent_cache_dir_url()
 
 
-def test_tf_dataset_batch_size(test_ctx):
-    df1 = test_ctx.spark.range(100)
-
-    batch_size = 30
-    converter1 = make_spark_converter(df1)
-
-    with converter1.make_tf_dataset(batch_size) as dataset:
-        iterator = dataset.make_one_shot_iterator()
-        tensor = iterator.get_next()
-        with tf.Session() as sess:
-            ts = sess.run(tensor)
-    assert len(ts.id) == batch_size
-
-
-def test_tf_dataset_preproc(test_ctx):
-    df1 = test_ctx.spark.createDataFrame(
-        [([1., 2., 3., 4., 5., 6.],),
-         ([4., 5., 6., 7., 8., 9.],)],
-        StructType([StructField(name='c1', dataType=ArrayType(DoubleType()))]))
-
-    converter1 = make_spark_converter(df1)
-
-    def preproc_fn(x):
-        return tf.reshape(x.c1, [-1, 3, 2]),
-
-    with converter1.make_tf_dataset(batch_size=2, preproc_fn=preproc_fn) as dataset:
-        iterator = dataset.make_one_shot_iterator()
-        tensor = iterator.get_next()
-        with tf.Session() as sess:
-            ts = sess.run(tensor)
-
-    assert ts[0].shape == (2, 3, 2)
-
-
-def test_precision(test_ctx):
-    df = test_ctx.spark.range(10)
-    df = df.withColumn("float_col", df.id.cast(FloatType())) \
-        .withColumn("double_col", df.id.cast(DoubleType()))
-
-    converter1 = make_spark_converter(df)
-    with converter1.make_tf_dataset() as dataset:
-        iterator = dataset.make_one_shot_iterator()
-        tensor = iterator.get_next()
-        with tf.Session() as sess:
-            ts = sess.run(tensor)
-    assert np.float32 == ts.double_col.dtype.type
-
-    converter2 = make_spark_converter(df, precision="float64")
-    with converter2.make_tf_dataset() as dataset:
-        iterator = dataset.make_one_shot_iterator()
-        tensor = iterator.get_next()
-        with tf.Session() as sess:
-            ts = sess.run(tensor)
-    assert np.float64 == ts.float_col.dtype.type
-
-    with pytest.raises(ValueError, match="precision float16 is not supported. \
-            Use 'float32' or float64"):
-        make_spark_converter(df, precision="float16")
-
-
-def test_array(test_ctx):
-    df = test_ctx.spark.createDataFrame(
-        [([1., 2., 3.],),
-         ([4., 5., 6.],)],
-        StructType([
-            StructField(name='c1', dataType=ArrayType(DoubleType()))
-        ])
-    )
-    converter1 = make_spark_converter(df)
-    with converter1.make_tf_dataset() as dataset:
-        iterator = dataset.make_one_shot_iterator()
-        tensor = iterator.get_next()
-        with tf.Session() as sess:
-            ts = sess.run(tensor)
-    assert np.float32 == ts.c1.dtype.type
-
-
-@pytest.mark.skipif(
-    LooseVersion(pyspark.__version__) < LooseVersion("3.0"),
-    reason="Vector columns are not supported for pyspark {} < 3.0.0"
-    .format(pyspark.__version__))
-def test_vector_to_array(test_ctx):
-    from pyspark.ml.linalg import Vectors
-    from pyspark.mllib.linalg import Vectors as OldVectors
-    df = test_ctx.spark.createDataFrame([
-        (Vectors.dense(1.0, 2.0, 3.0), OldVectors.dense(10.0, 20.0, 30.0)),
-        (Vectors.dense(5.0, 6.0, 7.0), OldVectors.dense(50.0, 60.0, 70.0))],
-                                        ["vec", "oldVec"])
-    converter1 = make_spark_converter(df)
-    with converter1.make_tf_dataset() as dataset:
-        iterator = dataset.make_one_shot_iterator()
-        tensor = iterator.get_next()
-        with tf.Session() as sess:
-            ts = sess.run(tensor)
-    assert np.float32 == ts.vec.dtype.type
-    assert np.float32 == ts.oldVec.dtype.type
-    assert (2, 3) == ts.vec.shape
-    assert (2, 3) == ts.oldVec.shape
-    assert [[1., 2., 3.], [5., 6., 7.]] == ts.vec
-    assert [[10., 20., 30.], [50., 60., 70]] == ts.oldVec
-
-
 def test_torch_primitive(test_ctx):
     import torch
 
@@ -381,15 +274,12 @@ def test_torch_primitive(test_ctx):
             for col in df.schema.names:
                 actual_ele = batch[col][0]
                 expected_ele = expected_df[i][col]
-                if col == "double_col":
-                    assert pytest.approx(expected_ele, rel=1e-6) == actual_ele
-                else:
-                    assert expected_ele == actual_ele
+                assert expected_ele == actual_ele
 
         assert len(expected_df) == len(converter)
     assert torch.uint8 == batch["bool_col"].dtype
     assert torch.int8 == batch["byte_col"].dtype
-    assert torch.float32 == batch["double_col"].dtype
+    assert torch.float64 == batch["double_col"].dtype
     assert torch.float32 == batch["float_col"].dtype
     assert torch.int32 == batch["int_col"].dtype
     assert torch.int64 == batch["long_col"].dtype

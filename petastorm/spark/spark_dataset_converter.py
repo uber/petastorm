@@ -141,11 +141,7 @@ class SparkDatasetConverter(object):
         """
         return self.dataset_size
 
-    def make_tf_dataset(self,
-                        batch_size=32,
-                        prefetch=None,
-                        preproc_fn=None,
-                        preproc_parallelism=None):
+    def make_tf_dataset(self):
         """
         Make a tensorflow dataset.
 
@@ -153,25 +149,11 @@ class SparkDatasetConverter(object):
           1) Open a petastorm reader on the materialized dataset dir.
           2) Create a tensorflow dataset based on the reader created in (1)
 
-        :param batch_size: batch size of the generated tf.data.dataset
-        :param prefetch: prefetch for tf dataset, if None, will use autotune prefetch
-                         if available, if 0, disable prefetch. Default is None.
-        :param preproc_fn: preprocessing function, will apply on batched tf tensor.
-        :param preproc_parallelism: parallelism for preprocessing function.
-                                    If None, will autotune best parallelism if available.
-                                    If tf do not support autotune, fallback to 1.
-
         :return: a context manager for a `tf.data.Dataset` object.
                  when exit the returned context manager, the reader
                  will be closed.
         """
-        return TFDatasetContextManager(
-            self.cache_dir_url,
-            batch_size=batch_size,
-            prefetch=prefetch,
-            preproc_fn=preproc_fn,
-            preproc_parallelism=preproc_parallelism
-        )
+        return TFDatasetContextManager(self.cache_dir_url)
 
     def make_torch_dataloader(self,
                               batch_size=32,
@@ -229,44 +211,14 @@ class TFDatasetContextManager(object):
     :class:`petastorm.Reader`.
     """
 
-    def __init__(self,
-                 data_url,
-                 batch_size,
-                 prefetch,
-                 preproc_fn,
-                 preproc_parallelism):
+    def __init__(self, data_url):
         """
         :param data_url: A string specifying the data URL.
-        :param batch_size: batch size of the generated tf.data.dataset
-        :param prefetch: prefetch for tf dataset
-        :param preproc_fn: preprocessing function
-        :param preproc_parallelism: parallelism for preprocessing function
         """
         from petastorm.tf_utils import make_petastorm_dataset
-        import tensorflow as tf
-
-        def support_prefetch_and_autotune():
-            return LooseVersion(tf.__version__) >= LooseVersion('1.14')
 
         self.reader = petastorm.make_batch_reader(data_url)
-        self.dataset = make_petastorm_dataset(self.reader) \
-            .flat_map(tf.data.Dataset.from_tensor_slices) \
-
-        self.dataset = self.dataset.batch(batch_size=batch_size)
-
-        if support_prefetch_and_autotune():
-            if prefetch is None:
-                prefetch = tf.data.experimental.AUTOTUNE
-            if prefetch != 0:
-                self.dataset = self.dataset.prefetch(prefetch)
-
-        if preproc_fn is not None:
-            if preproc_parallelism is None:
-                if support_prefetch_and_autotune():
-                    preproc_parallelism = tf.data.experimental.AUTOTUNE
-                else:
-                    preproc_parallelism = 1
-            self.dataset = self.dataset.map(preproc_fn, preproc_parallelism)
+        self.dataset = make_petastorm_dataset(self.reader)
 
     def __enter__(self):
         return self.dataset
@@ -314,7 +266,7 @@ def _get_df_plan(df):
 
 class CachedDataFrameMeta(object):
 
-    def __init__(self, df, row_group_size, compression_codec, precision):
+    def __init__(self, df, row_group_size, compression_codec):
         self.row_group_size = row_group_size
         self.compression_codec = compression_codec
         # Note: the metadata will hold dataframe plan, but it won't
@@ -323,21 +275,13 @@ class CachedDataFrameMeta(object):
         # This means the dataframe can be released by spark gc.
         self.df_plan = _get_df_plan(df)
         self.cache_dir_url = None
-        self.precision = precision
 
     @classmethod
     def create_cached_dataframe(cls, df, parent_cache_dir_url, row_group_size,
-                                compression_codec, precision):
-        meta = cls(df,
-                   row_group_size=row_group_size,
-                   compression_codec=compression_codec,
-                   precision=precision)
+                                compression_codec):
+        meta = cls(df, row_group_size, compression_codec)
         meta.cache_dir_url = _materialize_df(
-            df,
-            parent_cache_dir_url=parent_cache_dir_url,
-            parquet_row_group_size_bytes=row_group_size,
-            compression_codec=compression_codec,
-            precision=precision)
+            df, parent_cache_dir_url, row_group_size, compression_codec)
         return meta
 
 
@@ -362,9 +306,9 @@ def _make_sub_dir_url(dir_url, name):
     return parsed._replace(path=new_path).geturl()
 
 
-def _cache_df_or_retrieve_cache_data_url(
-        df, parent_cache_dir_url, parquet_row_group_size_bytes,
-        compression_codec, precision):
+def _cache_df_or_retrieve_cache_data_url(df, parent_cache_dir_url,
+                                         parquet_row_group_size_bytes,
+                                         compression_codec):
     """
     Check whether the df is cached.
     If so, return the existing cache file path.
@@ -375,8 +319,6 @@ def _cache_df_or_retrieve_cache_data_url(
     :param parquet_row_group_size_bytes: An int denoting the number of bytes
         in a parquet row group.
     :param compression_codec: Specify compression codec.
-    :param precision: 'float32' or 'float64', specifying the precision of the
-        output dataset.
     :return: A string denoting the path of the saved parquet file.
     """
     # TODO
@@ -387,33 +329,14 @@ def _cache_df_or_retrieve_cache_data_url(
         for meta in _cache_df_meta_list:
             if meta.row_group_size == parquet_row_group_size_bytes and \
                     meta.compression_codec == compression_codec and \
-                    meta.df_plan.sameResult(df_plan) and \
-                    meta.precision == precision:
+                    meta.df_plan.sameResult(df_plan):
                 return meta.cache_dir_url
         # do not find cached dataframe, start materializing.
         cached_df_meta = CachedDataFrameMeta.create_cached_dataframe(
             df, parent_cache_dir_url, parquet_row_group_size_bytes,
-            compression_codec, precision)
+            compression_codec)
         _cache_df_meta_list.append(cached_df_meta)
         return cached_df_meta.cache_dir_url
-
-
-def _convert_precision(df, precision):
-    if precision != "float32" and precision != "float64":
-        raise ValueError("precision {} is not supported. \
-            Use 'float32' or float64".format(precision))
-
-    source_type, target_type = (DoubleType, FloatType) \
-        if precision == "float32" else (FloatType, DoubleType)
-
-    for struct_field in df.schema:
-        col_name = struct_field.name
-        if isinstance(struct_field.dataType, source_type):
-            df = df.withColumn(col_name, df[col_name].cast(target_type()))
-        elif isinstance(struct_field.dataType, ArrayType) and \
-                isinstance(struct_field.dataType.elementType, source_type):
-            df = df.withColumn(col_name, df[col_name].cast(ArrayType(target_type())))
-    return df
 
 
 def _gen_cache_dir_name():
@@ -430,36 +353,10 @@ def _gen_cache_dir_name():
     return '{time}-appid-{appid}-{uuid}'.format(time=time_str, appid=appid, uuid=uuid_str)
 
 
-def _convert_vector(df, precision):
-    from pyspark.ml.linalg import Vector
-    from pyspark.mllib.linalg import Vector as OldVector
-
-    types_set = {struct_field.dataType for struct_field in df.schema}
-    found_vectors = not types_set.isdisjoint({Vector, OldVector})
-    if not found_vectors:
-        return df
-
-    import pyspark
-    if LooseVersion(pyspark.__version__) >= LooseVersion('3.0'):
-        raise ValueError("Vector columns are not supported for pyspark<3.0.0.")
-    # pylint: disable=import-error
-    from pyspark.ml.functions import vector_to_array
-    # pylint: enable=import-error
-
-    for struct_field in df.schema:
-        col_name = struct_field.name
-        if struct_field.dataType in {Vector, OldVector}:
-            df = df.withColumn(col_name,
-                               vector_to_array(df[col_name], precision))
-    return df
-
-
 def _materialize_df(df, parent_cache_dir_url, parquet_row_group_size_bytes,
-                    compression_codec, precision):
+                    compression_codec):
     dir_name = _gen_cache_dir_name()
     save_to_dir_url = _make_sub_dir_url(parent_cache_dir_url, dir_name)
-    df = _convert_vector(df, precision)
-    df = _convert_precision(df, precision)
 
     df.write \
         .option("compression", compression_codec) \
@@ -476,8 +373,7 @@ def _materialize_df(df, parent_cache_dir_url, parquet_row_group_size_bytes,
 def make_spark_converter(
         df,
         parquet_row_group_size_bytes=DEFAULT_ROW_GROUP_SIZE_BYTES,
-        compression_codec=None,
-        precision='float32'):
+        compression_codec=None):
     """
     Convert a spark dataframe into a :class:`SparkDatasetConverter` object.
     It will materialize a spark dataframe to the directory specified by
@@ -500,8 +396,6 @@ def make_spark_converter(
     :param compression_codec: Specify compression codec.
         It can be one of 'uncompressed', 'bzip2', 'gzip', 'lz4', 'snappy', 'deflate'.
         Default None. If None, it will leave the data uncompressed.
-    :param precision: 'float32' or 'float64', specifying the precision of the
-        output dataset.
 
     :return: a :class:`SparkDatasetConverter` object that holds the
         materialized dataframe and can be used to make one or more tensorflow
@@ -520,7 +414,7 @@ def make_spark_converter(
             "'uncompressed', 'bzip2', 'gzip', 'lz4', 'snappy', 'deflate'")
 
     dataset_cache_dir_url = _cache_df_or_retrieve_cache_data_url(
-        df, parent_cache_dir_url, parquet_row_group_size_bytes, compression_codec, precision)
+        df, parent_cache_dir_url, parquet_row_group_size_bytes, compression_codec)
 
     # TODO: improve this by read parquet file metadata to get count
     #  Currently spark can make sure to only read the minimal column
