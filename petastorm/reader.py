@@ -362,6 +362,11 @@ class Reader(object):
         self.dataset = pq.ParquetDataset(dataset_path, filesystem=pyarrow_filesystem,
                                          validate_schema=False)
 
+        if self.dataset.partitions is None:
+            # When read from parquet file list, the `dataset.partitions` will be None.
+            # But other petastorm code require at least an empty `ParquetPartitions` object.
+            self.dataset.partitions = pq.ParquetPartitions()
+
         stored_schema = infer_or_load_unischema(self.dataset)
 
         if isinstance(schema_fields, NGram):
