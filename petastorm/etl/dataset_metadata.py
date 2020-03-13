@@ -26,7 +26,7 @@ from six.moves.urllib.parse import urlparse
 from petastorm import utils
 from petastorm.compat import compat_get_metadata, compat_make_parquet_piece
 from petastorm.etl.legacy import depickle_legacy_package_name_compatible
-from petastorm.fs_utils import FilesystemResolver
+from petastorm.fs_utils import FilesystemResolver, get_filesystem_and_path_or_paths
 from petastorm.unischema import Unischema
 
 logger = logging.getLogger(__name__)
@@ -368,17 +368,17 @@ def get_schema(dataset):
     return schema
 
 
-def get_schema_from_dataset_url(dataset_url, hdfs_driver='libhdfs3'):
+def get_schema_from_dataset_url(dataset_url_or_urls, hdfs_driver='libhdfs3'):
     """Returns a :class:`petastorm.unischema.Unischema` object loaded from a dataset specified by a url.
 
-    :param dataset_url: A dataset URL
+    :param dataset_url_or_urls: a url to a parquet directory or a url list (with the same scheme) to parquet files.
     :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
         libhdfs (java through JNI) or libhdfs3 (C++)
     :return: A :class:`petastorm.unischema.Unischema` object
     """
-    resolver = FilesystemResolver(dataset_url, hdfs_driver=hdfs_driver)
-    dataset = pq.ParquetDataset(resolver.get_dataset_path(), filesystem=resolver.filesystem(),
-                                validate_schema=False)
+    fs, path_or_paths = get_filesystem_and_path_or_paths(dataset_url_or_urls, hdfs_driver)
+
+    dataset = pq.ParquetDataset(path_or_paths, filesystem=fs, validate_schema=False)
 
     # Get a unischema stored in the dataset metadata.
     stored_schema = get_schema(dataset)
