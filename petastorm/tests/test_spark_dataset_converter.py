@@ -28,6 +28,7 @@ from pyspark.sql.types import (ArrayType, BinaryType, BooleanType, ByteType,
                                ShortType, StringType, StructField, StructType)
 from six.moves.urllib.parse import urlparse
 
+import petastorm
 from petastorm.fs_utils import FilesystemResolver
 from petastorm.spark import make_spark_converter, spark_dataset_converter
 from petastorm.spark.spark_dataset_converter import (
@@ -370,7 +371,7 @@ def test_torch_primitive(test_ctx):
 
     converter = make_spark_converter(df)
     batch = None
-    with converter.make_torch_dataloader() as dataloader:
+    with converter.make_torch_dataloader(num_epochs=1) as dataloader:
         for i, batch in enumerate(dataloader):
             # default batch_size = 1
             for col in df.schema.names:
@@ -396,7 +397,7 @@ def test_torch_pickling_remotely(test_ctx):
     converter1 = make_spark_converter(df1)
 
     def map_fn(_):
-        with converter1.make_torch_dataloader() as dataloader:
+        with converter1.make_torch_dataloader(num_epochs=1) as dataloader:
             for batch in dataloader:
                 ret = batch["id"][0]
         return ret
@@ -404,3 +405,101 @@ def test_torch_pickling_remotely(test_ctx):
     result = test_ctx.spark.sparkContext.parallelize(range(1), 1) \
         .map(map_fn).collect()[0]
     assert result == 100
+
+
+def test_advanced_params(test_ctx):
+    df = test_ctx.spark.range(8)
+    conv = make_spark_converter(df)
+    batch_size = 2
+    with conv.make_torch_dataloader(batch_size=batch_size,
+                                    num_epochs=1) as dataloader:
+        for batch in dataloader:
+            assert batch_size == batch['id'].shape[0]
+
+    from torchvision import transforms
+    from petastorm import TransformSpec
+
+    def _transform_row(df_row):
+        scale_tranform = transforms.Compose([
+            transforms.Lambda(lambda x: x * 0.1),
+        ])
+        return scale_tranform(df_row)
+
+    transform = TransformSpec(_transform_row)
+    with conv.make_torch_dataloader(transform_spec=transform,
+                                    num_epochs=1) as dataloader:
+        for batch in dataloader:
+            assert min(batch['id']) >= 0 and max(batch['id']) < 1
+
+    with pytest.raises(TypeError, match="unexpected keyword argument 'xyz'"):
+        conv.make_torch_dataloader(xyz=1)
+
+    def mock_make_batch_reader(dataset_url,
+                               schema_fields=None,
+                               reader_pool_type='thread', workers_count=10,
+                               shuffle_row_groups=True, shuffle_row_drop_partitions=1,
+                               predicate=None,
+                               rowgroup_selector=None,
+                               num_epochs=1,
+                               cur_shard=None, shard_count=None,
+                               cache_type='null', cache_location=None, cache_size_limit=None,
+                               cache_row_size_estimate=None, cache_extra_settings=None,
+                               hdfs_driver='libhdfs3',
+                               transform_spec=None):
+        return {
+            "dataset_url": dataset_url,
+            "schema_fields": schema_fields,
+            "reader_pool_type": reader_pool_type,
+            "workers_count": workers_count,
+            "shuffle_row_groups": shuffle_row_groups,
+            "shuffle_row_drop_partitions": shuffle_row_drop_partitions,
+            "predicate": predicate,
+            "rowgroup_selector": rowgroup_selector,
+            "num_epochs": num_epochs,
+            "cur_shard": cur_shard,
+            "shard_count": shard_count,
+            "cache_type": cache_type,
+            "cache_location": cache_location,
+            "cache_size_limit": cache_size_limit,
+            "cache_row_size_estimate": cache_row_size_estimate,
+            "cache_extra_settings": cache_extra_settings,
+            "hdfs_driver": hdfs_driver,
+            "transform_spec": transform_spec,
+        }
+
+    original_fn = petastorm.make_batch_reader
+    petastorm.make_batch_reader = mock_make_batch_reader
+    ctm = conv.make_torch_dataloader(schema_fields="schema_1",
+                                     reader_pool_type='type_1',
+                                     workers_count="count_1",
+                                     shuffle_row_groups="row_group_1",
+                                     shuffle_row_drop_partitions="drop_1",
+                                     predicate="predicate_1",
+                                     rowgroup_selector="selector_1",
+                                     num_epochs="num_1",
+                                     cur_shard="shard_1",
+                                     shard_count="total_shard",
+                                     cache_type="cache_1",
+                                     cache_location="location_1",
+                                     cache_size_limit="limit_1",
+                                     cache_extra_settings="extra_1",
+                                     hdfs_driver="driver_1",
+                                     transform_spec="transform_spec_1")
+    assert ctm.reader["schema_fields"] == "schema_1"
+    assert ctm.reader["reader_pool_type"] == "type_1"
+    assert ctm.reader["workers_count"] == "count_1"
+    assert ctm.reader["shuffle_row_groups"] == "row_group_1"
+    assert ctm.reader["shuffle_row_drop_partitions"] == "drop_1"
+    assert ctm.reader["predicate"] == "predicate_1"
+    assert ctm.reader["rowgroup_selector"] == "selector_1"
+    assert ctm.reader["num_epochs"] == "num_1"
+    assert ctm.reader["cur_shard"] == "shard_1"
+    assert ctm.reader["shard_count"] == "total_shard"
+    assert ctm.reader["cache_type"] == "cache_1"
+    assert ctm.reader["cache_location"] == "location_1"
+    assert ctm.reader["cache_size_limit"] == "limit_1"
+    assert ctm.reader["cache_extra_settings"] == "extra_1"
+    assert ctm.reader["hdfs_driver"] == "driver_1"
+    assert ctm.reader["transform_spec"] == "transform_spec_1"
+
+    petastorm.make_batch_reader = original_fn
