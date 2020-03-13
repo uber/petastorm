@@ -14,6 +14,7 @@
 import itertools
 
 import numpy as np
+import pandas as pd
 import pytest
 from pyarrow import parquet as pq
 
@@ -21,6 +22,7 @@ from petastorm import make_batch_reader
 # pylint: disable=unnecessary-lambda
 from petastorm.compat import compat_get_metadata
 from petastorm.tests.test_common import create_test_scalar_dataset
+from petastorm.transform import TransformSpec
 
 _D = [lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', **kwargs)]
 
@@ -163,3 +165,21 @@ def test_invalid_and_valid_column_names(scalar_dataset, reader_factory):
         assert len(sample) == 1
         with pytest.raises(KeyError):
             assert sample[bad_field] == ""
+
+
+@pytest.mark.parametrize('reader_factory', _D)
+def test_transform_spec_support_return_tensor(scalar_dataset, reader_factory):
+    def preproc_fn1(x):
+        return pd.DataFrame({'tensor_col_1': x['id'].map(lambda _: np.random.rand(2, 3))})
+
+    # This spec will remove all input columns and return one new column 'tensor_col_1' with shape (2, 3)
+    spec1 = TransformSpec(
+        preproc_fn1,
+        edit_fields=[('tensor_col_1', np.float32, (2, 3), False)],
+        removed_fields=list(scalar_dataset.data[0].keys())
+    )
+
+    with reader_factory(scalar_dataset.url, transform_spec=spec1) as reader:
+        sample = next(reader)._asdict()
+        assert len(sample) == 1
+        assert (2, 3) == sample['tensor_col_1'].shape
