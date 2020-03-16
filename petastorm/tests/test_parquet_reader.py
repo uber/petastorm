@@ -177,7 +177,7 @@ def test_transform_spec_support_return_tensor(scalar_dataset, reader_factory):
     with pytest.raises(ValueError, match='field abc must be numpy array type'):
         ArrowReaderWorker._check_shape_and_ravel('xyz', field1)
 
-    with pytest.raises(ValueError, match='field abc must be the shape (2, 3)'):
+    with pytest.raises(ValueError, match='field abc must be the shape'):
         ArrowReaderWorker._check_shape_and_ravel(np.zeros((2, 5)), field1)
 
     with pytest.raises(ValueError, match='field abc error: only support row major multi-dimensional array'):
