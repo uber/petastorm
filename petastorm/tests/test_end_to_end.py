@@ -828,11 +828,10 @@ def _get_local_fs_url_list(dir_url):
     return url_list
 
 
-def test_make_reader_with_url_list(synthetic_dataset):
-    url_list = _get_local_fs_url_list(synthetic_dataset.url)
+def test_make_reader_with_url_list(flat_synthetic_dataset):
+    url_list = _get_local_fs_url_list(flat_synthetic_dataset.url)
     with make_reader(url_list, workers_count=1) as reader:
-        from .test_generate_metadata import ROWS_COUNT
-        assert len(reader) == ROWS_COUNT
+        assert len(reader) == 100
 
 
 def test_make_batch_reader_with_url_list(scalar_dataset):
@@ -842,6 +841,6 @@ def test_make_batch_reader_with_url_list(scalar_dataset):
     with make_batch_reader(url_list, workers_count=1) as reader:
         row_count = 0
         for batch in reader:
-            row_count += len(batch)
+            row_count += len(batch.id)
 
         assert row_count == 100
