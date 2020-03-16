@@ -32,7 +32,7 @@ from petastorm.selectors import SingleIndexSelector, IntersectIndexSelector, Uni
 from petastorm.tests.test_common import create_test_dataset, TestSchema
 from petastorm.tests.test_end_to_end_predicates_impl import \
     PartitionKeyInSetPredicate, EqualPredicate, VectorizedEqualPredicate
-from petastorm.tests.test_generate_metadata import flat_synthetic_dataset
+from petastorm.tests.test_generate_metadata import SyntheticDataset
 from petastorm.unischema import UnischemaField, Unischema
 
 # pylint: disable=unnecessary-lambda
@@ -827,6 +827,14 @@ def _get_local_fs_url_list(dir_url):
     for file_name in os.listdir(dir_path):
         url_list.append('file://{dir_path}/{file_name}'.format(dir_path=dir_path, file_name=file_name))
     return url_list
+
+
+@pytest.fixture(scope="session")
+def flat_synthetic_dataset(tmpdir_factory):
+    path = tmpdir_factory.mktemp('data').strpath
+    url = 'file://' + path
+    data = create_test_dataset(url, range(100), make_partition=False)
+    return SyntheticDataset(url=url, path=path, data=data)
 
 
 def test_make_reader_with_url_list(flat_synthetic_dataset):
