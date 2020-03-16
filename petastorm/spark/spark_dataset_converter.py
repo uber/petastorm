@@ -19,12 +19,13 @@ import datetime
 import uuid
 import logging
 import warnings
+from distutils.version import LooseVersion
 
 from pyarrow import LocalFileSystem
 from pyspark.sql.session import SparkSession
 from six.moves.urllib.parse import urlparse
 
-from petastorm import make_batch_reader
+import petastorm
 from petastorm.fs_utils import FilesystemResolver
 
 DEFAULT_ROW_GROUP_SIZE_BYTES = 32 * 1024 * 1024
@@ -139,7 +140,14 @@ class SparkDatasetConverter(object):
         """
         return self.dataset_size
 
-    def make_tf_dataset(self):
+    def make_tf_dataset(
+            self,
+            batch_size=32,
+            prefetch=None,
+            num_epochs=None,
+            workers_count=4,
+            **petastorm_reader_kwargs
+    ):
         """
         Make a tensorflow dataset.
 
@@ -147,11 +155,29 @@ class SparkDatasetConverter(object):
           1) Open a petastorm reader on the materialized dataset dir.
           2) Create a tensorflow dataset based on the reader created in (1)
 
+        :param batch_size: The number of items to return per batch
+        :param prefetch: Prefetch size for tensorflow dataset. If None will use
+            tensorflow autotune size. Note only available on tensorflow>=1.14
+        :param num_epochs: An epoch is a single pass over all rows in the dataset.
+            Setting ``num_epochs`` to ``None`` will result in an infinite number
+            of epochs.
+        :param workers_count: An int for the number of workers to use in the
+            reader pool. This only is used for the thread or process pool. Default value 4.
+        :param petastorm_reader_kwargs: arguments for `petastorm.make_batch_reader()`,
+            exclude these arguments: "dataset_url", "num_epochs", "workers_count".
+
         :return: a context manager for a `tf.data.Dataset` object.
                  when exit the returned context manager, the reader
                  will be closed.
         """
-        return TFDatasetContextManager(self.cache_dir_url)
+        return TFDatasetContextManager(
+            self.cache_dir_url,
+            batch_size=batch_size,
+            prefetch=prefetch,
+            num_epochs=num_epochs,
+            workers_count=workers_count,
+            petastorm_reader_kwargs=petastorm_reader_kwargs
+        )
 
     def delete(self):
         """
@@ -166,17 +192,52 @@ class TFDatasetContextManager(object):
     :class:`petastorm.Reader`.
     """
 
-    def __init__(self, data_url):
+    def __init__(
+            self,
+            data_url,
+            batch_size,
+            prefetch,
+            num_epochs,
+            workers_count,
+            petastorm_reader_kwargs
+    ):
         """
         :param data_url: A string specifying the data URL.
+        :param batch_size: batch size for tensorflow dataset.
+        :param prefetch: the prefectch size for tensorflow dataset.
+        :param num_epochs: number of epochs
+        :param worker_count: worker count of petastorm reader worker
+        :param petastorm_reader_kwargs: other arguments for petastorm reader
         """
-        from petastorm.tf_utils import make_petastorm_dataset
+        self.data_url = data_url
+        self.batch_size = batch_size
+        self.prefetch = prefetch
+        self.petastorm_reader_kwargs = petastorm_reader_kwargs
 
-        self.reader = make_batch_reader(data_url)
-        self.dataset = make_petastorm_dataset(self.reader)
+        # override some arguments default values of petastorm reader
+        self.petastorm_reader_kwargs['num_epochs'] = num_epochs
+        self.petastorm_reader_kwargs['workers_count'] = workers_count
 
     def __enter__(self):
-        return self.dataset
+        # import locally to avoid importing tensorflow globally.
+        from petastorm.tf_utils import make_petastorm_dataset
+        import tensorflow as tf
+
+        self.reader = petastorm.make_batch_reader(self.data_url, self.petastorm_reader_kwargs)
+
+        dataset = make_petastorm_dataset(self.reader) \
+            .flat_map(tf.data.Dataset.from_tensor_slices)
+        dataset = dataset.batch(batch_size=self.batch_size)
+
+        if LooseVersion(tf.__version__) >= LooseVersion('1.14'):
+            # We can make prefetch optimization
+            prefetch = self.prefetch
+            if prefetch is None:
+                prefetch = tf.data.experimental.AUTOTUNE
+            if prefetch != 0:
+                dataset = dataset.prefetch(prefetch)
+
+        return dataset
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self.reader.stop()

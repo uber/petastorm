@@ -17,9 +17,10 @@ import subprocess
 import sys
 import tempfile
 import pytest
-
 import numpy as np
 import tensorflow as tf
+from contextlib import contextmanager
+
 from pyspark.sql import SparkSession
 from pyspark.sql.types import (BinaryType, BooleanType, ByteType, DoubleType,
                                FloatType, IntegerType, LongType, ShortType,
@@ -237,3 +238,54 @@ def test_change_cache_dir_raise_error(test_ctx):
     # restore conf (other test need use it)
     test_ctx.spark.conf.set('petastorm.spark.converter.parentCacheDirUrl', test_ctx.temp_url)
     assert test_ctx.temp_url == _get_parent_cache_dir_url()
+
+
+def test_tf_dataset_batch_size(test_ctx):
+    df1 = test_ctx.spark.range(100)
+
+    batch_size = 30
+    converter1 = make_spark_converter(df1)
+
+    with converter1.make_tf_dataset(batch_size) as dataset:
+        iterator = dataset.make_one_shot_iterator()
+        tensor = iterator.get_next()
+        with tf.Session() as sess:
+            ts = sess.run(tensor)
+    assert len(ts.id) == batch_size
+
+
+@contextmanager
+def mock_make_batch_reader():
+    captured_args = []
+    import petastorm
+    original_make_batch_reader = petastorm.make_batch_reader
+
+    def mock_fn(dataset_url, **kwargs):
+        captured_args.append({'dataset_url': dataset_url, **kwargs})
+        return original_make_batch_reader(dataset_url, **kwargs)
+
+    petastorm.make_batch_reader = mock_fn
+    try:
+        yield captured_args
+    finally:
+        petastorm.make_batch_reader = original_make_batch_reader
+
+
+def test_tf_dataset_petastorm_args(test_ctx):
+    df1 = test_ctx.spark.range(100, 101)
+    conv1 = make_spark_converter(df1)
+
+    with mock_make_batch_reader() as captured_args:
+        conv1.make_tf_dataset(reader_pool_type='dummy', cur_shard=1, shard_count=3)
+        peta_args = captured_args[0]
+        assert peta_args['reader_pool_type'] == 'dummy' and \
+            peta_args['cur_shard'] == 1 and \
+            peta_args['shard_count'] == 3 and \
+            peta_args['num_epochs'] is None and \
+            peta_args['workers_count'] == 4
+
+    # Test default value overridden arguments.
+    with mock_make_batch_reader() as captured_args:
+        conv1.make_tf_dataset(num_epochs=1, workers_count=2)
+        peta_args = captured_args[0]
+        assert peta_args['num_epochs'] == 1 and peta_args['workers_count'] == 2
