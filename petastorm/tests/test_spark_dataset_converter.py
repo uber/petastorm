@@ -246,7 +246,7 @@ def test_tf_dataset_batch_size(test_ctx):
     batch_size = 30
     converter1 = make_spark_converter(df1)
 
-    with converter1.make_tf_dataset(batch_size) as dataset:
+    with converter1.make_tf_dataset(batch_size=batch_size) as dataset:
         iterator = dataset.make_one_shot_iterator()
         tensor = iterator.get_next()
         with tf.Session() as sess:
@@ -261,7 +261,9 @@ def mock_make_batch_reader():
     original_make_batch_reader = petastorm.make_batch_reader
 
     def mock_fn(dataset_url, **kwargs):
-        captured_args.append({'dataset_url': dataset_url, **kwargs})
+        reader_args = {'dataset_url': dataset_url}
+        reader_args.update(kwargs)
+        captured_args.append(reader_args)
         return original_make_batch_reader(dataset_url, **kwargs)
 
     petastorm.make_batch_reader = mock_fn

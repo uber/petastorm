@@ -18,6 +18,7 @@ import threading
 import datetime
 import uuid
 import logging
+import os
 import warnings
 from distutils.version import LooseVersion
 
@@ -30,6 +31,7 @@ from petastorm.fs_utils import FilesystemResolver
 
 DEFAULT_ROW_GROUP_SIZE_BYTES = 32 * 1024 * 1024
 
+logger = logging.getLogger(__name__)
 
 def _get_spark_session():
     return SparkSession.builder.getOrCreate()
@@ -62,7 +64,7 @@ def _get_parent_cache_dir_url():
     else:
         _check_url(conf_url)
         _parent_cache_dir_url = conf_url
-        logging.info(
+        logger.info(
             'Read petastorm.spark.converter.parentCacheDirUrl %s', _parent_cache_dir_url)
 
     return _parent_cache_dir_url
@@ -111,6 +113,21 @@ def _delete_cache_data_atexit(dataset_url):
         _delete_cache_data(dataset_url)
     except Exception:  # pylint: disable=broad-except
         warnings.warn('delete cache data {url} failed.'.format(url=dataset_url))
+
+
+def get_env_rank_and_size():
+    rank_env = ['HOROVOD_RANK', 'OMPI_COMM_WORLD_RANK', 'PMI_RANK']
+    size_env = ['HOROVOD_SIZE', 'OMPI_COMM_WORLD_SIZE', 'PMI_SIZE']
+
+    for rank_var, size_var in zip(rank_env, size_env):
+        rank = os.environ.get(rank_var)
+        size = os.environ.get(size_var)
+        if rank is not None and size is not None:
+            return int(rank), int(size)
+        elif rank is not None or size is not None:
+            return None, None
+
+    return None, None
 
 
 class SparkDatasetConverter(object):
@@ -170,12 +187,23 @@ class SparkDatasetConverter(object):
                  when exit the returned context manager, the reader
                  will be closed.
         """
+
+        # override some arguments default values of petastorm reader
+        petastorm_reader_kwargs['num_epochs'] = num_epochs
+        petastorm_reader_kwargs['workers_count'] = workers_count
+
+        env_rank, env_size = get_env_rank_and_size()
+        if env_rank is not None and env_size is not None:
+            if petastorm_reader_kwargs['cur_shard'] != env_rank or \
+                    petastorm_reader_kwargs['shard_count'] != env_size:
+                logger.warning('The petastorm arguments cur_shard and shard_count is not '
+                               'consistent with detected MPI/horovod environments, do you '
+                               'set them correctly ?')
+
         return TFDatasetContextManager(
             self.cache_dir_url,
             batch_size=batch_size,
             prefetch=prefetch,
-            num_epochs=num_epochs,
-            workers_count=workers_count,
             petastorm_reader_kwargs=petastorm_reader_kwargs
         )
 
@@ -197,16 +225,12 @@ class TFDatasetContextManager(object):
             data_url,
             batch_size,
             prefetch,
-            num_epochs,
-            workers_count,
             petastorm_reader_kwargs
     ):
         """
         :param data_url: A string specifying the data URL.
         :param batch_size: batch size for tensorflow dataset.
         :param prefetch: the prefectch size for tensorflow dataset.
-        :param num_epochs: number of epochs
-        :param worker_count: worker count of petastorm reader worker
         :param petastorm_reader_kwargs: other arguments for petastorm reader
         """
         self.data_url = data_url
@@ -214,16 +238,12 @@ class TFDatasetContextManager(object):
         self.prefetch = prefetch
         self.petastorm_reader_kwargs = petastorm_reader_kwargs
 
-        # override some arguments default values of petastorm reader
-        self.petastorm_reader_kwargs['num_epochs'] = num_epochs
-        self.petastorm_reader_kwargs['workers_count'] = workers_count
-
     def __enter__(self):
         # import locally to avoid importing tensorflow globally.
         from petastorm.tf_utils import make_petastorm_dataset
         import tensorflow as tf
 
-        self.reader = petastorm.make_batch_reader(self.data_url, self.petastorm_reader_kwargs)
+        self.reader = petastorm.make_batch_reader(self.data_url, **self.petastorm_reader_kwargs)
 
         dataset = make_petastorm_dataset(self.reader) \
             .flat_map(tf.data.Dataset.from_tensor_slices)
@@ -347,7 +367,7 @@ def _materialize_df(df, parent_cache_dir_url, parquet_row_group_size_bytes,
         .option("parquet.block.size", parquet_row_group_size_bytes) \
         .parquet(save_to_dir_url)
 
-    logging.info('Materialize dataframe to url %s successfully.', save_to_dir_url)
+    logger.info('Materialize dataframe to url %s successfully.', save_to_dir_url)
 
     atexit.register(_delete_cache_data_atexit, save_to_dir_url)
 
