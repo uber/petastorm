@@ -274,16 +274,16 @@ def mock_make_batch_reader():
 
 
 def test_tf_dataset_petastorm_args(test_ctx):
-    df1 = test_ctx.spark.range(100, 101)
+    df1 = test_ctx.spark.range(100).repartition(4)
     conv1 = make_spark_converter(df1)
 
     with mock_make_batch_reader() as captured_args:
-        with conv1.make_tf_dataset(reader_pool_type='dummy', cur_shard=1, shard_count=3):
+        with conv1.make_tf_dataset(reader_pool_type='dummy', cur_shard=1, shard_count=4):
             pass
         peta_args = captured_args[0]
         assert peta_args['reader_pool_type'] == 'dummy' and \
             peta_args['cur_shard'] == 1 and \
-            peta_args['shard_count'] == 3 and \
+            peta_args['shard_count'] == 4 and \
             peta_args['num_epochs'] is None and \
             peta_args['workers_count'] == 4
 
