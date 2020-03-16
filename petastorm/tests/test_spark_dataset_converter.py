@@ -27,7 +27,7 @@ from pyspark.sql.types import (BinaryType, BooleanType, ByteType, DoubleType,
                                StringType, StructField, StructType)
 from six.moves.urllib.parse import urlparse
 
-from petastorm import make_batch_reader
+import petastorm
 from petastorm.fs_utils import FilesystemResolver
 from petastorm.spark import make_spark_converter
 from petastorm.spark import spark_dataset_converter
@@ -258,19 +258,19 @@ def test_tf_dataset_batch_size(test_ctx):
 @contextmanager
 def mock_make_batch_reader():
     captured_args = []
-    import petastorm.spark
+    original_make_batch_reader = petastorm.make_batch_reader
 
     def mock_fn(dataset_url, **kwargs):
         reader_args = {'dataset_url': dataset_url}
         reader_args.update(kwargs)
         captured_args.append(reader_args)
-        return make_batch_reader(dataset_url, **kwargs)
+        return original_make_batch_reader(dataset_url, **kwargs)
 
-    petastorm.spark.spark_dataset_converter.make_batch_reader = mock_fn
+    petastorm.make_batch_reader = mock_fn
     try:
         yield captured_args
     finally:
-        petastorm.spark.spark_dataset_converter.make_batch_reader = make_batch_reader
+        petastorm.make_batch_reader = original_make_batch_reader
 
 
 def test_tf_dataset_petastorm_args(test_ctx):
