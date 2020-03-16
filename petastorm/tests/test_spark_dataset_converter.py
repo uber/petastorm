@@ -353,7 +353,7 @@ def mock_torch_make_batch_reader():
         reader_args = {'dataset_url': dataset_url}
         reader_args.update(kwargs)
         captured_args.append(reader_args)
-        return make_batch_reader(dataset_url)
+        return make_batch_reader(dataset_url, **kwargs)
 
     petastorm.spark.spark_dataset_converter.make_batch_reader = mock_fn
     try:
@@ -364,17 +364,18 @@ def mock_torch_make_batch_reader():
 
 
 def test_torch_advanced_params(test_ctx):
-    df = test_ctx.spark.range(8)
+    SHARD_COUNT = 3
+    df = test_ctx.spark.range(100).repartition(SHARD_COUNT)
     conv = make_spark_converter(df)
 
     with mock_torch_make_batch_reader() as captured_args:
         with conv.make_torch_dataloader(reader_pool_type='dummy', cur_shard=1,
-                                        shard_count=3) as _:
+                                        shard_count=SHARD_COUNT) as _:
             pass
         peta_args = captured_args[0]
         assert peta_args['reader_pool_type'] == 'dummy' and \
             peta_args['cur_shard'] == 1 and \
-            peta_args['shard_count'] == 3 and \
+            peta_args['shard_count'] == SHARD_COUNT and \
             peta_args['num_epochs'] is None and \
             peta_args['workers_count'] == 4
 

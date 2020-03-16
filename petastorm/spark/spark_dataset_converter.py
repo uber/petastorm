@@ -173,8 +173,6 @@ class SparkDatasetConverter(object):
                               batch_size=32,
                               num_epochs=None,
                               workers_count=4,
-                              cur_shard=None,
-                              shard_count=None,
                               **petastorm_reader_kwargs):
         """
         Make a PyTorch DataLoader.
@@ -190,12 +188,6 @@ class SparkDatasetConverter(object):
         :param workers_count: An int for the number of workers to use in the
             reader pool. This only is used for the thread or process pool.
             Defaults value 4.
-        :param cur_shard: An int denoting the current shard number. Each node
-            reading a shard should pass in a unique shard number in the range
-            [0, shard_count). shard_count must be supplied as well. Defaults to
-            None
-        :param shard_count: An int denoting the number of shards to break this
-            dataset into. Defaults to None
         :param petastorm_reader_kwargs: all the arguments for
             `petastorm.make_batch_reader()`.
 
@@ -218,8 +210,6 @@ class SparkDatasetConverter(object):
                                           batch_size,
                                           num_epochs,
                                           workers_count,
-                                          cur_shard,
-                                          shard_count,
                                           **petastorm_reader_kwargs)
 
     def delete(self):
@@ -259,7 +249,7 @@ class TorchDatasetContextManager(object):
     """
 
     def __init__(self, data_url, batch_size, num_epochs, workers_count,
-                 cur_shard, shard_count, **petastorm_reader_kwargs):
+                 **petastorm_reader_kwargs):
         """
         :param data_url: A string specifying the data URL.
         See `SparkDatasetConverter.make_torch_dataloader()` for the definitions
@@ -268,8 +258,6 @@ class TorchDatasetContextManager(object):
         petastorm_reader_kwargs["num_epochs"] = num_epochs
         if workers_count is not None:
             petastorm_reader_kwargs["workers_count"] = workers_count
-        petastorm_reader_kwargs["cur_shard"] = cur_shard
-        petastorm_reader_kwargs["shard_count"] = shard_count
         self.data_url = data_url
         self.batch_size = batch_size
         self.petastorm_reader_kwargs = petastorm_reader_kwargs
