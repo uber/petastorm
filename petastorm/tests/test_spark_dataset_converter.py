@@ -16,17 +16,18 @@ import os
 import subprocess
 import sys
 import tempfile
+from contextlib import contextmanager
 
 import numpy as np
 import pytest
 import tensorflow as tf
 from pyspark.sql import SparkSession
-from pyspark.sql.types import (BinaryType, BooleanType, ByteType,
-                               DoubleType, FloatType, IntegerType, LongType,
-                               ShortType, StringType, StructField, StructType)
+from pyspark.sql.types import (BinaryType, BooleanType, ByteType, DoubleType,
+                               FloatType, IntegerType, LongType, ShortType,
+                               StringType, StructField, StructType)
 from six.moves.urllib.parse import urlparse
 
-import petastorm
+from petastorm import make_batch_reader
 from petastorm.fs_utils import FilesystemResolver
 from petastorm.spark import (SparkDatasetConverter, make_spark_converter,
                              spark_dataset_converter)
@@ -148,6 +149,7 @@ def test_atexit(test_ctx):
 def test_set_delete_handler(test_ctx):
     def test_delete_handler(dir_url):
         raise RuntimeError('Not implemented delete handler.')
+
     register_delete_dir_handler(test_delete_handler)
 
     with pytest.raises(RuntimeError, match='Not implemented delete handler'):
@@ -210,7 +212,8 @@ def test_check_url():
 def test_make_sub_dir_url():
     assert _make_sub_dir_url('file:///a/b', 'c') == 'file:///a/b/c'
     assert _make_sub_dir_url('hdfs:/a/b', 'c') == 'hdfs:/a/b/c'
-    assert _make_sub_dir_url('hdfs://nn1:9000/a/b', 'c') == 'hdfs://nn1:9000/a/b/c'
+    assert _make_sub_dir_url('hdfs://nn1:9000/a/b',
+                             'c') == 'hdfs://nn1:9000/a/b/c'
 
 
 def test_pickling_remotely(test_ctx):
@@ -225,13 +228,16 @@ def test_pickling_remotely(test_ctx):
                 ts = sess.run(tensor)
         return getattr(ts, 'id')[0]
 
-    result = test_ctx.spark.sparkContext.parallelize(range(1), 1).map(map_fn).collect()[0]
+    result = test_ctx.spark.sparkContext.parallelize(range(1), 1) \
+                                        .map(map_fn).collect()[0]
     assert result == 100
 
 
 def test_change_cache_dir_raise_error(test_ctx):
-    temp_url2 = 'file://' + tempfile.mkdtemp('_spark_converter_test2').replace(os.sep, '/')
-    test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, temp_url2)
+    temp_url2 = 'file://' + tempfile.mkdtemp('_spark_converter_test2').replace(
+        os.sep, '/')
+    test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF,
+                            temp_url2)
 
     with pytest.raises(RuntimeError,
                        match="{} has been set to be".format(
@@ -299,7 +305,7 @@ def test_torch_pickling_remotely(test_ctx):
     assert result == 100
 
 
-def test_advanced_params(test_ctx):
+def test_torch_batch_size(test_ctx):
     df = test_ctx.spark.range(8)
     conv = make_spark_converter(df)
     batch_size = 2
@@ -307,6 +313,11 @@ def test_advanced_params(test_ctx):
                                     num_epochs=1) as dataloader:
         for batch in dataloader:
             assert batch_size == batch['id'].shape[0]
+
+
+def test_torch_transform_spec(test_ctx):
+    df = test_ctx.spark.range(8)
+    conv = make_spark_converter(df)
 
     from torchvision import transforms
     from petastorm import TransformSpec
@@ -323,75 +334,53 @@ def test_advanced_params(test_ctx):
         for batch in dataloader:
             assert min(batch['id']) >= 0 and max(batch['id']) < 1
 
+
+def test_torch_unexpected_param(test_ctx):
+    df = test_ctx.spark.range(8)
+    conv = make_spark_converter(df)
+
     with pytest.raises(TypeError, match="unexpected keyword argument 'xyz'"):
-        conv.make_torch_dataloader(xyz=1)
+        with conv.make_torch_dataloader(xyz=1) as _:
+            pass
 
-    def mock_make_batch_reader(dataset_url,
-                               schema_fields=None,
-                               reader_pool_type='thread', workers_count=10,
-                               shuffle_row_groups=True, shuffle_row_drop_partitions=1,
-                               predicate=None,
-                               rowgroup_selector=None,
-                               num_epochs=1,
-                               cur_shard=None, shard_count=None,
-                               cache_type='null', cache_location=None, cache_size_limit=None,
-                               cache_row_size_estimate=None, cache_extra_settings=None,
-                               hdfs_driver='libhdfs3',
-                               transform_spec=None):
-        return {
-            "dataset_url": dataset_url,
-            "schema_fields": schema_fields,
-            "reader_pool_type": reader_pool_type,
-            "workers_count": workers_count,
-            "shuffle_row_groups": shuffle_row_groups,
-            "shuffle_row_drop_partitions": shuffle_row_drop_partitions,
-            "predicate": predicate,
-            "rowgroup_selector": rowgroup_selector,
-            "num_epochs": num_epochs,
-            "cur_shard": cur_shard,
-            "shard_count": shard_count,
-            "cache_type": cache_type,
-            "cache_location": cache_location,
-            "cache_size_limit": cache_size_limit,
-            "cache_row_size_estimate": cache_row_size_estimate,
-            "cache_extra_settings": cache_extra_settings,
-            "hdfs_driver": hdfs_driver,
-            "transform_spec": transform_spec,
-        }
 
-    original_fn = petastorm.make_batch_reader
-    petastorm.make_batch_reader = mock_make_batch_reader
-    ctm = conv.make_torch_dataloader(schema_fields="schema_1",
-                                     reader_pool_type='type_1',
-                                     workers_count="count_1",
-                                     shuffle_row_groups="row_group_1",
-                                     shuffle_row_drop_partitions="drop_1",
-                                     predicate="predicate_1",
-                                     rowgroup_selector="selector_1",
-                                     num_epochs="num_1",
-                                     cur_shard="shard_1",
-                                     shard_count="total_shard",
-                                     cache_type="cache_1",
-                                     cache_location="location_1",
-                                     cache_size_limit="limit_1",
-                                     cache_extra_settings="extra_1",
-                                     hdfs_driver="driver_1",
-                                     transform_spec="transform_spec_1")
-    assert ctm.reader["schema_fields"] == "schema_1"
-    assert ctm.reader["reader_pool_type"] == "type_1"
-    assert ctm.reader["workers_count"] == "count_1"
-    assert ctm.reader["shuffle_row_groups"] == "row_group_1"
-    assert ctm.reader["shuffle_row_drop_partitions"] == "drop_1"
-    assert ctm.reader["predicate"] == "predicate_1"
-    assert ctm.reader["rowgroup_selector"] == "selector_1"
-    assert ctm.reader["num_epochs"] == "num_1"
-    assert ctm.reader["cur_shard"] == "shard_1"
-    assert ctm.reader["shard_count"] == "total_shard"
-    assert ctm.reader["cache_type"] == "cache_1"
-    assert ctm.reader["cache_location"] == "location_1"
-    assert ctm.reader["cache_size_limit"] == "limit_1"
-    assert ctm.reader["cache_extra_settings"] == "extra_1"
-    assert ctm.reader["hdfs_driver"] == "driver_1"
-    assert ctm.reader["transform_spec"] == "transform_spec_1"
+@contextmanager
+def mock_torch_make_batch_reader():
+    captured_args = []
+    import petastorm.spark
 
-    petastorm.make_batch_reader = original_fn
+    def mock_fn(dataset_url, **kwargs):
+        reader_args = {'dataset_url': dataset_url}
+        reader_args.update(kwargs)
+        captured_args.append(reader_args)
+        return make_batch_reader(dataset_url)
+
+    petastorm.spark.spark_dataset_converter.make_batch_reader = mock_fn
+    try:
+        yield captured_args
+    finally:
+        petastorm.spark.spark_dataset_converter.make_batch_reader = \
+            make_batch_reader
+
+
+def test_torch_advanced_params(test_ctx):
+    df = test_ctx.spark.range(8)
+    conv = make_spark_converter(df)
+
+    with mock_torch_make_batch_reader() as captured_args:
+        with conv.make_torch_dataloader(reader_pool_type='dummy', cur_shard=1,
+                                        shard_count=3) as _:
+            pass
+        peta_args = captured_args[0]
+        assert peta_args['reader_pool_type'] == 'dummy' and \
+            peta_args['cur_shard'] == 1 and \
+            peta_args['shard_count'] == 3 and \
+            peta_args['num_epochs'] is None and \
+            peta_args['workers_count'] == 4
+
+    # Test default value overridden arguments.
+    with mock_torch_make_batch_reader() as captured_args:
+        with conv.make_torch_dataloader(num_epochs=1, workers_count=2) as _:
+            pass
+        peta_args = captured_args[0]
+        assert peta_args['num_epochs'] == 1 and peta_args['workers_count'] == 2

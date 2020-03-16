@@ -15,6 +15,7 @@
 import atexit
 import datetime
 import logging
+import os
 import shutil
 import threading
 import uuid
@@ -24,7 +25,7 @@ from pyarrow import LocalFileSystem
 from pyspark.sql.session import SparkSession
 from six.moves.urllib.parse import urlparse
 
-import petastorm
+from petastorm import make_batch_reader
 from petastorm.fs_utils import FilesystemResolver
 
 DEFAULT_ROW_GROUP_SIZE_BYTES = 32 * 1024 * 1024
@@ -112,6 +113,21 @@ def _delete_cache_data_atexit(dataset_url):
         warnings.warn('delete cache data {url} failed.'.format(url=dataset_url))
 
 
+def get_env_rank_and_size():
+    rank_env = ['HOROVOD_RANK', 'OMPI_COMM_WORLD_RANK', 'PMI_RANK']
+    size_env = ['HOROVOD_SIZE', 'OMPI_COMM_WORLD_SIZE', 'PMI_SIZE']
+
+    for rank_var, size_var in zip(rank_env, size_env):
+        rank = os.environ.get(rank_var)
+        size = os.environ.get(size_var)
+        if rank is not None and size is not None:
+            return int(rank), int(size)
+        elif rank is not None or size is not None:
+            return None, None
+
+    return None, None
+
+
 class SparkDatasetConverter(object):
     """
     A `SparkDatasetConverter` object holds one materialized spark dataframe and
@@ -156,7 +172,7 @@ class SparkDatasetConverter(object):
     def make_torch_dataloader(self,
                               batch_size=32,
                               num_epochs=None,
-                              workers_count=None,
+                              workers_count=4,
                               cur_shard=None,
                               shard_count=None,
                               **petastorm_reader_kwargs):
@@ -173,8 +189,7 @@ class SparkDatasetConverter(object):
             infinite number of epochs.
         :param workers_count: An int for the number of workers to use in the
             reader pool. This only is used for the thread or process pool.
-            Defaults to None, which means using the default value from
-            `petastorm.make_batch_reader()`.
+            Defaults value 4.
         :param cur_shard: An int denoting the current shard number. Each node
             reading a shard should pass in a unique shard number in the range
             [0, shard_count). shard_count must be supplied as well. Defaults to
@@ -188,6 +203,17 @@ class SparkDatasetConverter(object):
                  when exit the returned context manager, the reader
                  will be closed.
         """
+
+        env_rank, env_size = get_env_rank_and_size()
+        if env_rank is not None and env_size is not None:
+            if petastorm_reader_kwargs['cur_shard'] != env_rank or \
+                    petastorm_reader_kwargs['shard_count'] != env_size:
+                warnings.warn(
+                    'The petastorm arguments cur_shard and shard_count is not '
+                    'consistent with the detected MPI/horovod environments.'
+                    'Detected: cur_shard={}, shard_count={}.'.format(env_rank,
+                                                                     env_size))
+
         return TorchDatasetContextManager(self.cache_dir_url,
                                           batch_size,
                                           num_epochs,
@@ -215,7 +241,7 @@ class TFDatasetContextManager(object):
         """
         from petastorm.tf_utils import make_petastorm_dataset
 
-        self.reader = petastorm.make_batch_reader(data_url)
+        self.reader = make_batch_reader(data_url)
         self.dataset = make_petastorm_dataset(self.reader)
 
     def __enter__(self):
@@ -239,18 +265,21 @@ class TorchDatasetContextManager(object):
         See `SparkDatasetConverter.make_torch_dataloader()` for the definitions
         of the other parameters.
         """
-        from petastorm.pytorch import DataLoader
-
         petastorm_reader_kwargs["num_epochs"] = num_epochs
         if workers_count is not None:
             petastorm_reader_kwargs["workers_count"] = workers_count
         petastorm_reader_kwargs["cur_shard"] = cur_shard
         petastorm_reader_kwargs["shard_count"] = shard_count
-
-        self.reader = petastorm.make_batch_reader(data_url, **petastorm_reader_kwargs)
-        self.loader = DataLoader(reader=self.reader, batch_size=batch_size)
+        self.data_url = data_url
+        self.batch_size = batch_size
+        self.petastorm_reader_kwargs = petastorm_reader_kwargs
 
     def __enter__(self):
+        from petastorm.pytorch import DataLoader
+
+        self.reader = make_batch_reader(self.data_url,
+                                        **self.petastorm_reader_kwargs)
+        self.loader = DataLoader(reader=self.reader, batch_size=self.batch_size)
         return self.loader
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
