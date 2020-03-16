@@ -278,7 +278,8 @@ def test_tf_dataset_petastorm_args(test_ctx):
     conv1 = make_spark_converter(df1)
 
     with mock_make_batch_reader() as captured_args:
-        conv1.make_tf_dataset(reader_pool_type='dummy', cur_shard=1, shard_count=3)
+        with conv1.make_tf_dataset(reader_pool_type='dummy', cur_shard=1, shard_count=3):
+            pass
         peta_args = captured_args[0]
         assert peta_args['reader_pool_type'] == 'dummy' and \
             peta_args['cur_shard'] == 1 and \
@@ -288,6 +289,7 @@ def test_tf_dataset_petastorm_args(test_ctx):
 
     # Test default value overridden arguments.
     with mock_make_batch_reader() as captured_args:
-        conv1.make_tf_dataset(num_epochs=1, workers_count=2)
+        with conv1.make_tf_dataset(num_epochs=1, workers_count=2):
+            pass
         peta_args = captured_args[0]
         assert peta_args['num_epochs'] == 1 and peta_args['workers_count'] == 2
