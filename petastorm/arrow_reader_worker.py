@@ -159,6 +159,18 @@ class ArrowReaderWorker(WorkerBase):
         if all_cols:
             self.publish_func(all_cols)
 
+    @staticmethod
+    def _check_shape_and_ravel(x, field):
+        if not isinstance(x, np.ndarray):
+            raise ValueError('field {name} must be numpy array type.'.format(name=field.name))
+        if x.shape != field.shape:
+            raise ValueError('field {name} must be the shape {shape}'
+                             .format(name=field.name, shape=field.shape))
+        if not x.flags.c_contiguous:
+            raise ValueError('field {name} error: only support row major multi-dimensional array.'
+                             .format(name=field.name))
+        return x.ravel()
+
     def _load_rows(self, pq_file, piece, shuffle_row_drop_range):
         """Loads all rows from a piece"""
 
@@ -188,20 +200,13 @@ class ArrowReaderWorker(WorkerBase):
                                  .format(rc=','.join(transformed_result_column_set),
                                          sc=','.join(transformed_schema_column_set)))
 
-            def check_shape_and_ravel(x, field):
-                if not isinstance(x, np.ndarray):
-                    raise ValueError('field {name} must be numpy array type.'.format(name=field.name))
-                if x.shape != field.shape:
-                    raise ValueError('field {name} must be the shape {shape}'
-                                     .format(name=field.name, shape=field.shape))
-                if not x.flags.c_contiguous:
-                    raise ValueError('Only support row major multi-dimensional array.')
-                return x.ravel()
-
+            # For fields return multidimensional array, we need to ravel them
+            # because pyarrow do not support multidimensional array.
+            # later we will reshape it back.
             for field in self._transformed_schema.fields.values():
                 if len(field.shape) > 1:
                     transformed_result[field.name] = transformed_result[field.name] \
-                        .map(lambda x: check_shape_and_ravel(x, field))  # pylint: disable=cell-var-from-loop
+                        .map(lambda x, f=field: self._check_shape_and_ravel(x, f))
 
             result = pa.Table.from_pandas(transformed_result, preserve_index=False)
 
