@@ -19,15 +19,7 @@ SyntheticDataset = namedtuple('synthetic_dataset', ['url', 'data', 'path'])
 def synthetic_dataset(tmpdir_factory):
     path = tmpdir_factory.mktemp('data').strpath
     url = 'file://' + path
-    data = create_test_dataset(url, range(ROWS_COUNT), make_partition=True)
-    return SyntheticDataset(url=url, path=path, data=data)
-
-
-@pytest.fixture(scope="session")
-def flat_synthetic_dataset(tmpdir_factory):
-    path = tmpdir_factory.mktemp('data').strpath
-    url = 'file://' + path
-    data = create_test_dataset(url, range(100), make_partition=False)
+    data = create_test_dataset(url, range(ROWS_COUNT))
     return SyntheticDataset(url=url, path=path, data=data)
 
 
