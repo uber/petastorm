@@ -26,12 +26,13 @@ from pyarrow import LocalFileSystem
 from pyspark.sql.session import SparkSession
 from six.moves.urllib.parse import urlparse
 
-import petastorm
+from petastorm import make_batch_reader
 from petastorm.fs_utils import FilesystemResolver
 
 DEFAULT_ROW_GROUP_SIZE_BYTES = 32 * 1024 * 1024
 
 logger = logging.getLogger(__name__)
+
 
 def _get_spark_session():
     return SparkSession.builder.getOrCreate()
@@ -243,7 +244,7 @@ class TFDatasetContextManager(object):
         from petastorm.tf_utils import make_petastorm_dataset
         import tensorflow as tf
 
-        self.reader = petastorm.make_batch_reader(self.data_url, **self.petastorm_reader_kwargs)
+        self.reader = make_batch_reader(self.data_url, **self.petastorm_reader_kwargs)
 
         dataset = make_petastorm_dataset(self.reader) \
             .flat_map(tf.data.Dataset.from_tensor_slices)
