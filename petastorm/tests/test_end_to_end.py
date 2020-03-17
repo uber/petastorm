@@ -32,7 +32,6 @@ from petastorm.selectors import SingleIndexSelector, IntersectIndexSelector, Uni
 from petastorm.tests.test_common import create_test_dataset, TestSchema
 from petastorm.tests.test_end_to_end_predicates_impl import \
     PartitionKeyInSetPredicate, EqualPredicate, VectorizedEqualPredicate
-from petastorm.tests.test_generate_metadata import SyntheticDataset
 from petastorm.unischema import UnischemaField, Unischema
 
 # pylint: disable=unnecessary-lambda
