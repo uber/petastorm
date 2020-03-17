@@ -26,15 +26,12 @@ READER_FACTORIES = [
 
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
-def test_dataset_url_must_be_string_or_string_list(reader_factory):
+def test_dataset_url_must_be_string(reader_factory):
     with pytest.raises(ValueError):
         reader_factory(None)
 
     with pytest.raises(ValueError):
         reader_factory(123)
-
-    with pytest.raises(ValueError):
-        reader_factory([123, 456])
 
     with pytest.raises(ValueError):
         reader_factory([])
