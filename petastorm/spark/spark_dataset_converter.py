@@ -117,6 +117,9 @@ def _delete_cache_data_atexit(dataset_url):
 
 
 def get_env_rank_and_size():
+    """
+    Get rank and size from environment, return (rank, size), if failed, return (None, None)
+    """
     rank_env = ['HOROVOD_RANK', 'OMPI_COMM_WORLD_RANK', 'PMI_RANK']
     size_env = ['HOROVOD_SIZE', 'OMPI_COMM_WORLD_SIZE', 'PMI_SIZE']
 
@@ -129,6 +132,20 @@ def get_env_rank_and_size():
             return None, None
 
     return None, None
+
+
+def check_rank_and_size(petastorm_reader_kwargs):
+    """
+    :param check whether the cur_shard and shard_count args are set correctly.
+    :return If return False, denotes user may set cur_shard and shard_count wrong.
+    """
+    env_rank, env_size = get_env_rank_and_size()
+    if env_rank is not None and env_size is not None:
+        if petastorm_reader_kwargs.get('cur_shard') != env_rank or \
+                petastorm_reader_kwargs.get('shard_count') != env_size:
+            return False
+
+    return True
 
 
 class SparkDatasetConverter(object):
@@ -163,7 +180,7 @@ class SparkDatasetConverter(object):
             batch_size=32,
             prefetch=None,
             num_epochs=None,
-            workers_count=4,
+            workers_count=None,
             **petastorm_reader_kwargs
     ):
         """
@@ -180,7 +197,10 @@ class SparkDatasetConverter(object):
             Setting ``num_epochs`` to ``None`` will result in an infinite number
             of epochs.
         :param workers_count: An int for the number of workers to use in the
-            reader pool. This only is used for the thread or process pool. Default value 4.
+            reader pool. This only is used for the thread or process pool.
+            None denotes auto tune best value (current implementation when auto tune,
+            it will always use 4 workers, but it may be improved in future)
+            Default value None.
         :param petastorm_reader_kwargs: arguments for `petastorm.make_batch_reader()`,
             exclude these arguments: "dataset_url", "num_epochs", "workers_count".
 
@@ -194,12 +214,10 @@ class SparkDatasetConverter(object):
         petastorm_reader_kwargs['workers_count'] = workers_count
 
         env_rank, env_size = get_env_rank_and_size()
-        if env_rank is not None and env_size is not None:
-            if petastorm_reader_kwargs['cur_shard'] != env_rank or \
-                    petastorm_reader_kwargs['shard_count'] != env_size:
-                logger.warning('The petastorm arguments cur_shard and shard_count is not '
-                               'consistent with detected MPI/horovod environments, do you '
-                               'set them correctly ?')
+        if check_rank_and_size(petastorm_reader_kwargs):
+            logger.warning('The petastorm arguments cur_shard and shard_count is not '
+                           'consistent with detected MPI/horovod environments, does '
+                           'each work sample the whole dataset?')
 
         return TFDatasetContextManager(
             self.cache_dir_url,
@@ -246,17 +264,20 @@ class TFDatasetContextManager(object):
 
         self.reader = make_batch_reader(self.data_url, **self.petastorm_reader_kwargs)
 
-        dataset = make_petastorm_dataset(self.reader) \
-            .flat_map(tf.data.Dataset.from_tensor_slices)
+        # unroll dataset
+        dataset = make_petastorm_dataset(self.reader).flat_map(tf.data.Dataset.from_tensor_slices)
         dataset = dataset.batch(batch_size=self.batch_size)
 
-        if LooseVersion(tf.__version__) >= LooseVersion('1.14'):
-            # We can make prefetch optimization
-            prefetch = self.prefetch
-            if prefetch is None:
+        prefetch = self.prefetch
+
+        if prefetch is None:
+            if LooseVersion(tf.__version__) >= LooseVersion('1.14'):
+                # We can make prefetch optimization
                 prefetch = tf.data.experimental.AUTOTUNE
-            if prefetch != 0:
-                dataset = dataset.prefetch(prefetch)
+            else:
+                prefetch = 1
+
+        dataset = dataset.prefetch(prefetch)
 
         return dataset
 
