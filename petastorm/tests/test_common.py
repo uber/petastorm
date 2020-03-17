@@ -94,7 +94,7 @@ def _randomize_row(id_num):
     return row_dict
 
 
-def create_test_dataset(tmp_url, rows, num_files=2, spark=None, make_partition=True):
+def create_test_dataset(tmp_url, rows, num_files=2, spark=None):
     """
     Creates a test dataset under tmp_dir, with rows and num_files that has TestSchema.
     :param tmp_url: The URL of the temp directory to store the test dataset in.
@@ -134,16 +134,11 @@ def create_test_dataset(tmp_url, rows, num_files=2, spark=None, make_partition=T
         dataframe = spark. \
             createDataFrame(random_rows_rdd, TestSchema.as_spark_schema()).sort('id')
 
-        if make_partition:
-            partition_by = ['partition_key']
-        else:
-            partition_by = []
-
         # Save a parquet
         dataframe. \
             coalesce(num_files). \
             write.option('compression', 'none'). \
-            partitionBy(*partition_by). \
+            partitionBy('partition_key'). \
             mode('overwrite'). \
             parquet(tmp_url)
 
