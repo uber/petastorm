@@ -829,20 +829,6 @@ def _get_local_fs_url_list(dir_url):
     return url_list
 
 
-@pytest.fixture(scope="session")
-def flat_synthetic_dataset(tmpdir_factory):
-    path = tmpdir_factory.mktemp('data').strpath
-    url = 'file://' + path
-    data = create_test_dataset(url, range(100), make_partition=False)
-    return SyntheticDataset(url=url, path=path, data=data)
-
-
-def test_make_reader_with_url_list(flat_synthetic_dataset):
-    url_list = _get_local_fs_url_list(flat_synthetic_dataset.url)
-    with make_reader(url_list, workers_count=1) as reader:
-        assert len(reader) == 100
-
-
 def test_make_batch_reader_with_url_list(scalar_dataset):
     url_list = _get_local_fs_url_list(scalar_dataset.url)
     url_list = filter(lambda x: x.endswith('.parquet'), url_list)
