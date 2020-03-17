@@ -830,7 +830,7 @@ def _get_local_fs_url_list(dir_url):
 
 def test_make_batch_reader_with_url_list(scalar_dataset):
     url_list = _get_local_fs_url_list(scalar_dataset.url)
-    url_list = filter(lambda x: x.endswith('.parquet'), url_list)
+    url_list = list(filter(lambda x: x.endswith('.parquet'), url_list))
 
     with make_batch_reader(url_list, workers_count=1) as reader:
         row_count = 0
