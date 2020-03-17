@@ -173,7 +173,7 @@ def _assert_expected_rows_data(expected_data, rows_data):
 def test_simple_read_tensorflow(synthetic_dataset):
     """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
     data"""
-    with make_reader(schema_fields=NON_NULLABLE_FIELDS, dataset_url_or_urls=synthetic_dataset.url) as reader:
+    with make_reader(schema_fields=NON_NULLABLE_FIELDS, dataset_url=synthetic_dataset.url) as reader:
         row_tensors = tf_tensors(reader)
         with _tf_session() as sess:
             rows_data = [sess.run(row_tensors) for _ in range(30)]
