@@ -134,7 +134,7 @@ def get_env_rank_and_size():
     return None, None
 
 
-def check_rank_and_size(petastorm_reader_kwargs):
+def is_rank_and_size_consistent_with_env(petastorm_reader_kwargs):
     """
     Check whether the cur_shard and shard_count args are consistent with environment variables.
     If not consistent with environment variables, return False.
@@ -212,9 +212,12 @@ class SparkDatasetConverter(object):
 
         # override some arguments default values of petastorm reader
         petastorm_reader_kwargs['num_epochs'] = num_epochs
+        if workers_count is None:
+            # TODO: generate a best tuned value for default worker count value
+            workers_count = 4
         petastorm_reader_kwargs['workers_count'] = workers_count
 
-        if check_rank_and_size(petastorm_reader_kwargs):
+        if not is_rank_and_size_consistent_with_env(petastorm_reader_kwargs):
             logger.warning('The petastorm arguments cur_shard and shard_count is not '
                            'consistent with detected MPI/horovod environments, does '
                            'each work sample the whole dataset?')
