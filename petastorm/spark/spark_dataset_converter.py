@@ -172,7 +172,7 @@ class SparkDatasetConverter(object):
     def make_torch_dataloader(self,
                               batch_size=32,
                               num_epochs=None,
-                              workers_count=4,
+                              workers_count=None,
                               **petastorm_reader_kwargs):
         """
         Make a PyTorch DataLoader.
@@ -187,7 +187,8 @@ class SparkDatasetConverter(object):
             infinite number of epochs.
         :param workers_count: An int for the number of workers to use in the
             reader pool. This only is used for the thread or process pool.
-            Defaults value 4.
+            Defaults value None, which means using the default value from
+            `petastorm.make_batch_reader()`. We can autotune it in the future.
         :param petastorm_reader_kwargs: all the arguments for
             `petastorm.make_batch_reader()`.
 
