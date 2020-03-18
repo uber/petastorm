@@ -377,7 +377,7 @@ def test_torch_advanced_params(test_ctx):
             peta_args['cur_shard'] == 1 and \
             peta_args['shard_count'] == SHARD_COUNT and \
             peta_args['num_epochs'] is None and \
-            peta_args['workers_count'] is None
+            ('workers_count' not in peta_args)
 
     # Test default value overridden arguments.
     with mock_torch_make_batch_reader() as captured_args:
