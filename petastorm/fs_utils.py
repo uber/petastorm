@@ -27,7 +27,7 @@ def get_dataset_path(parsed_url):
     paths that start with a `/`
     """
     if parsed_url.scheme.lower() in ['s3', 'gs', 'gcs']:
-        # s3fs expects paths of the form `bucket/path`
+        # s3/gs/gcs filesystem expects paths of the form `bucket/path`
         return parsed_url.netloc + parsed_url.path
 
     return parsed_url.path
