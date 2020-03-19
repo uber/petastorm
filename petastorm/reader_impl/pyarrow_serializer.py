@@ -16,6 +16,8 @@ from decimal import Decimal
 import pyarrow
 from pyarrow import register_default_serialization_handlers
 
+import numpy as np
+
 
 class PyArrowSerializer(object):
 
@@ -41,3 +43,16 @@ class PyArrowSerializer(object):
             self._context.register_type(Decimal, 'decimal.Decimal', pickle=True)
 
         return self._context
+
+    def scalar_dtype_mappings(self):
+        dtypes_to_check = (np.int8, np.int16, np.int32, np.int64,
+                           np.uint8, np.uint16, np.uint32, np.uint64,
+                           np.float16, np.float32, np.float64,)
+        result = {}
+        for dtype in dtypes_to_check:
+            before = dtype()
+            after = self.deserialize(self.serialize(before))
+            if type(before) != type(after):
+                result[dtype] = type(after)
+
+        return result

@@ -28,6 +28,7 @@ from petastorm.codecs import ScalarCodec, CompressedImageCodec
 from petastorm.errors import NoDataAvailableError
 from petastorm.etl.dataset_metadata import materialize_dataset
 from petastorm.predicates import in_lambda
+from petastorm.reader_impl.pyarrow_serializer import PyArrowSerializer
 from petastorm.selectors import SingleIndexSelector, IntersectIndexSelector, UnionIndexSelector
 from petastorm.tests.test_common import create_test_dataset, TestSchema
 from petastorm.tests.test_end_to_end_predicates_impl import \
@@ -35,6 +36,8 @@ from petastorm.tests.test_end_to_end_predicates_impl import \
 from petastorm.unischema import UnischemaField, Unischema
 
 # pylint: disable=unnecessary-lambda
+from petastorm.workers_pool.process_pool import ProcessPool
+
 MINIMAL_READER_FLAVOR_FACTORIES = [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
 ]
@@ -43,7 +46,8 @@ MINIMAL_READER_FLAVOR_FACTORIES = [
 ALL_READER_FLAVOR_FACTORIES = MINIMAL_READER_FLAVOR_FACTORIES + [
     lambda url, **kwargs: make_reader(url, reader_pool_type='thread', **kwargs),
     lambda url, **kwargs: make_reader(url, reader_pool_type='process', workers_count=2, **kwargs),
-    lambda url, **kwargs: make_reader(url, reader_pool_type='process', workers_count=2, **kwargs),
+    lambda url, **kwargs: make_reader(url, reader_pool_type='process', pyarrow_serialize=False, workers_count=2,
+                                      **kwargs),
 ]
 
 SCALAR_FIELDS = [f for f in TestSchema.fields.values() if isinstance(f.codec, ScalarCodec)]
@@ -54,7 +58,8 @@ SCALAR_ONLY_READER_FACTORIES = [
 ]
 
 
-def _check_simple_reader(reader, expected_data, expected_rows_count=None, check_types=True, limit_checked_rows=None):
+def _check_simple_reader(reader, expected_data, expected_rows_count=None, check_types=True, limit_checked_rows=None,
+                         check_scalar_types=True):
     # Read a bunch of entries from the dataset and compare the data to reference
     def _type(v):
         if isinstance(v, np.ndarray):
@@ -75,8 +80,8 @@ def _check_simple_reader(reader, expected_data, expected_rows_count=None, check_
         actual = row._asdict()
         expected = next(d for d in expected_data if d['id'] == actual['id'])
         np.testing.assert_equal(actual, expected)
-        actual_types = {k: _type(v) for k, v in actual.items()}
-        expected_types = {k: _type(v) for k, v in expected.items()}
+        actual_types = {k: _type(v) for k, v in actual.items() if check_scalar_types or isinstance(v, np.ndarray)}
+        expected_types = {k: _type(v) for k, v in expected.items() if check_scalar_types or isinstance(v, np.ndarray)}
         assert not check_types or actual_types == expected_types
         count += 1
 
@@ -104,7 +109,11 @@ def _readout_all_ids(reader, limit=None):
 def test_simple_read(synthetic_dataset, reader_factory):
     """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
     with reader_factory(synthetic_dataset.url) as reader:
-        _check_simple_reader(reader, synthetic_dataset.data)
+        # Pyarrow serializer makes IPC much faster. However, it messes up numpy scalar type, e.g. `np.int8` will come
+        # out as `int` after deserialization.
+        is_pyarrow_serializer = isinstance(reader._workers_pool, ProcessPool) \
+                                and isinstance(reader._workers_pool._serializer, PyArrowSerializer)
+        _check_simple_reader(reader, synthetic_dataset.data, check_scalar_types=not is_pyarrow_serializer)
 
 
 @pytest.mark.parametrize('reader_factory', [
@@ -177,7 +186,6 @@ def test_transform_function_with_predicate(synthetic_dataset, reader_factory):
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
 ])
 def test_transform_function_returns_a_new_dict_with_predicate(synthetic_dataset, reader_factory):
-
     def transform(sample):
         return {'id': sample['id'], 'id2': -1}
 

@@ -41,6 +41,8 @@ _NUMPY_TO_TF_DTYPES_MAPPING = {
     np.bool_: tf.bool,
     Decimal: tf.string,
     np.datetime64: tf.int64,
+    int: tf.int64,
+    float: tf.float64,
 }
 
 # Name of an op in the TF graph used for the random shuffling queue. This name can be used by diagnostics code that
@@ -97,12 +99,18 @@ def _sanitize_field_tf_types(sample):
     return sample.__class__(**next_sample_dict)
 
 
-def _schema_to_tf_dtypes(schema):
+def _schema_to_tf_dtypes(schema, output_scalar_dtype_mapping):
     """Returns schema as a list of tensorflow dtypes.
     :param schema: The schema.
     :return: List of tensorflow dtypes.
     """
-    return [_numpy_to_tf_dtypes(f.numpy_dtype) for f in schema.fields.values()]
+    output_dtypes = []
+    for f in schema.fields.values():
+        if output_scalar_dtype_mapping and f.shape == ():
+            output_dtypes.append(output_scalar_dtype_mapping.get(f.numpy_dtype, f.numpy_dtype))
+        else:
+            output_dtypes.append(f.numpy_dtype)
+    return [_numpy_to_tf_dtypes(t) for t in output_dtypes]
 
 
 def _schema_to_tf_dtypes_ngram(schema, ngram):
@@ -233,7 +241,8 @@ def _tf_tensors_nonngram(reader, shuffling_queue_capacity, min_after_dequeue):
 
     # fields_as_list is a list with tensors matching the order of the values in the schema. named-tuple semantics is
     # not preserved across tf.py_func call boundary.
-    fields_as_list = tf.py_func(dequeue_sample_impl, [tf.constant(1)], _schema_to_tf_dtypes(reader.schema))
+    fields_as_list = tf.py_func(dequeue_sample_impl, [tf.constant(1)],
+                                _schema_to_tf_dtypes(reader.schema, reader.output_scalar_dtype_mapping))
 
     if shuffling_queue_capacity > 0:
         # Pass py_func output via shuffling queue if requested.

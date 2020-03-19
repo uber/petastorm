@@ -170,10 +170,12 @@ def _assert_expected_rows_data(expected_data, rows_data):
 
 
 @pytest.mark.forked
-def test_simple_read_tensorflow(synthetic_dataset):
+@pytest.mark.parametrize('reader_pool_type', ['process', 'dummy', 'thread'])
+def test_simple_read_tensorflow(synthetic_dataset, reader_pool_type):
     """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
     data"""
-    with make_reader(schema_fields=NON_NULLABLE_FIELDS, dataset_url=synthetic_dataset.url) as reader:
+    with make_reader(schema_fields=NON_NULLABLE_FIELDS, dataset_url=synthetic_dataset.url,
+                     reader_pool_type=reader_pool_type) as reader:
         row_tensors = tf_tensors(reader)
         with _tf_session() as sess:
             rows_data = [sess.run(row_tensors) for _ in range(30)]
@@ -279,10 +281,11 @@ def test_shuffling_queue_with_ngrams(synthetic_dataset):
 
 
 @pytest.mark.forked
-def test_simple_read_tensorflow_with_parquet_dataset(scalar_dataset):
+@pytest.mark.parametrize('reader_pool_type', ['process', 'dummy', 'thread'])
+def test_simple_read_tensorflow_with_parquet_dataset(scalar_dataset, reader_pool_type):
     """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
     data"""
-    with make_batch_reader(dataset_url_or_urls=scalar_dataset.url) as reader:
+    with make_batch_reader(dataset_url_or_urls=scalar_dataset.url, reader_pool_type=reader_pool_type) as reader:
         row_tensors = tf_tensors(reader)
         # Make sure we have static shape info for all fields
         for column in row_tensors:

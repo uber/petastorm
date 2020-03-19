@@ -67,7 +67,7 @@ def normalize_dataset_url_or_urls(dataset_url_or_urls):
 
 def make_reader(dataset_url,
                 schema_fields=None,
-                reader_pool_type='thread', workers_count=10, pyarrow_serialize=False, results_queue_size=50,
+                reader_pool_type='thread', workers_count=10, pyarrow_serialize=True, results_queue_size=50,
                 shuffle_row_groups=True, shuffle_row_drop_partitions=1,
                 predicate=None,
                 rowgroup_selector=None,
@@ -145,11 +145,13 @@ def make_reader(dataset_url,
         raise RuntimeError('Currently make_reader supports reading only Petastorm datasets. '
                            'To read from a non-Petastorm Parquet store use make_batch_reader')
 
+    output_scalar_dtype_mapping = None
     if reader_pool_type == 'thread':
         reader_pool = ThreadPool(workers_count, results_queue_size)
     elif reader_pool_type == 'process':
         if pyarrow_serialize:
             serializer = PyArrowSerializer()
+            output_scalar_dtype_mapping = serializer.scalar_dtype_mappings()
         else:
             serializer = PickleSerializer()
         reader_pool = ProcessPool(workers_count, serializer)
@@ -170,6 +172,7 @@ def make_reader(dataset_url,
         'shard_count': shard_count,
         'cache': cache,
         'transform_spec': transform_spec,
+        'output_scalar_dtype_mapping': output_scalar_dtype_mapping,
     }
 
     try:
@@ -304,7 +307,7 @@ class Reader(object):
                  shuffle_row_groups=True, shuffle_row_drop_partitions=1,
                  predicate=None, rowgroup_selector=None, reader_pool=None, num_epochs=1,
                  cur_shard=None, shard_count=None, cache=None, worker_class=None,
-                 transform_spec=None, is_batched_reader=False):
+                 transform_spec=None, is_batched_reader=False, output_scalar_dtype_mapping=None):
         """Initializes a reader object.
 
         :param pyarrow_filesystem: An instance of ``pyarrow.FileSystem`` that will be used. If not specified,
@@ -358,6 +361,7 @@ class Reader(object):
             raise ValueError('Fields must be either None, an iterable collection of Unischema fields '
                              'or an NGram object.')
 
+        self.output_scalar_dtype_mapping = output_scalar_dtype_mapping
         self.is_batched_reader = is_batched_reader
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
         self.dataset = pq.ParquetDataset(dataset_path, filesystem=pyarrow_filesystem,
