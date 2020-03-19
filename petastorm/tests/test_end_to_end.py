@@ -43,7 +43,6 @@ MINIMAL_READER_FLAVOR_FACTORIES = [
 ALL_READER_FLAVOR_FACTORIES = MINIMAL_READER_FLAVOR_FACTORIES + [
     lambda url, **kwargs: make_reader(url, reader_pool_type='thread', **kwargs),
     lambda url, **kwargs: make_reader(url, reader_pool_type='process', workers_count=2, **kwargs),
-    lambda url, **kwargs: make_reader(url, reader_pool_type='process', workers_count=2, **kwargs),
 ]
 
 SCALAR_FIELDS = [f for f in TestSchema.fields.values() if isinstance(f.codec, ScalarCodec)]
