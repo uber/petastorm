@@ -19,7 +19,11 @@ import tempfile
 import pytest
 import numpy as np
 import tensorflow as tf
-from contextlib import contextmanager
+
+try:
+    from unittest import mock
+except ImportError:
+    from mock import mock
 
 from pyspark.sql import SparkSession
 from pyspark.sql.types import (BinaryType, BooleanType, ByteType, DoubleType,
@@ -255,41 +259,27 @@ def test_tf_dataset_batch_size(test_ctx):
     assert len(ts.id) == batch_size
 
 
-@contextmanager
-def mock_make_batch_reader():
-    captured_args = []
-    import petastorm.spark
-
-    def mock_fn(dataset_url, **kwargs):
-        reader_args = {'dataset_url': dataset_url}
-        reader_args.update(kwargs)
-        captured_args.append(reader_args)
-        return make_batch_reader(dataset_url, **kwargs)
-
-    petastorm.spark.spark_dataset_converter.make_batch_reader = mock_fn
-    try:
-        yield captured_args
-    finally:
-        petastorm.spark.spark_dataset_converter.make_batch_reader = make_batch_reader
-
-
 def test_tf_dataset_petastorm_args(test_ctx):
     df1 = test_ctx.spark.range(100).repartition(4)
     conv1 = make_spark_converter(df1)
 
-    with mock_make_batch_reader() as captured_args:
+    mocked_make_batch_reader = mock.Mock()
+    mocked_make_batch_reader.return_value = make_batch_reader(conv1.cache_dir_url)
+
+    with mock.patch('petastorm.spark.spark_dataset_converter.make_batch_reader',
+                    new_callable=mocked_make_batch_reader):
         with conv1.make_tf_dataset(reader_pool_type='dummy', cur_shard=1, shard_count=4):
             pass
-        peta_args = captured_args[0]
+
+        peta_args = mocked_make_batch_reader.call_args.kwargs
         assert peta_args['reader_pool_type'] == 'dummy' and \
             peta_args['cur_shard'] == 1 and \
             peta_args['shard_count'] == 4 and \
             peta_args['num_epochs'] is None and \
             peta_args['workers_count'] == 4
 
-    # Test default value overridden arguments.
-    with mock_make_batch_reader() as captured_args:
         with conv1.make_tf_dataset(num_epochs=1, workers_count=2):
             pass
-        peta_args = captured_args[0]
+
+        peta_args = mocked_make_batch_reader.call_args.kwargs
         assert peta_args['num_epochs'] == 1 and peta_args['workers_count'] == 2
