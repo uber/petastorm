@@ -116,7 +116,7 @@ def _delete_cache_data_atexit(dataset_url):
         warnings.warn('delete cache data {url} failed.'.format(url=dataset_url))
 
 
-def get_env_rank_and_size():
+def _get_env_rank_and_size():
     """
     Get rank and size from environment, return (rank, size), if failed, return (None, None)
     """
@@ -134,18 +134,15 @@ def get_env_rank_and_size():
     return None, None
 
 
-def is_rank_and_size_consistent_with_env(petastorm_reader_kwargs):
+def _is_rank_and_size_consistent_with_horovod(cur_shard, shard_count, hvd_rank, hvd_size):
     """
-    Check whether the cur_shard and shard_count args are consistent with environment variables.
-    If not consistent with environment variables, return False.
-    If there're no related environment variable set, return True.
+    Check whether the cur_shard and shard_count args are consistent with horovod environment variables.
+    If not consistent with horovod environment variables, return False.
+    If there're no related horovod environment variable set, return True.
     """
-    env_rank, env_size = get_env_rank_and_size()
-    if env_rank is not None and env_size is not None:
-        if petastorm_reader_kwargs.get('cur_shard') != env_rank or \
-                petastorm_reader_kwargs.get('shard_count') != env_size:
+    if hvd_rank is not None and hvd_size is not None:
+        if cur_shard != hvd_rank or shard_count != hvd_size:
             return False
-
     return True
 
 
@@ -178,7 +175,7 @@ class SparkDatasetConverter(object):
 
     def make_tf_dataset(
             self,
-            batch_size=32,
+            batch_size=None,
             prefetch=None,
             num_epochs=None,
             workers_count=None,
@@ -191,7 +188,9 @@ class SparkDatasetConverter(object):
           1) Open a petastorm reader on the materialized dataset dir.
           2) Create a tensorflow dataset based on the reader created in (1)
 
-        :param batch_size: The number of items to return per batch
+        :param batch_size: The number of items to return per batch. Default None.
+            If None, current implementation will set batch size to be 32, in future,
+            None value will denotes auto tuned best value for batch size.
         :param prefetch: Prefetch size for tensorflow dataset. If None will use
             tensorflow autotune size. Note only available on tensorflow>=1.14
         :param num_epochs: An epoch is a single pass over all rows in the dataset.
@@ -217,10 +216,19 @@ class SparkDatasetConverter(object):
             workers_count = 4
         petastorm_reader_kwargs['workers_count'] = workers_count
 
-        if not is_rank_and_size_consistent_with_env(petastorm_reader_kwargs):
-            logger.warning('The petastorm arguments cur_shard and shard_count is not '
-                           'consistent with detected MPI/horovod environments, does '
-                           'each work sample the whole dataset?')
+        hvd_rank, hvd_size = _get_env_rank_and_size()
+        cur_shard = petastorm_reader_kwargs.get('cur_shard')
+        shard_count = petastorm_reader_kwargs.get('shard_count')
+
+        if not _is_rank_and_size_consistent_with_horovod(cur_shard, shard_count, hvd_rank, hvd_size):
+            logger.warning('The petastorm reader arguments cur_shard({cur_shard}) and shard_count({shard_count}) '
+                           'is not consistent with horovod environments hvd_rank({hvd_rank}) and hvd_size({hvd_size}), '
+                           'If you want each horovod worker train on one corresponding shard data, you should set '
+                           'argument `cur_shard` to be `hvd.rank()` and argument `shard_count` to be `hvd.size()`.'
+                           .format(cur_shard=cur_shard,
+                                   shard_count=shard_count,
+                                   hvd_rank=hvd_rank,
+                                   hvd_size=hvd_size))
 
         return TFDatasetContextManager(
             self.cache_dir_url,
@@ -269,7 +277,10 @@ class TFDatasetContextManager(object):
 
         # unroll dataset
         dataset = make_petastorm_dataset(self.reader).flat_map(tf.data.Dataset.from_tensor_slices)
-        dataset = dataset.batch(batch_size=self.batch_size)
+
+        # TODO: auto tune best batch size in default case.
+        batch_size = self.batch_size or 32
+        dataset = dataset.batch(batch_size=batch_size)
 
         prefetch = self.prefetch
 

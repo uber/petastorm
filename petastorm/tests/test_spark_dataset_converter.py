@@ -259,27 +259,25 @@ def test_tf_dataset_batch_size(test_ctx):
     assert len(ts.id) == batch_size
 
 
-def test_tf_dataset_petastorm_args(test_ctx):
+@mock.patch('petastorm.spark.spark_dataset_converter.make_batch_reader')
+def test_tf_dataset_petastorm_args(test_ctx, mock_make_batch_reader):
     df1 = test_ctx.spark.range(100).repartition(4)
     conv1 = make_spark_converter(df1)
 
-    mocked_make_batch_reader = mock.Mock()
-    mocked_make_batch_reader.return_value = make_batch_reader(conv1.cache_dir_url)
+    mock_make_batch_reader.return_value = make_batch_reader(conv1.cache_dir_url)
 
-    with mock.patch('petastorm.spark.spark_dataset_converter.make_batch_reader',
-                    new_callable=mocked_make_batch_reader):
-        with conv1.make_tf_dataset(reader_pool_type='dummy', cur_shard=1, shard_count=4):
-            pass
+    with conv1.make_tf_dataset(reader_pool_type='dummy', cur_shard=1, shard_count=4):
+        pass
 
-        peta_args = mocked_make_batch_reader.call_args.kwargs
-        assert peta_args['reader_pool_type'] == 'dummy' and \
-            peta_args['cur_shard'] == 1 and \
-            peta_args['shard_count'] == 4 and \
-            peta_args['num_epochs'] is None and \
-            peta_args['workers_count'] == 4
+    peta_args = mock_make_batch_reader.call_args.kwargs
+    assert peta_args['reader_pool_type'] == 'dummy' and \
+        peta_args['cur_shard'] == 1 and \
+        peta_args['shard_count'] == 4 and \
+        peta_args['num_epochs'] is None and \
+        peta_args['workers_count'] == 4
 
-        with conv1.make_tf_dataset(num_epochs=1, workers_count=2):
-            pass
+    with conv1.make_tf_dataset(num_epochs=1, workers_count=2):
+        pass
 
-        peta_args = mocked_make_batch_reader.call_args.kwargs
-        assert peta_args['num_epochs'] == 1 and peta_args['workers_count'] == 2
+    peta_args = mock_make_batch_reader.call_args.kwargs
+    assert peta_args['num_epochs'] == 1 and peta_args['workers_count'] == 2
