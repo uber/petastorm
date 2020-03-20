@@ -201,6 +201,13 @@ class ScalarCodec(DataframeColumnCodec):
         # (currently works only with make_batch_reader). We should move all pyspark related code into a separate module
         import pyspark.sql.types as sql_types
 
+        # We treat ndarrays with shape=() as scalars
+        unsized_numpy_array = isinstance(value, np.ndarray) and value.shape == ()
+        # Validate the input to be a scalar (or an unsized numpy array)
+        if not unsized_numpy_array and hasattr(value, '__len__') and (not isinstance(value, str)):
+            raise TypeError('Expected a scalar as a value for field \'{}\'. '
+                            'Got a non-numpy type\'{}\''.format(unischema_field.name, type(value)))
+
         if unischema_field.shape:
             raise ValueError('The shape field of unischema_field \'%s\' must be an empty tuple (i.e. \'()\' '
                              'to indicate a scalar. However, the actual shape is %s',

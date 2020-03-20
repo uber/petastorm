@@ -115,3 +115,11 @@ def test_encode_scalar_string():
     encoded = codec.encode(field, expected)
     assert isinstance(encoded, str)
     assert expected == encoded
+
+
+@pytest.mark.parametrize("non_scalar_value", [[1.2], np.asarray([3.4]), [5, 6]])
+def test_encode_non_scalar_type_is_passed(non_scalar_value):
+    codec = ScalarCodec(FloatType())
+    field = UnischemaField(name='field_float', numpy_dtype=np.float32, shape=(), codec=codec, nullable=False)
+    with pytest.raises(TypeError, match='Expected a scalar'):
+        codec.encode(field, non_scalar_value)
