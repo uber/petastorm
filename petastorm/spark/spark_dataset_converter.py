@@ -116,7 +116,7 @@ def _delete_cache_data_atexit(dataset_url):
         warnings.warn('delete cache data {url} failed.'.format(url=dataset_url))
 
 
-def _get_env_rank_and_size():
+def _get_horovod_rank_and_size():
     """
     Get rank and size from environment, return (rank, size), if failed, return (None, None)
     """
@@ -216,19 +216,16 @@ class SparkDatasetConverter(object):
             workers_count = 4
         petastorm_reader_kwargs['workers_count'] = workers_count
 
-        hvd_rank, hvd_size = _get_env_rank_and_size()
+        hvd_rank, hvd_size = _get_horovod_rank_and_size()
         cur_shard = petastorm_reader_kwargs.get('cur_shard')
         shard_count = petastorm_reader_kwargs.get('shard_count')
 
         if not _is_rank_and_size_consistent_with_horovod(cur_shard, shard_count, hvd_rank, hvd_size):
-            logger.warning('The petastorm reader arguments cur_shard({cur_shard}) and shard_count({shard_count}) '
-                           'is not consistent with horovod environments hvd_rank({hvd_rank}) and hvd_size({hvd_size}), '
+            logger.warning('The petastorm reader arguments cur_shard(%d) and shard_count(%d) '
+                           'is not consistent with horovod environments hvd_rank(%d) and hvd_size(%d), '
                            'If you want each horovod worker train on one corresponding shard data, you should set '
-                           'argument `cur_shard` to be `hvd.rank()` and argument `shard_count` to be `hvd.size()`.'
-                           .format(cur_shard=cur_shard,
-                                   shard_count=shard_count,
-                                   hvd_rank=hvd_rank,
-                                   hvd_size=hvd_size))
+                           'argument `cur_shard` to be `hvd.rank()` and argument `shard_count` to be `hvd.size()`.',
+                           cur_shard, shard_count, hvd_rank, hvd_size)
 
         return TFDatasetContextManager(
             self.cache_dir_url,

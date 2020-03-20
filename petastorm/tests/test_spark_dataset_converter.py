@@ -36,7 +36,8 @@ from petastorm.fs_utils import FilesystemResolver
 from petastorm.spark import make_spark_converter
 from petastorm.spark import spark_dataset_converter
 from petastorm.spark.spark_dataset_converter import register_delete_dir_handler, \
-    _check_url, _get_parent_cache_dir_url, _make_sub_dir_url
+    _check_url, _get_parent_cache_dir_url, _make_sub_dir_url, \
+    _get_horovod_rank_and_size, _is_rank_and_size_consistent_with_horovod
 
 
 class TestContext(object):
@@ -281,3 +282,10 @@ def test_tf_dataset_petastorm_args(test_ctx, mock_make_batch_reader):
 
     peta_args = mock_make_batch_reader.call_args.kwargs
     assert peta_args['num_epochs'] == 1 and peta_args['workers_count'] == 2
+
+
+def test_horovod_rank_compatibility(test_ctx):
+    assert _is_rank_and_size_consistent_with_horovod(cur_shard=1, shard_count=3, hvd_rank=1, hvd_size=3)
+    assert _is_rank_and_size_consistent_with_horovod(cur_shard=1, shard_count=3, hvd_rank=None, hvd_size=None)
+    assert not _is_rank_and_size_consistent_with_horovod(cur_shard=1, shard_count=2, hvd_rank=1, hvd_size=3)
+    assert not _is_rank_and_size_consistent_with_horovod(cur_shard=0, shard_count=3, hvd_rank=1, hvd_size=3)
