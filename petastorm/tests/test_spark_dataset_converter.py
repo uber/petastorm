@@ -17,6 +17,10 @@ import subprocess
 import sys
 import tempfile
 from contextlib import contextmanager
+try:
+    from unittest import mock
+except ImportError:
+    from mock import mock
 
 import numpy as np
 import pytest
@@ -363,25 +367,27 @@ def mock_torch_make_batch_reader():
             make_batch_reader
 
 
-def test_torch_advanced_params(test_ctx):
+@mock.patch('petastorm.spark.spark_dataset_converter.make_batch_reader')
+def test_torch_dataloader_advanced_params(mock_torch_make_batch_reader, test_ctx):
     SHARD_COUNT = 3
     df = test_ctx.spark.range(100).repartition(SHARD_COUNT)
     conv = make_spark_converter(df)
 
-    with mock_torch_make_batch_reader() as captured_args:
-        with conv.make_torch_dataloader(reader_pool_type='dummy', cur_shard=1,
-                                        shard_count=SHARD_COUNT) as _:
-            pass
-        peta_args = captured_args[0]
-        assert peta_args['reader_pool_type'] == 'dummy' and \
-            peta_args['cur_shard'] == 1 and \
-            peta_args['shard_count'] == SHARD_COUNT and \
-            peta_args['num_epochs'] is None and \
-            ('workers_count' not in peta_args)
+    mock_torch_make_batch_reader.return_value = \
+        make_batch_reader(conv.cache_dir_url)
+
+    with conv.make_torch_dataloader(reader_pool_type='dummy', cur_shard=1,
+                                    shard_count=SHARD_COUNT) as _:
+        pass
+    peta_args = mock_torch_make_batch_reader.call_args[1]
+    assert peta_args['reader_pool_type'] == 'dummy' and \
+        peta_args['cur_shard'] == 1 and \
+        peta_args['shard_count'] == SHARD_COUNT and \
+        peta_args['num_epochs'] is None and \
+        ('workers_count' not in peta_args)
 
     # Test default value overridden arguments.
-    with mock_torch_make_batch_reader() as captured_args:
-        with conv.make_torch_dataloader(num_epochs=1, workers_count=2) as _:
-            pass
-        peta_args = captured_args[0]
-        assert peta_args['num_epochs'] == 1 and peta_args['workers_count'] == 2
+    with conv.make_torch_dataloader(num_epochs=1, workers_count=2) as _:
+        pass
+    peta_args = mock_torch_make_batch_reader.call_args[1]
+    assert peta_args['num_epochs'] == 1 and peta_args['workers_count'] == 2
