@@ -17,10 +17,7 @@ import subprocess
 import sys
 import tempfile
 from contextlib import contextmanager
-try:
-    from unittest import mock
-except ImportError:
-    from mock import mock
+from unittest import mock
 
 import numpy as np
 import pytest
