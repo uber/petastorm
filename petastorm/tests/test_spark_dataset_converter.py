@@ -260,27 +260,26 @@ def test_tf_dataset_batch_size(test_ctx):
     assert len(ts.id) == batch_size
 
 
-def test_tf_dataset_petastorm_args(test_ctx):
+@mock.patch('petastorm.spark.spark_dataset_converter.make_batch_reader')
+def test_tf_dataset_petastorm_args(mock_make_batch_reader, test_ctx):
     df1 = test_ctx.spark.range(100).repartition(4)
     conv1 = make_spark_converter(df1)
 
-    with mock.patch('petastorm.spark.spark_dataset_converter.make_batch_reader') as mock_make_batch_reader:
-        mock_make_batch_reader.return_value = make_batch_reader(conv1.cache_dir_url)
-        with conv1.make_tf_dataset(reader_pool_type='dummy', cur_shard=1, shard_count=4):
-            pass
-        peta_args = mock_make_batch_reader.call_args.kwargs
-        assert peta_args['reader_pool_type'] == 'dummy' and \
-            peta_args['cur_shard'] == 1 and \
-            peta_args['shard_count'] == 4 and \
-            peta_args['num_epochs'] is None and \
-            peta_args['workers_count'] == 4
+    mock_make_batch_reader.return_value = make_batch_reader(conv1.cache_dir_url)
 
-    with mock.patch('petastorm.spark.spark_dataset_converter.make_batch_reader') as mock_make_batch_reader:
-        mock_make_batch_reader.return_value = make_batch_reader(conv1.cache_dir_url)
-        with conv1.make_tf_dataset(num_epochs=1, workers_count=2):
-            pass
-        peta_args = mock_make_batch_reader.call_args.kwargs
-        assert peta_args['num_epochs'] == 1 and peta_args['workers_count'] == 2
+    with conv1.make_tf_dataset(reader_pool_type='dummy', cur_shard=1, shard_count=4):
+        pass
+    peta_args = mock_make_batch_reader.call_args.kwargs
+    assert peta_args['reader_pool_type'] == 'dummy' and \
+        peta_args['cur_shard'] == 1 and \
+        peta_args['shard_count'] == 4 and \
+        peta_args['num_epochs'] is None and \
+        peta_args['workers_count'] == 4
+
+    with conv1.make_tf_dataset(num_epochs=1, workers_count=2):
+        pass
+    peta_args = mock_make_batch_reader.call_args.kwargs
+    assert peta_args['num_epochs'] == 1 and peta_args['workers_count'] == 2
 
 
 def test_horovod_rank_compatibility(test_ctx):
