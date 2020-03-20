@@ -21,9 +21,9 @@ import numpy as np
 import tensorflow as tf
 
 try:
-    from unittest import mock
-except ImportError:
     from mock import mock
+except ImportError:
+    from unittest import mock
 
 from pyspark.sql import SparkSession
 from pyspark.sql.types import (BinaryType, BooleanType, ByteType, DoubleType,
