@@ -120,7 +120,7 @@ def test_dict_to_spark_row_field_validation_scalar_types():
         isinstance(dict_to_spark_row(TestSchema, {'string_field': None}), Row)
 
     # Wrong field type
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         isinstance(dict_to_spark_row(TestSchema, {'string_field': []}), Row)
 
 
