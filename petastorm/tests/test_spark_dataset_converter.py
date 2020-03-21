@@ -17,7 +17,6 @@ import subprocess
 import sys
 import tempfile
 from contextlib import contextmanager
-from unittest import mock
 
 import numpy as np
 import pytest
@@ -33,8 +32,14 @@ from petastorm.fs_utils import FilesystemResolver
 from petastorm.spark import (SparkDatasetConverter, make_spark_converter,
                              spark_dataset_converter)
 from petastorm.spark.spark_dataset_converter import (
-    _check_url, _get_parent_cache_dir_url, _make_sub_dir_url,
+    _check_url, _get_horovod_rank_and_size, _get_parent_cache_dir_url,
+    _is_rank_and_size_consistent_with_horovod, _make_sub_dir_url,
     register_delete_dir_handler)
+
+try:
+    from mock import mock
+except ImportError:
+    from unittest import mock
 
 
 class TestContext(object):
@@ -249,6 +254,58 @@ def test_change_cache_dir_raise_error(test_ctx):
     test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF,
                             test_ctx.temp_url)
     assert test_ctx.temp_url == _get_parent_cache_dir_url()
+
+
+def test_tf_dataset_batch_size(test_ctx):
+    df1 = test_ctx.spark.range(100)
+
+    batch_size = 30
+    converter1 = make_spark_converter(df1)
+
+    with converter1.make_tf_dataset(batch_size=batch_size) as dataset:
+        iterator = dataset.make_one_shot_iterator()
+        tensor = iterator.get_next()
+        with tf.Session() as sess:
+            ts = sess.run(tensor)
+    assert len(ts.id) == batch_size
+
+
+@mock.patch('petastorm.spark.spark_dataset_converter.make_batch_reader')
+def test_tf_dataset_petastorm_args(mock_make_batch_reader, test_ctx):
+    df1 = test_ctx.spark.range(100).repartition(4)
+    conv1 = make_spark_converter(df1)
+
+    mock_make_batch_reader.return_value = make_batch_reader(conv1.cache_dir_url)
+
+    with conv1.make_tf_dataset(reader_pool_type='dummy', cur_shard=1, shard_count=4):
+        pass
+    peta_args = mock_make_batch_reader.call_args.kwargs
+    assert peta_args['reader_pool_type'] == 'dummy' and \
+        peta_args['cur_shard'] == 1 and \
+        peta_args['shard_count'] == 4 and \
+        peta_args['num_epochs'] is None and \
+        peta_args['workers_count'] == 4
+
+    with conv1.make_tf_dataset(num_epochs=1, workers_count=2):
+        pass
+    peta_args = mock_make_batch_reader.call_args.kwargs
+    assert peta_args['num_epochs'] == 1 and peta_args['workers_count'] == 2
+
+
+def test_horovod_rank_compatibility(test_ctx):
+    with mock.patch.dict(os.environ, {'HOROVOD_RANK': '1', 'HOROVOD_SIZE': '3'}, clear=True):
+        assert (1, 3) == _get_horovod_rank_and_size()
+    with mock.patch.dict(os.environ, {'OMPI_COMM_WORLD_RANK': '1', 'OMPI_COMM_WORLD_SIZE': '3'}, clear=True):
+        assert (1, 3) == _get_horovod_rank_and_size()
+    with mock.patch.dict(os.environ, {'PMI_RANK': '1', 'PMI_SIZE': '3'}, clear=True):
+        assert (1, 3) == _get_horovod_rank_and_size()
+    with mock.patch.dict(os.environ, {}, clear=True):
+        assert (None, None) == _get_horovod_rank_and_size()
+
+    assert _is_rank_and_size_consistent_with_horovod(cur_shard=1, shard_count=3, hvd_rank=1, hvd_size=3)
+    assert _is_rank_and_size_consistent_with_horovod(cur_shard=1, shard_count=3, hvd_rank=None, hvd_size=None)
+    assert not _is_rank_and_size_consistent_with_horovod(cur_shard=1, shard_count=2, hvd_rank=1, hvd_size=3)
+    assert not _is_rank_and_size_consistent_with_horovod(cur_shard=0, shard_count=3, hvd_rank=1, hvd_size=3)
 
 
 def test_torch_primitive(test_ctx):
