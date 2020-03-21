@@ -16,7 +16,6 @@ import os
 import subprocess
 import sys
 import tempfile
-from contextlib import contextmanager
 
 import numpy as np
 import pytest
@@ -51,8 +50,7 @@ class TestContext(object):
             .getOrCreate()
         self.tempdir = tempfile.mkdtemp('_spark_converter_test')
         self.temp_url = 'file://' + self.tempdir.replace(os.sep, '/')
-        self.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF,
-                            self.temp_url)
+        self.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, self.temp_url)
 
     def tear_down(self):
         self.spark.stop()
@@ -218,8 +216,7 @@ def test_check_url():
 def test_make_sub_dir_url():
     assert _make_sub_dir_url('file:///a/b', 'c') == 'file:///a/b/c'
     assert _make_sub_dir_url('hdfs:/a/b', 'c') == 'hdfs:/a/b/c'
-    assert _make_sub_dir_url('hdfs://nn1:9000/a/b',
-                             'c') == 'hdfs://nn1:9000/a/b/c'
+    assert _make_sub_dir_url('hdfs://nn1:9000/a/b', 'c') == 'hdfs://nn1:9000/a/b/c'
 
 
 def test_pickling_remotely(test_ctx):
@@ -234,16 +231,13 @@ def test_pickling_remotely(test_ctx):
                 ts = sess.run(tensor)
         return getattr(ts, 'id')[0]
 
-    result = test_ctx.spark.sparkContext.parallelize(range(1), 1) \
-                                        .map(map_fn).collect()[0]
+    result = test_ctx.spark.sparkContext.parallelize(range(1), 1).map(map_fn).collect()[0]
     assert result == 100
 
 
 def test_change_cache_dir_raise_error(test_ctx):
-    temp_url2 = 'file://' + tempfile.mkdtemp('_spark_converter_test2').replace(
-        os.sep, '/')
-    test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF,
-                            temp_url2)
+    temp_url2 = 'file://' + tempfile.mkdtemp('_spark_converter_test2').replace(os.sep, '/')
+    test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, temp_url2)
 
     with pytest.raises(RuntimeError,
                        match="{} has been set to be".format(
@@ -251,8 +245,7 @@ def test_change_cache_dir_raise_error(test_ctx):
         _get_parent_cache_dir_url()
 
     # restore conf (other test need use it)
-    test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF,
-                            test_ctx.temp_url)
+    test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, test_ctx.temp_url)
     assert test_ctx.temp_url == _get_parent_cache_dir_url()
 
 
@@ -404,25 +397,6 @@ def test_torch_unexpected_param(test_ctx):
     with pytest.raises(TypeError, match="unexpected keyword argument 'xyz'"):
         with conv.make_torch_dataloader(xyz=1) as _:
             pass
-
-
-@contextmanager
-def mock_torch_make_batch_reader():
-    captured_args = []
-    import petastorm.spark
-
-    def mock_fn(dataset_url, **kwargs):
-        reader_args = {'dataset_url': dataset_url}
-        reader_args.update(kwargs)
-        captured_args.append(reader_args)
-        return make_batch_reader(dataset_url, **kwargs)
-
-    petastorm.spark.spark_dataset_converter.make_batch_reader = mock_fn
-    try:
-        yield captured_args
-    finally:
-        petastorm.spark.spark_dataset_converter.make_batch_reader = \
-            make_batch_reader
 
 
 @mock.patch('petastorm.spark.spark_dataset_converter.make_batch_reader')
