@@ -17,7 +17,7 @@ from petastorm.unischema import UnischemaField, Unischema
 
 
 class TransformSpec(object):
-    def __init__(self, func=None, edit_fields=None, removed_fields=None):
+    def __init__(self, func=None, edit_fields=None, removed_fields=None, selected_fields=None):
         """TransformSpec defines a user transformation that is applied to a loaded row on a worker thread/process.
 
         The object defines the function (callable) that perform the transform as well as the
@@ -34,10 +34,12 @@ class TransformSpec(object):
         :param edit_fields: Optional. A list of 4-tuples with the following fields:
           ``(name, numpy_dtype, shape, is_nullable)``
         :param removed_fields: Optional[list]. A list of field names that will be removed from the original schema.
+        :param selected_fields: Optional[list]. A list of field names specify the fields to be selected.
         """
         self.func = func
         self.edit_fields = edit_fields or []
         self.removed_fields = removed_fields or []
+        self.selected_fields = selected_fields
 
 
 def transform_schema(schema, transform_spec):
@@ -60,5 +62,9 @@ def transform_schema(schema, transform_spec):
         edited_unischema_field = UnischemaField(name=field_to_edit[0], numpy_dtype=field_to_edit[1],
                                                 shape=field_to_edit[2], codec=None, nullable=field_to_edit[3])
         fields.append(edited_unischema_field)
+
+    if transform_spec.selected_fields is not None:
+        fields = [f for f in fields if f.name in transform_spec.selected_fields]
+        fields = sorted(fields, key=lambda f: transform_spec.selected_fields.index(f.name))
 
     return Unischema(schema._name + '_transformed', fields)

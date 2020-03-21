@@ -95,11 +95,11 @@ class _NamedtupleCache(object):
         :return: A namedtuple with field names defined by `field_names`
         """
         # Cache key is a combination of schema name and all field names
-        sorted_names = list(sorted(field_names))
-        key = ' '.join([parent_schema_name] + sorted_names)
+        field_names = list(field_names)
+        key = ' '.join([parent_schema_name] + field_names)
         if key not in _NamedtupleCache._store:
             _NamedtupleCache._store[key] = \
-                _new_gt_255_compatible_namedtuple('{}_view'.format(parent_schema_name), sorted_names)
+                _new_gt_255_compatible_namedtuple('{}_view'.format(parent_schema_name), field_names)
         return _NamedtupleCache._store[key]
 
 
@@ -185,6 +185,8 @@ class Unischema(object):
                 warnings.warn(('Can not create dynamic property {} because it conflicts with an existing property of '
                                'Unischema').format(f.name))
 
+        self._ordered_fields_name = [f.name for f in fields]
+
     def create_schema_view(self, fields):
         """Creates a new instance of the schema using a subset of fields.
 
@@ -229,7 +231,7 @@ class Unischema(object):
         return Unischema('{}_view'.format(self._name), view_fields)
 
     def _get_namedtuple(self):
-        return _NamedtupleCache.get(self._name, self._fields.keys())
+        return _NamedtupleCache.get(self._name, self._ordered_fields_name)
 
     def __str__(self):
         """Represent this as the following form:
