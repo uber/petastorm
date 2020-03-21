@@ -134,14 +134,28 @@ def _get_horovod_rank_and_size():
     return None, None
 
 
-def _is_rank_and_size_consistent_with_horovod(cur_shard, shard_count, hvd_rank, hvd_size):
+def _check_rank_and_size_consistent_with_horovod(petastorm_reader_kwargs):
     """
     Check whether the cur_shard and shard_count args are consistent with horovod environment variables.
-    If not consistent with horovod environment variables, return False.
+    If not consistent with horovod environment variables, log warning message and return False.
     If there're no related horovod environment variable set, return True.
     """
+    hvd_rank, hvd_size = _get_horovod_rank_and_size()
+    cur_shard = petastorm_reader_kwargs.get('cur_shard')
+    shard_count = petastorm_reader_kwargs.get('shard_count')
+
     if hvd_rank is not None and hvd_size is not None:
         if cur_shard != hvd_rank or shard_count != hvd_size:
+            logger.warning(
+                'The petastorm reader arguments cur_shard(%d) and '
+                'shard_count(%d) '
+                'is not consistent with horovod environments hvd_rank(%d) and '
+                'hvd_size(%d), '
+                'If you want each horovod worker train on one corresponding '
+                'shard data, you should set '
+                'argument `cur_shard` to be `hvd.rank()` and argument '
+                '`shard_count` to be `hvd.size()`.',
+                cur_shard, shard_count, hvd_rank, hvd_size)
             return False
     return True
 
@@ -216,16 +230,7 @@ class SparkDatasetConverter(object):
             workers_count = 4
         petastorm_reader_kwargs['workers_count'] = workers_count
 
-        hvd_rank, hvd_size = _get_horovod_rank_and_size()
-        cur_shard = petastorm_reader_kwargs.get('cur_shard')
-        shard_count = petastorm_reader_kwargs.get('shard_count')
-
-        if not _is_rank_and_size_consistent_with_horovod(cur_shard, shard_count, hvd_rank, hvd_size):
-            logger.warning('The petastorm reader arguments cur_shard(%d) and shard_count(%d) '
-                           'is not consistent with horovod environments hvd_rank(%d) and hvd_size(%d), '
-                           'If you want each horovod worker train on one corresponding shard data, you should set '
-                           'argument `cur_shard` to be `hvd.rank()` and argument `shard_count` to be `hvd.size()`.',
-                           cur_shard, shard_count, hvd_rank, hvd_size)
+        _check_rank_and_size_consistent_with_horovod(petastorm_reader_kwargs)
 
         return TFDatasetContextManager(
             self.cache_dir_url,
@@ -262,15 +267,7 @@ class SparkDatasetConverter(object):
                  will be closed.
         """
 
-        env_rank, env_size = get_env_rank_and_size()
-        if env_rank is not None and env_size is not None:
-            if petastorm_reader_kwargs['cur_shard'] != env_rank or \
-                    petastorm_reader_kwargs['shard_count'] != env_size:
-                warnings.warn(
-                    'The petastorm arguments cur_shard and shard_count is not '
-                    'consistent with the detected MPI/horovod environments.'
-                    'Detected: cur_shard={}, shard_count={}.'.format(env_rank,
-                                                                     env_size))
+        _check_rank_and_size_consistent_with_horovod(petastorm_reader_kwargs)
 
         return TorchDatasetContextManager(self.cache_dir_url,
                                           batch_size,

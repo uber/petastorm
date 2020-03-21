@@ -24,7 +24,7 @@ from petastorm.cache import NullCache
 from petastorm.errors import NoDataAvailableError
 from petastorm.etl import dataset_metadata, rowgroup_indexing
 from petastorm.etl.dataset_metadata import PetastormMetadataError, infer_or_load_unischema
-from petastorm.fs_utils import FilesystemResolver
+from petastorm.fs_utils import get_filesystem_and_path_or_paths
 from petastorm.local_disk_arrow_table_cache import LocalDiskArrowTableCache
 from petastorm.local_disk_cache import LocalDiskCache
 from petastorm.ngram import NGram
@@ -45,6 +45,24 @@ logger = logging.getLogger(__name__)
 # Ventilator guarantees that no more than workers + _VENTILATE_EXTRA_ROWGROUPS are processed at a moment by a
 # worker pool. This guarantees that we don't run out of memory if data consumer is slower than the Reader.
 _VENTILATE_EXTRA_ROWGROUPS = 2
+
+
+def normalize_dataset_url(dataset_url):
+    if dataset_url is None or not isinstance(dataset_url, six.string_types):
+        raise ValueError('dataset url must be a string')
+
+    dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
+    logger.debug('dataset url: %s', dataset_url)
+    return dataset_url
+
+
+def normalize_dataset_url_or_urls(dataset_url_or_urls):
+    if isinstance(dataset_url_or_urls, list):
+        if not dataset_url_or_urls:
+            raise ValueError('dataset url list must be non-empty.')
+        return [normalize_dataset_url(url) for url in dataset_url_or_urls]
+    else:
+        return normalize_dataset_url(dataset_url_or_urls)
 
 
 def make_reader(dataset_url,
@@ -110,16 +128,9 @@ def make_reader(dataset_url,
         on the ``reader_pool_type`` value).
     :return: A :class:`Reader` object
     """
+    dataset_url = normalize_dataset_url(dataset_url)
 
-    if dataset_url is None or not isinstance(dataset_url, six.string_types):
-        raise ValueError('dataset_url must be a string')
-
-    dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
-    logger.debug('dataset_url: %s', dataset_url)
-
-    resolver = FilesystemResolver(dataset_url, hdfs_driver=hdfs_driver)
-    filesystem = resolver.filesystem()
-    dataset_path = resolver.get_dataset_path()
+    filesystem, dataset_path = get_filesystem_and_path_or_paths(dataset_url, hdfs_driver)
 
     if cache_type is None or cache_type == 'null':
         cache = NullCache()
@@ -174,7 +185,7 @@ def make_reader(dataset_url,
                            'Inner exception: %s', str(e))
 
 
-def make_batch_reader(dataset_url,
+def make_batch_reader(dataset_url_or_urls,
                       schema_fields=None,
                       reader_pool_type='thread', workers_count=10,
                       shuffle_row_groups=True, shuffle_row_drop_partitions=1,
@@ -195,9 +206,10 @@ def make_batch_reader(dataset_url,
 
     NOTE: only scalar columns are currently supported.
 
-    :param dataset_url: an filepath or a url to a parquet directory,
+    :param dataset_url_or_urls: a url to a parquet directory or a url list (with the same scheme) to parquet files.
         e.g. ``'hdfs://some_hdfs_cluster/user/yevgeni/parquet8'``, or ``'file:///tmp/mydataset'``,
-        or ``'s3://bucket/mydataset'``, or ``'gs://bucket/mydataset'``.
+        or ``'s3://bucket/mydataset'``, or ``'gs://bucket/mydataset'``,
+        or ``[file:///tmp/mydataset/00000.parquet, file:///tmp/mydataset/00001.parquet]``.
     :param schema_fields: A list of regex pattern strings. Only columns matching at least one of the
         patterns in the list will be loaded.
     :param reader_pool_type: A string denoting the reader pool type. Should be one of ['thread', 'process', 'dummy']
@@ -235,25 +247,18 @@ def make_batch_reader(dataset_url,
         on the ``reader_pool_type`` value).
     :return: A :class:`Reader` object
     """
+    dataset_url_or_urls = normalize_dataset_url_or_urls(dataset_url_or_urls)
 
-    if dataset_url is None or not isinstance(dataset_url, six.string_types):
-        raise ValueError('dataset_url must be a string')
+    filesystem, dataset_path_or_paths = get_filesystem_and_path_or_paths(dataset_url_or_urls, hdfs_driver)
 
     try:
-        dataset_metadata.get_schema_from_dataset_url(dataset_url, hdfs_driver=hdfs_driver)
+        dataset_metadata.get_schema_from_dataset_url(dataset_url_or_urls, hdfs_driver=hdfs_driver)
         warnings.warn('Please use make_reader (instead of \'make_batch_dataset\' function to read this dataset. '
                       'You may get unexpected results. '
                       'Currently make_batch_reader supports reading only Parquet stores that contain '
                       'standard Parquet data types and do not require petastorm decoding.')
     except PetastormMetadataError:
         pass
-
-    dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
-    logger.debug('dataset_url: %s', dataset_url)
-
-    resolver = FilesystemResolver(dataset_url, hdfs_driver=hdfs_driver)
-    filesystem = resolver.filesystem()
-    dataset_path = resolver.get_dataset_path()
 
     if cache_type is None or cache_type == 'null':
         cache = NullCache()
@@ -273,7 +278,7 @@ def make_batch_reader(dataset_url,
     else:
         raise ValueError('Unknown reader_pool_type: {}'.format(reader_pool_type))
 
-    return Reader(filesystem, dataset_path,
+    return Reader(filesystem, dataset_path_or_paths,
                   schema_fields=schema_fields,
                   worker_class=ArrowReaderWorker,
                   reader_pool=reader_pool,
@@ -307,8 +312,9 @@ class Reader(object):
             ``s3://`` and ``gs://`` support, use ``make_reader``). The default hdfs driver is ``libhdfs3``.
             If you want to to use ``libhdfs``, use
             ``pyarrow_filesystem=pyarrow.hdfs.connect('hdfs:///some/path', driver='libhdfs')``.
-        :param dataset_path: filepath to a parquet directory on the specified filesystem.
-            e.g. ``'/user/yevgeni/parquet8'``, or ``'/tmp/mydataset'``.
+        :param dataset_path: filepath to a parquet directory or parquet file path list on the specified filesystem.
+            e.g. ``'/user/yevgeni/parquet8'``, or ``'/tmp/mydataset'``,
+            or ``[/tmp/mydataset/00000.parquet, /tmp/mydataset/00001.parquet]``
         :param schema_fields: Either list of unischema fields to subset, or ``None`` to read all fields.
             OR an NGram object, then it will return an NGram of the specified properties.
         :param shuffle_row_groups: Whether to shuffle row groups (the order in which full row groups are read)
@@ -356,6 +362,11 @@ class Reader(object):
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
         self.dataset = pq.ParquetDataset(dataset_path, filesystem=pyarrow_filesystem,
                                          validate_schema=False)
+
+        if self.dataset.partitions is None:
+            # When read from parquet file list, the `dataset.partitions` will be None.
+            # But other petastorm code require at least an empty `ParquetPartitions` object.
+            self.dataset.partitions = pq.ParquetPartitions()
 
         stored_schema = infer_or_load_unischema(self.dataset)
 
@@ -406,7 +417,7 @@ class Reader(object):
 
         # 5. Start workers pool
         self._workers_pool.start(worker_class, (pyarrow_filesystem, dataset_path, storage_schema, self.ngram,
-                                                row_groups, cache, transform_spec),
+                                                row_groups, cache, transform_spec, self.schema),
                                  ventilator=self.ventilator)
         logger.debug('Workers pool started')
 

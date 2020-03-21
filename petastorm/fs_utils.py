@@ -20,6 +20,19 @@ from petastorm.gcsfs_helpers.gcsfs_wrapper import GCSFSWrapper
 from petastorm.hdfs.namenode import HdfsNamenodeResolver, HdfsConnector
 
 
+def get_dataset_path(parsed_url):
+    """
+    The dataset path is different than the one in `_parsed_dataset_url` for some filesystems.
+    For example s3fs expects the bucket name to be included in the path and doesn't support
+    paths that start with a `/`
+    """
+    if parsed_url.scheme.lower() in ['s3', 'gs', 'gcs']:
+        # s3/gs/gcs filesystem expects paths of the form `bucket/path`
+        return parsed_url.netloc + parsed_url.path
+
+    return parsed_url.path
+
+
 class FilesystemResolver(object):
     """Resolves a dataset URL, makes a connection via pyarrow, and provides a filesystem object."""
 
@@ -158,12 +171,7 @@ class FilesystemResolver(object):
         For example s3fs expects the bucket name to be included in the path and doesn't support
         paths that start with a `/`
         """
-        if isinstance(self._filesystem, pyarrow.filesystem.S3FSWrapper) or \
-                isinstance(self._filesystem, GCSFSWrapper):
-            # s3fs expects paths of the form `bucket/path`
-            return self._parsed_dataset_url.netloc + self._parsed_dataset_url.path
-
-        return self._parsed_dataset_url.path
+        return get_dataset_path(self._parsed_dataset_url)
 
     def filesystem(self):
         """
@@ -183,3 +191,35 @@ class FilesystemResolver(object):
         raise RuntimeError('Pickling FilesystemResolver is not supported as it may contain some '
                            'a file-system instance objects that do not support pickling but do not have '
                            'anti-pickling protection')
+
+
+def get_filesystem_and_path_or_paths(url_or_urls, hdfs_driver='libhdfs3'):
+    """
+    Given a url or url list, return a tuple ``(filesystem, path_or_paths)``
+    ``filesystem`` is created from the given url(s), and ``path_or_paths`` is a path or path list
+    extracted from the given url(s)
+    if url list given, the urls must have the same scheme and netloc.
+    """
+    if isinstance(url_or_urls, list):
+        url_list = url_or_urls
+    else:
+        url_list = [url_or_urls]
+
+    parsed_url_list = [urlparse(url) for url in url_list]
+
+    first_scheme = parsed_url_list[0].scheme
+    first_netloc = parsed_url_list[0].netloc
+
+    for parsed_url in parsed_url_list:
+        if parsed_url.scheme != first_scheme or parsed_url.netloc != first_netloc:
+            raise ValueError('The dataset url list must contain url with the same scheme and netloc.')
+
+    fs = FilesystemResolver(url_list[0], hdfs_driver=hdfs_driver).filesystem()
+    path_list = [get_dataset_path(parsed_url) for parsed_url in parsed_url_list]
+
+    if isinstance(url_or_urls, list):
+        path_or_paths = path_list
+    else:
+        path_or_paths = path_list[0]
+
+    return fs, path_or_paths

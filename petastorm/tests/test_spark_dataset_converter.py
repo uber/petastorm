@@ -33,7 +33,7 @@ from petastorm.spark import (SparkDatasetConverter, make_spark_converter,
                              spark_dataset_converter)
 from petastorm.spark.spark_dataset_converter import (
     _check_url, _get_horovod_rank_and_size, _get_parent_cache_dir_url,
-    _is_rank_and_size_consistent_with_horovod, _make_sub_dir_url,
+    _check_rank_and_size_consistent_with_horovod, _make_sub_dir_url,
     register_delete_dir_handler)
 
 try:
@@ -295,17 +295,21 @@ def test_tf_dataset_petastorm_args(mock_make_batch_reader, test_ctx):
 def test_horovod_rank_compatibility(test_ctx):
     with mock.patch.dict(os.environ, {'HOROVOD_RANK': '1', 'HOROVOD_SIZE': '3'}, clear=True):
         assert (1, 3) == _get_horovod_rank_and_size()
+        assert _check_rank_and_size_consistent_with_horovod(
+            petastorm_reader_kwargs={"cur_shard": 1, "shard_count": 3})
+        assert not _check_rank_and_size_consistent_with_horovod(
+            petastorm_reader_kwargs={"cur_shard": 1, "shard_count": 2})
+        assert not _check_rank_and_size_consistent_with_horovod(
+            petastorm_reader_kwargs={"cur_shard": 0, "shard_count": 3})
+
     with mock.patch.dict(os.environ, {'OMPI_COMM_WORLD_RANK': '1', 'OMPI_COMM_WORLD_SIZE': '3'}, clear=True):
         assert (1, 3) == _get_horovod_rank_and_size()
     with mock.patch.dict(os.environ, {'PMI_RANK': '1', 'PMI_SIZE': '3'}, clear=True):
         assert (1, 3) == _get_horovod_rank_and_size()
     with mock.patch.dict(os.environ, {}, clear=True):
         assert (None, None) == _get_horovod_rank_and_size()
-
-    assert _is_rank_and_size_consistent_with_horovod(cur_shard=1, shard_count=3, hvd_rank=1, hvd_size=3)
-    assert _is_rank_and_size_consistent_with_horovod(cur_shard=1, shard_count=3, hvd_rank=None, hvd_size=None)
-    assert not _is_rank_and_size_consistent_with_horovod(cur_shard=1, shard_count=2, hvd_rank=1, hvd_size=3)
-    assert not _is_rank_and_size_consistent_with_horovod(cur_shard=0, shard_count=3, hvd_rank=1, hvd_size=3)
+        assert _check_rank_and_size_consistent_with_horovod(
+            petastorm_reader_kwargs={"cur_shard": 1, "shard_count": 3})
 
 
 def test_torch_primitive(test_ctx):

@@ -282,7 +282,7 @@ def test_shuffling_queue_with_ngrams(synthetic_dataset):
 def test_simple_read_tensorflow_with_parquet_dataset(scalar_dataset):
     """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
     data"""
-    with make_batch_reader(dataset_url=scalar_dataset.url) as reader:
+    with make_batch_reader(dataset_url_or_urls=scalar_dataset.url) as reader:
         row_tensors = tf_tensors(reader)
         # Make sure we have static shape info for all fields
         for column in row_tensors:
@@ -301,7 +301,7 @@ def test_simple_read_tensorflow_with_parquet_dataset(scalar_dataset):
 def test_simple_read_tensorflow_with_non_petastorm_many_columns_dataset(many_columns_non_petastorm_dataset):
     """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
     data"""
-    with make_batch_reader(dataset_url=many_columns_non_petastorm_dataset.url) as reader:
+    with make_batch_reader(dataset_url_or_urls=many_columns_non_petastorm_dataset.url) as reader:
         row_tensors = tf_tensors(reader)
         # Make sure we have static shape info for all fields
         for column in row_tensors:
@@ -313,7 +313,7 @@ def test_simple_read_tensorflow_with_non_petastorm_many_columns_dataset(many_col
 
 
 def test_shuffling_queue_with_make_batch_reader(scalar_dataset):
-    with make_batch_reader(dataset_url=scalar_dataset.url) as reader:
+    with make_batch_reader(dataset_url_or_urls=scalar_dataset.url) as reader:
         with pytest.raises(ValueError):
             tf_tensors(reader, 100, 90)
 

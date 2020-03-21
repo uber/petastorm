@@ -15,6 +15,7 @@ import operator
 import os
 from concurrent.futures import ThreadPoolExecutor
 from shutil import rmtree, copytree
+from six.moves.urllib.parse import urlparse
 
 import numpy as np
 import pyarrow.hdfs
@@ -817,3 +818,23 @@ def test_should_fail_if_reading_after_stop(synthetic_dataset):
 
     with pytest.raises(RuntimeError, match='Trying to read a sample.*'):
         next(reader)
+
+
+def _get_local_fs_url_list(dir_url):
+    url_list = []
+    dir_path = urlparse(dir_url).path
+    for file_name in os.listdir(dir_path):
+        url_list.append('file://{dir_path}/{file_name}'.format(dir_path=dir_path, file_name=file_name))
+    return url_list
+
+
+def test_make_batch_reader_with_url_list(scalar_dataset):
+    url_list = _get_local_fs_url_list(scalar_dataset.url)
+    url_list = list(filter(lambda x: x.endswith('.parquet'), url_list))
+
+    with make_batch_reader(url_list, workers_count=1) as reader:
+        row_count = 0
+        for batch in reader:
+            row_count += len(batch.id)
+
+        assert row_count == 100
