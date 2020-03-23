@@ -16,10 +16,8 @@ import collections
 import logging
 import warnings
 
-import numpy as np
 import six
 from pyarrow import parquet as pq
-from pyarrow.parquet import ParquetFile
 
 from petastorm.arrow_reader_worker import ArrowReaderWorker
 from petastorm.cache import NullCache
@@ -37,7 +35,6 @@ from petastorm.reader_impl.pickle_serializer import PickleSerializer
 from petastorm.reader_impl.pyarrow_serializer import PyArrowSerializer
 from petastorm.selectors import RowGroupSelectorBase
 from petastorm.transform import transform_schema
-from petastorm.unischema import Unischema, UnischemaField
 from petastorm.workers_pool.dummy_pool import DummyPool
 from petastorm.workers_pool.process_pool import ProcessPool
 from petastorm.workers_pool.thread_pool import ThreadPool
@@ -250,14 +247,16 @@ def make_batch_reader(dataset_url_or_urls,
     :param transform_spec: An instance of :class:`~petastorm.transform.TransformSpec` object defining how a record
         is transformed after it is loaded and decoded. The transformation occurs on a worker thread/process (depends
         on the ``reader_pool_type`` value).
-    :param infer_schema_from_first_row: Whether to infer schema from the row data. Only support parquet reader.
+    :param infer_schema_from_first_row: Whether to infer schema from the first row data. Only support parquet reader.
         If on, before creating the reader, it will first read one row group to infer the full schema information,
         and the transform spec (if exists) do not need to specify edit_fields/removed_fields.
-        Require: for all rows (before applying predicates), all values in each field are non-nullable and have
+        Require:
+         * for all rows (before applying predicates), all values in each field are non-nullable and have
           the same shape.
+         * Do not support parquet partition column.
         Turning on this param will address the following two issues:
-          1) Auto inferring parquet schema from metadata cannot get shape information.
-          2) If there's a preprocessing function, we have to specify edit/removed fields.
+          * Auto inferring parquet schema from metadata cannot get shape information.
+          * If there's a preprocessing function, we have to specify edit/removed fields.
     :return: A :class:`Reader` object
     """
     dataset_url_or_urls = normalize_dataset_url_or_urls(dataset_url_or_urls)
@@ -354,14 +353,7 @@ class Reader(object):
             to the main data store is either slow or expensive and the local machine has large enough storage
             to store entire dataset (or a partition of a dataset if shards are used).
             By default, use the :class:`.NullCache` implementation.
-        :param infer_schema_from_first_row: Whether to infer schema from the row data. Only support parquet reader.
-            If on, before creating the reader, it will first read one row group to infer the full schema information,
-            and the transform spec (if exists) do not need to specify edit_fields/removed_fields.
-            Require: for all rows (before applying predicates), all values in each field are non-nullable and have
-              the same shape.
-            Turning on this param will address the following two issues:
-              1) Auto inferring parquet schema from metadata cannot get shape information.
-              2) If there's a preprocessing function, we have to specify edit/removed fields.
+        :param infer_schema_from_first_row: Whether to infer schema from the first row data.
 
         :param worker_class: This is the class that will be instantiated on a different thread/process. It's
             responsibility is to load and filter the data.
@@ -426,8 +418,9 @@ class Reader(object):
             if worker_class is not ArrowReaderWorker:
                 raise ValueError('infer_schema_from_first_row only support ArrowReaderWorker.')
             worker0 = ArrowReaderWorker(0, None, (pyarrow_filesystem, dataset_path, storage_schema, self.ngram,
-                                                  row_groups, NullCache(), None, None))
-            self.schema = self._infer_schema_from_first_row(worker0, transform_spec)
+                                                  row_groups, NullCache(), transform_spec, None))
+            self.schema = worker0.infer_schema_from_first_row()
+            logger.info('Inferred schema from first row: %s', str(self.schema))
         else:
             if transform_spec:
                 self.schema = transform_schema(storage_schema, transform_spec)
@@ -483,34 +476,6 @@ class Reader(object):
     @property
     def batched_output(self):
         return self._results_queue_reader.batched_output
-
-    @staticmethod
-    def _infer_schema_from_first_row(worker0, transform_spec):
-        piece0 = worker0._split_pieces[0]
-        pq_file0 = ParquetFile(worker0._dataset.fs.open(piece0.path))
-        piece0_pdf = worker0._load_rows(pq_file0, piece0, (0, 1))
-
-        row0_pdf = piece0_pdf.head(n=1)
-        if transform_spec:
-            row0_pdf = transform_spec.func(row0_pdf)
-
-        unischema_fields = []
-        for field_name in list(row0_pdf.columns):
-            field_val = row0_pdf[field_name][0]
-
-            if np.ndim(field_val) == 0:
-                # scalar value
-                field_shape = ()
-                field_numpy_type = np.dtype(type(field_val)).type
-            else:
-                field_shape = field_val.shape
-                field_numpy_type = field_val.dtype.type
-
-            # TODO: add type checking,raise error for illegal type (such as np.object_)
-            unischema_field = UnischemaField(field_name, field_numpy_type, field_shape, None, False)
-            unischema_fields.append(unischema_field)
-
-        return Unischema('inferred_schema', unischema_fields)
 
     def _filter_row_groups(self, dataset, row_groups, predicate, rowgroup_selector, cur_shard,
                            shard_count):

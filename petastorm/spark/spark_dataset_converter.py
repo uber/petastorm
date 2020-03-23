@@ -28,6 +28,7 @@ from six.moves.urllib.parse import urlparse
 
 from petastorm import make_batch_reader
 from petastorm.fs_utils import FilesystemResolver
+from petastorm.transform import TransformSpec
 
 DEFAULT_ROW_GROUP_SIZE_BYTES = 32 * 1024 * 1024
 
@@ -189,6 +190,12 @@ class SparkDatasetConverter(object):
           1) Open a petastorm reader on the materialized dataset dir.
           2) Create a tensorflow dataset based on the reader created in (1)
 
+        The generated dataset each element will be a batch of namedtuples.
+        If without specifying `preprocess_fn`, each namedtuple in result dataset will match the
+        schema of the original spark dataframe columns, otherwise will match the columns of the
+        output pandas dataframe of `preprocess_fn`. The fields order will keep the same with
+        original spark dataframe columns or the output pandas dataframe of `preprocess_fn`.
+
         :param batch_size: The number of items to return per batch. Default None.
             If None, current implementation will set batch size to be 32, in future,
             None value will denotes auto tuned best value for batch size.
@@ -204,6 +211,9 @@ class SparkDatasetConverter(object):
             Default value None.
         :param preprocess_fn: Preprocessing function. Input is pandas dataframe of
             a rowgroup data and output should be the transformed pandas dataframe.
+            the column order of the input pandas dataframe is undefined, but the output
+            pandas dataframe column order will determine the result tensorflow dataset's
+            element fields order.
         :param petastorm_reader_kwargs: arguments for `petastorm.make_batch_reader()`,
             exclude these arguments: "dataset_url_or_urls", "num_epochs", "workers_count",
             "transform_spec", "infer_schema_from_first_row"
@@ -227,6 +237,10 @@ class SparkDatasetConverter(object):
                 'infer_schema_from_first_row' in petastorm_reader_kwargs:
             raise ValueError('User cannot set transform_spec and infer_schema_from_first_row '
                              'arguments, use `preprocess_fn` argument instead.')
+
+        petastorm_reader_kwargs['infer_schema_from_first_row'] = True
+        if preprocess_fn:
+            petastorm_reader_kwargs['transform_spec'] = TransformSpec(preprocess_fn)
 
         hvd_rank, hvd_size = _get_horovod_rank_and_size()
         cur_shard = petastorm_reader_kwargs.get('cur_shard')
