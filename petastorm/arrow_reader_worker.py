@@ -118,11 +118,10 @@ class ArrowReaderWorker(WorkerBase):
                 self._dataset_path_or_paths,
                 filesystem=self._filesystem,
                 validate_schema=False)
-
-        if self._dataset.partitions is None:
-            # When read from parquet file list, the `dataset.partitions` will be None.
-            # But other petastorm code require at least an empty `ParquetPartitions` object.
-            self._dataset.partitions = pq.ParquetPartitions()
+            if self._dataset.partitions is None:
+                # When read from parquet file list, the `dataset.partitions` will be None.
+                # But other petastorm code require at least an empty `ParquetPartitions` object.
+                self._dataset.partitions = pq.ParquetPartitions()
 
     # pylint: disable=arguments-differ
     def process(self, piece_index, worker_predicate, shuffle_row_drop_partition):
@@ -173,14 +172,13 @@ class ArrowReaderWorker(WorkerBase):
 
     def infer_schema_from_first_row(self):
         self._init_dataset()
-        if self._dataset.partitions.partition_names:
-            raise ValueError('infer_schema_from_first_row does not support parquet partition column.')
 
         piece0 = self._split_pieces[0]
         pq_file0 = ParquetFile(self._dataset.fs.open(piece0.path))
 
         column_names = [field_name for field_name in self._schema.fields]
-        piece0_pdf = compat_piece_read(piece0, lambda _: pq_file0, columns=column_names).to_pandas()
+
+        piece0_pdf = self._read_piece(piece0, pq_file0, set(column_names)).to_pandas()
 
         row0_pdf = piece0_pdf.head(n=1)
         if self._transform_spec:
@@ -318,7 +316,7 @@ class ArrowReaderWorker(WorkerBase):
 
         return pa.Table.from_pandas(result, preserve_index=False)
 
-    def _read_with_shuffle_row_drop(self, piece, pq_file, column_names, shuffle_row_drop_partition):
+    def _read_piece(self, piece, pq_file, column_names):
         partition_names = self._dataset.partitions.partition_names
 
         # pyarrow would fail if we request a column names that the dataset is partitioned by
@@ -332,6 +330,10 @@ class ArrowReaderWorker(WorkerBase):
         unasked_for_columns = loaded_column_names - column_names
         if unasked_for_columns:
             table = table.drop(unasked_for_columns)
+        return table
+
+    def _read_with_shuffle_row_drop(self, piece, pq_file, column_names, shuffle_row_drop_partition):
+        table = self._read_piece(piece, pq_file, column_names)
 
         num_rows = len(table)
         num_partitions = shuffle_row_drop_partition[1]
