@@ -19,6 +19,7 @@ import datetime
 import uuid
 import logging
 import os
+import time
 import warnings
 from distutils.version import LooseVersion
 
@@ -432,6 +433,12 @@ def _databricks_wait_for_s3_consistency(url_list):
                 new_remaining_list.append(path)
         remaining_list = new_remaining_list
         new_remaining_list = []
+
+        if not remaining_list:
+            # all files can be accessed by dbfs fuse
+            return
+
+        time.sleep(1)
 
     if remaining_list:
         raise RuntimeError('These files cannot be synced after waiting 30 seconds: {path_list}'.format(
