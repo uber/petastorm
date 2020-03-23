@@ -23,11 +23,12 @@ import warnings
 from distutils.version import LooseVersion
 
 from pyarrow import LocalFileSystem
+from pyspark.ml.common import _java2py
 from pyspark.sql.session import SparkSession
 from six.moves.urllib.parse import urlparse
 
 from petastorm import make_batch_reader
-from petastorm.fs_utils import FilesystemResolver
+from petastorm.fs_utils import FilesystemResolver, get_filesystem_and_path_or_paths
 
 DEFAULT_ROW_GROUP_SIZE_BYTES = 32 * 1024 * 1024
 
@@ -157,14 +158,14 @@ class SparkDatasetConverter(object):
 
     PARENT_CACHE_DIR_URL_CONF = 'petastorm.spark.converter.parentCacheDirUrl'
 
-    def __init__(self, cache_dir_url, dataset_size):
+    def __init__(self, cache_dir_url, parquet_file_url_list, dataset_size):
         """
-        :param cache_dir_url: A string denoting the path to store the cache
-            files.
-        :param dataset_size: An int denoting the number of rows in the
-            dataframe.
+        :param cache_dir_url: A string denoting the path to store the cache files.
+        :param parquet_file_url_list: a list of parquet file list of this dataset.
+        :param dataset_size: An int denoting the number of rows in the dataframe.
         """
         self.cache_dir_url = cache_dir_url
+        self.parquet_file_url_list = parquet_file_url_list
         self.dataset_size = dataset_size
 
     def __len__(self):
@@ -228,7 +229,7 @@ class SparkDatasetConverter(object):
                            cur_shard, shard_count, hvd_rank, hvd_size)
 
         return TFDatasetContextManager(
-            self.cache_dir_url,
+            self.parquet_file_url_list,
             batch_size=batch_size,
             prefetch=prefetch,
             petastorm_reader_kwargs=petastorm_reader_kwargs
@@ -249,18 +250,18 @@ class TFDatasetContextManager(object):
 
     def __init__(
             self,
-            data_url,
+            parquet_file_url_list,
             batch_size,
             prefetch,
             petastorm_reader_kwargs
     ):
         """
-        :param data_url: A string specifying the data URL.
+        :param parquet_file_url_list: A string specifying the parquet file URL list.
         :param batch_size: batch size for tensorflow dataset.
         :param prefetch: the prefectch size for tensorflow dataset.
         :param petastorm_reader_kwargs: other arguments for petastorm reader
         """
-        self.data_url = data_url
+        self.parquet_file_url_list = parquet_file_url_list
         self.batch_size = batch_size
         self.prefetch = prefetch
         self.petastorm_reader_kwargs = petastorm_reader_kwargs
@@ -270,7 +271,8 @@ class TFDatasetContextManager(object):
         from petastorm.tf_utils import make_petastorm_dataset
         import tensorflow as tf
 
-        self.reader = make_batch_reader(self.data_url, **self.petastorm_reader_kwargs)
+        _databricks_wait_for_s3_consistency(self.parquet_file_url_list)
+        self.reader = make_batch_reader(self.parquet_file_url_list, **self.petastorm_reader_kwargs)
 
         # unroll dataset
         dataset = make_petastorm_dataset(self.reader).flat_map(tf.data.Dataset.from_tensor_slices)
@@ -407,6 +409,35 @@ def _materialize_df(df, parent_cache_dir_url, parquet_row_group_size_bytes,
     return save_to_dir_url
 
 
+_DATABRICKS_WAIT_SECONDS_FOR_S3_CONSISTENCY = 30
+
+
+def _databricks_wait_for_s3_consistency(url_list):
+    """
+    This is used in databricks runtime. Waiting about 30 seconds to make sure
+    all files can be accessed by dbfs fuse.
+    This is because of s3 eventually consistency, and the backend of dbfs is s3.
+    """
+
+    if 'DATABRICKS_RUNTIME_VERSION' not in os.environ:
+        return
+
+    _, path_list = get_filesystem_and_path_or_paths(url_list)
+    remaining_list = list(path_list)
+    new_remaining_list = []
+
+    for _ in range(_DATABRICKS_WAIT_SECONDS_FOR_S3_CONSISTENCY):
+        for path in remaining_list:
+            if not os.path.exists(path):
+                new_remaining_list.append(path)
+        remaining_list = new_remaining_list
+        new_remaining_list = []
+
+    if remaining_list:
+        raise RuntimeError('These files cannot be synced after waiting 30 seconds: {path_list}'.format(
+            path_list=','.join(remaining_list)))
+
+
 def make_spark_converter(
         df,
         parquet_row_group_size_bytes=DEFAULT_ROW_GROUP_SIZE_BYTES,
@@ -456,5 +487,10 @@ def make_spark_converter(
     # TODO: improve this by read parquet file metadata to get count
     #  Currently spark can make sure to only read the minimal column
     #  so count will usually be fast.
-    dataset_size = _get_spark_session().read.parquet(dataset_cache_dir_url).count()
-    return SparkDatasetConverter(dataset_cache_dir_url, dataset_size)
+    spark = _get_spark_session()
+    spark_df = spark.read.parquet(dataset_cache_dir_url)
+
+    dataset_size = spark_df.count()
+    parquet_file_url_list = _java2py(spark.sparkContext, spark_df._jdf.inputFiles())
+
+    return SparkDatasetConverter(dataset_cache_dir_url, parquet_file_url_list, dataset_size)
