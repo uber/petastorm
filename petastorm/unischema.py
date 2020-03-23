@@ -172,11 +172,11 @@ class Unischema(object):
         """Creates an instance of a Unischema object.
 
         :param name: name of the schema
-        :param fields: a list of ``UnischemaField`` instances describing the fields. The order of the fields is
-            not important - they are stored sorted by name internally.
+        :param fields: a list of ``UnischemaField`` instances describing the fields. The element order in the list
+            represent the schema field order.
         """
         self._name = name
-        self._fields = OrderedDict([(f.name, f) for f in sorted(fields, key=lambda t: t.name)])
+        self._fields = OrderedDict([(f.name, f) for f in fields])
         # Generates attributes named by the field names as an access syntax sugar.
         for f in fields:
             if not hasattr(self, f.name):
