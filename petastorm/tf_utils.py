@@ -38,6 +38,7 @@ _NUMPY_TO_TF_DTYPES_MAPPING = {
     np.string_: tf.string,
     np.unicode_: tf.string,
     np.str_: tf.string,
+    np.bytes_: tf.string,
     np.bool_: tf.bool,
     Decimal: tf.string,
     np.datetime64: tf.int64,

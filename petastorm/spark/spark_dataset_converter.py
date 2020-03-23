@@ -179,6 +179,7 @@ class SparkDatasetConverter(object):
             prefetch=None,
             num_epochs=None,
             workers_count=None,
+            preprocess_fn=None,
             **petastorm_reader_kwargs
     ):
         """
@@ -201,8 +202,11 @@ class SparkDatasetConverter(object):
             None denotes auto tune best value (current implementation when auto tune,
             it will always use 4 workers, but it may be improved in future)
             Default value None.
+        :param preprocess_fn: Preprocessing function. Input is pandas dataframe of
+            a rowgroup data and output should be the transformed pandas dataframe.
         :param petastorm_reader_kwargs: arguments for `petastorm.make_batch_reader()`,
-            exclude these arguments: "dataset_url", "num_epochs", "workers_count".
+            exclude these arguments: "dataset_url_or_urls", "num_epochs", "workers_count",
+            "transform_spec", "infer_schema_from_first_row"
 
         :return: a context manager for a `tf.data.Dataset` object.
                  when exit the returned context manager, the reader
@@ -215,6 +219,14 @@ class SparkDatasetConverter(object):
             # TODO: generate a best tuned value for default worker count value
             workers_count = 4
         petastorm_reader_kwargs['workers_count'] = workers_count
+
+        if 'dataset_url_or_urls' in petastorm_reader_kwargs:
+            raise ValueError('User cannot set dataset_url_or_urls argument.')
+
+        if 'transform_spec' in petastorm_reader_kwargs or \
+                'infer_schema_from_first_row' in petastorm_reader_kwargs:
+            raise ValueError('User cannot set transform_spec and infer_schema_from_first_row '
+                             'arguments, use `preprocess_fn` argument instead.')
 
         hvd_rank, hvd_size = _get_horovod_rank_and_size()
         cur_shard = petastorm_reader_kwargs.get('cur_shard')
