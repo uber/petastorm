@@ -250,13 +250,10 @@ def make_batch_reader(dataset_url_or_urls,
     :param infer_schema_from_first_row: Whether to infer schema from the first row data. Only support parquet reader.
         If on, before creating the reader, it will first read one row group to infer the full schema information,
         and the transform spec (if exists) do not need to specify edit_fields/removed_fields.
-        Require:
-         * for all rows (before applying predicates), all values in each field are non-nullable and have
-          the same shape.
-         * Do not support parquet partition column.
-        Turning on this param will address the following two issues:
-          * Auto inferring parquet schema from metadata cannot get shape information.
-          * If there's a preprocessing function, we have to specify edit/removed fields.
+        Require: for all rows (before applying predicates), all values in each field are non-nullable and have the
+        same shape.
+        Turning on this param will address the following two issues: (1) Auto inferring parquet schema from metadata
+        cannot get shape information. (2) If there's a preprocessing function, we have to specify edit/removed fields.
     :return: A :class:`Reader` object
     """
     dataset_url_or_urls = normalize_dataset_url_or_urls(dataset_url_or_urls)
