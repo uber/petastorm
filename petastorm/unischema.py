@@ -31,6 +31,9 @@ from six import string_types
 
 from petastorm.compat import compat_get_metadata
 
+# _UNISCHEMA_FIELD_ORDER available values are 'preserve_input_order' or 'alphabetical'
+_UNISCHEMA_FIELD_ORDER = 'preserve_input_order'
+
 
 def _fields_as_tuple(field):
     """Common representation of UnischemaField for equality and hash operators.
@@ -95,11 +98,12 @@ class _NamedtupleCache(object):
         :return: A namedtuple with field names defined by `field_names`
         """
         # Cache key is a combination of schema name and all field names
-        sorted_names = list(sorted(field_names))
-        key = ' '.join([parent_schema_name] + sorted_names)
+        if _UNISCHEMA_FIELD_ORDER.lower() == 'alphabetical':
+            field_names = list(sorted(field_names))
+        key = ' '.join([parent_schema_name] + field_names)
         if key not in _NamedtupleCache._store:
             _NamedtupleCache._store[key] = \
-                _new_gt_255_compatible_namedtuple('{}_view'.format(parent_schema_name), sorted_names)
+                _new_gt_255_compatible_namedtuple('{}_view'.format(parent_schema_name), field_names)
         return _NamedtupleCache._store[key]
 
 
@@ -161,10 +165,6 @@ def _field_spark_dtype(field):
         spark_type = field.codec.spark_dtype()
 
     return spark_type
-
-
-# _UNISCHEMA_FIELD_ORDER available values are 'preserve_input_order' or 'alphabetical'
-_UNISCHEMA_FIELD_ORDER = 'preserve_input_order'
 
 
 class Unischema(object):
