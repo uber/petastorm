@@ -100,6 +100,8 @@ class _NamedtupleCache(object):
         # Cache key is a combination of schema name and all field names
         if _UNISCHEMA_FIELD_ORDER.lower() == 'alphabetical':
             field_names = list(sorted(field_names))
+        else:
+            field_names = list(field_names)
         key = ' '.join([parent_schema_name] + field_names)
         if key not in _NamedtupleCache._store:
             _NamedtupleCache._store[key] = \
