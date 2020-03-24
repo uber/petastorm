@@ -170,7 +170,7 @@ class ArrowReaderWorker(WorkerBase):
         if all_cols:
             self.publish_func(all_cols)
 
-    def infer_schema_from_first_row(self):
+    def infer_schema_from_a_row(self):
         self._init_dataset()
 
         piece0 = self._split_pieces[0]

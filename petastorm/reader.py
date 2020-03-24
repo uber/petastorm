@@ -198,7 +198,7 @@ def make_batch_reader(dataset_url_or_urls,
                       cache_row_size_estimate=None, cache_extra_settings=None,
                       hdfs_driver='libhdfs3',
                       transform_spec=None,
-                      infer_schema_from_first_row=False):
+                      infer_schema_from_a_row=False):
     """
     Creates an instance of Reader for reading batches out of a non-Petastorm Parquet store.
 
@@ -247,7 +247,7 @@ def make_batch_reader(dataset_url_or_urls,
     :param transform_spec: An instance of :class:`~petastorm.transform.TransformSpec` object defining how a record
         is transformed after it is loaded and decoded. The transformation occurs on a worker thread/process (depends
         on the ``reader_pool_type`` value).
-    :param infer_schema_from_first_row: Whether to infer schema from the first row data. Only support parquet reader.
+    :param infer_schema_from_a_row: Whether to infer schema from a row data. Only support parquet reader.
         If on, before creating the reader, it will first read one row group to infer the full schema information,
         and the transform spec (if exists) do not need to specify edit_fields/removed_fields.
         Require: for all rows (before applying predicates), all values in each field are non-nullable and have the
@@ -301,7 +301,7 @@ def make_batch_reader(dataset_url_or_urls,
                   cache=cache,
                   transform_spec=transform_spec,
                   is_batched_reader=True,
-                  infer_schema_from_first_row=infer_schema_from_first_row)
+                  infer_schema_from_a_row=infer_schema_from_a_row)
 
 
 class Reader(object):
@@ -314,7 +314,7 @@ class Reader(object):
                  shuffle_row_groups=True, shuffle_row_drop_partitions=1,
                  predicate=None, rowgroup_selector=None, reader_pool=None, num_epochs=1,
                  cur_shard=None, shard_count=None, cache=None, worker_class=None,
-                 transform_spec=None, is_batched_reader=False, infer_schema_from_first_row=False):
+                 transform_spec=None, is_batched_reader=False, infer_schema_from_a_row=False):
         """Initializes a reader object.
 
         :param pyarrow_filesystem: An instance of ``pyarrow.FileSystem`` that will be used. If not specified,
@@ -350,7 +350,7 @@ class Reader(object):
             to the main data store is either slow or expensive and the local machine has large enough storage
             to store entire dataset (or a partition of a dataset if shards are used).
             By default, use the :class:`.NullCache` implementation.
-        :param infer_schema_from_first_row: Whether to infer schema from the first row data.
+        :param infer_schema_from_a_row: Whether to infer schema from a row data.
 
         :param worker_class: This is the class that will be instantiated on a different thread/process. It's
             responsibility is to load and filter the data.
@@ -411,12 +411,12 @@ class Reader(object):
         # 2. Get a list of all row groups and infer schema if needed.
         row_groups = dataset_metadata.load_row_groups(self.dataset)
 
-        if infer_schema_from_first_row:
+        if infer_schema_from_a_row:
             if worker_class is not ArrowReaderWorker:
                 raise ValueError('infer_schema_from_first_row only support ArrowReaderWorker.')
             worker0 = ArrowReaderWorker(0, None, (pyarrow_filesystem, dataset_path, storage_schema, self.ngram,
                                                   row_groups, NullCache(), transform_spec, None))
-            self.schema = worker0.infer_schema_from_first_row()
+            self.schema = worker0.infer_schema_from_a_row()
             logger.info('Inferred schema from first row: %s', str(self.schema))
         else:
             if transform_spec:

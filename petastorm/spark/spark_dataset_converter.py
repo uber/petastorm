@@ -234,11 +234,11 @@ class SparkDatasetConverter(object):
             raise ValueError('User cannot set dataset_url_or_urls argument.')
 
         if 'transform_spec' in petastorm_reader_kwargs or \
-                'infer_schema_from_first_row' in petastorm_reader_kwargs:
-            raise ValueError('User cannot set transform_spec and infer_schema_from_first_row '
+                'infer_schema_from_a_row' in petastorm_reader_kwargs:
+            raise ValueError('User cannot set transform_spec and infer_schema_from_a_row '
                              'arguments, use `preprocess_fn` argument instead.')
 
-        petastorm_reader_kwargs['infer_schema_from_first_row'] = True
+        petastorm_reader_kwargs['infer_schema_from_a_row'] = True
         if preprocess_fn:
             petastorm_reader_kwargs['transform_spec'] = TransformSpec(preprocess_fn)
 
