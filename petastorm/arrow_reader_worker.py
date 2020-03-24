@@ -183,6 +183,7 @@ class ArrowReaderWorker(WorkerBase):
         row0_pdf = piece0_pdf.head(n=1)
         if self._transform_spec:
             row0_pdf = self._transform_spec.func(row0_pdf)
+            column_names = list(row0_pdf.columns)
 
         unischema_fields = []
         for field_name in column_names:
