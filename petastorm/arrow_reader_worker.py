@@ -24,6 +24,7 @@ from pyarrow.parquet import ParquetFile
 
 from petastorm.cache import NullCache
 from petastorm.compat import compat_piece_read, compat_table_columns_gen, compat_column_data
+from petastorm import unischema
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.worker_base import WorkerBase
 
@@ -180,15 +181,24 @@ class ArrowReaderWorker(WorkerBase):
                              .format(name=field.name))
         return x.ravel()
 
+    def _reorder_input_pandas_df_column(self, pandas_df):
+        if unischema._UNISCHEMA_FIELD_ORDER.lower() == 'preserve_input_order':
+            # Make pandas dataframe column order to be the same with input schema fields.
+            column_names = [f for f in self._schema.fields]
+            return pandas_df.reindex(column_names, axis='columns', copy=False)
+        else:
+            return pandas_df
+
     def _load_rows(self, pq_file, piece, shuffle_row_drop_range):
         """Loads all rows from a piece"""
 
         column_names_in_schema = set(field.name for field in self._schema.fields.values())
 
         result = self._read_with_shuffle_row_drop(piece, pq_file, column_names_in_schema, shuffle_row_drop_range)
+        result_as_pandas = result.to_pandas()
+        result_as_pandas = self._reorder_input_pandas_df_column(result_as_pandas)
 
         if self._transform_spec:
-            result_as_pandas = result.to_pandas()
             # A user may omit `func` value if they intend just to delete some fields using the TransformSpec
             if self._transform_spec.func:
                 transformed_result = self._transform_spec.func(result_as_pandas)
@@ -217,9 +227,9 @@ class ArrowReaderWorker(WorkerBase):
                     transformed_result[field.name] = transformed_result[field.name] \
                         .map(lambda x, f=field: self._check_shape_and_ravel(x, f))
 
-            result = pa.Table.from_pandas(transformed_result, preserve_index=False)
+            result_as_pandas = transformed_result
 
-        return result
+        return pa.Table.from_pandas(result_as_pandas, preserve_index=False)
 
     def _load_rows_with_predicate(self, pq_file, piece, worker_predicate, shuffle_row_drop_partition):
         """Loads all rows that match a predicate from a piece"""
@@ -276,6 +286,8 @@ class ArrowReaderWorker(WorkerBase):
             result_data_frame = predicates_data_frame
 
         result = result_data_frame[match_predicate_mask]
+
+        result = self._reorder_input_pandas_df_column(result)
 
         if self._transform_spec:
             result = self._transform_spec.func(result)

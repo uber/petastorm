@@ -163,6 +163,10 @@ def _field_spark_dtype(field):
     return spark_type
 
 
+# _UNISCHEMA_FIELD_ORDER available values are 'preserve_input_order' or 'alphabetical'
+_UNISCHEMA_FIELD_ORDER = 'preserve_input_order'
+
+
 class Unischema(object):
     """Describes a schema of a data structure which can be rendered as native schema/data-types objects
     in several different python libraries. Currently supported are pyspark, tensorflow, and numpy.
@@ -176,6 +180,9 @@ class Unischema(object):
             represent the schema field order.
         """
         self._name = name
+        if _UNISCHEMA_FIELD_ORDER.lower() == 'alphabetical':
+            fields = sorted(fields, key=lambda t: t.name)
+
         self._fields = OrderedDict([(f.name, f) for f in fields])
         # Generates attributes named by the field names as an access syntax sugar.
         for f in fields:
