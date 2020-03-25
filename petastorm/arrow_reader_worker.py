@@ -180,15 +180,6 @@ class ArrowReaderWorker(WorkerBase):
                              .format(name=field.name))
         return x.ravel()
 
-    def _reorder_input_pandas_df_column(self, pandas_df):
-        """
-        Make pandas dataframe column order to be the same with input schema fields.
-        This method is applied on dataframe before TransformSpec. So that preprocessing function
-        will get an input dataframe which preserve the column order of the input parquet dataset.
-        """
-        column_names = [f for f in self._schema.fields]
-        return pandas_df.reindex(column_names, axis='columns', copy=False)
-
     def _load_rows(self, pq_file, piece, shuffle_row_drop_range):
         """Loads all rows from a piece"""
 
@@ -198,7 +189,6 @@ class ArrowReaderWorker(WorkerBase):
 
         if self._transform_spec:
             result_as_pandas = result.to_pandas()
-            result_as_pandas = self._reorder_input_pandas_df_column(result_as_pandas)
             # A user may omit `func` value if they intend just to delete some fields using the TransformSpec
             if self._transform_spec.func:
                 transformed_result = self._transform_spec.func(result_as_pandas)
@@ -288,7 +278,6 @@ class ArrowReaderWorker(WorkerBase):
         result = result_data_frame[match_predicate_mask]
 
         if self._transform_spec:
-            result = self._reorder_input_pandas_df_column(result)
             result = self._transform_spec.func(result)
 
         return pa.Table.from_pandas(result, preserve_index=False)
