@@ -48,12 +48,13 @@ def test_remove_field_transform():
 
 
 def test_select_field_transform():
-    for selected_fields in [
+    test_list = [
         ['string', 'double', 'int'],
         ['int', 'string', 'double'],
         ['string', 'int'],
         ['int']
-    ]:
+    ]
+    for selected_fields in test_list:
         transformed = transform_schema(TestSchema, TransformSpec(selected_fields=selected_fields))
         assert list(transformed.fields.keys()) == selected_fields
 
