@@ -35,6 +35,7 @@ class TransformSpec(object):
           ``(name, numpy_dtype, shape, is_nullable)``
         :param removed_fields: Optional[list]. A list of field names that will be removed from the original schema.
         :param selected_fields: Optional[list]. A list of field names specify the fields to be selected.
+          If selected_fields specified, The reader schema will preserve the field order in selected_fields.
 
         Note: For param `removed_fields` and `selected_fields`, user can only specify one of them.
         """

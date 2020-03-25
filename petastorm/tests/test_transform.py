@@ -40,6 +40,17 @@ def test_remove_field_transform():
     assert set(two_removed.fields.keys()) == {'string'}
 
 
+def test_select_field_transform():
+    for selected_fields in [
+        ['string', 'double', 'int'],
+        ['int', 'string', 'double'],
+        ['string', 'int'],
+        ['int']
+    ]:
+        transformed = transform_schema(TestSchema, TransformSpec(selected_fields=selected_fields))
+        assert list(transformed.fields.keys()) == selected_fields
+
+
 def test_add_field_transform():
     one_added = transform_schema(TestSchema,
                                  TransformSpec(lambda x: x,
