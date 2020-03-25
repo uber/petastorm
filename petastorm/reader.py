@@ -76,7 +76,8 @@ def make_reader(dataset_url,
                 cache_type='null', cache_location=None, cache_size_limit=None,
                 cache_row_size_estimate=None, cache_extra_settings=None,
                 hdfs_driver='libhdfs3',
-                transform_spec=None):
+                transform_spec=None,
+                is_petastorm_compatible=False):
     """
     Creates an instance of Reader for reading Petastorm datasets. A Petastorm dataset is a dataset generated using
     :func:`~petastorm.etl.dataset_metadata.materialize_dataset` context manager as explained
@@ -126,6 +127,9 @@ def make_reader(dataset_url,
     :param transform_spec: An instance of :class:`~petastorm.transform.TransformSpec` object defining how a record
         is transformed after it is loaded and decoded. The transformation occurs on a worker thread/process (depends
         on the ``reader_pool_type`` value).
+    :param is_petastorm_compatible: A boolean value that indicates if the dataset is petastorm
+        compatible or not. This is useful where the dataset is compatible with petastorm but is not
+        generated with petastorm so it may not have the metadata file. Defaults to False.
     :return: A :class:`Reader` object
     """
     dataset_url = normalize_dataset_url(dataset_url)
@@ -142,8 +146,12 @@ def make_reader(dataset_url,
     try:
         dataset_metadata.get_schema_from_dataset_url(dataset_url, hdfs_driver=hdfs_driver)
     except PetastormMetadataError:
-        raise RuntimeError('Currently make_reader supports reading only Petastorm datasets. '
-                           'To read from a non-Petastorm Parquet store use make_batch_reader')
+        message = 'Currently make_reader supports reading only Petastorm datasets. To read from ' \
+                  'a non-Petastorm Parquet store use make_batch_reader'
+        if not is_petastorm_compatible:
+            raise RuntimeError(message)
+        else:
+            logger.error(message)
 
     if reader_pool_type == 'thread':
         reader_pool = ThreadPool(workers_count, results_queue_size)
