@@ -305,8 +305,8 @@ def test_horovod_rank_compatibility(test_ctx):
 def test_wait_for_fs_eventually_consistency(test_ctx):
     pq_dir = os.path.join(test_ctx.tempdir, 'test_ev')
     os.makedirs(pq_dir)
-    file1_path = os.path.join(test_ctx.tempdir, 'file1')
-    file2_path = os.path.join(test_ctx.tempdir, 'file2')
+    file1_path = os.path.join(pq_dir, 'file1')
+    file2_path = os.path.join(pq_dir, 'file2')
     url1 = 'file://' + file1_path.replace(os.sep, '/')
     url2 = 'file://' + file2_path.replace(os.sep, '/')
 
@@ -334,5 +334,3 @@ def test_wait_for_fs_eventually_consistency(test_ctx):
     threading.Thread(target=delay_create_file2()).start()
 
     _wait_for_fs_eventually_consistency(url_list)
-
-
