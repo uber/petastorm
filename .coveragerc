@@ -3,6 +3,7 @@ branch = True
 source =
     petastorm
     examples
+parallel = True
 
 [report]
 exclude_lines =

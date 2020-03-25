@@ -72,26 +72,7 @@ script:
   # Build documentation
   - $RUN bash -c "cd /petastorm/docs/autodoc && pwd && make html"
 
-  # Running pytest twice: first tests that do not have to be forked.
-  # `-Y` will result in datasets generated for testing to be persisted between runs in pytest cache.
-
-  - $RUN $PYTEST -m "forked" --forked -Y
-    --ignore=examples/mnist/tests/test_pytorch_mnist.py
-    --ignore=petastorm/tests/test_pytorch_utils.py
-    --ignore=petastorm/tests/test_pytorch_dataloader.py
-    petastorm examples
-
-  - $RUN $PYTEST -m "not forked" -v -Y  --cov-append
-      --ignore=examples/mnist/tests/test_pytorch_mnist.py
-      --ignore=petastorm/tests/test_pytorch_utils.py
-      --ignore=petastorm/tests/test_pytorch_dataloader.py
-      petastorm examples
-
-    # Tensorflow and pytorch tests confict (segfault). Split into separate runs.
-  - $RUN $PYTEST  --cov-append
-      examples/mnist/tests/test_pytorch_mnist.py
-      petastorm/tests/test_pytorch_dataloader.py
-      petastorm/tests/test_pytorch_utils.py
+  - $RUN $PYTEST -v -Y --cov-append petastorm examples
 
 after_success:
   - codecov --required
