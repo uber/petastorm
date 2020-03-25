@@ -269,7 +269,6 @@ column followed by a label column.
 .. code-block:: python
 
     from petastorm.spark import SparkDatasetConverter, make_spark_converter
-    import tensorflow as tf
 
     spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, 'hdfs:/...')
 
