@@ -28,6 +28,7 @@ from six.moves.urllib.parse import urlparse
 
 from petastorm import make_batch_reader
 from petastorm.fs_utils import FilesystemResolver
+from petastorm.transform import TransformSpec
 
 DEFAULT_ROW_GROUP_SIZE_BYTES = 32 * 1024 * 1024
 
@@ -179,6 +180,7 @@ class SparkDatasetConverter(object):
             prefetch=None,
             num_epochs=None,
             workers_count=None,
+            preprocess_fn=None,
             **petastorm_reader_kwargs
     ):
         """
@@ -187,6 +189,12 @@ class SparkDatasetConverter(object):
         This method will do the following two steps:
           1) Open a petastorm reader on the materialized dataset dir.
           2) Create a tensorflow dataset based on the reader created in (1)
+
+        The generated dataset each element will be a batch of namedtuples.
+        If without specifying `preprocess_fn`, each namedtuple in result dataset will match the
+        schema of the original spark dataframe columns, otherwise will match the columns of the
+        output pandas dataframe of `preprocess_fn`. The fields order will keep the same with
+        original spark dataframe columns or the output pandas dataframe of `preprocess_fn`.
 
         :param batch_size: The number of items to return per batch. Default None.
             If None, current implementation will set batch size to be 32, in future,
@@ -201,8 +209,14 @@ class SparkDatasetConverter(object):
             None denotes auto tune best value (current implementation when auto tune,
             it will always use 4 workers, but it may be improved in future)
             Default value None.
+        :param preprocess_fn: Preprocessing function. Input is pandas dataframe of
+            a rowgroup data and output should be the transformed pandas dataframe.
+            the column order of the input pandas dataframe is undefined, but the output
+            pandas dataframe column order will determine the result tensorflow dataset's
+            element fields order.
         :param petastorm_reader_kwargs: arguments for `petastorm.make_batch_reader()`,
-            exclude these arguments: "dataset_url", "num_epochs", "workers_count".
+            exclude these arguments: "dataset_url_or_urls", "num_epochs", "workers_count",
+            "transform_spec", "infer_schema_from_first_row"
 
         :return: a context manager for a `tf.data.Dataset` object.
                  when exit the returned context manager, the reader
@@ -215,6 +229,18 @@ class SparkDatasetConverter(object):
             # TODO: generate a best tuned value for default worker count value
             workers_count = 4
         petastorm_reader_kwargs['workers_count'] = workers_count
+
+        if 'dataset_url_or_urls' in petastorm_reader_kwargs:
+            raise ValueError('User cannot set dataset_url_or_urls argument.')
+
+        if 'transform_spec' in petastorm_reader_kwargs or \
+                'infer_schema_from_a_row' in petastorm_reader_kwargs:
+            raise ValueError('User cannot set transform_spec and infer_schema_from_a_row '
+                             'arguments, use `preprocess_fn` argument instead.')
+
+        petastorm_reader_kwargs['infer_schema_from_a_row'] = True
+        if preprocess_fn:
+            petastorm_reader_kwargs['transform_spec'] = TransformSpec(preprocess_fn)
 
         hvd_rank, hvd_size = _get_horovod_rank_and_size()
         cur_shard = petastorm_reader_kwargs.get('cur_shard')

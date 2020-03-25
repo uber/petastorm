@@ -24,6 +24,7 @@ from pyarrow.parquet import ParquetFile
 
 from petastorm.cache import NullCache
 from petastorm.compat import compat_piece_read, compat_table_columns_gen, compat_column_data
+from petastorm.unischema import Unischema, UnischemaField
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.worker_base import WorkerBase
 
@@ -111,6 +112,17 @@ class ArrowReaderWorker(WorkerBase):
     def new_results_queue_reader():
         return ArrowReaderWorkerResultsQueueReader()
 
+    def _init_dataset(self):
+        if not self._dataset:
+            self._dataset = pq.ParquetDataset(
+                self._dataset_path_or_paths,
+                filesystem=self._filesystem,
+                validate_schema=False)
+            if self._dataset.partitions is None:
+                # When read from parquet file list, the `dataset.partitions` will be None.
+                # But other petastorm code require at least an empty `ParquetPartitions` object.
+                self._dataset.partitions = pq.ParquetPartitions()
+
     # pylint: disable=arguments-differ
     def process(self, piece_index, worker_predicate, shuffle_row_drop_partition):
         """Main worker function. Loads and returns all rows matching the predicate from a rowgroup
@@ -124,17 +136,7 @@ class ArrowReaderWorker(WorkerBase):
             of partitions.
         :return:
         """
-
-        if not self._dataset:
-            self._dataset = pq.ParquetDataset(
-                self._dataset_path_or_paths,
-                filesystem=self._filesystem,
-                validate_schema=False)
-
-        if self._dataset.partitions is None:
-            # When read from parquet file list, the `dataset.partitions` will be None.
-            # But other petastorm code require at least an empty `ParquetPartitions` object.
-            self._dataset.partitions = pq.ParquetPartitions()
+        self._init_dataset()
 
         piece = self._split_pieces[piece_index]
 
@@ -167,6 +169,39 @@ class ArrowReaderWorker(WorkerBase):
 
         if all_cols:
             self.publish_func(all_cols)
+
+    def infer_schema_from_a_row(self):
+        self._init_dataset()
+
+        piece0 = self._split_pieces[0]
+        pq_file0 = ParquetFile(self._dataset.fs.open(piece0.path))
+
+        column_names = [field_name for field_name in self._schema.fields]
+
+        piece0_pdf = self._read_piece(piece0, pq_file0, set(column_names)).to_pandas()
+
+        row0_pdf = piece0_pdf.head(n=1)
+        if self._transform_spec:
+            row0_pdf = self._transform_spec.func(row0_pdf)
+            column_names = list(row0_pdf.columns)
+
+        unischema_fields = []
+        for field_name in column_names:
+            field_val = row0_pdf[field_name][0]
+
+            if np.ndim(field_val) == 0:
+                # scalar value
+                field_shape = ()
+                field_numpy_type = np.dtype(type(field_val)).type
+            else:
+                field_shape = field_val.shape
+                field_numpy_type = field_val.dtype.type
+
+            # TODO: add type checking,raise error for illegal type (such as np.object_)
+            unischema_field = UnischemaField(field_name, field_numpy_type, field_shape, None, False)
+            unischema_fields.append(unischema_field)
+
+        return Unischema('inferred_schema', unischema_fields)
 
     @staticmethod
     def _check_shape_and_ravel(x, field):
@@ -282,7 +317,7 @@ class ArrowReaderWorker(WorkerBase):
 
         return pa.Table.from_pandas(result, preserve_index=False)
 
-    def _read_with_shuffle_row_drop(self, piece, pq_file, column_names, shuffle_row_drop_partition):
+    def _read_piece(self, piece, pq_file, column_names):
         partition_names = self._dataset.partitions.partition_names
 
         # pyarrow would fail if we request a column names that the dataset is partitioned by
@@ -296,6 +331,10 @@ class ArrowReaderWorker(WorkerBase):
         unasked_for_columns = loaded_column_names - column_names
         if unasked_for_columns:
             table = table.drop(unasked_for_columns)
+        return table
+
+    def _read_with_shuffle_row_drop(self, piece, pq_file, column_names, shuffle_row_drop_partition):
+        table = self._read_piece(piece, pq_file, column_names)
 
         num_rows = len(table)
         num_partitions = shuffle_row_drop_partition[1]
