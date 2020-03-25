@@ -16,6 +16,8 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
+import threading
 import pytest
 import numpy as np
 import tensorflow as tf
@@ -37,7 +39,8 @@ from petastorm.spark import make_spark_converter
 from petastorm.spark import spark_dataset_converter
 from petastorm.spark.spark_dataset_converter import register_delete_dir_handler, \
     _check_url, _get_parent_cache_dir_url, _make_sub_dir_url, \
-    _get_horovod_rank_and_size, _is_rank_and_size_consistent_with_horovod
+    _get_horovod_rank_and_size, _is_rank_and_size_consistent_with_horovod, \
+    _wait_for_fs_eventually_consistency
 
 
 class TestContext(object):
@@ -50,6 +53,7 @@ class TestContext(object):
         self.tempdir = tempfile.mkdtemp('_spark_converter_test')
         self.temp_url = 'file://' + self.tempdir.replace(os.sep, '/')
         self.spark.conf.set('petastorm.spark.converter.parentCacheDirUrl', self.temp_url)
+        self.spark.conf.set('petastorm.spark.converter.fsEventuallyConsistencySeconds', '2')
 
     def tear_down(self):
         self.spark.stop()
@@ -296,3 +300,39 @@ def test_horovod_rank_compatibility(test_ctx):
     assert _is_rank_and_size_consistent_with_horovod(cur_shard=1, shard_count=3, hvd_rank=None, hvd_size=None)
     assert not _is_rank_and_size_consistent_with_horovod(cur_shard=1, shard_count=2, hvd_rank=1, hvd_size=3)
     assert not _is_rank_and_size_consistent_with_horovod(cur_shard=0, shard_count=3, hvd_rank=1, hvd_size=3)
+
+
+def test_wait_for_fs_eventually_consistency(test_ctx):
+    pq_dir = os.path.join(test_ctx.tempdir, 'test_ev')
+    os.makedirs(pq_dir)
+    file1_path = os.path.join(test_ctx.tempdir, 'file1')
+    file2_path = os.path.join(test_ctx.tempdir, 'file2')
+    url1 = 'file://' + file1_path.replace(os.sep, '/')
+    url2 = 'file://' + file2_path.replace(os.sep, '/')
+
+    url_list = [url1, url2]
+
+    def create_file(p):
+        with open(p, 'w'):
+            pass
+
+    # 1. test all files exists.
+    create_file(file1_path)
+    create_file(file2_path)
+    _wait_for_fs_eventually_consistency(url_list)
+
+    # 2. test one file does not exists. Raise error.
+    os.remove(file2_path)
+    with pytest.raises(RuntimeError, match='These files cannot be synced after waiting 30 seconds'):
+        _wait_for_fs_eventually_consistency(url_list)
+
+    # 3. test one file accessible after 1 second.
+    def delay_create_file2():
+        time.sleep(1)
+        create_file(file2_path)
+
+    threading.Thread(target=delay_create_file2()).start()
+
+    _wait_for_fs_eventually_consistency(url_list)
+
+

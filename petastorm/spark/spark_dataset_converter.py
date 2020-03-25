@@ -417,7 +417,7 @@ def _wait_for_fs_eventually_consistency(url_list):
     all files can be accessed by dbfs fuse.
     This is because of s3 eventually consistency, and the backend of dbfs is s3.
     """
-    _, path_list = get_filesystem_and_path_or_paths(url_list)
+    fs, path_list = get_filesystem_and_path_or_paths(url_list)
     remaining_list = list(path_list)
     new_remaining_list = []
 
@@ -429,11 +429,11 @@ def _wait_for_fs_eventually_consistency(url_list):
         return
 
     logger.debug('Because of filesystem eventually consistency, waiting several seconds until '
-                 'these files become accessible: ', ','.join(remaining_list))
+                 'these files become accessible: %s', ','.join(remaining_list))
 
     for _ in range(wait_seconds):
         for path in remaining_list:
-            if not os.path.exists(path):
+            if not fs.exists(path):
                 new_remaining_list.append(path)
         remaining_list = new_remaining_list
         new_remaining_list = []
