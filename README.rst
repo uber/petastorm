@@ -225,19 +225,24 @@ The minimalist example below assumes the definition of a ``Net`` class and
                                 transform_spec=transform), batch_size=1000) as test_loader:
         test(model, device, test_loader)
 
-Spark converter API
+Spark Converter API
 -------------------
 
-To simplify data conversion from Spark to TensorFlow, you can use Spark converter API:
+Spark converter API simplifies the data conversion from Spark to TensorFlow or PyTorch.
+The input Spark DataFrame is first materialized in the parquet format and then loaded as
+a ``tf.data.Dataset`` or ``torch.utils.data.DataLoader``.
+
+The minimalist example below assumes the definition of a compiled ``tf.keras`` model and a
+Spark DataFrame containing a feature column followed by a label column.
 
 .. code-block:: python
 
-    from petastorm import make_spark_converter
+    from petastorm.spark import SparkDatasetConverter, make_spark_converter
     import tensorflow as tf
 
     # specify a cache dir first.
     # the dir is used to save materialized spark dataframe files
-    spark.conf.set('petastorm.spark.converter.parentCacheDirUrl', 'hdfs:/...')
+    spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, 'hdfs:/...')
 
     df1 = ... # `df1` is a spark dataframe
 
@@ -248,20 +253,45 @@ To simplify data conversion from Spark to TensorFlow, you can use Spark converte
     # make a tensorflow dataset from `converter1
     with converter1.make_tf_dataset() as dataset:
         # the `dataset` is `tf.data.Dataset` object
-        # we can train/evaluate model on `dataset`
-        # when exit the with context, the reader of the dataset will be closed
-        ...
+        # dataset transformation can be done if needed
+        dataset = dataset.map(...)
+        # we can train/evaluate model on the `dataset`
+        model.fit(dataset)
+        # when exiting the context, the reader of the dataset will be closed
 
     # delete the cached files of the dataframe.
+    converter1.delete()
+
+The minimalist example below assumes the definition of a ``Net`` class and
+``train`` and ``test`` functions, and a Spark DataFrame containing a feature
+column followed by a label column.
+
+.. code-block:: python
+
+    from petastorm.spark import SparkDatasetConverter, make_spark_converter
+    import tensorflow as tf
+
+    spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, 'hdfs:/...')
+
+    df1 = ... # `df1` is a spark dataframe
+    model = Net()
+
+    converter1 = make_spark_converter(df1)
+
+    with converter1.make_torch_dataloader() as dataloader:
+        train(model, dataloader, ...)
+
+    with converter1.make_torch_dataloader() as dataloader:
+        test(model, dataloader, ...)
+
     converter1.delete()
 
 
 PySpark and SQL
 ---------------
 
-Using the Parquet data format, which is natively supported by Spark, makes it possible to use a wide range of Spark
-tools to analyze and manipulate the dataset. The example below shows how to read a Petastorm dataset
-as a Spark RDD object:
+A Petastorm dataset can be read into a Spark DataFrame using PySpark, where you can
+use a wide range of Spark tools to analyze and manipulate the dataset.
 
 .. code-block:: python
 
