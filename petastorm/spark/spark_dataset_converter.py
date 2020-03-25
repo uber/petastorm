@@ -158,6 +158,7 @@ class SparkDatasetConverter(object):
     """
 
     PARENT_CACHE_DIR_URL_CONF = 'petastorm.spark.converter.parentCacheDirUrl'
+    WAIT_FS_EVENTUALLY_CONSISTENCY_SECONS = 'petastorm.spark.converter.fsEventuallyConsistencySeconds'
 
     def __init__(self, cache_dir_url, parquet_file_url_list, dataset_size):
         """
@@ -272,7 +273,7 @@ class TFDatasetContextManager(object):
         from petastorm.tf_utils import make_petastorm_dataset
         import tensorflow as tf
 
-        _databricks_wait_for_s3_consistency(self.parquet_file_url_list)
+        _wait_for_fs_eventually_consistency(self.parquet_file_url_list)
         self.reader = make_batch_reader(self.parquet_file_url_list, **self.petastorm_reader_kwargs)
 
         # unroll dataset
@@ -410,24 +411,27 @@ def _materialize_df(df, parent_cache_dir_url, parquet_row_group_size_bytes,
     return save_to_dir_url
 
 
-_DATABRICKS_WAIT_SECONDS_FOR_S3_CONSISTENCY = 30
-
-
-def _databricks_wait_for_s3_consistency(url_list):
+def _wait_for_fs_eventually_consistency(url_list):
     """
     This is used in databricks runtime. Waiting about 30 seconds to make sure
     all files can be accessed by dbfs fuse.
     This is because of s3 eventually consistency, and the backend of dbfs is s3.
     """
-
-    if 'DATABRICKS_RUNTIME_VERSION' not in os.environ:
-        return
-
     _, path_list = get_filesystem_and_path_or_paths(url_list)
     remaining_list = list(path_list)
     new_remaining_list = []
 
-    for _ in range(_DATABRICKS_WAIT_SECONDS_FOR_S3_CONSISTENCY):
+    wait_seconds = _get_spark_session().conf \
+        .get(SparkDatasetConverter.WAIT_FS_EVENTUALLY_CONSISTENCY_SECONS, '0')
+    wait_seconds = int(wait_seconds)
+
+    if wait_seconds <= 0:
+        return
+
+    logger.debug('Because of filesystem eventually consistency, waiting several seconds until '
+                 'these files become accessible: ', ','.join(remaining_list))
+
+    for _ in range(wait_seconds):
         for path in remaining_list:
             if not os.path.exists(path):
                 new_remaining_list.append(path)
@@ -438,6 +442,7 @@ def _databricks_wait_for_s3_consistency(url_list):
             # all files can be accessed by dbfs fuse
             return
 
+        logger.debug('Remaining these files to be accessible: %s', ','.join(remaining_list))
         time.sleep(1)
 
     if remaining_list:
