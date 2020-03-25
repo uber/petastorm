@@ -23,6 +23,11 @@ import pytest
 from pyspark.sql import SparkSession
 from pyspark.sql.types import LongType, ShortType, StringType
 
+try:
+    from mock import mock
+except ImportError:
+    from unittest import mock
+
 from petastorm import make_reader, make_batch_reader, TransformSpec
 from petastorm.codecs import ScalarCodec, CompressedImageCodec
 from petastorm.errors import NoDataAvailableError
@@ -110,6 +115,7 @@ def test_simple_read(synthetic_dataset, reader_factory):
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
 ])
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_transform_function(synthetic_dataset, reader_factory):
     """"""
 
@@ -128,6 +134,7 @@ def test_transform_function(synthetic_dataset, reader_factory):
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
 ])
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_transform_function_returns_a_new_dict(synthetic_dataset, reader_factory):
     """"""
 
@@ -145,6 +152,7 @@ def test_transform_function_returns_a_new_dict(synthetic_dataset, reader_factory
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
 ])
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_transform_remove_field(synthetic_dataset, reader_factory):
     """Make sure we apply transform only after we apply the predicate"""
 
@@ -158,6 +166,7 @@ def test_transform_remove_field(synthetic_dataset, reader_factory):
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
 ])
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_transform_function_with_predicate(synthetic_dataset, reader_factory):
     """Make sure we apply transform only after we apply the predicate"""
 
@@ -176,6 +185,7 @@ def test_transform_function_with_predicate(synthetic_dataset, reader_factory):
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
 ])
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_transform_function_returns_a_new_dict_with_predicate(synthetic_dataset, reader_factory):
 
     def transform(sample):
@@ -198,6 +208,7 @@ def test_transform_function_returns_a_new_dict_with_predicate(synthetic_dataset,
 @pytest.mark.parametrize('reader_factory', [
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
 ])
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_transform_function_new_field(synthetic_dataset, reader_factory):
     """"""
 
@@ -216,6 +227,7 @@ def test_transform_function_new_field(synthetic_dataset, reader_factory):
         np.testing.assert_equal(expected_matrix, actual.double_matrix)
 
 
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_transform_function_batched(scalar_dataset):
     def double_float64(sample):
         sample['float64'] *= 2
@@ -229,6 +241,7 @@ def test_transform_function_batched(scalar_dataset):
             np.testing.assert_equal(expected_matrix, actual_float64)
 
 
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_transform_function_batched_deleting_column(scalar_dataset):
     def double_float64(sample):
         del sample['float64']
@@ -240,6 +253,7 @@ def test_transform_function_batched_deleting_column(scalar_dataset):
         assert 'float64' not in actual._fields
 
 
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_transform_function_batched_auto_deleting_column(scalar_dataset):
     with make_batch_reader(scalar_dataset.url,
                            transform_spec=TransformSpec(removed_fields=['float64'])) as reader:
@@ -247,6 +261,7 @@ def test_transform_function_batched_auto_deleting_column(scalar_dataset):
         assert 'float64' not in actual._fields
 
 
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_transform_function_with_predicate_batched(scalar_dataset):
     def double_float64(sample):
         assert all(sample['id'] % 2 == 0)
