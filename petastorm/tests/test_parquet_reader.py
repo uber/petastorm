@@ -18,6 +18,11 @@ import pandas as pd
 import pytest
 from pyarrow import parquet as pq
 
+try:
+    from mock import mock
+except ImportError:
+    from unittest import mock
+
 from petastorm import make_batch_reader
 from petastorm.arrow_reader_worker import ArrowReaderWorker
 # pylint: disable=unnecessary-lambda
@@ -170,6 +175,7 @@ def test_invalid_and_valid_column_names(scalar_dataset, reader_factory):
 
 
 @pytest.mark.parametrize('reader_factory', _D)
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_transform_spec_support_return_tensor(scalar_dataset, reader_factory):
 
     field1 = UnischemaField(name='abc', shape=(2, 3), numpy_dtype=np.float32)
