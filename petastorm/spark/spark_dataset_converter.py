@@ -190,6 +190,15 @@ class SparkDatasetConverter(object):
         """
         return self.dataset_size
 
+    def _check_and_set_overriden_petastorm_args(self, petastorm_reader_kwargs, num_epochs, workers_count):
+        # override some arguments default values of petastorm reader
+        petastorm_reader_kwargs['num_epochs'] = num_epochs
+        if workers_count is None:
+            # TODO: generate a best tuned value for default worker count value
+            workers_count = 4
+        petastorm_reader_kwargs['workers_count'] = workers_count
+        _check_rank_and_size_consistent_with_horovod(petastorm_reader_kwargs)
+
     def make_tf_dataset(
             self,
             batch_size=None,
@@ -225,22 +234,13 @@ class SparkDatasetConverter(object):
                  when exit the returned context manager, the reader
                  will be closed.
         """
-
-        # override some arguments default values of petastorm reader
-        petastorm_reader_kwargs['num_epochs'] = num_epochs
-        if workers_count is None:
-            # TODO: generate a best tuned value for default worker count value
-            workers_count = 4
-        petastorm_reader_kwargs['workers_count'] = workers_count
-
-        _check_rank_and_size_consistent_with_horovod(petastorm_reader_kwargs)
-
+        self._check_and_set_overriden_petastorm_args(
+            petastorm_reader_kwargs, num_epochs=num_epochs, workers_count=workers_count)
         return TFDatasetContextManager(
             self.parquet_file_url_list,
             batch_size=batch_size,
             prefetch=prefetch,
-            petastorm_reader_kwargs=petastorm_reader_kwargs
-        )
+            petastorm_reader_kwargs=petastorm_reader_kwargs)
 
     def make_torch_dataloader(self,
                               batch_size=32,
@@ -269,14 +269,12 @@ class SparkDatasetConverter(object):
                  when exit the returned context manager, the reader
                  will be closed.
         """
-
-        _check_rank_and_size_consistent_with_horovod(petastorm_reader_kwargs)
-
-        return TorchDatasetContextManager(self.cache_dir_url,
-                                          batch_size,
-                                          num_epochs,
-                                          workers_count,
-                                          **petastorm_reader_kwargs)
+        self._check_and_set_overriden_petastorm_args(
+            petastorm_reader_kwargs, num_epochs=num_epochs, workers_count=workers_count)
+        return TorchDatasetContextManager(
+            self.parquet_file_url_list,
+            batch_size=batch_size,
+            petastorm_reader_kwargs=petastorm_reader_kwargs)
 
     def delete(self):
         """
@@ -349,24 +347,20 @@ class TorchDatasetContextManager(object):
     :class:`petastorm.Reader`.
     """
 
-    def __init__(self, data_url, batch_size, num_epochs, workers_count,
-                 **petastorm_reader_kwargs):
+    def __init__(self, parquet_file_url_list, batch_size, petastorm_reader_kwargs):
         """
-        :param data_url: A string specifying the data URL.
+        :param parquet_file_url_list: A string specifying the data URL.
         See `SparkDatasetConverter.make_torch_dataloader()` for the definitions
         of the other parameters.
         """
-        petastorm_reader_kwargs["num_epochs"] = num_epochs
-        if workers_count is not None:
-            petastorm_reader_kwargs["workers_count"] = workers_count
-        self.data_url = data_url
+        self.parquet_file_url_list = parquet_file_url_list
         self.batch_size = batch_size
         self.petastorm_reader_kwargs = petastorm_reader_kwargs
 
     def __enter__(self):
         from petastorm.pytorch import DataLoader
 
-        self.reader = make_batch_reader(self.data_url,
+        self.reader = make_batch_reader(self.parquet_file_url_list,
                                         **self.petastorm_reader_kwargs)
         self.loader = DataLoader(reader=self.reader, batch_size=self.batch_size)
         return self.loader
