@@ -420,7 +420,7 @@ def test_torch_dataloader_advanced_params(mock_torch_make_batch_reader, test_ctx
         peta_args['cur_shard'] == 1 and \
         peta_args['shard_count'] == SHARD_COUNT and \
         peta_args['num_epochs'] is None and \
-        peta_args['workers_count'] == 44
+        peta_args['workers_count'] == 4
 
     # Test default value overridden arguments.
     with conv.make_torch_dataloader(num_epochs=1, workers_count=2) as _:
