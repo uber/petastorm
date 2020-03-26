@@ -18,11 +18,6 @@ import pandas as pd
 import pytest
 from pyarrow import parquet as pq
 
-try:
-    from mock import mock
-except ImportError:
-    from unittest import mock
-
 from petastorm import make_batch_reader
 from petastorm.arrow_reader_worker import ArrowReaderWorker
 # pylint: disable=unnecessary-lambda
