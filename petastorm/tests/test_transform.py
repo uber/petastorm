@@ -15,11 +15,6 @@
 import numpy as np
 import pytest
 
-try:
-    from mock import mock
-except ImportError:
-    from unittest import mock
-
 from petastorm.transform import transform_schema, TransformSpec
 from petastorm.unischema import Unischema, UnischemaField
 
