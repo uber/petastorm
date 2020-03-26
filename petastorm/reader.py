@@ -206,6 +206,11 @@ def make_batch_reader(dataset_url_or_urls,
 
     NOTE: only scalar columns are currently supported.
 
+    NOTE: If without `schema_fields` specified, the reader schema will be inferred from parquet dataset. then the
+    reader schema fields order will preserve parqeut dataset fields order (partition column come first), but if
+    setting `transform_spec` and specified `TransformSpec.selected_fields`, then the reader schema fields order
+    will be the order of 'selected_fields'.
+
     :param dataset_url_or_urls: a url to a parquet directory or a url list (with the same scheme) to parquet files.
         e.g. ``'hdfs://some_hdfs_cluster/user/yevgeni/parquet8'``, or ``'file:///tmp/mydataset'``,
         or ``'s3://bucket/mydataset'``, or ``'gs://bucket/mydataset'``,
@@ -245,11 +250,6 @@ def make_batch_reader(dataset_url_or_urls,
     :param transform_spec: An instance of :class:`~petastorm.transform.TransformSpec` object defining how a record
         is transformed after it is loaded and decoded. The transformation occurs on a worker thread/process (depends
         on the ``reader_pool_type`` value).
-
-    Note: If without `schema_fields` specified, the reader schema will be inferred from parquet dataset. then the
-        reader schema fields order will preserve parqeut dataset fields order (partition column come first), but if
-        setting `transform_spec` and specified `TransformSpec.selected_fields`, then the reader schema fields order
-        will be the order of 'selected_fields'.
     :return: A :class:`Reader` object
     """
     dataset_url_or_urls = normalize_dataset_url_or_urls(dataset_url_or_urls)
