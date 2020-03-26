@@ -505,7 +505,8 @@ def _wait_for_fs_eventually_consistency(url_list):
             if elapsed > wait_seconds:
                 return False
 
-    with ThreadPool(64) as pool:
+    pool = ThreadPool(64)
+    try:
         async_results = [pool.apply_async(wait_on_file, (path,)) for path in path_list]
         failed_file_list = []
         for i in range(len(path_list)):
@@ -515,6 +516,9 @@ def _wait_for_fs_eventually_consistency(url_list):
         if failed_file_list:
             raise RuntimeError('These files cannot be synced after waiting {wait} seconds: {path_list}'
                                .format(wait=wait_seconds, path_list=','.join(failed_file_list)))
+    finally:
+        pool.close()
+        pool.join()
 
 
 def make_spark_converter(
