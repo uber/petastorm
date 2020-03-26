@@ -323,7 +323,7 @@ def test_wait_for_fs_eventually_consistency(test_ctx):
 
     # 2. test one file does not exists. Raise error.
     os.remove(file2_path)
-    with pytest.raises(RuntimeError, match='These files cannot be synced after waiting 30 seconds'):
+    with pytest.raises(RuntimeError, match='These files cannot be synced after waiting'):
         _wait_for_fs_eventually_consistency(url_list)
 
     # 3. test one file accessible after 1 second.

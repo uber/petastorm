@@ -22,6 +22,7 @@ import os
 import time
 import warnings
 from distutils.version import LooseVersion
+from multiprocessing.pool import ThreadPool
 
 from pyarrow import LocalFileSystem
 from pyspark.ml.common import _java2py
@@ -158,7 +159,7 @@ class SparkDatasetConverter(object):
     """
 
     PARENT_CACHE_DIR_URL_CONF = 'petastorm.spark.converter.parentCacheDirUrl'
-    WAIT_FS_EVENTUALLY_CONSISTENCY_SECONS = 'petastorm.spark.converter.fsEventuallyConsistencySeconds'
+    WAIT_FS_EVENTUALLY_CONSISTENCY_SECONDS = 'petastorm.spark.converter.fsEventuallyConsistencySecs'
 
     def __init__(self, cache_dir_url, parquet_file_url_list, dataset_size):
         """
@@ -418,36 +419,34 @@ def _wait_for_fs_eventually_consistency(url_list):
     This is because of s3 eventually consistency, and the backend of dbfs is s3.
     """
     fs, path_list = get_filesystem_and_path_or_paths(url_list)
-    remaining_list = list(path_list)
-    new_remaining_list = []
 
     wait_seconds = _get_spark_session().conf \
-        .get(SparkDatasetConverter.WAIT_FS_EVENTUALLY_CONSISTENCY_SECONS, '0')
+        .get(SparkDatasetConverter.WAIT_FS_EVENTUALLY_CONSISTENCY_SECONDS, '0')
     wait_seconds = int(wait_seconds)
 
     if wait_seconds <= 0:
         return
 
-    logger.debug('Because of filesystem eventually consistency, waiting several seconds until '
-                 'these files become accessible: %s', ','.join(remaining_list))
+    def wait_on_file(path):
+        beg_time = time.time()
+        while True:
+            if fs.exists(path):
+                return True
+            time.sleep(0.1)
+            elapsed = time.time() - beg_time
+            if elapsed > wait_seconds:
+                return False
 
-    for _ in range(wait_seconds):
-        for path in remaining_list:
-            if not fs.exists(path):
-                new_remaining_list.append(path)
-        remaining_list = new_remaining_list
-        new_remaining_list = []
-
-        if not remaining_list:
-            # all files can be accessed by dbfs fuse
-            return
-
-        logger.debug('Remaining these files to be accessible: %s', ','.join(remaining_list))
-        time.sleep(1)
-
-    if remaining_list:
-        raise RuntimeError('These files cannot be synced after waiting 30 seconds: {path_list}'.format(
-            path_list=','.join(remaining_list)))
+    with ThreadPool(64) as pool:
+        async_results = [pool.apply_async(wait_on_file, (path,)) for path in path_list]
+        failed_file_list = []
+        for i in range(len(path_list)):
+            res = async_results[i].get()
+            if not res:
+                failed_file_list.append(path_list[i])
+        if failed_file_list:
+            raise RuntimeError('These files cannot be synced after waiting {wait} seconds: {path_list}'
+                               .format(wait=wait_seconds, path_list=','.join(failed_file_list)))
 
 
 def make_spark_converter(
