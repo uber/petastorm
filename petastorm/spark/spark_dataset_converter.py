@@ -25,7 +25,6 @@ from distutils.version import LooseVersion
 from multiprocessing.pool import ThreadPool
 
 from pyarrow import LocalFileSystem
-from pyspark.ml.common import _java2py
 from pyspark.sql.session import SparkSession
 from six.moves.urllib.parse import urlparse
 
@@ -502,6 +501,6 @@ def make_spark_converter(
     spark_df = spark.read.parquet(dataset_cache_dir_url)
 
     dataset_size = spark_df.count()
-    parquet_file_url_list = _java2py(spark.sparkContext, spark_df._jdf.inputFiles())
+    parquet_file_url_list = list(spark_df._jdf.inputFiles())
 
     return SparkDatasetConverter(dataset_cache_dir_url, parquet_file_url_list, dataset_size)
