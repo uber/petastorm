@@ -41,11 +41,12 @@ class TransformSpec(object):
         """
         self.func = func
         self.edit_fields = edit_fields or []
-        self.removed_fields = removed_fields or []
-        self.selected_fields = selected_fields or []
 
-        if self.removed_fields and self.selected_fields:
+        if self.removed_fields is not None and self.selected_fields is not None:
             raise ValueError('User can only specify one of removed_fields and selected_fields in TransformSpec.')
+
+        self.removed_fields = removed_fields or []
+        self.selected_fields = selected_fields
 
 
 def transform_schema(schema, transform_spec):
@@ -69,7 +70,12 @@ def transform_schema(schema, transform_spec):
                                                 shape=field_to_edit[2], codec=None, nullable=field_to_edit[3])
         fields.append(edited_unischema_field)
 
-    if transform_spec.selected_fields:
+    unknown_field_names = set(transform_spec.selected_fields) - set(f.name for f in fields)
+    if unknown_field_names:
+        warnings.warn('selected_fields specified some field names that are not part of the schema. '
+                      'These field names will be ignored "{}". '.format(', '.join(unknown_field_names)))
+
+    if transform_spec.selected_fields is not None:
         fields = [f for f in fields if f.name in transform_spec.selected_fields]
         fields = sorted(fields, key=lambda f: transform_spec.selected_fields.index(f.name))
 
