@@ -158,7 +158,7 @@ class SparkDatasetConverter(object):
     """
 
     PARENT_CACHE_DIR_URL_CONF = 'petastorm.spark.converter.parentCacheDirUrl'
-    WAIT_FS_EVENTUALLY_CONSISTENCY_SECONDS = 'petastorm.spark.converter.fsEventuallyConsistencySecs'
+    WAIT_FS_EVENTUALLY_CONSISTENCY_SECONDS = 'petastorm.spark.converter.fsEventuallyConsistencyWaitSecs'
 
     def __init__(self, cache_dir_url, parquet_file_url_list, dataset_size):
         """
