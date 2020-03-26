@@ -37,10 +37,6 @@ from petastorm.compat import compat_get_metadata
 _UNISCHEMA_FIELD_ORDER = 'preserve_input_order'
 
 
-def get_unischema_field_order():
-    return _UNISCHEMA_FIELD_ORDER.lower()
-
-
 def _fields_as_tuple(field):
     """Common representation of UnischemaField for equality and hash operators.
     Defined outside class because the method won't be accessible otherwise.
@@ -104,10 +100,12 @@ class _NamedtupleCache(object):
         :return: A namedtuple with field names defined by `field_names`
         """
         # Cache key is a combination of schema name and all field names
-        if get_unischema_field_order() == 'alphabetical':
+        if _UNISCHEMA_FIELD_ORDER.lower() == 'alphabetical':
             field_names = list(sorted(field_names))
         else:
             field_names = list(field_names)
+
+        print('DBG _NamedtupleCache.get: fields: ' + str(field_names))
         key = ' '.join([parent_schema_name] + field_names)
         if key not in _NamedtupleCache._store:
             _NamedtupleCache._store[key] = \
@@ -188,7 +186,7 @@ class Unischema(object):
             represent the schema field order.
         """
         self._name = name
-        if get_unischema_field_order() == 'alphabetical':
+        if _UNISCHEMA_FIELD_ORDER.lower() == 'alphabetical':
             fields = sorted(fields, key=lambda t: t.name)
 
         self._fields = OrderedDict([(f.name, f) for f in fields])

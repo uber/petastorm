@@ -36,7 +36,6 @@ def test_noop_transform():
     assert transformed_schema.fields == TestSchema.fields
 
 
-@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_remove_field_transform():
     one_removed = transform_schema(TestSchema, TransformSpec(lambda x: x, edit_fields=None,
                                                              removed_fields=['int']))
@@ -59,7 +58,6 @@ def test_select_field_transform():
         assert list(transformed.fields.keys()) == selected_fields
 
 
-@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_add_field_transform():
     one_added = transform_schema(TestSchema,
                                  TransformSpec(lambda x: x,
@@ -67,7 +65,6 @@ def test_add_field_transform():
     assert set(one_added.fields.keys()) == {'string', 'double', 'double2', 'int'}
 
 
-@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_change_field_transform():
     one_added = transform_schema(TestSchema,
                                  TransformSpec(lambda x: x,
@@ -75,7 +72,6 @@ def test_change_field_transform():
     assert one_added.fields['double'].numpy_dtype == np.float16
 
 
-@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_unknown_fields_in_remove_field_transform():
     with pytest.warns(UserWarning, match='not part of the schema.*unknown_1'):
         one_removed = transform_schema(TestSchema, TransformSpec(lambda x: x, edit_fields=None,

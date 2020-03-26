@@ -335,8 +335,7 @@ def test_arrow_schema_convertion():
         pa.field('timestamp_s', pa.timestamp('s')),
         pa.field('timestamp_ns', pa.timestamp('ns')),
         pa.field('date_32', pa.date32()),
-        pa.field('date_64', pa.date64()),
-        pa.field('list_of_int', pa.list_(pa.int32()))
+        pa.field('date_64', pa.date64())
     ]
     arrow_schema = pa.schema(fields)
 
@@ -346,10 +345,6 @@ def test_arrow_schema_convertion():
     for name in arrow_schema.names:
         assert getattr(unischema, name).name == name
         assert getattr(unischema, name).codec is None
-        if name == 'list_of_int':
-            assert getattr(unischema, name).shape == (None,)
-        else:
-            assert getattr(unischema, name).shape == ()
 
         if name == 'bool':
             assert not getattr(unischema, name).nullable
