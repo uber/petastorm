@@ -30,10 +30,9 @@ TestSchema = Unischema('TestSchema', [
 ])
 
 
-@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_noop_transform():
     transformed_schema = transform_schema(TestSchema, TransformSpec(lambda x: x, edit_fields=None, removed_fields=None))
-    assert transformed_schema.fields == TestSchema.fields
+    assert set(transformed_schema.fields) == set(TestSchema.fields)
 
 
 def test_remove_field_transform():
