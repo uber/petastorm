@@ -104,8 +104,6 @@ class _NamedtupleCache(object):
             field_names = list(sorted(field_names))
         else:
             field_names = list(field_names)
-
-        print('DBG _NamedtupleCache.get: fields: ' + str(field_names))
         key = ' '.join([parent_schema_name] + field_names)
         if key not in _NamedtupleCache._store:
             _NamedtupleCache._store[key] = \
