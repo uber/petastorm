@@ -225,8 +225,8 @@ The minimalist example below assumes the definition of a ``Net`` class and
                                 transform_spec=transform), batch_size=1000) as test_loader:
         test(model, device, test_loader)
 
-Spark Converter API
--------------------
+Spark Dataset Converter API
+---------------------------
 
 Spark converter API simplifies the data conversion from Spark to TensorFlow or PyTorch.
 The input Spark DataFrame is first materialized in the parquet format and then loaded as
@@ -263,8 +263,9 @@ Spark DataFrame containing a feature column followed by a label column.
     converter1.delete()
 
 The minimalist example below assumes the definition of a ``Net`` class and
-``train`` and ``test`` functions, and a Spark DataFrame containing a feature
-column followed by a label column.
+``train`` and ``test`` functions, included in
+`pytorch_example.py <https://github.com/uber/petastorm/blob/master/examples/mnist/pytorch_example.py>`_,
+and a Spark DataFrame containing a feature column followed by a label column.
 
 .. code-block:: python
 
@@ -272,18 +273,20 @@ column followed by a label column.
 
     spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, 'hdfs:/...')
 
-    df1 = ... # `df1` is a spark dataframe
+    df_train, df_test = ... # `df_train` and `df_test` are spark dataframes
     model = Net()
 
-    converter1 = make_spark_converter(df1)
+    converter_train = make_spark_converter(df_train)
+    converter_test = make_spark_converter(df_test)
 
-    with converter1.make_torch_dataloader() as dataloader:
+    with converter_train.make_torch_dataloader() as dataloader:
         train(model, dataloader, ...)
 
-    with converter1.make_torch_dataloader() as dataloader:
+    with converter_test.make_torch_dataloader() as dataloader:
         test(model, dataloader, ...)
 
-    converter1.delete()
+    converter_train.delete()
+    converter_test.delete()
 
 
 PySpark and SQL
