@@ -42,7 +42,7 @@ class TransformSpec(object):
         self.func = func
         self.edit_fields = edit_fields or []
 
-        if self.removed_fields is not None and self.selected_fields is not None:
+        if removed_fields is not None and selected_fields is not None:
             raise ValueError('User can only specify one of removed_fields and selected_fields in TransformSpec.')
 
         self.removed_fields = removed_fields or []
