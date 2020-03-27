@@ -32,8 +32,8 @@ from six import string_types
 from petastorm.compat import compat_get_metadata
 
 # _UNISCHEMA_FIELD_ORDER available values are 'preserve_input_order' or 'alphabetical'
-# default behavior is 'preserve_input_order', but, when backward compatibility required,
-# set this to be 'alphabetical'
+# Current default behavior is 'preserve_input_order', the legacy behavior is 'alphabetical', which is deprecated and
+# will be removed in future versions.
 _UNISCHEMA_FIELD_ORDER = 'preserve_input_order'
 
 
