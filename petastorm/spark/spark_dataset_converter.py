@@ -489,7 +489,7 @@ def _wait_file_available(url_list):
     """
     fs, path_list = get_filesystem_and_path_or_paths(url_list)
     wait_seconds = _get_spark_session().conf \
-        .get(SparkDatasetConverter.FILE_AVAILABILITY_WAIT_TIMEOUT_SECS_CONF, '0')
+        .get(SparkDatasetConverter.FILE_AVAILABILITY_WAIT_TIMEOUT_SECS_CONF, '30')
     wait_seconds = int(wait_seconds)
     if wait_seconds <= 0:
         return
