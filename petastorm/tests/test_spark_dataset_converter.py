@@ -120,7 +120,6 @@ def test_array_field(test_ctx):
     @pandas_udf('array<float>')
     def gen_array(v):
         return v.map(lambda x: np.random.rand(10))
-
     df1 = test_ctx.spark.range(10).withColumn('v', gen_array('id')).repartition(2)
     cv1 = make_spark_converter(df1)
     # we can auto infer one-dim array shape
@@ -129,8 +128,7 @@ def test_array_field(test_ctx):
         next_op = tf_iter.get_next()
         with tf.Session() as sess:
             batch1 = sess.run(next_op)
-        
-        assert batch1.shape == (4, 10)
+        assert batch1.v.shape == (4, 10)
 
 
 def test_delete(test_ctx):
