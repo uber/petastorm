@@ -244,14 +244,14 @@ Spark DataFrame containing a feature column followed by a label column.
     # the dir is used to save materialized spark dataframe files
     spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, 'hdfs:/...')
 
-    df1 = ... # `df1` is a spark dataframe
+    df = ... # `df` is a spark dataframe
 
-    # create a converter from `df1`
-    # it will materialize `df1` to cache dir.
-    converter1 = make_spark_converter(df1)
+    # create a converter from `df`
+    # it will materialize `df` to cache dir.
+    converter = make_spark_converter(df)
 
-    # make a tensorflow dataset from `converter1
-    with converter1.make_tf_dataset() as dataset:
+    # make a tensorflow dataset from `converter`
+    with converter.make_tf_dataset() as dataset:
         # the `dataset` is `tf.data.Dataset` object
         # dataset transformation can be done if needed
         dataset = dataset.map(...)
@@ -260,7 +260,7 @@ Spark DataFrame containing a feature column followed by a label column.
         # when exiting the context, the reader of the dataset will be closed
 
     # delete the cached files of the dataframe.
-    converter1.delete()
+    converter.delete()
 
 The minimalist example below assumes the definition of a ``Net`` class and
 ``train`` and ``test`` functions, included in
@@ -271,20 +271,30 @@ and a Spark DataFrame containing a feature column followed by a label column.
 
     from petastorm.spark import SparkDatasetConverter, make_spark_converter
 
+    # specify a cache dir first.
+    # the dir is used to save materialized spark dataframe files
     spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, 'hdfs:/...')
 
     df_train, df_test = ... # `df_train` and `df_test` are spark dataframes
     model = Net()
 
+    # create a converter_train from `df_train`
+    # it will materialize `df_train` to cache dir. (the same for df_test)
     converter_train = make_spark_converter(df_train)
     converter_test = make_spark_converter(df_test)
 
-    with converter_train.make_torch_dataloader() as dataloader:
-        train(model, dataloader, ...)
+    # make a pytorch dataloader from `converter_train`
+    with converter_train.make_torch_dataloader() as dataloader_train:
+        # the `dataloader_train` is `torch.utils.data.DataLoader` object
+        # we can train model using the `dataloader_train`
+        train(model, dataloader_train, ...)
+        # when exiting the context, the reader of the dataset will be closed
 
-    with converter_test.make_torch_dataloader() as dataloader:
-        test(model, dataloader, ...)
+    # the same for `converter_test`
+    with converter_test.make_torch_dataloader() as dataloader_test:
+        test(model, dataloader_test, ...)
 
+    # delete the cached files of the dataframes.
     converter_train.delete()
     converter_test.delete()
 
