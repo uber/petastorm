@@ -70,12 +70,11 @@ def transform_schema(schema, transform_spec):
                                                 shape=field_to_edit[2], codec=None, nullable=field_to_edit[3])
         fields.append(edited_unischema_field)
 
-    unknown_field_names = set(transform_spec.selected_fields) - set(f.name for f in fields)
-    if unknown_field_names:
-        warnings.warn('selected_fields specified some field names that are not part of the schema. '
-                      'These field names will be ignored "{}". '.format(', '.join(unknown_field_names)))
-
     if transform_spec.selected_fields is not None:
+        unknown_field_names = set(transform_spec.selected_fields) - set(f.name for f in fields)
+        if unknown_field_names:
+            warnings.warn('selected_fields specified some field names that are not part of the schema. '
+                          'These field names will be ignored "{}". '.format(', '.join(unknown_field_names)))
         fields = [f for f in fields if f.name in transform_spec.selected_fields]
         fields = sorted(fields, key=lambda f: transform_spec.selected_fields.index(f.name))
 
