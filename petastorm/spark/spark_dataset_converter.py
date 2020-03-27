@@ -172,16 +172,16 @@ class SparkDatasetConverter(object):
     """
 
     PARENT_CACHE_DIR_URL_CONF = 'petastorm.spark.converter.parentCacheDirUrl'
-    WAIT_FS_EVENTUALLY_CONSISTENCY_SECONDS = 'petastorm.spark.converter.fsEventuallyConsistencyWaitSecs'
+    FILE_AVAILABILITY_WAIT_TIMEOUT_SECS_CONF = 'petastorm.spark.converter.fileAvailabilityWaitTimeoutSecs'
 
-    def __init__(self, cache_dir_url, parquet_file_url_list, dataset_size):
+    def __init__(self, cache_dir_url, file_urls, dataset_size):
         """
         :param cache_dir_url: A string denoting the path to store the cache files.
-        :param parquet_file_url_list: a list of parquet file list of this dataset.
+        :param file_urls: a list of parquet file url list of this dataset.
         :param dataset_size: An int denoting the number of rows in the dataframe.
         """
         self.cache_dir_url = cache_dir_url
-        self.parquet_file_url_list = parquet_file_url_list
+        self.file_urls = file_urls
         self.dataset_size = dataset_size
 
     def __len__(self):
@@ -190,7 +190,8 @@ class SparkDatasetConverter(object):
         """
         return self.dataset_size
 
-    def _check_and_set_overriden_petastorm_args(self, petastorm_reader_kwargs, num_epochs, workers_count):
+    @staticmethod
+    def _check_and_set_overriden_petastorm_args(petastorm_reader_kwargs, num_epochs, workers_count):
         # override some arguments default values of petastorm reader
         petastorm_reader_kwargs['num_epochs'] = num_epochs
         if workers_count is None:
@@ -237,7 +238,7 @@ class SparkDatasetConverter(object):
         self._check_and_set_overriden_petastorm_args(
             petastorm_reader_kwargs, num_epochs=num_epochs, workers_count=workers_count)
         return TFDatasetContextManager(
-            self.parquet_file_url_list,
+            self.file_urls,
             batch_size=batch_size,
             prefetch=prefetch,
             petastorm_reader_kwargs=petastorm_reader_kwargs)
@@ -272,7 +273,7 @@ class SparkDatasetConverter(object):
         self._check_and_set_overriden_petastorm_args(
             petastorm_reader_kwargs, num_epochs=num_epochs, workers_count=workers_count)
         return TorchDatasetContextManager(
-            self.parquet_file_url_list,
+            self.file_urls,
             batch_size=batch_size,
             petastorm_reader_kwargs=petastorm_reader_kwargs)
 
@@ -312,7 +313,7 @@ class TFDatasetContextManager(object):
         from petastorm.tf_utils import make_petastorm_dataset
         import tensorflow as tf
 
-        _wait_for_fs_eventually_consistency(self.parquet_file_url_list)
+        _wait_file_available(self.parquet_file_url_list)
         self.reader = make_batch_reader(self.parquet_file_url_list, **self.petastorm_reader_kwargs)
 
         # unroll dataset
@@ -480,42 +481,36 @@ def _materialize_df(df, parent_cache_dir_url, parquet_row_group_size_bytes,
     return save_to_dir_url
 
 
-def _wait_for_fs_eventually_consistency(url_list):
+def _wait_file_available(url_list):
     """
-    This is used in databricks runtime. Waiting about 30 seconds to make sure
-    all files can be accessed by dbfs fuse.
-    This is because of s3 eventually consistency, and the backend of dbfs is s3.
+    Waiting about SparkDatasetConverter.FILE_AVAILABILITY_WAIT_TIMEOUT_SECS_CONF seconds to make sure
+    all files are available for reading. This is useful in some filesystems, such as S3 which only
+    providing eventually consistency.
     """
     fs, path_list = get_filesystem_and_path_or_paths(url_list)
-
     wait_seconds = _get_spark_session().conf \
-        .get(SparkDatasetConverter.WAIT_FS_EVENTUALLY_CONSISTENCY_SECONDS, '0')
+        .get(SparkDatasetConverter.FILE_AVAILABILITY_WAIT_TIMEOUT_SECS_CONF, '0')
     wait_seconds = int(wait_seconds)
-
     if wait_seconds <= 0:
         return
+    logger.debug('Waiting some seconds until all parquet-store files appear at urls {url_list}', ','.join(url_list))
 
-    def wait_on_file(path):
-        beg_time = time.time()
-        while True:
+    def wait_for_file(path):
+        end_time = time.time() + wait_seconds
+        while time.time() < end_time:
             if fs.exists(path):
                 return True
             time.sleep(0.1)
-            elapsed = time.time() - beg_time
-            if elapsed > wait_seconds:
-                return False
+        return False
 
     pool = ThreadPool(64)
     try:
-        async_results = [pool.apply_async(wait_on_file, (path,)) for path in path_list]
-        failed_file_list = []
-        for i in range(len(path_list)):
-            res = async_results[i].get()
-            if not res:
-                failed_file_list.append(path_list[i])
-        if failed_file_list:
-            raise RuntimeError('These files cannot be synced after waiting {wait} seconds: {path_list}'
-                               .format(wait=wait_seconds, path_list=','.join(failed_file_list)))
+        results = pool.map(wait_for_file, path_list)
+        failed_list = [url for url, result in zip(url_list, results) if result]
+        if failed_list:
+            raise RuntimeError('Timeout while waiting for all parquet-store files to appear at urls {failed_list},'
+                               'Please check whether these files were saved successfully when materializing dataframe.'
+                               .format(failed_list=','.join(failed_list)))
     finally:
         pool.close()
         pool.join()

@@ -36,7 +36,7 @@ from petastorm.spark import (SparkDatasetConverter, make_spark_converter,
 from petastorm.spark.spark_dataset_converter import (
     _check_url, _get_horovod_rank_and_size, _get_parent_cache_dir_url,
     _check_rank_and_size_consistent_with_horovod, _make_sub_dir_url,
-    register_delete_dir_handler, _wait_for_fs_eventually_consistency)
+    register_delete_dir_handler, _wait_file_available)
 
 try:
     from mock import mock
@@ -54,7 +54,7 @@ class TestContext(object):
         self.tempdir = tempfile.mkdtemp('_spark_converter_test')
         self.temp_url = 'file://' + self.tempdir.replace(os.sep, '/')
         self.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, self.temp_url)
-        self.spark.conf.set(SparkDatasetConverter.WAIT_FS_EVENTUALLY_CONSISTENCY_SECONDS, '2')
+        self.spark.conf.set(SparkDatasetConverter.FILE_AVAILABILITY_WAIT_TIMEOUT_SECS_CONF, '2')
 
     def tear_down(self):
         self.spark.stop()
@@ -446,12 +446,12 @@ def test_wait_for_fs_eventually_consistency(test_ctx):
     # 1. test all files exists.
     create_file(file1_path)
     create_file(file2_path)
-    _wait_for_fs_eventually_consistency(url_list)
+    _wait_file_available(url_list)
 
     # 2. test one file does not exists. Raise error.
     os.remove(file2_path)
     with pytest.raises(RuntimeError, match='These files cannot be synced after waiting'):
-        _wait_for_fs_eventually_consistency(url_list)
+        _wait_file_available(url_list)
 
     # 3. test one file accessible after 1 second.
     def delay_create_file2():
@@ -460,4 +460,4 @@ def test_wait_for_fs_eventually_consistency(test_ctx):
 
     threading.Thread(target=delay_create_file2()).start()
 
-    _wait_for_fs_eventually_consistency(url_list)
+    _wait_file_available(url_list)
