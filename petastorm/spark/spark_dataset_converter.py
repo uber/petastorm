@@ -493,7 +493,7 @@ def _wait_file_available(url_list):
     wait_seconds = int(wait_seconds)
     if wait_seconds <= 0:
         return
-    logger.debug('Waiting some seconds until all parquet-store files appear at urls {url_list}', ','.join(url_list))
+    logger.debug('Waiting some seconds until all parquet-store files appear at urls %s', ','.join(url_list))
 
     def wait_for_file(path):
         end_time = time.time() + wait_seconds
