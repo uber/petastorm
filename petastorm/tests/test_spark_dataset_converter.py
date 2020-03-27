@@ -429,7 +429,7 @@ def test_torch_dataloader_advanced_params(mock_torch_make_batch_reader, test_ctx
     assert peta_args['num_epochs'] == 1 and peta_args['workers_count'] == 2
 
 
-def test_wait_for_fs_eventually_consistency(test_ctx):
+def test_wait_file_available(test_ctx):
     pq_dir = os.path.join(test_ctx.tempdir, 'test_ev')
     os.makedirs(pq_dir)
     file1_path = os.path.join(pq_dir, 'file1')
@@ -450,7 +450,8 @@ def test_wait_for_fs_eventually_consistency(test_ctx):
 
     # 2. test one file does not exists. Raise error.
     os.remove(file2_path)
-    with pytest.raises(RuntimeError, match='These files cannot be synced after waiting'):
+    with pytest.raises(RuntimeError,
+                       match='Timeout while waiting for all parquet-store files to appear at urls'):
         _wait_file_available(url_list)
 
     # 3. test one file accessible after 1 second.
