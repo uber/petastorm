@@ -13,12 +13,12 @@
 # limitations under the License.
 
 import atexit
-import shutil
-import threading
 import datetime
-import uuid
 import logging
 import os
+import shutil
+import threading
+import uuid
 import warnings
 from distutils.version import LooseVersion
 
@@ -134,14 +134,28 @@ def _get_horovod_rank_and_size():
     return None, None
 
 
-def _is_rank_and_size_consistent_with_horovod(cur_shard, shard_count, hvd_rank, hvd_size):
+def _check_rank_and_size_consistent_with_horovod(petastorm_reader_kwargs):
     """
     Check whether the cur_shard and shard_count args are consistent with horovod environment variables.
-    If not consistent with horovod environment variables, return False.
+    If not consistent with horovod environment variables, log warning message and return False.
     If there're no related horovod environment variable set, return True.
     """
+    hvd_rank, hvd_size = _get_horovod_rank_and_size()
+    cur_shard = petastorm_reader_kwargs.get('cur_shard')
+    shard_count = petastorm_reader_kwargs.get('shard_count')
+
     if hvd_rank is not None and hvd_size is not None:
         if cur_shard != hvd_rank or shard_count != hvd_size:
+            logger.warning(
+                'The petastorm reader arguments cur_shard(%d) and '
+                'shard_count(%d) '
+                'is not consistent with horovod environments hvd_rank(%d) and '
+                'hvd_size(%d), '
+                'If you want each horovod worker train on one corresponding '
+                'shard data, you should set '
+                'argument `cur_shard` to be `hvd.rank()` and argument '
+                '`shard_count` to be `hvd.size()`.',
+                cur_shard, shard_count, hvd_rank, hvd_size)
             return False
     return True
 
@@ -216,16 +230,7 @@ class SparkDatasetConverter(object):
             workers_count = 4
         petastorm_reader_kwargs['workers_count'] = workers_count
 
-        hvd_rank, hvd_size = _get_horovod_rank_and_size()
-        cur_shard = petastorm_reader_kwargs.get('cur_shard')
-        shard_count = petastorm_reader_kwargs.get('shard_count')
-
-        if not _is_rank_and_size_consistent_with_horovod(cur_shard, shard_count, hvd_rank, hvd_size):
-            logger.warning('The petastorm reader arguments cur_shard(%d) and shard_count(%d) '
-                           'is not consistent with horovod environments hvd_rank(%d) and hvd_size(%d), '
-                           'If you want each horovod worker train on one corresponding shard data, you should set '
-                           'argument `cur_shard` to be `hvd.rank()` and argument `shard_count` to be `hvd.size()`.',
-                           cur_shard, shard_count, hvd_rank, hvd_size)
+        _check_rank_and_size_consistent_with_horovod(petastorm_reader_kwargs)
 
         return TFDatasetContextManager(
             self.cache_dir_url,
@@ -233,6 +238,42 @@ class SparkDatasetConverter(object):
             prefetch=prefetch,
             petastorm_reader_kwargs=petastorm_reader_kwargs
         )
+
+    def make_torch_dataloader(self,
+                              batch_size=32,
+                              num_epochs=None,
+                              workers_count=None,
+                              **petastorm_reader_kwargs):
+        """
+        Make a PyTorch DataLoader.
+
+        This method will do the following two steps:
+          1) Open a petastorm reader on the materialized dataset dir.
+          2) Create a PyTorch DataLoader based on the reader created in (1)
+
+        :param batch_size: The number of items to return per batch
+        :param num_epochs: An epoch is a single pass over all rows in the
+            dataset. Setting ``num_epochs`` to ``None`` will result in an
+            infinite number of epochs.
+        :param workers_count: An int for the number of workers to use in the
+            reader pool. This only is used for the thread or process pool.
+            Defaults value None, which means using the default value from
+            `petastorm.make_batch_reader()`. We can autotune it in the future.
+        :param petastorm_reader_kwargs: all the arguments for
+            `petastorm.make_batch_reader()`.
+
+        :return: a context manager for a `torch.utils.data.DataLoader` object.
+                 when exit the returned context manager, the reader
+                 will be closed.
+        """
+
+        _check_rank_and_size_consistent_with_horovod(petastorm_reader_kwargs)
+
+        return TorchDatasetContextManager(self.cache_dir_url,
+                                          batch_size,
+                                          num_epochs,
+                                          workers_count,
+                                          **petastorm_reader_kwargs)
 
     def delete(self):
         """
@@ -270,10 +311,12 @@ class TFDatasetContextManager(object):
         from petastorm.tf_utils import make_petastorm_dataset
         import tensorflow as tf
 
-        self.reader = make_batch_reader(self.data_url, **self.petastorm_reader_kwargs)
+        self.reader = make_batch_reader(self.data_url,
+                                        **self.petastorm_reader_kwargs)
 
         # unroll dataset
-        dataset = make_petastorm_dataset(self.reader).flat_map(tf.data.Dataset.from_tensor_slices)
+        dataset = make_petastorm_dataset(self.reader).flat_map(
+            tf.data.Dataset.from_tensor_slices)
 
         # TODO: auto tune best batch size in default case.
         batch_size = self.batch_size or 32
@@ -291,6 +334,39 @@ class TFDatasetContextManager(object):
         dataset = dataset.prefetch(prefetch)
 
         return dataset
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        self.reader.stop()
+        self.reader.join()
+
+
+class TorchDatasetContextManager(object):
+    """
+    A context manager that manages the creation and termination of a
+    :class:`petastorm.Reader`.
+    """
+
+    def __init__(self, data_url, batch_size, num_epochs, workers_count,
+                 **petastorm_reader_kwargs):
+        """
+        :param data_url: A string specifying the data URL.
+        See `SparkDatasetConverter.make_torch_dataloader()` for the definitions
+        of the other parameters.
+        """
+        petastorm_reader_kwargs["num_epochs"] = num_epochs
+        if workers_count is not None:
+            petastorm_reader_kwargs["workers_count"] = workers_count
+        self.data_url = data_url
+        self.batch_size = batch_size
+        self.petastorm_reader_kwargs = petastorm_reader_kwargs
+
+    def __enter__(self):
+        from petastorm.pytorch import DataLoader
+
+        self.reader = make_batch_reader(self.data_url,
+                                        **self.petastorm_reader_kwargs)
+        self.loader = DataLoader(reader=self.reader, batch_size=self.batch_size)
+        return self.loader
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self.reader.stop()
@@ -429,7 +505,7 @@ def make_spark_converter(
 
     :param df: The :class:`DataFrame` object to be converted.
     :param parquet_row_group_size_bytes: An int denoting the number of bytes
-        in a parquet row group when materializing the dataframe..
+        in a parquet row group when materializing the dataframe.
     :param compression_codec: Specify compression codec.
         It can be one of 'uncompressed', 'bzip2', 'gzip', 'lz4', 'snappy', 'deflate'.
         Default None. If None, it will leave the data uncompressed.
