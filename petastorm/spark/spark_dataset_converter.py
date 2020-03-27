@@ -506,7 +506,7 @@ def _wait_file_available(url_list):
     pool = ThreadPool(64)
     try:
         results = pool.map(wait_for_file, path_list)
-        failed_list = [url for url, result in zip(url_list, results) if result]
+        failed_list = [url for url, result in zip(url_list, results) if not result]
         if failed_list:
             raise RuntimeError('Timeout while waiting for all parquet-store files to appear at urls {failed_list},'
                                'Please check whether these files were saved successfully when materializing dataframe.'
