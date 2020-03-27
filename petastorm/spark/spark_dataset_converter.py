@@ -361,6 +361,7 @@ class TorchDatasetContextManager(object):
     def __enter__(self):
         from petastorm.pytorch import DataLoader
 
+        _wait_file_available(self.parquet_file_url_list)
         self.reader = make_batch_reader(self.parquet_file_url_list,
                                         **self.petastorm_reader_kwargs)
         self.loader = DataLoader(reader=self.reader, batch_size=self.batch_size)
