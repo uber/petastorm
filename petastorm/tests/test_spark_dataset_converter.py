@@ -44,11 +44,6 @@ from petastorm.spark.spark_dataset_converter import (
     _check_rank_and_size_consistent_with_horovod, _make_sub_dir_url,
     register_delete_dir_handler)
 
-try:
-    from mock import mock
-except ImportError:
-    from unittest import mock
-
 
 class TestContext(object):
 
