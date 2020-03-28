@@ -105,7 +105,7 @@ def test_primitive(test_ctx):
                 if col == "bin_col":
                     actual_ele = bytearray(actual_ele)
                 if col == "float_col" or col == "double_col":
-                    # Note that the default precision is float32
+                    # Note that the default dtype is float32
                     assert pytest.approx(expected_ele, rel=1e-6) == actual_ele
                 else:
                     assert expected_ele == actual_ele
@@ -114,7 +114,7 @@ def test_primitive(test_ctx):
 
     assert np.bool_ == ts.bool_col.dtype.type
     assert np.float32 == ts.float_col.dtype.type
-    # Default precision float32
+    # Default dtype float32
     assert np.float32 == ts.double_col.dtype.type
     assert np.int16 == ts.short_col.dtype.type
     assert np.int32 == ts.int_col.dtype.type
@@ -312,7 +312,7 @@ def test_horovod_rank_compatibility(test_ctx):
             petastorm_reader_kwargs={"cur_shard": 1, "shard_count": 3})
 
 
-def test_precision(test_ctx):
+def test_dtype(test_ctx):
     df = test_ctx.spark.range(10)
     df = df.withColumn("float_col", df.id.cast(FloatType())) \
         .withColumn("double_col", df.id.cast(DoubleType()))
@@ -325,7 +325,7 @@ def test_precision(test_ctx):
             ts = sess.run(tensor)
     assert np.float32 == ts.double_col.dtype.type
 
-    converter2 = make_spark_converter(df, precision="float64")
+    converter2 = make_spark_converter(df, dtype="float64")
     with converter2.make_tf_dataset() as dataset:
         iterator = dataset.make_one_shot_iterator()
         tensor = iterator.get_next()
@@ -333,9 +333,9 @@ def test_precision(test_ctx):
             ts = sess.run(tensor)
     assert np.float64 == ts.float_col.dtype.type
 
-    with pytest.raises(ValueError, match="precision float16 is not supported. \
+    with pytest.raises(ValueError, match="dtype float16 is not supported. \
             Use 'float32' or float64"):
-        make_spark_converter(df, precision="float16")
+        make_spark_converter(df, dtype="float16")
 
 
 def test_array(test_ctx):
@@ -413,7 +413,7 @@ def test_torch_primitive(test_ctx):
                 actual_ele = batch[col][0]
                 expected_ele = expected_df[i][col]
                 if col == "float_col" or col == "double_col":
-                    # Note that the default precision is float32
+                    # Note that the default dtype is float32
                     assert pytest.approx(expected_ele, rel=1e-6) == actual_ele
                 else:
                     assert expected_ele == actual_ele
