@@ -55,7 +55,7 @@ before_script:
   - $RUN pip install --upgrade numpy
 
   - $RUN pip install -U pyarrow==${PYARROW_VERSION} tensorflow==${TF_VERSION}
-  - if [[ ${PYSPARK_VERSION} > 2.4.5 ]] ; then $RUN pip install https://ml-team-public-read.s3-us-west-2.amazonaws.com/pyspark-3.1.0.dev0-60dd1a690fed62b1d6442cdc8cf3f89ef4304d5a.tar.gz ; fi
+  - if [[ ${PYSPARK_VERSION} > 2.4.5 ]] ; then $RUN pip install https://ml-team-public-read.s3-us-west-2.amazonaws.com/pyspark-3.1.0.dev0-60dd1a690fed62b1d6442cdc8cf3f89ef4304d5a.tar.gz --force-reinstall --upgrade ; fi
 
   - $RUN pip list
 
