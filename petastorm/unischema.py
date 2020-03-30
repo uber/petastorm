@@ -31,6 +31,11 @@ from six import string_types
 
 from petastorm.compat import compat_get_metadata
 
+# _UNISCHEMA_FIELD_ORDER available values are 'preserve_input_order' or 'alphabetical'
+# Current default behavior is 'preserve_input_order', the legacy behavior is 'alphabetical', which is deprecated and
+# will be removed in future versions.
+_UNISCHEMA_FIELD_ORDER = 'preserve_input_order'
+
 
 def _fields_as_tuple(field):
     """Common representation of UnischemaField for equality and hash operators.
@@ -95,11 +100,14 @@ class _NamedtupleCache(object):
         :return: A namedtuple with field names defined by `field_names`
         """
         # Cache key is a combination of schema name and all field names
-        sorted_names = list(sorted(field_names))
-        key = ' '.join([parent_schema_name] + sorted_names)
+        if _UNISCHEMA_FIELD_ORDER.lower() == 'alphabetical':
+            field_names = list(sorted(field_names))
+        else:
+            field_names = list(field_names)
+        key = ' '.join([parent_schema_name] + field_names)
         if key not in _NamedtupleCache._store:
             _NamedtupleCache._store[key] = \
-                _new_gt_255_compatible_namedtuple('{}_view'.format(parent_schema_name), sorted_names)
+                _new_gt_255_compatible_namedtuple('{}_view'.format(parent_schema_name), field_names)
         return _NamedtupleCache._store[key]
 
 
@@ -172,11 +180,14 @@ class Unischema(object):
         """Creates an instance of a Unischema object.
 
         :param name: name of the schema
-        :param fields: a list of ``UnischemaField`` instances describing the fields. The order of the fields is
-            not important - they are stored sorted by name internally.
+        :param fields: a list of ``UnischemaField`` instances describing the fields. The element order in the list
+            represent the schema field order.
         """
         self._name = name
-        self._fields = OrderedDict([(f.name, f) for f in sorted(fields, key=lambda t: t.name)])
+        if _UNISCHEMA_FIELD_ORDER.lower() == 'alphabetical':
+            fields = sorted(fields, key=lambda t: t.name)
+
+        self._fields = OrderedDict([(f.name, f) for f in fields])
         # Generates attributes named by the field names as an access syntax sugar.
         for f in fields:
             if not hasattr(self, f.name):
