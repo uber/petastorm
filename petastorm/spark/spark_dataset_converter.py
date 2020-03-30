@@ -38,9 +38,7 @@ if LooseVersion(pyspark.__version__) < LooseVersion('3.0'):
     def vector_to_array(_1, _2='float32'):
         raise RuntimeError("Vector columns are only supported in pyspark>=3.0")
 else:
-    # pylint: disable=import-error
-    from pyspark.ml.functions import vector_to_array
-    # pylint: enable=import-error
+    from pyspark.ml.functions import vector_to_array  # pylint: disable=import-error
 
 DEFAULT_ROW_GROUP_SIZE_BYTES = 32 * 1024 * 1024
 
