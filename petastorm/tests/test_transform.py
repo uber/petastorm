@@ -27,7 +27,7 @@ TestSchema = Unischema('TestSchema', [
 
 def test_noop_transform():
     transformed_schema = transform_schema(TestSchema, TransformSpec(lambda x: x, edit_fields=None, removed_fields=None))
-    assert transformed_schema.fields == TestSchema.fields
+    assert set(transformed_schema.fields) == set(TestSchema.fields)
 
 
 def test_remove_field_transform():
@@ -38,6 +38,18 @@ def test_remove_field_transform():
     two_removed = transform_schema(TestSchema, TransformSpec(lambda x: x, edit_fields=None,
                                                              removed_fields=['int', 'double']))
     assert set(two_removed.fields.keys()) == {'string'}
+
+
+def test_select_field_transform():
+    test_list = [
+        ['string', 'double', 'int'],
+        ['int', 'string', 'double'],
+        ['string', 'int'],
+        ['int']
+    ]
+    for selected_fields in test_list:
+        transformed = transform_schema(TestSchema, TransformSpec(selected_fields=selected_fields))
+        assert list(transformed.fields.keys()) == selected_fields
 
 
 def test_add_field_transform():
