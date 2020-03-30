@@ -487,12 +487,12 @@ def _convert_vector(df, dtype):
     from pyspark.mllib.linalg import VectorUDT as OldVectorUDT
 
     found_vector_column = False
-    for struct_field in df.schema:
-        col_name = struct_field.name
-        if struct_field.dataType == Vector() or \
-                struct_field.dataType == OldVector() or \
-                type(struct_field.dataType) == VectorUDT or \
-                type(struct_field.dataType) == OldVectorUDT:
+    for field in df.schema:
+        col_name = field.name
+        if field.dataType == Vector() or \
+                field.dataType == OldVector() or \
+                type(field.dataType) == VectorUDT or \
+                type(field.dataType) == OldVectorUDT:
             if not found_vector_column:
                 import pyspark
                 if LooseVersion(pyspark.__version__) < LooseVersion('3.0'):
