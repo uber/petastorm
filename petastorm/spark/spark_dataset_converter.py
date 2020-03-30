@@ -24,13 +24,23 @@ import warnings
 from distutils.version import LooseVersion
 from multiprocessing.pool import ThreadPool
 
+import pyspark
 from pyarrow import LocalFileSystem
 from pyspark.sql.session import SparkSession
 from pyspark.sql.types import ArrayType, DoubleType, FloatType
 from six.moves.urllib.parse import urlparse
 
 from petastorm import make_batch_reader
-from petastorm.fs_utils import FilesystemResolver, get_filesystem_and_path_or_paths
+from petastorm.fs_utils import (FilesystemResolver,
+                                get_filesystem_and_path_or_paths)
+
+if LooseVersion(pyspark.__version__) < LooseVersion('3.0'):
+    def vector_to_array(_1, _2='float32'):
+        raise RuntimeError("Vector columns are only supported in pyspark>=3.0")
+else:
+    # pylint: disable=import-error
+    from pyspark.ml.functions import vector_to_array
+    # pylint: enable=import-error
 
 DEFAULT_ROW_GROUP_SIZE_BYTES = 32 * 1024 * 1024
 
@@ -439,7 +449,7 @@ def _cache_df_or_retrieve_cache_data_url(df, parent_cache_dir_url,
         in a parquet row group.
     :param compression_codec: Specify compression codec.
     :param dtype: 'float32' or 'float64', specifying the precision of the
-        output dataset.
+        floating-point type columns in the output dataset.
     :return: A string denoting the path of the saved parquet file.
     """
     # TODO
@@ -483,19 +493,10 @@ def _convert_vector(df, dtype):
     from pyspark.ml.linalg import VectorUDT
     from pyspark.mllib.linalg import VectorUDT as OldVectorUDT
 
-    found_vector_column = False
     for field in df.schema:
         col_name = field.name
         if isinstance(field.dataType, VectorUDT) or \
                 isinstance(field.dataType, OldVectorUDT):
-            if not found_vector_column:
-                import pyspark
-                if LooseVersion(pyspark.__version__) < LooseVersion('3.0'):
-                    raise ValueError("Vector columns are not supported for pyspark<3.0.0.")
-                # pylint: disable=import-error
-                from pyspark.ml.functions import vector_to_array
-                # pylint: enable=import-error
-                found_vector_column = True
             df = df.withColumn(col_name,
                                vector_to_array(df[col_name], dtype))
     return df
