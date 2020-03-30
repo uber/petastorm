@@ -412,6 +412,12 @@ def _check_url(dir_url):
             'ERROR! A scheme-less directory url ({}) is no longer supported. '
             'Please prepend "file://" for local filesystem.'.format(dir_url))
 
+    if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
+        if parsed.scheme.lower() != 'file' or not parsed.path.startswith('/dbfs/'):
+            raise ValueError(
+                "You must specify a dbfs fuse path for {conf}, like: 'file:/dbfs/path/to/cache_dir'"
+                .format(conf=SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF))
+
 
 def _make_sub_dir_url(dir_url, name):
     parsed = urlparse(dir_url)
