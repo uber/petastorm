@@ -15,6 +15,7 @@
 from __future__ import division
 
 import random
+from collections import OrderedDict
 from decimal import Decimal
 from functools import partial
 
@@ -197,6 +198,7 @@ def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None, pa
                   'float64': np.float64(i) * .66}
         if not is_list_of_scalar_broken:
             result['int_fixed_size_list'] = np.arange(1 + i, 10 + i).astype(np.int32)
+        result = OrderedDict(sorted(result.items(), key=lambda item: item[0]))
         return result
 
     expected_data = [expected_row(i) for i in range(num_rows)]
@@ -217,16 +219,19 @@ def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None, pa
         if not is_list_of_scalar_broken else []
 
     # WARNING: surprisingly, schema fields and row fields are matched only by order and not name.
+    # We must maintain alphabetical order of the struct fields for the code to work!!!
     schema = StructType(
         [
+            StructField('datetime', DateType(), False),
+            StructField('float64', DoubleType(), False),
             StructField('id', IntegerType(), False),
             StructField('id_div_700', IntegerType(), False),
-            StructField('datetime', DateType(), False),
-            StructField('timestamp', TimestampType(), False),
+        ] + maybe_int_fixed_size_list_field +
+        [
             StructField('string', StringType(), False),
             StructField('string2', StringType(), False),
-            StructField('float64', DoubleType(), False),
-        ] + maybe_int_fixed_size_list_field)
+            StructField('timestamp', TimestampType(), False),
+        ])
 
     dataframe = spark.createDataFrame(rows, schema)
     dataframe. \
