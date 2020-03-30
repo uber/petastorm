@@ -481,9 +481,7 @@ def _convert_precision(df, dtype):
 
 
 def _convert_vector(df, dtype):
-    from pyspark.ml.linalg import Vector
     from pyspark.ml.linalg import VectorUDT
-    from pyspark.mllib.linalg import Vector as OldVector
     from pyspark.mllib.linalg import VectorUDT as OldVectorUDT
 
     found_vector_column = False
