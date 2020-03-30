@@ -379,8 +379,9 @@ def dict_to_spark_row(unischema, row_dict):
                 encoded_dict[field_name] = value.tolist()
             else:
                 encoded_dict[field_name] = value
-
-    return pyspark.Row(**encoded_dict)
+    schema_field_indices = {field_name: i for i, field_name in enumerate(unischema.fields)}
+    sorted_dict = OrderedDict(sorted(encoded_dict.items(), key=lambda item: schema_field_indices[item[0]]))
+    return pyspark.Row(**sorted_dict)
 
 
 def insert_explicit_nulls(unischema, row_dict):

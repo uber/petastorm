@@ -151,6 +151,21 @@ def test_dict_to_spark_row_field_validation_ndarrays():
         isinstance(dict_to_spark_row(TestSchema, {'string_field': np.zeros((1, 2, 3), dtype=np.float32)}), Row)
 
 
+def test_dict_to_spark_row_order():
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('float_col', np.float64, ()),
+        UnischemaField('int_col', np.int64, ()),
+    ])
+    row_dict = {
+        TestSchema.int_col.name: 3,
+        TestSchema.float_col.name: 2.0,
+    }
+    spark_row = dict_to_spark_row(TestSchema, row_dict)
+    schema_field_names = list(TestSchema.fields)
+    assert spark_row[0] == row_dict[schema_field_names[0]]
+    assert spark_row[1] == row_dict[schema_field_names[1]]
+
+
 def test_make_named_tuple():
     TestSchema = Unischema('TestSchema', [
         UnischemaField('string_scalar', np.string_, (), ScalarCodec(StringType()), True),
