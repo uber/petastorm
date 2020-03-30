@@ -204,7 +204,12 @@ def make_batch_reader(dataset_url_or_urls,
     Use :func:`~petastorm.make_reader` to read Petastorm Parquet stores generated with
     :func:`~petastorm.etl.dataset_metadata.materialize_dataset`.
 
-    NOTE: only scalar columns are currently supported.
+    NOTE: only scalar columns or array type (of primitive type element) columns are currently supported.
+
+    NOTE: If without `schema_fields` specified, the reader schema will be inferred from parquet dataset. then the
+    reader schema fields order will preserve parqeut dataset fields order (partition column come first), but if
+    setting `transform_spec` and specified `TransformSpec.selected_fields`, then the reader schema fields order
+    will be the order of 'selected_fields'.
 
     :param dataset_url_or_urls: a url to a parquet directory or a url list (with the same scheme) to parquet files.
         e.g. ``'hdfs://some_hdfs_cluster/user/yevgeni/parquet8'``, or ``'file:///tmp/mydataset'``,

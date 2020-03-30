@@ -13,21 +13,23 @@
 # limitations under the License.
 
 import atexit
-import shutil
-import threading
 import datetime
-import uuid
 import logging
 import os
+import shutil
+import threading
+import time
+import uuid
 import warnings
 from distutils.version import LooseVersion
+from multiprocessing.pool import ThreadPool
 
 from pyarrow import LocalFileSystem
 from pyspark.sql.session import SparkSession
 from six.moves.urllib.parse import urlparse
 
 from petastorm import make_batch_reader
-from petastorm.fs_utils import FilesystemResolver
+from petastorm.fs_utils import FilesystemResolver, get_filesystem_and_path_or_paths
 
 DEFAULT_ROW_GROUP_SIZE_BYTES = 32 * 1024 * 1024
 
@@ -134,14 +136,28 @@ def _get_horovod_rank_and_size():
     return None, None
 
 
-def _is_rank_and_size_consistent_with_horovod(cur_shard, shard_count, hvd_rank, hvd_size):
+def _check_rank_and_size_consistent_with_horovod(petastorm_reader_kwargs):
     """
     Check whether the cur_shard and shard_count args are consistent with horovod environment variables.
-    If not consistent with horovod environment variables, return False.
+    If not consistent with horovod environment variables, log warning message and return False.
     If there're no related horovod environment variable set, return True.
     """
+    hvd_rank, hvd_size = _get_horovod_rank_and_size()
+    cur_shard = petastorm_reader_kwargs.get('cur_shard')
+    shard_count = petastorm_reader_kwargs.get('shard_count')
+
     if hvd_rank is not None and hvd_size is not None:
         if cur_shard != hvd_rank or shard_count != hvd_size:
+            logger.warning(
+                'The petastorm reader arguments cur_shard(%d) and '
+                'shard_count(%d) '
+                'is not consistent with horovod environments hvd_rank(%d) and '
+                'hvd_size(%d), '
+                'If you want each horovod worker train on one corresponding '
+                'shard data, you should set '
+                'argument `cur_shard` to be `hvd.rank()` and argument '
+                '`shard_count` to be `hvd.size()`.',
+                cur_shard, shard_count, hvd_rank, hvd_size)
             return False
     return True
 
@@ -156,15 +172,16 @@ class SparkDatasetConverter(object):
     """
 
     PARENT_CACHE_DIR_URL_CONF = 'petastorm.spark.converter.parentCacheDirUrl'
+    FILE_AVAILABILITY_WAIT_TIMEOUT_SECS_CONF = 'petastorm.spark.converter.fileAvailabilityWaitTimeoutSecs'
 
-    def __init__(self, cache_dir_url, dataset_size):
+    def __init__(self, cache_dir_url, file_urls, dataset_size):
         """
-        :param cache_dir_url: A string denoting the path to store the cache
-            files.
-        :param dataset_size: An int denoting the number of rows in the
-            dataframe.
+        :param cache_dir_url: A string denoting the path to store the cache files.
+        :param file_urls: a list of parquet file url list of this dataset.
+        :param dataset_size: An int denoting the number of rows in the dataframe.
         """
         self.cache_dir_url = cache_dir_url
+        self.file_urls = file_urls
         self.dataset_size = dataset_size
 
     def __len__(self):
@@ -172,6 +189,16 @@ class SparkDatasetConverter(object):
         :return: dataset size
         """
         return self.dataset_size
+
+    @staticmethod
+    def _check_and_set_overriden_petastorm_args(petastorm_reader_kwargs, num_epochs, workers_count):
+        # override some arguments default values of petastorm reader
+        petastorm_reader_kwargs['num_epochs'] = num_epochs
+        if workers_count is None:
+            # TODO: generate a best tuned value for default worker count value
+            workers_count = 4
+        petastorm_reader_kwargs['workers_count'] = workers_count
+        _check_rank_and_size_consistent_with_horovod(petastorm_reader_kwargs)
 
     def make_tf_dataset(
             self,
@@ -208,31 +235,47 @@ class SparkDatasetConverter(object):
                  when exit the returned context manager, the reader
                  will be closed.
         """
-
-        # override some arguments default values of petastorm reader
-        petastorm_reader_kwargs['num_epochs'] = num_epochs
-        if workers_count is None:
-            # TODO: generate a best tuned value for default worker count value
-            workers_count = 4
-        petastorm_reader_kwargs['workers_count'] = workers_count
-
-        hvd_rank, hvd_size = _get_horovod_rank_and_size()
-        cur_shard = petastorm_reader_kwargs.get('cur_shard')
-        shard_count = petastorm_reader_kwargs.get('shard_count')
-
-        if not _is_rank_and_size_consistent_with_horovod(cur_shard, shard_count, hvd_rank, hvd_size):
-            logger.warning('The petastorm reader arguments cur_shard(%d) and shard_count(%d) '
-                           'is not consistent with horovod environments hvd_rank(%d) and hvd_size(%d), '
-                           'If you want each horovod worker train on one corresponding shard data, you should set '
-                           'argument `cur_shard` to be `hvd.rank()` and argument `shard_count` to be `hvd.size()`.',
-                           cur_shard, shard_count, hvd_rank, hvd_size)
-
+        self._check_and_set_overriden_petastorm_args(
+            petastorm_reader_kwargs, num_epochs=num_epochs, workers_count=workers_count)
         return TFDatasetContextManager(
-            self.cache_dir_url,
+            self.file_urls,
             batch_size=batch_size,
             prefetch=prefetch,
-            petastorm_reader_kwargs=petastorm_reader_kwargs
-        )
+            petastorm_reader_kwargs=petastorm_reader_kwargs)
+
+    def make_torch_dataloader(self,
+                              batch_size=32,
+                              num_epochs=None,
+                              workers_count=None,
+                              **petastorm_reader_kwargs):
+        """
+        Make a PyTorch DataLoader.
+
+        This method will do the following two steps:
+          1) Open a petastorm reader on the materialized dataset dir.
+          2) Create a PyTorch DataLoader based on the reader created in (1)
+
+        :param batch_size: The number of items to return per batch
+        :param num_epochs: An epoch is a single pass over all rows in the
+            dataset. Setting ``num_epochs`` to ``None`` will result in an
+            infinite number of epochs.
+        :param workers_count: An int for the number of workers to use in the
+            reader pool. This only is used for the thread or process pool.
+            Defaults value None, which means using the default value from
+            `petastorm.make_batch_reader()`. We can autotune it in the future.
+        :param petastorm_reader_kwargs: all the arguments for
+            `petastorm.make_batch_reader()`.
+
+        :return: a context manager for a `torch.utils.data.DataLoader` object.
+                 when exit the returned context manager, the reader
+                 will be closed.
+        """
+        self._check_and_set_overriden_petastorm_args(
+            petastorm_reader_kwargs, num_epochs=num_epochs, workers_count=workers_count)
+        return TorchDatasetContextManager(
+            self.file_urls,
+            batch_size=batch_size,
+            petastorm_reader_kwargs=petastorm_reader_kwargs)
 
     def delete(self):
         """
@@ -249,18 +292,18 @@ class TFDatasetContextManager(object):
 
     def __init__(
             self,
-            data_url,
+            parquet_file_url_list,
             batch_size,
             prefetch,
             petastorm_reader_kwargs
     ):
         """
-        :param data_url: A string specifying the data URL.
+        :param parquet_file_url_list: A string specifying the parquet file URL list.
         :param batch_size: batch size for tensorflow dataset.
         :param prefetch: the prefectch size for tensorflow dataset.
         :param petastorm_reader_kwargs: other arguments for petastorm reader
         """
-        self.data_url = data_url
+        self.parquet_file_url_list = parquet_file_url_list
         self.batch_size = batch_size
         self.prefetch = prefetch
         self.petastorm_reader_kwargs = petastorm_reader_kwargs
@@ -270,10 +313,12 @@ class TFDatasetContextManager(object):
         from petastorm.tf_utils import make_petastorm_dataset
         import tensorflow as tf
 
-        self.reader = make_batch_reader(self.data_url, **self.petastorm_reader_kwargs)
+        _wait_file_available(self.parquet_file_url_list)
+        self.reader = make_batch_reader(self.parquet_file_url_list, **self.petastorm_reader_kwargs)
 
         # unroll dataset
-        dataset = make_petastorm_dataset(self.reader).flat_map(tf.data.Dataset.from_tensor_slices)
+        dataset = make_petastorm_dataset(self.reader).flat_map(
+            tf.data.Dataset.from_tensor_slices)
 
         # TODO: auto tune best batch size in default case.
         batch_size = self.batch_size or 32
@@ -291,6 +336,36 @@ class TFDatasetContextManager(object):
         dataset = dataset.prefetch(prefetch)
 
         return dataset
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        self.reader.stop()
+        self.reader.join()
+
+
+class TorchDatasetContextManager(object):
+    """
+    A context manager that manages the creation and termination of a
+    :class:`petastorm.Reader`.
+    """
+
+    def __init__(self, parquet_file_url_list, batch_size, petastorm_reader_kwargs):
+        """
+        :param parquet_file_url_list: A string specifying the data URL.
+        See `SparkDatasetConverter.make_torch_dataloader()` for the definitions
+        of the other parameters.
+        """
+        self.parquet_file_url_list = parquet_file_url_list
+        self.batch_size = batch_size
+        self.petastorm_reader_kwargs = petastorm_reader_kwargs
+
+    def __enter__(self):
+        from petastorm.pytorch import DataLoader
+
+        _wait_file_available(self.parquet_file_url_list)
+        self.reader = make_batch_reader(self.parquet_file_url_list,
+                                        **self.petastorm_reader_kwargs)
+        self.loader = DataLoader(reader=self.reader, batch_size=self.batch_size)
+        return self.loader
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self.reader.stop()
@@ -407,6 +482,41 @@ def _materialize_df(df, parent_cache_dir_url, parquet_row_group_size_bytes,
     return save_to_dir_url
 
 
+def _wait_file_available(url_list):
+    """
+    Waiting about SparkDatasetConverter.FILE_AVAILABILITY_WAIT_TIMEOUT_SECS_CONF seconds to make sure
+    all files are available for reading. This is useful in some filesystems, such as S3 which only
+    providing eventually consistency.
+    """
+    fs, path_list = get_filesystem_and_path_or_paths(url_list)
+    wait_seconds = _get_spark_session().conf \
+        .get(SparkDatasetConverter.FILE_AVAILABILITY_WAIT_TIMEOUT_SECS_CONF, '30')
+    wait_seconds = int(wait_seconds)
+    if wait_seconds <= 0:
+        return
+    logger.debug('Waiting some seconds until all parquet-store files appear at urls %s', ','.join(url_list))
+
+    def wait_for_file(path):
+        end_time = time.time() + wait_seconds
+        while time.time() < end_time:
+            if fs.exists(path):
+                return True
+            time.sleep(0.1)
+        return False
+
+    pool = ThreadPool(64)
+    try:
+        results = pool.map(wait_for_file, path_list)
+        failed_list = [url for url, result in zip(url_list, results) if not result]
+        if failed_list:
+            raise RuntimeError('Timeout while waiting for all parquet-store files to appear at urls {failed_list},'
+                               'Please check whether these files were saved successfully when materializing dataframe.'
+                               .format(failed_list=','.join(failed_list)))
+    finally:
+        pool.close()
+        pool.join()
+
+
 def make_spark_converter(
         df,
         parquet_row_group_size_bytes=DEFAULT_ROW_GROUP_SIZE_BYTES,
@@ -429,7 +539,7 @@ def make_spark_converter(
 
     :param df: The :class:`DataFrame` object to be converted.
     :param parquet_row_group_size_bytes: An int denoting the number of bytes
-        in a parquet row group when materializing the dataframe..
+        in a parquet row group when materializing the dataframe.
     :param compression_codec: Specify compression codec.
         It can be one of 'uncompressed', 'bzip2', 'gzip', 'lz4', 'snappy', 'deflate'.
         Default None. If None, it will leave the data uncompressed.
@@ -456,5 +566,10 @@ def make_spark_converter(
     # TODO: improve this by read parquet file metadata to get count
     #  Currently spark can make sure to only read the minimal column
     #  so count will usually be fast.
-    dataset_size = _get_spark_session().read.parquet(dataset_cache_dir_url).count()
-    return SparkDatasetConverter(dataset_cache_dir_url, dataset_size)
+    spark = _get_spark_session()
+    spark_df = spark.read.parquet(dataset_cache_dir_url)
+
+    dataset_size = spark_df.count()
+    parquet_file_url_list = list(spark_df._jdf.inputFiles())
+
+    return SparkDatasetConverter(dataset_cache_dir_url, parquet_file_url_list, dataset_size)
