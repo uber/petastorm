@@ -17,6 +17,7 @@ import datetime
 import logging
 import os
 import shutil
+import statistics
 import threading
 import time
 import uuid
@@ -521,6 +522,19 @@ def _wait_file_available(url_list):
     finally:
         pool.close()
         pool.join()
+
+
+def check_parquet_file_size(url_list):
+    fs, path_list = get_filesystem_and_path_or_paths(url_list)
+    # TODO: also check other file system.
+    if isinstance(fs, LocalFileSystem):
+        file_size_list = [os.path.getsize(path) for path in path_list]
+        median_size = statistics.median(file_size_list)
+        if median_size < 32 * 1024 * 1024:
+            logger.warning('The median size of these parquet files ({url_list}) is too small.'
+                           'Increase file sizes by repartition or coalesce spark dataframe, which '
+                           'will help improve performance.'
+                           .format(url_list=','.join(url_list)))
 
 
 def make_spark_converter(
