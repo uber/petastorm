@@ -489,10 +489,8 @@ def _convert_vector(df, dtype):
     found_vector_column = False
     for field in df.schema:
         col_name = field.name
-        if field.dataType == Vector() or \
-                field.dataType == OldVector() or \
-                type(field.dataType) == VectorUDT or \
-                type(field.dataType) == OldVectorUDT:
+        if isinstance(field.dataType, VectorUDT) or \
+                isinstance(field.dataType, OldVectorUDT):
             if not found_vector_column:
                 import pyspark
                 if LooseVersion(pyspark.__version__) < LooseVersion('3.0'):
