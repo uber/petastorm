@@ -217,19 +217,16 @@ def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None, pa
         if not is_list_of_scalar_broken else []
 
     # WARNING: surprisingly, schema fields and row fields are matched only by order and not name.
-    # We must maintain alphabetical order of the struct fields for the code to work!!!
     schema = StructType(
         [
-            StructField('datetime', DateType(), False),
-            StructField('float64', DoubleType(), False),
             StructField('id', IntegerType(), False),
             StructField('id_div_700', IntegerType(), False),
-        ] + maybe_int_fixed_size_list_field +
-        [
+            StructField('datetime', DateType(), False),
+            StructField('timestamp', TimestampType(), False),
             StructField('string', StringType(), False),
             StructField('string2', StringType(), False),
-            StructField('timestamp', TimestampType(), False),
-        ])
+            StructField('float64', DoubleType(), False),
+        ] + maybe_int_fixed_size_list_field)
 
     dataframe = spark.createDataFrame(rows, schema)
     dataframe. \
