@@ -470,12 +470,12 @@ def _convert_precision(df, dtype):
     source_type, target_type = (DoubleType, FloatType) \
         if dtype == "float32" else (FloatType, DoubleType)
 
-    for struct_field in df.schema:
-        col_name = struct_field.name
-        if isinstance(struct_field.dataType, source_type):
+    for field in df.schema:
+        col_name = field.name
+        if isinstance(field.dataType, source_type):
             df = df.withColumn(col_name, df[col_name].cast(target_type()))
-        elif isinstance(struct_field.dataType, ArrayType) and \
-                isinstance(struct_field.dataType.elementType, source_type):
+        elif isinstance(field.dataType, ArrayType) and \
+                isinstance(field.dataType.elementType, source_type):
             df = df.withColumn(col_name, df[col_name].cast(ArrayType(target_type())))
     return df
 

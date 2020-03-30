@@ -284,9 +284,15 @@ def test_simple_read_tensorflow_with_parquet_dataset(scalar_dataset):
     data"""
     with make_batch_reader(dataset_url_or_urls=scalar_dataset.url) as reader:
         row_tensors = tf_tensors(reader)
+        row_tensors_dict = row_tensors._asdict()
         # Make sure we have static shape info for all fields
-        for column in row_tensors:
-            assert column.get_shape().as_list() == [None]
+        for column_name in row_tensors_dict:
+            column = row_tensors_dict[column_name]
+            column_shape = column.get_shape().as_list()
+            if column_name == 'int_fixed_size_list':
+                assert column_shape == [None, None]
+            else:
+                assert column_shape == [None]
 
         with _tf_session() as sess:
             for _ in range(2):

@@ -19,10 +19,12 @@ import tempfile
 from distutils.version import LooseVersion
 
 import numpy as np
+import pyarrow
 import pyspark
 import pytest
 import tensorflow as tf
 from pyspark.sql import SparkSession
+from pyspark.sql.functions import pandas_udf
 from pyspark.sql.types import (ArrayType, BinaryType, BooleanType, ByteType,
                                DoubleType, FloatType, IntegerType, LongType,
                                ShortType, StringType, StructField, StructType)
@@ -121,6 +123,23 @@ def test_primitive(test_ctx):
     assert np.int64 == ts.long_col.dtype.type
     assert np.object_ == ts.str_col.dtype.type
     assert np.object_ == ts.bin_col.dtype.type
+
+
+@pytest.mark.skipif(LooseVersion(pyarrow.__version__) >= LooseVersion('0.15'),
+                    reason="Spark 2.x is not compatible with pyarrow>=0.15")
+def test_array_field(test_ctx):
+    @pandas_udf('array<float>')
+    def gen_array(v):
+        return v.map(lambda x: np.random.rand(10))
+    df1 = test_ctx.spark.range(10).withColumn('v', gen_array('id')).repartition(2)
+    cv1 = make_spark_converter(df1)
+    # we can auto infer one-dim array shape
+    with cv1.make_tf_dataset(batch_size=4, num_epochs=1) as dataset:
+        tf_iter = dataset.make_one_shot_iterator()
+        next_op = tf_iter.get_next()
+        with tf.Session() as sess:
+            batch1 = sess.run(next_op)
+        assert batch1.v.shape == (4, 10)
 
 
 def test_delete(test_ctx):
