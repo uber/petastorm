@@ -299,8 +299,8 @@ and a Spark DataFrame containing a feature column followed by a label column.
     converter_test.delete()
 
 
-PySpark and SQL
----------------
+Analyzing petastorm datasets using PySpark and SQL
+--------------------------------------------------
 
 A Petastorm dataset can be read into a Spark DataFrame using PySpark, where you can
 use a wide range of Spark tools to analyze and manipulate the dataset.
