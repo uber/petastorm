@@ -335,7 +335,7 @@ def test_match_unischema_fields_legacy_warning():
 
 
 def test_arrow_schema_convertion():
-    arrow_schema = pa.schema([
+    fields = [
         pa.field('string', pa.string()),
         pa.field('int8', pa.int8()),
         pa.field('int16', pa.int16()),
@@ -350,8 +350,9 @@ def test_arrow_schema_convertion():
         pa.field('timestamp_s', pa.timestamp('s')),
         pa.field('timestamp_ns', pa.timestamp('ns')),
         pa.field('date_32', pa.date32()),
-        pa.field('date_64', pa.date64()),
-    ])
+        pa.field('date_64', pa.date64())
+    ]
+    arrow_schema = pa.schema(fields)
 
     mock_dataset = _mock_parquet_dataset([], arrow_schema)
 
@@ -359,10 +360,15 @@ def test_arrow_schema_convertion():
     for name in arrow_schema.names:
         assert getattr(unischema, name).name == name
         assert getattr(unischema, name).codec is None
+
         if name == 'bool':
             assert not getattr(unischema, name).nullable
         else:
             assert getattr(unischema, name).nullable
+
+    # Test schema preserve fields order
+    field_name_list = [f.name for f in fields]
+    assert list(unischema.fields.keys()) == field_name_list
 
 
 def test_arrow_schema_convertion_with_string_partitions():
