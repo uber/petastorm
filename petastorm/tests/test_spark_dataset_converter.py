@@ -14,16 +14,14 @@
 
 import numpy as np
 import os
+import pytest
 import subprocess
 import sys
 import tempfile
 import tensorflow as tf
 import threading
 import time
-import pyarrow
-import pytest
 
-from distutils.version import LooseVersion
 from six.moves.urllib.parse import urlparse
 
 try:
@@ -123,8 +121,6 @@ def test_primitive(test_ctx):
     assert np.object_ == ts.bin_col.dtype.type
 
 
-@pytest.mark.skipif(LooseVersion(pyarrow.__version__) >= LooseVersion('0.15'),
-                    reason="Spark 2.x is not compatible with pyarrow>=0.15")
 def test_array_field(test_ctx):
     @pandas_udf('array<float>')
     def gen_array(v):
