@@ -41,7 +41,8 @@ before_script:
 
   # wait for docker to start
   - sleep 5
-  - export RUN="docker exec petastorm_ci bash /run_in_venv.sh ${PY}"
+  # ARROW_PRE_0_15_IPC_FORMAT=1 is required when spark<3.0 and pyarrow>=0.15
+  - export RUN="docker exec -e ARROW_PRE_0_15_IPC_FORMAT=$ARROW_PRE_0_15_IPC_FORMAT petastorm_ci bash /run_in_venv.sh ${PY}"
   - export PYTEST="pytest --timeout=180 -v --color=yes --cov=./ --cov-report xml:coverage.xml"
   # Refresh our dependencies' versions as in the CI image, they may go stale
   - $RUN pip install -e /petastorm/[test,tf,torch,docs,opencv]
@@ -66,9 +67,6 @@ before_script:
 
   # enable core dumps
   - $RUN ulimit -c unlimited -S
-
-  # export ARROW_PRE_0_15_IPC_FORMAT (required when spark<3.0 and pyarrow>=0.15)
-  - export ARROW_PRE_0_15_IPC_FORMAT=$ARROW_PRE_0_15_IPC_FORMAT
 
 script:
   # Build documentation
