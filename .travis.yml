@@ -18,9 +18,9 @@ python:
   - '2.7'
 env:
   - PYARROW_VERSION=0.12.1 TF_VERSION=1.12 DEPLOYABLE=0 PY=2.7 PYSPARK_VERSION=2.4.4
-  - PYARROW_VERSION=0.15.1 TF_VERSION=1.12 DEPLOYABLE=0 PY=2.7 PYSPARK_VERSION=2.4.4
+  - ARROW_PRE_0_15_IPC_FORMAT=1 PYARROW_VERSION=0.15.1 TF_VERSION=1.12 DEPLOYABLE=0 PY=2.7 PYSPARK_VERSION=2.4.4
   - PYARROW_VERSION=0.12.1 TF_VERSION=1.13.2 DEPLOYABLE=0 PY=3.7 PYSPARK_VERSION=2.4.4
-  - PYARROW_VERSION=0.15.1 TF_VERSION=1.13.2 DEPLOYABLE=1 PY=3.7 PYSPARK_VERSION=2.4.4
+  - ARROW_PRE_0_15_IPC_FORMAT=1 PYARROW_VERSION=0.15.1 TF_VERSION=1.13.2 DEPLOYABLE=1 PY=3.7 PYSPARK_VERSION=2.4.4
   - PYARROW_VERSION=0.15.1 TF_VERSION=1.13.2 DEPLOYABLE=1 PY=3.7 PYSPARK_VERSION=3.0.0
 services:
   - docker
@@ -74,20 +74,20 @@ script:
   # Running pytest twice: first tests that do not have to be forked.
   # `-Y` will result in datasets generated for testing to be persisted between runs in pytest cache.
 
-  - $RUN $PYTEST -m "forked" --forked -Y
+  - ARROW_PRE_0_15_IPC_FORMAT=$ARROW_PRE_0_15_IPC_FORMAT $RUN $PYTEST -m "forked" --forked -Y
     --ignore=examples/mnist/tests/test_pytorch_mnist.py
     --ignore=petastorm/tests/test_pytorch_utils.py
     --ignore=petastorm/tests/test_pytorch_dataloader.py
     petastorm examples
 
-  - $RUN $PYTEST -m "not forked" -v -Y  --cov-append
+  - ARROW_PRE_0_15_IPC_FORMAT=$ARROW_PRE_0_15_IPC_FORMAT $RUN $PYTEST -m "not forked" -v -Y  --cov-append
       --ignore=examples/mnist/tests/test_pytorch_mnist.py
       --ignore=petastorm/tests/test_pytorch_utils.py
       --ignore=petastorm/tests/test_pytorch_dataloader.py
       petastorm examples
 
     # Tensorflow and pytorch tests confict (segfault). Split into separate runs.
-  - $RUN $PYTEST  --cov-append
+  - ARROW_PRE_0_15_IPC_FORMAT=$ARROW_PRE_0_15_IPC_FORMAT $RUN $PYTEST  --cov-append
       examples/mnist/tests/test_pytorch_mnist.py
       petastorm/tests/test_pytorch_dataloader.py
       petastorm/tests/test_pytorch_utils.py
