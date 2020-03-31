@@ -151,6 +151,21 @@ def test_dict_to_spark_row_field_validation_ndarrays():
         isinstance(dict_to_spark_row(TestSchema, {'string_field': np.zeros((1, 2, 3), dtype=np.float32)}), Row)
 
 
+def test_dict_to_spark_row_order():
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('float_col', np.float64, ()),
+        UnischemaField('int_col', np.int64, ()),
+    ])
+    row_dict = {
+        TestSchema.int_col.name: 3,
+        TestSchema.float_col.name: 2.0,
+    }
+    spark_row = dict_to_spark_row(TestSchema, row_dict)
+    schema_field_names = list(TestSchema.fields)
+    assert spark_row[0] == row_dict[schema_field_names[0]]
+    assert spark_row[1] == row_dict[schema_field_names[1]]
+
+
 def test_make_named_tuple():
     TestSchema = Unischema('TestSchema', [
         UnischemaField('string_scalar', np.string_, (), ScalarCodec(StringType()), True),
@@ -320,7 +335,7 @@ def test_match_unischema_fields_legacy_warning():
 
 
 def test_arrow_schema_convertion():
-    arrow_schema = pa.schema([
+    fields = [
         pa.field('string', pa.string()),
         pa.field('int8', pa.int8()),
         pa.field('int16', pa.int16()),
@@ -335,8 +350,9 @@ def test_arrow_schema_convertion():
         pa.field('timestamp_s', pa.timestamp('s')),
         pa.field('timestamp_ns', pa.timestamp('ns')),
         pa.field('date_32', pa.date32()),
-        pa.field('date_64', pa.date64()),
-    ])
+        pa.field('date_64', pa.date64())
+    ]
+    arrow_schema = pa.schema(fields)
 
     mock_dataset = _mock_parquet_dataset([], arrow_schema)
 
@@ -344,10 +360,15 @@ def test_arrow_schema_convertion():
     for name in arrow_schema.names:
         assert getattr(unischema, name).name == name
         assert getattr(unischema, name).codec is None
+
         if name == 'bool':
             assert not getattr(unischema, name).nullable
         else:
             assert getattr(unischema, name).nullable
+
+    # Test schema preserve fields order
+    field_name_list = [f.name for f in fields]
+    assert list(unischema.fields.keys()) == field_name_list
 
 
 def test_arrow_schema_convertion_with_string_partitions():

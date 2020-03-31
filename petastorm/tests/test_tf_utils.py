@@ -23,6 +23,11 @@ import numpy as np
 import pytest
 import tensorflow as tf
 
+try:
+    from mock import mock
+except ImportError:
+    from unittest import mock
+
 from petastorm import make_reader, make_batch_reader, TransformSpec
 from petastorm.ngram import NGram
 from petastorm.tests.test_common import TestSchema
@@ -93,6 +98,7 @@ def test_unknown_type():
         _numpy_to_tf_dtypes(np.uint64)
 
 
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_schema_to_dtype_list():
     TestSchema = Unischema('TestSchema', [
         UnischemaField('int32', np.int32, (), None, False),
@@ -284,9 +290,15 @@ def test_simple_read_tensorflow_with_parquet_dataset(scalar_dataset):
     data"""
     with make_batch_reader(dataset_url_or_urls=scalar_dataset.url) as reader:
         row_tensors = tf_tensors(reader)
+        row_tensors_dict = row_tensors._asdict()
         # Make sure we have static shape info for all fields
-        for column in row_tensors:
-            assert column.get_shape().as_list() == [None]
+        for column_name in row_tensors_dict:
+            column = row_tensors_dict[column_name]
+            column_shape = column.get_shape().as_list()
+            if column_name == 'int_fixed_size_list':
+                assert column_shape == [None, None]
+            else:
+                assert column_shape == [None]
 
         with _tf_session() as sess:
             for _ in range(2):
@@ -318,6 +330,7 @@ def test_shuffling_queue_with_make_batch_reader(scalar_dataset):
             tf_tensors(reader, 100, 90)
 
 
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_transform_function_new_field(synthetic_dataset):
     def double_matrix(sample):
         sample['double_matrix'] = sample['matrix'] * 2
@@ -337,6 +350,7 @@ def test_transform_function_new_field(synthetic_dataset):
         np.testing.assert_equal(expected_matrix, actual.double_matrix)
 
 
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_transform_function_new_field_batched(scalar_dataset):
     def double_float64(sample):
         sample['new_float64'] = sample['float64'] * 2

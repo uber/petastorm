@@ -31,6 +31,11 @@ from six import string_types
 
 from petastorm.compat import compat_get_metadata
 
+# _UNISCHEMA_FIELD_ORDER available values are 'preserve_input_order' or 'alphabetical'
+# Current default behavior is 'preserve_input_order', the legacy behavior is 'alphabetical', which is deprecated and
+# will be removed in future versions.
+_UNISCHEMA_FIELD_ORDER = 'preserve_input_order'
+
 
 def _fields_as_tuple(field):
     """Common representation of UnischemaField for equality and hash operators.
@@ -95,11 +100,14 @@ class _NamedtupleCache(object):
         :return: A namedtuple with field names defined by `field_names`
         """
         # Cache key is a combination of schema name and all field names
-        sorted_names = list(sorted(field_names))
-        key = ' '.join([parent_schema_name] + sorted_names)
+        if _UNISCHEMA_FIELD_ORDER.lower() == 'alphabetical':
+            field_names = list(sorted(field_names))
+        else:
+            field_names = list(field_names)
+        key = ' '.join([parent_schema_name] + field_names)
         if key not in _NamedtupleCache._store:
             _NamedtupleCache._store[key] = \
-                _new_gt_255_compatible_namedtuple('{}_view'.format(parent_schema_name), sorted_names)
+                _new_gt_255_compatible_namedtuple('{}_view'.format(parent_schema_name), field_names)
         return _NamedtupleCache._store[key]
 
 
@@ -172,11 +180,14 @@ class Unischema(object):
         """Creates an instance of a Unischema object.
 
         :param name: name of the schema
-        :param fields: a list of ``UnischemaField`` instances describing the fields. The order of the fields is
-            not important - they are stored sorted by name internally.
+        :param fields: a list of ``UnischemaField`` instances describing the fields. The element order in the list
+            represent the schema field order.
         """
         self._name = name
-        self._fields = OrderedDict([(f.name, f) for f in sorted(fields, key=lambda t: t.name)])
+        if _UNISCHEMA_FIELD_ORDER.lower() == 'alphabetical':
+            fields = sorted(fields, key=lambda t: t.name)
+
+        self._fields = OrderedDict([(f.name, f) for f in fields])
         # Generates attributes named by the field names as an access syntax sugar.
         for f in fields:
             if not hasattr(self, f.name):
@@ -322,11 +333,13 @@ class Unischema(object):
         for column_name in arrow_schema.names:
             arrow_field = arrow_schema.field_by_name(column_name)
             field_type = arrow_field.type
+            field_shape = ()
             if isinstance(field_type, ListType):
                 if isinstance(field_type.value_type, ListType) or isinstance(field_type.value_type, pyStructType):
                     warnings.warn('[ARROW-1644] Ignoring unsupported structure %r for field %r'
                                   % (field_type, column_name))
                     continue
+                field_shape = (None,)
             try:
                 np_type = _numpy_and_codec_from_arrow_type(field_type)
             except ValueError:
@@ -336,7 +349,7 @@ class Unischema(object):
                     continue
                 else:
                     raise
-            unischema_fields.append(UnischemaField(column_name, np_type, (), None, arrow_field.nullable))
+            unischema_fields.append(UnischemaField(column_name, np_type, field_shape, None, arrow_field.nullable))
         return Unischema('inferred_schema', unischema_fields)
 
 
@@ -380,7 +393,14 @@ def dict_to_spark_row(unischema, row_dict):
             else:
                 encoded_dict[field_name] = value
 
-    return pyspark.Row(**encoded_dict)
+    field_list = list(unischema.fields.keys())
+    # generate a value list which match the schema column order.
+    value_list = [encoded_dict[name] for name in field_list]
+    # create a row by value list
+    row = pyspark.Row(*value_list)
+    # set row fields
+    row.__fields__ = field_list
+    return row
 
 
 def insert_explicit_nulls(unischema, row_dict):

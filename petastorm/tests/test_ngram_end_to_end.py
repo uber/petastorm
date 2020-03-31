@@ -22,6 +22,11 @@ import pytest
 import tensorflow as tf
 from tensorflow.python.framework.errors_impl import OutOfRangeError
 
+try:
+    from mock import mock
+except ImportError:
+    from unittest import mock
+
 from petastorm import make_reader
 from petastorm.ngram import NGram
 from petastorm.tests.conftest import SyntheticDataset, maybe_cached_dataset
@@ -209,6 +214,7 @@ def test_ngram_basic_tf(dataset_num_files_1, reader_factory):
 
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_ngram_basic(dataset_num_files_1, reader_factory):
     """Tests basic ngram with no delta threshold with no shuffle and in the same partition."""
     fields = {
@@ -233,6 +239,7 @@ def test_ngram_basic_longer_tf(dataset_num_files_1, reader_factory):
 
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_ngram_basic_longer(dataset_num_files_1, reader_factory):
     """Tests basic ngram with no delta threshold with no shuffle and in the same partition."""
     fields = {
@@ -257,6 +264,7 @@ def test_ngram_basic_shuffle_multi_partition_tf(synthetic_dataset, reader_factor
 
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_ngram_basic_shuffle_multi_partition(synthetic_dataset, reader_factory):
     """Tests basic ngram with no delta threshold with shuffle and in many partitions."""
     fields = {
@@ -281,6 +289,7 @@ def test_ngram_basic_longer_shuffle_multi_partition_tf(synthetic_dataset, reader
 
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_ngram_basic_longer_shuffle_multi_partition(synthetic_dataset, reader_factory):
     """Tests basic ngram with no delta threshold with shuffle and in many partitions."""
     fields = {
@@ -294,6 +303,7 @@ def test_ngram_basic_longer_shuffle_multi_partition(synthetic_dataset, reader_fa
 
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_ngram_basic_longer_no_overlap(synthetic_dataset, reader_factory):
     """Tests basic ngram with no delta threshold with no overlaps of timestamps."""
     fields = {
@@ -366,6 +376,7 @@ def test_ngram_delta_threshold_tf(dataset_0_3_8_10_11_20_23, reader_factory):
 
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_ngram_delta_threshold(dataset_0_3_8_10_11_20_23, reader_factory):
     """Test to verify that delta threshold work as expected in one partition in the same ngram
     and between consecutive ngrams. delta threshold here refers that each ngram must not be
@@ -557,6 +568,7 @@ def _test_continuous_ngram_returns(ngram_fields, ts_field, dataset_num_files_1, 
 
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_ngram_with_regex_fields(dataset_num_files_1, reader_factory):
     """Tests to verify fields and timestamp field can be regular expressions and work with a reader
     """
