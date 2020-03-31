@@ -67,6 +67,9 @@ before_script:
   # enable core dumps
   - $RUN ulimit -c unlimited -S
 
+  # export ARROW_PRE_0_15_IPC_FORMAT (required when spark<3.0 and pyarrow>=0.15)
+  - export ARROW_PRE_0_15_IPC_FORMAT=$ARROW_PRE_0_15_IPC_FORMAT
+
 script:
   # Build documentation
   - $RUN bash -c "cd /petastorm/docs/autodoc && pwd && make html"
@@ -74,20 +77,20 @@ script:
   # Running pytest twice: first tests that do not have to be forked.
   # `-Y` will result in datasets generated for testing to be persisted between runs in pytest cache.
 
-  - ARROW_PRE_0_15_IPC_FORMAT=$ARROW_PRE_0_15_IPC_FORMAT $RUN $PYTEST -m "forked" --forked -Y
+  - $RUN $PYTEST -m "forked" --forked -Y
     --ignore=examples/mnist/tests/test_pytorch_mnist.py
     --ignore=petastorm/tests/test_pytorch_utils.py
     --ignore=petastorm/tests/test_pytorch_dataloader.py
     petastorm examples
 
-  - ARROW_PRE_0_15_IPC_FORMAT=$ARROW_PRE_0_15_IPC_FORMAT $RUN $PYTEST -m "not forked" -v -Y  --cov-append
+  - $RUN $PYTEST -m "not forked" -v -Y  --cov-append
       --ignore=examples/mnist/tests/test_pytorch_mnist.py
       --ignore=petastorm/tests/test_pytorch_utils.py
       --ignore=petastorm/tests/test_pytorch_dataloader.py
       petastorm examples
 
     # Tensorflow and pytorch tests confict (segfault). Split into separate runs.
-  - ARROW_PRE_0_15_IPC_FORMAT=$ARROW_PRE_0_15_IPC_FORMAT $RUN $PYTEST  --cov-append
+  - $RUN $PYTEST  --cov-append
       examples/mnist/tests/test_pytorch_mnist.py
       petastorm/tests/test_pytorch_dataloader.py
       petastorm/tests/test_pytorch_utils.py
