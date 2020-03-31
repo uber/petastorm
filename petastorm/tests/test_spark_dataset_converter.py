@@ -12,16 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numpy as np
 import os
 import subprocess
 import sys
 import tempfile
+import tensorflow as tf
+import threading
+import time
 import pyarrow
 import pytest
-import numpy as np
-import tensorflow as tf
 
 from distutils.version import LooseVersion
+from six.moves.urllib.parse import urlparse
 
 try:
     from mock import mock
@@ -33,7 +36,6 @@ from pyspark.sql.functions import pandas_udf
 from pyspark.sql.types import (BinaryType, BooleanType, ByteType, DoubleType,
                                FloatType, IntegerType, LongType, ShortType,
                                StringType, StructField, StructType)
-from six.moves.urllib.parse import urlparse
 
 from petastorm import make_batch_reader
 from petastorm.fs_utils import FilesystemResolver
@@ -42,7 +44,7 @@ from petastorm.spark import (SparkDatasetConverter, make_spark_converter,
 from petastorm.spark.spark_dataset_converter import (
     _check_url, _get_horovod_rank_and_size, _get_parent_cache_dir_url,
     _check_rank_and_size_consistent_with_horovod, _make_sub_dir_url,
-    register_delete_dir_handler)
+    register_delete_dir_handler, _wait_file_available)
 
 
 class TestContext(object):
@@ -55,6 +57,7 @@ class TestContext(object):
         self.tempdir = tempfile.mkdtemp('_spark_converter_test')
         self.temp_url = 'file://' + self.tempdir.replace(os.sep, '/')
         self.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, self.temp_url)
+        self.spark.conf.set(SparkDatasetConverter.FILE_AVAILABILITY_WAIT_TIMEOUT_SECS_CONF, '2')
 
     def tear_down(self):
         self.spark.stop()
@@ -432,15 +435,50 @@ def test_torch_dataloader_advanced_params(mock_torch_make_batch_reader, test_ctx
     with conv.make_torch_dataloader(reader_pool_type='dummy', cur_shard=1,
                                     shard_count=SHARD_COUNT) as _:
         pass
-    peta_args = mock_torch_make_batch_reader.call_args[1]
+    peta_args = mock_torch_make_batch_reader.call_args.kwargs
     assert peta_args['reader_pool_type'] == 'dummy' and \
         peta_args['cur_shard'] == 1 and \
         peta_args['shard_count'] == SHARD_COUNT and \
         peta_args['num_epochs'] is None and \
-        ('workers_count' not in peta_args)
+        peta_args['workers_count'] == 4
 
     # Test default value overridden arguments.
     with conv.make_torch_dataloader(num_epochs=1, workers_count=2) as _:
         pass
     peta_args = mock_torch_make_batch_reader.call_args[1]
     assert peta_args['num_epochs'] == 1 and peta_args['workers_count'] == 2
+
+
+def test_wait_file_available(test_ctx):
+    pq_dir = os.path.join(test_ctx.tempdir, 'test_ev')
+    os.makedirs(pq_dir)
+    file1_path = os.path.join(pq_dir, 'file1')
+    file2_path = os.path.join(pq_dir, 'file2')
+    url1 = 'file://' + file1_path.replace(os.sep, '/')
+    url2 = 'file://' + file2_path.replace(os.sep, '/')
+
+    url_list = [url1, url2]
+
+    def create_file(p):
+        with open(p, 'w'):
+            pass
+
+    # 1. test all files exists.
+    create_file(file1_path)
+    create_file(file2_path)
+    _wait_file_available(url_list)
+
+    # 2. test one file does not exists. Raise error.
+    os.remove(file2_path)
+    with pytest.raises(RuntimeError,
+                       match='Timeout while waiting for all parquet-store files to appear at urls'):
+        _wait_file_available(url_list)
+
+    # 3. test one file accessible after 1 second.
+    def delay_create_file2():
+        time.sleep(1)
+        create_file(file2_path)
+
+    threading.Thread(target=delay_create_file2()).start()
+
+    _wait_file_available(url_list)

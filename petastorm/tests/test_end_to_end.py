@@ -23,6 +23,11 @@ import pytest
 from pyspark.sql import SparkSession
 from pyspark.sql.types import LongType, ShortType, StringType
 
+try:
+    from mock import mock
+except ImportError:
+    from unittest import mock
+
 from petastorm import make_reader, make_batch_reader, TransformSpec
 from petastorm.codecs import ScalarCodec, CompressedImageCodec
 from petastorm.errors import NoDataAvailableError
@@ -216,6 +221,7 @@ def test_transform_function_new_field(synthetic_dataset, reader_factory):
         np.testing.assert_equal(expected_matrix, actual.double_matrix)
 
 
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_transform_function_batched(scalar_dataset):
     def double_float64(sample):
         sample['float64'] *= 2

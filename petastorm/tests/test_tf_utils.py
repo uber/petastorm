@@ -23,6 +23,11 @@ import numpy as np
 import pytest
 import tensorflow as tf
 
+try:
+    from mock import mock
+except ImportError:
+    from unittest import mock
+
 from petastorm import make_reader, make_batch_reader, TransformSpec
 from petastorm.ngram import NGram
 from petastorm.tests.test_common import TestSchema
@@ -93,6 +98,7 @@ def test_unknown_type():
         _numpy_to_tf_dtypes(np.uint64)
 
 
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_schema_to_dtype_list():
     TestSchema = Unischema('TestSchema', [
         UnischemaField('int32', np.int32, (), None, False),
@@ -324,6 +330,7 @@ def test_shuffling_queue_with_make_batch_reader(scalar_dataset):
             tf_tensors(reader, 100, 90)
 
 
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_transform_function_new_field(synthetic_dataset):
     def double_matrix(sample):
         sample['double_matrix'] = sample['matrix'] * 2
@@ -343,6 +350,7 @@ def test_transform_function_new_field(synthetic_dataset):
         np.testing.assert_equal(expected_matrix, actual.double_matrix)
 
 
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_transform_function_new_field_batched(scalar_dataset):
     def double_float64(sample):
         sample['new_float64'] = sample['float64'] * 2
