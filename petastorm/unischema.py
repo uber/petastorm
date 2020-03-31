@@ -393,7 +393,7 @@ def dict_to_spark_row(unischema, row_dict):
             else:
                 encoded_dict[field_name] = value
 
-    field_list = [field.name for field in unischema.fields]
+    field_list = [name for name in unischema.fields.keys()]
     # generate a value list which match the schema column order.
     value_list = [encoded_dict[name] for name in field_list]
     # create a row by value list
