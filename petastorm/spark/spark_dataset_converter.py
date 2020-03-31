@@ -543,7 +543,7 @@ def _check_dataset_file_median_size(url_list):
         mid_index = len(file_size_list) // 2
         median_size = sorted(file_size_list)[mid_index]
         if median_size < 50 * 1024 * 1024:
-            logger.warning('The median size ({%d}) of these parquet files ({%s}) is too small.'
+            logger.warning('The median size (%d) of these parquet files (%s) is too small.'
                            'Increase file sizes by repartition or coalesce spark dataframe, which '
                            'will help improve performance.', median_size, ','.join(url_list))
 
