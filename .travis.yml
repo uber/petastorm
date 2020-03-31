@@ -40,7 +40,7 @@ before_script:
   - docker run -v `pwd`:/petastorm --name petastorm_ci $CI_IMAGE /bin/sh -c "sleep 3600" &
 
   # wait for docker to start
-  - sleep 5
+  - sleep 20
   # ARROW_PRE_0_15_IPC_FORMAT=1 is required when spark<3.0 and pyarrow>=0.15
   - export RUN="docker exec -e ARROW_PRE_0_15_IPC_FORMAT=$ARROW_PRE_0_15_IPC_FORMAT petastorm_ci bash /run_in_venv.sh ${PY}"
   - export PYTEST="pytest --timeout=180 -v --color=yes --cov=./ --cov-report xml:coverage.xml"
