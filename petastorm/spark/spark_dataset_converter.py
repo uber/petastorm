@@ -425,7 +425,7 @@ def _check_parent_cache_dir_url(dir_url):
     if 'DATABRICKS_RUNTIME_VERSION' in os.environ and not _is_spark_local_mode():
         if isinstance(fs, LocalFileSystem):
             # User need to use dbfs fuse URL.
-            if dir_path.startswith('/dbfs/'):
+            if not dir_path.startswith('/dbfs/'):
                 raise ValueError(
                     "You must specify a dbfs fuse path for {conf}, like: 'file:/dbfs/path/to/cache_dir'"
                     .format(conf=SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF))
