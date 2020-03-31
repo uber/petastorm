@@ -21,7 +21,6 @@ import time
 from distutils.version import LooseVersion
 
 import numpy as np
-import pyarrow
 import pyspark
 import pytest
 import tensorflow as tf
@@ -128,8 +127,6 @@ def test_primitive(test_ctx):
     assert np.object_ == ts.bin_col.dtype.type
 
 
-@pytest.mark.skipif(LooseVersion(pyarrow.__version__) >= LooseVersion('0.15'),
-                    reason="Spark 2.x is not compatible with pyarrow>=0.15")
 def test_array_field(test_ctx):
     @pandas_udf('array<float>')
     def gen_array(v):

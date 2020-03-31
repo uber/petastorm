@@ -17,10 +17,11 @@ language: python
 python:
   - '2.7'
 env:
-  - PYARROW_VERSION=0.12.1 TF_VERSION=1.12 DEPLOYABLE=0 PY=2.7
-  - PYARROW_VERSION=0.15.1 TF_VERSION=1.12 DEPLOYABLE=0 PY=2.7
-  - PYARROW_VERSION=0.12.1 TF_VERSION=1.13.2 DEPLOYABLE=0 PY=3.7
-  - PYARROW_VERSION=0.15.1 TF_VERSION=1.13.2 DEPLOYABLE=1 PY=3.7
+  - PYARROW_VERSION=0.12.1 TF_VERSION=1.12 DEPLOYABLE=0 PY=2.7 PYSPARK_VERSION=2.4.4
+  - ARROW_PRE_0_15_IPC_FORMAT=1 PYARROW_VERSION=0.15.1 TF_VERSION=1.12 DEPLOYABLE=0 PY=2.7 PYSPARK_VERSION=2.4.4
+  - PYARROW_VERSION=0.12.1 TF_VERSION=1.13.2 DEPLOYABLE=0 PY=3.7 PYSPARK_VERSION=2.4.4
+  - ARROW_PRE_0_15_IPC_FORMAT=1 PYARROW_VERSION=0.15.1 TF_VERSION=1.13.2 DEPLOYABLE=1 PY=3.7 PYSPARK_VERSION=2.4.4
+  - ARROW_PRE_0_15_IPC_FORMAT=0 PYARROW_VERSION=0.15.1 TF_VERSION=1.13.2 DEPLOYABLE=1 PY=3.7 PYSPARK_VERSION=3.0.0
 services:
   - docker
 
@@ -39,8 +40,9 @@ before_script:
   - docker run -v `pwd`:/petastorm --name petastorm_ci $CI_IMAGE /bin/sh -c "sleep 3600" &
 
   # wait for docker to start
-  - sleep 5
-  - export RUN="docker exec petastorm_ci bash /run_in_venv.sh ${PY}"
+  - sleep 20
+  # ARROW_PRE_0_15_IPC_FORMAT=1 is required when spark<3.0 and pyarrow>=0.15
+  - export RUN="docker exec -e ARROW_PRE_0_15_IPC_FORMAT=$ARROW_PRE_0_15_IPC_FORMAT petastorm_ci bash /run_in_venv.sh ${PY}"
   - export PYTEST="pytest --timeout=180 -v --color=yes --cov=./ --cov-report xml:coverage.xml"
   # Refresh our dependencies' versions as in the CI image, they may go stale
   - $RUN pip install -e /petastorm/[test,tf,torch,docs,opencv]
@@ -54,6 +56,7 @@ before_script:
   - $RUN pip install --upgrade numpy
 
   - $RUN pip install -U pyarrow==${PYARROW_VERSION} tensorflow==${TF_VERSION}
+  - if [[ ${PYSPARK_VERSION} > "3" ]] ; then $RUN pip install https://ml-team-public-read.s3-us-west-2.amazonaws.com/pyspark-3.1.0.dev0-60dd1a690fed62b1d6442cdc8cf3f89ef4304d5a.tar.gz --force-reinstall --upgrade ; fi
 
   - $RUN pip list
 
