@@ -333,11 +333,13 @@ class Unischema(object):
         for column_name in arrow_schema.names:
             arrow_field = arrow_schema.field_by_name(column_name)
             field_type = arrow_field.type
+            field_shape = ()
             if isinstance(field_type, ListType):
                 if isinstance(field_type.value_type, ListType) or isinstance(field_type.value_type, pyStructType):
                     warnings.warn('[ARROW-1644] Ignoring unsupported structure %r for field %r'
                                   % (field_type, column_name))
                     continue
+                field_shape = (None,)
             try:
                 np_type = _numpy_and_codec_from_arrow_type(field_type)
             except ValueError:
@@ -347,7 +349,7 @@ class Unischema(object):
                     continue
                 else:
                     raise
-            unischema_fields.append(UnischemaField(column_name, np_type, (), None, arrow_field.nullable))
+            unischema_fields.append(UnischemaField(column_name, np_type, field_shape, None, arrow_field.nullable))
         return Unischema('inferred_schema', unischema_fields)
 
 
