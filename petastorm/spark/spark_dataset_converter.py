@@ -421,13 +421,14 @@ def _check_parent_cache_dir_url(dir_url):
     Check dir url whether is suitable to be used as parent cache directory.
     """
     _check_url(dir_url)
-    parsed = urlparse(dir_url)
+    fs, dir_path = get_filesystem_and_path_or_paths(dir_url)
     if 'DATABRICKS_RUNTIME_VERSION' in os.environ and not _is_spark_local_mode():
-        # User need to use dbfs fuse URL.
-        if parsed.scheme.lower() != 'file' or not parsed.path.startswith('/dbfs/'):
-            raise ValueError(
-                "You must specify a dbfs fuse path for {conf}, like: 'file:/dbfs/path/to/cache_dir'"
-                .format(conf=SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF))
+        if isinstance(fs, LocalFileSystem):
+            # User need to use dbfs fuse URL.
+            if dir_path.startswith('/dbfs/'):
+                raise ValueError(
+                    "You must specify a dbfs fuse path for {conf}, like: 'file:/dbfs/path/to/cache_dir'"
+                    .format(conf=SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF))
 
 
 def _make_sub_dir_url(dir_url, name):
