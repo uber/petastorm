@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import contextlib
+import logging
 import numpy as np
 import os
 import pytest
@@ -22,6 +24,7 @@ import tensorflow as tf
 import threading
 import time
 
+from six import StringIO
 from six.moves.urllib.parse import urlparse
 
 try:
@@ -42,11 +45,11 @@ from petastorm.spark import (SparkDatasetConverter, make_spark_converter,
 from petastorm.spark.spark_dataset_converter import (
     _check_url, _get_horovod_rank_and_size, _get_parent_cache_dir_url,
     _check_rank_and_size_consistent_with_horovod, _make_sub_dir_url,
-    register_delete_dir_handler, _wait_file_available)
+    register_delete_dir_handler, _wait_file_available, _check_dataset_file_median_size,
+    _check_parent_cache_dir_url)
 
 
 class TestContext(object):
-
     def __init__(self):
         self.spark = SparkSession.builder \
             .master("local[2]") \
@@ -59,6 +62,19 @@ class TestContext(object):
 
     def tear_down(self):
         self.spark.stop()
+
+
+@contextlib.contextmanager
+def patch_logger(name):
+    """patch logger and give an output"""
+    io_out = StringIO()
+    log = logging.getLogger(name)
+    handler = logging.StreamHandler(io_out)
+    log.addHandler(handler)
+    try:
+        yield io_out
+    finally:
+        log.removeHandler(handler)
 
 
 @pytest.fixture(scope='module')
@@ -441,7 +457,7 @@ def test_torch_dataloader_advanced_params(mock_torch_make_batch_reader, test_ctx
     # Test default value overridden arguments.
     with conv.make_torch_dataloader(num_epochs=1, workers_count=2) as _:
         pass
-    peta_args = mock_torch_make_batch_reader.call_args[1]
+    peta_args = mock_torch_make_batch_reader.call_args.kwargs
     assert peta_args['num_epochs'] == 1 and peta_args['workers_count'] == 2
 
 
@@ -478,3 +494,36 @@ def test_wait_file_available(test_ctx):
     threading.Thread(target=delay_create_file2()).start()
 
     _wait_file_available(url_list)
+
+
+def test_check_dataset_file_median_size(test_ctx):
+    file_size_map = {
+        '/a/b/01.parquet': 50,
+        '/a/b/02.parquet': 70,
+        '/a/b/03.parquet': 60,
+        '/a/b/04.parquet': 65,
+        '/a/b/05.parquet': 999000,
+    }
+    with mock.patch('os.path.getsize') as mock_path_get_size:
+        mock_path_get_size.side_effect = lambda p: file_size_map[p]
+        url_list = ['file://' + path for path in file_size_map.keys()]
+        with patch_logger('petastorm.spark.spark_dataset_converter') as output:
+            _check_dataset_file_median_size(url_list)
+            assert 'The median size (65) of these parquet files' in output.getvalue()
+        for k in file_size_map:
+            file_size_map[k] *= (1024 * 1024)
+        with patch_logger('petastorm.spark.spark_dataset_converter') as output:
+            _check_dataset_file_median_size(url_list)
+            assert 'The median size (68157440) of these parquet files' not in output.getvalue()
+
+
+@mock.patch.dict(os.environ, {'DATABRICKS_RUNTIME_VERSION': '7.0'}, clear=True)
+def test_check_parent_cache_dir_url(test_ctx):
+    with mock.patch('petastorm.spark.spark_dataset_converter._is_spark_local_mode') as mock_is_local:
+        mock_is_local.return_value = False
+        _check_parent_cache_dir_url('file:/dbfs/a/b')
+        with pytest.raises(ValueError, match='You must specify a dbfs fuse path'):
+            _check_parent_cache_dir_url('file:/a/b')
+        mock_is_local.return_value = True
+        _check_parent_cache_dir_url('file:/dbfs/a/b')
+        _check_parent_cache_dir_url('file:/a/b')

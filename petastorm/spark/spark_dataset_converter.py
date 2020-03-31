@@ -17,7 +17,6 @@ import datetime
 import logging
 import os
 import shutil
-import statistics
 import threading
 import time
 import uuid
@@ -66,7 +65,7 @@ def _get_parent_cache_dir_url():
                 "application."
                 .format(url=_parent_cache_dir_url, new_url=conf_url))
     else:
-        _check_url(conf_url)
+        _check_parent_cache_dir_url(conf_url)
         _parent_cache_dir_url = conf_url
         logger.info(
             'Read petastorm.spark.converter.parentCacheDirUrl %s', _parent_cache_dir_url)
@@ -402,6 +401,10 @@ _cache_df_meta_list = []
 _cache_df_meta_list_lock = threading.Lock()
 
 
+def _is_spark_local_mode():
+    return _get_spark_session().conf.get('spark.master').strip().lower().startswith('local')
+
+
 def _check_url(dir_url):
     """
     Check dir url, will check scheme, raise error if empty scheme
@@ -412,7 +415,15 @@ def _check_url(dir_url):
             'ERROR! A scheme-less directory url ({}) is no longer supported. '
             'Please prepend "file://" for local filesystem.'.format(dir_url))
 
-    if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
+
+def _check_parent_cache_dir_url(dir_url):
+    """
+    Check dir url whether is suitable to be used as parent cache directory.
+    """
+    _check_url(dir_url)
+    parsed = urlparse(dir_url)
+    if 'DATABRICKS_RUNTIME_VERSION' in os.environ and not _is_spark_local_mode():
+        # User need to use dbfs fuse URL.
         if parsed.scheme.lower() != 'file' or not parsed.path.startswith('/dbfs/'):
             raise ValueError(
                 "You must specify a dbfs fuse path for {conf}, like: 'file:/dbfs/path/to/cache_dir'"
@@ -524,17 +535,18 @@ def _wait_file_available(url_list):
         pool.join()
 
 
-def check_parquet_file_size(url_list):
+def _check_dataset_file_median_size(url_list):
     fs, path_list = get_filesystem_and_path_or_paths(url_list)
     # TODO: also check other file system.
     if isinstance(fs, LocalFileSystem):
         file_size_list = [os.path.getsize(path) for path in path_list]
-        median_size = statistics.median(file_size_list)
+        mid_index = len(file_size_list) // 2
+        median_size = sorted(file_size_list)[mid_index]
         if median_size < 50 * 1024 * 1024:
-            logger.warning('The median size of these parquet files ({url_list}) is too small.'
+            logger.warning('The median size ({ms}) of these parquet files ({url_list}) is too small.'
                            'Increase file sizes by repartition or coalesce spark dataframe, which '
                            'will help improve performance.'
-                           .format(url_list=','.join(url_list)))
+                           .format(ms=median_size, url_list=','.join(url_list)))
 
 
 def make_spark_converter(
