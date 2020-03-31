@@ -393,7 +393,14 @@ def dict_to_spark_row(unischema, row_dict):
             else:
                 encoded_dict[field_name] = value
 
-    return pyspark.Row(**encoded_dict)
+    field_list = list(unischema.fields.keys())
+    # generate a value list which match the schema column order.
+    value_list = [encoded_dict[name] for name in field_list]
+    # create a row by value list
+    row = pyspark.Row(*value_list)
+    # set row fields
+    row.__fields__ = field_list
+    return row
 
 
 def insert_explicit_nulls(unischema, row_dict):
