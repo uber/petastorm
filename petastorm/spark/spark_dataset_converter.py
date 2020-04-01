@@ -538,15 +538,21 @@ def _wait_file_available(url_list):
 
 def _check_dataset_file_median_size(url_list):
     fs, path_list = get_filesystem_and_path_or_paths(url_list)
-    # TODO: also check other file system.
+
+    # TODO: also check file size for other file system.
     if isinstance(fs, LocalFileSystem):
-        file_size_list = [os.path.getsize(path) for path in path_list]
-        mid_index = len(file_size_list) // 2
-        median_size = sorted(file_size_list)[mid_index]
-        if median_size < 50 * 1024 * 1024:
-            logger.warning('The median size (%d) of these parquet files (%s) is too small.'
-                           'Increase file sizes by repartition or coalesce spark dataframe, which '
-                           'will help improve performance.', median_size, ','.join(url_list))
+        pool = ThreadPool(64)
+        try:
+            file_size_list = pool.map(os.path.getsize, path_list)
+            mid_index = len(file_size_list) // 2
+            median_size = sorted(file_size_list)[mid_index]
+            if median_size < 50 * 1024 * 1024:
+                logger.warning('The median size (%d) of these parquet files (%s) is too small.'
+                               'Increase file sizes by repartition or coalesce spark dataframe, which '
+                               'will help improve performance.', median_size, ','.join(url_list))
+        finally:
+            pool.close()
+            pool.join()
 
 
 def make_spark_converter(
@@ -603,5 +609,6 @@ def make_spark_converter(
 
     dataset_size = spark_df.count()
     parquet_file_url_list = list(spark_df._jdf.inputFiles())
+    _check_dataset_file_median_size(parquet_file_url_list)
 
     return SparkDatasetConverter(dataset_cache_dir_url, parquet_file_url_list, dataset_size)

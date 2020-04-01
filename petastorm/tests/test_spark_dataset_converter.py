@@ -496,7 +496,7 @@ def test_wait_file_available(test_ctx):
     _wait_file_available(url_list)
 
 
-def test_check_dataset_file_median_size(test_ctx):
+def test_check_dataset_file_median_size(test_ctx, caplog):
     file_size_map = {
         '/a/b/01.parquet': 50,
         '/a/b/02.parquet': 70,
@@ -507,14 +507,14 @@ def test_check_dataset_file_median_size(test_ctx):
     with mock.patch('os.path.getsize') as mock_path_get_size:
         mock_path_get_size.side_effect = lambda p: file_size_map[p]
         url_list = ['file://' + path for path in file_size_map.keys()]
-        with patch_logger('petastorm.spark.spark_dataset_converter') as output:
-            _check_dataset_file_median_size(url_list)
-            assert 'The median size (65) of these parquet files' in output.getvalue()
+        caplog.clear()
+        _check_dataset_file_median_size(url_list)
+        assert 'The median size (65) of these parquet files' in '\n'.join([r.message for r in caplog.records])
         for k in file_size_map:
             file_size_map[k] *= (1024 * 1024)
-        with patch_logger('petastorm.spark.spark_dataset_converter') as output:
-            _check_dataset_file_median_size(url_list)
-            assert 'The median size (68157440) of these parquet files' not in output.getvalue()
+        caplog.clear()
+        _check_dataset_file_median_size(url_list)
+        assert 'The median size (68157440) of these parquet files' not in '\n'.join([r.message for r in caplog.records])
 
 
 @mock.patch.dict(os.environ, {'DATABRICKS_RUNTIME_VERSION': '7.0'}, clear=True)
