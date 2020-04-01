@@ -64,19 +64,6 @@ class TestContext(object):
         self.spark.stop()
 
 
-@contextlib.contextmanager
-def patch_logger(name):
-    """patch logger and give an output"""
-    io_out = StringIO()
-    log = logging.getLogger(name)
-    handler = logging.StreamHandler(io_out)
-    log.addHandler(handler)
-    try:
-        yield io_out
-    finally:
-        log.removeHandler(handler)
-
-
 @pytest.fixture(scope='module')
 def test_ctx():
     ctx = TestContext()
