@@ -13,12 +13,15 @@
 # limitations under the License.
 import warnings
 
-from collections import namedtuple
 from petastorm.unischema import UnischemaField, Unischema
 
 
-class EditField(namedtuple('EditField', ['name', 'numpy_dtype', 'shape', 'nullable'])):
-    pass
+def edit_field(name, numpy_dtype, shape, nullable=False):
+    """
+    A helper method to create the 4-tuples (name, numpy_dtype, shape, is_nullable)
+    used in the `edit_fields` of `TransformSpec`.
+    """
+    return name, numpy_dtype, shape, nullable
 
 
 class TransformSpec(object):
@@ -36,8 +39,8 @@ class TransformSpec(object):
           complies to the input schema and must return a dictionary that complies to a post-transform schema. User may
           In case the user wants to only remove certain fields, the user may omit this argument and specify only
           `remove_fields` argument.
-        :param edit_fields: Optional. A list of 4-tuples or `EditField` namedtuples with the following fields:
-          ``(name, numpy_dtype, shape, is_nullable)``
+        :param edit_fields: Optional. A list of 4-tuples with the following fields:
+          ``(name, numpy_dtype, shape, is_nullable)``.
         :param removed_fields: Optional[list]. A list of field names that will be removed from the original schema.
         :param selected_fields: Optional[list]. A list of field names specify the fields to be selected.
           If selected_fields specified, The reader schema will preserve the field order in selected_fields.
