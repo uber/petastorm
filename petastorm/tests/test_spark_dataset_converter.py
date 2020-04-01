@@ -344,13 +344,22 @@ def test_dtype(test_ctx):
             ts = sess.run(tensor)
     assert np.float32 == ts.double_col.dtype.type
 
-    converter2 = make_spark_converter(df, dtype="float64")
+    converter2 = make_spark_converter(df, dtype='float64')
     with converter2.make_tf_dataset() as dataset:
         iterator = dataset.make_one_shot_iterator()
         tensor = iterator.get_next()
         with tf.Session() as sess:
             ts = sess.run(tensor)
     assert np.float64 == ts.float_col.dtype.type
+
+    converter3 = make_spark_converter(df, dtype=None)
+    with converter3.make_tf_dataset() as dataset:
+        iterator = dataset.make_one_shot_iterator()
+        tensor = iterator.get_next()
+        with tf.Session() as sess:
+            ts = sess.run(tensor)
+    assert np.float32 == ts.float_col.dtype.type
+    assert np.float64 == ts.double_col.dtype.type
 
     with pytest.raises(ValueError, match="dtype float16 is not supported. \
             Use 'float32' or float64"):

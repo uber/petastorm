@@ -20,7 +20,6 @@ import shutil
 import threading
 import time
 import uuid
-import warnings
 from distutils.version import LooseVersion
 from multiprocessing.pool import ThreadPool
 
@@ -124,7 +123,7 @@ def _delete_cache_data_atexit(dataset_url):
     try:
         _delete_cache_data(dataset_url)
     except Exception:  # pylint: disable=broad-except
-        warnings.warn('delete cache data {url} failed.'.format(url=dataset_url))
+        logger.warning('delete cache data %s failed.', dataset_url)
 
 
 def _get_horovod_rank_and_size():
@@ -159,13 +158,11 @@ def _check_rank_and_size_consistent_with_horovod(petastorm_reader_kwargs):
         if cur_shard != hvd_rank or shard_count != hvd_size:
             logger.warning(
                 'The petastorm reader arguments cur_shard(%d) and '
-                'shard_count(%d) '
-                'is not consistent with horovod environments hvd_rank(%d) and '
-                'hvd_size(%d), '
-                'If you want each horovod worker train on one corresponding '
-                'shard data, you should set '
-                'argument `cur_shard` to be `hvd.rank()` and argument '
-                '`shard_count` to be `hvd.size()`.',
+                'shard_count(%d) is not consistent with horovod '
+                'environments hvd_rank(%d) and hvd_size(%d), If you want '
+                'each horovod worker train on one corresponding shard data, '
+                'you should set argument `cur_shard` to be `hvd.rank()` '
+                'and argument `shard_count` to be `hvd.size()`.',
                 cur_shard, shard_count, hvd_rank, hvd_size)
             return False
     return True
@@ -446,8 +443,9 @@ def _cache_df_or_retrieve_cache_data_url(df, parent_cache_dir_url,
     :param parquet_row_group_size_bytes: An int denoting the number of bytes
         in a parquet row group.
     :param compression_codec: Specify compression codec.
-    :param dtype: 'float32' or 'float64', specifying the precision of the
-        floating-point type columns in the output dataset.
+    :param dtype: None, 'float32' or 'float64', specifying the precision of the floating-point
+        elements in the output dataset. Integer types will remain unchanged. If None, all types
+        will remain unchanged. Default 'float32'.
     :return: A string denoting the path of the saved parquet file.
     """
     # TODO
@@ -470,12 +468,17 @@ def _cache_df_or_retrieve_cache_data_url(df, parent_cache_dir_url,
 
 
 def _convert_precision(df, dtype):
+    if dtype is None:
+        return df
+
     if dtype != "float32" and dtype != "float64":
         raise ValueError("dtype {} is not supported. \
             Use 'float32' or float64".format(dtype))
 
     source_type, target_type = (DoubleType, FloatType) \
         if dtype == "float32" else (FloatType, DoubleType)
+
+    logger.warning("Converting floating-point columns to %s", dtype)
 
     for field in df.schema:
         col_name = field.name
@@ -596,8 +599,9 @@ def make_spark_converter(
     :param compression_codec: Specify compression codec.
         It can be one of 'uncompressed', 'bzip2', 'gzip', 'lz4', 'snappy', 'deflate'.
         Default None. If None, it will leave the data uncompressed.
-    :param dtype: 'float32' or 'float64', specifying the precision of the floating-point
-        elements in the output dataset. Integer types will remain unchanged.
+    :param dtype: None, 'float32' or 'float64', specifying the precision of the floating-point
+        elements in the output dataset. Integer types will remain unchanged. If None, all types
+        will remain unchanged. Default 'float32'.
 
     :return: a :class:`SparkDatasetConverter` object that holds the
         materialized dataframe and can be used to make one or more tensorflow
