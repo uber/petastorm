@@ -593,12 +593,21 @@ def test_check_dataset_file_median_size(test_ctx, caplog):
 
 
 @mock.patch.dict(os.environ, {'DATABRICKS_RUNTIME_VERSION': '7.0'}, clear=True)
-def test_check_parent_cache_dir_url(test_ctx):
+def test_check_parent_cache_dir_url(test_ctx, caplog):
+    def log_warning_occur():
+        return 'you should specify a dbfs fuse path' in '\n'.join([r.message for r in caplog.records])
     with mock.patch('petastorm.spark.spark_dataset_converter._is_spark_local_mode') as mock_is_local:
         mock_is_local.return_value = False
+        caplog.clear()
         _check_parent_cache_dir_url('file:/dbfs/a/b')
-        with pytest.raises(ValueError, match='You must specify a dbfs fuse path'):
-            _check_parent_cache_dir_url('file:/a/b')
-        mock_is_local.return_value = True
-        _check_parent_cache_dir_url('file:/dbfs/a/b')
+        assert not log_warning_occur()
+        caplog.clear()
         _check_parent_cache_dir_url('file:/a/b')
+        assert log_warning_occur()
+        mock_is_local.return_value = True
+        caplog.clear()
+        _check_parent_cache_dir_url('file:/dbfs/a/b')
+        assert not log_warning_occur()
+        caplog.clear()
+        _check_parent_cache_dir_url('file:/a/b')
+        assert not log_warning_occur()
