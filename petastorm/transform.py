@@ -16,6 +16,14 @@ import warnings
 from petastorm.unischema import UnischemaField, Unischema
 
 
+def edit_field(name, numpy_dtype, shape, nullable=False):
+    """
+    A helper method to create the 4-tuples (name, numpy_dtype, shape, is_nullable)
+    used in the `edit_fields` of `TransformSpec`.
+    """
+    return name, numpy_dtype, shape, nullable
+
+
 class TransformSpec(object):
     def __init__(self, func=None, edit_fields=None, removed_fields=None, selected_fields=None):
         """TransformSpec defines a user transformation that is applied to a loaded row on a worker thread/process.
@@ -32,7 +40,7 @@ class TransformSpec(object):
           In case the user wants to only remove certain fields, the user may omit this argument and specify only
           `remove_fields` argument.
         :param edit_fields: Optional. A list of 4-tuples with the following fields:
-          ``(name, numpy_dtype, shape, is_nullable)``
+          ``(name, numpy_dtype, shape, is_nullable)``.
         :param removed_fields: Optional[list]. A list of field names that will be removed from the original schema.
         :param selected_fields: Optional[list]. A list of field names specify the fields to be selected.
           If selected_fields specified, The reader schema will preserve the field order in selected_fields.

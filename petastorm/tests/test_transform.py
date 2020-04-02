@@ -15,7 +15,7 @@
 import numpy as np
 import pytest
 
-from petastorm.transform import transform_schema, TransformSpec
+from petastorm.transform import edit_field, transform_schema, TransformSpec
 from petastorm.unischema import Unischema, UnischemaField
 
 TestSchema = Unischema('TestSchema', [
@@ -71,3 +71,8 @@ def test_unknown_fields_in_remove_field_transform():
         one_removed = transform_schema(TestSchema, TransformSpec(lambda x: x, edit_fields=None,
                                                                  removed_fields=['int', 'unknown_1', 'unknown_2']))
     assert set(one_removed.fields.keys()) == {'string', 'double'}
+
+
+def test_create_edit_field():
+    e1 = edit_field(name='ab', numpy_dtype=np.float64, shape=(2, 3), nullable=True)
+    assert e1 == ('ab', np.float64, (2, 3), True)
