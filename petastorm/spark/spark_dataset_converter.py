@@ -73,7 +73,7 @@ def _get_parent_cache_dir_url():
                 "application."
                 .format(url=_parent_cache_dir_url, new_url=conf_url))
     else:
-        _check_url(conf_url)
+        _check_parent_cache_dir_url(conf_url)
         _parent_cache_dir_url = conf_url
         logger.info(
             'Read petastorm.spark.converter.parentCacheDirUrl %s', _parent_cache_dir_url)
@@ -412,6 +412,10 @@ _cache_df_meta_list = []
 _cache_df_meta_list_lock = threading.Lock()
 
 
+def _is_spark_local_mode():
+    return _get_spark_session().conf.get('spark.master').strip().lower().startswith('local')
+
+
 def _check_url(dir_url):
     """
     Check dir url, will check scheme, raise error if empty scheme
@@ -421,6 +425,23 @@ def _check_url(dir_url):
         raise ValueError(
             'ERROR! A scheme-less directory url ({}) is no longer supported. '
             'Please prepend "file://" for local filesystem.'.format(dir_url))
+
+
+def _check_parent_cache_dir_url(dir_url):
+    """
+    Check dir url whether is suitable to be used as parent cache directory.
+    """
+    _check_url(dir_url)
+    fs, dir_path = get_filesystem_and_path_or_paths(dir_url)
+    if 'DATABRICKS_RUNTIME_VERSION' in os.environ and not _is_spark_local_mode():
+        if isinstance(fs, LocalFileSystem):
+            # User need to use dbfs fuse URL.
+            if not dir_path.startswith('/dbfs/'):
+                logger.warning(
+                    "Usually, when running on databricks spark cluster, you should specify a dbfs fuse path "
+                    "for %s, like: 'file:/dbfs/path/to/cache_dir', otherwise, you should mount NFS to this "
+                    "directory '%s' on all nodes of the cluster, e.g. using EFS.",
+                    SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, dir_url)
 
 
 def _make_sub_dir_url(dir_url, name):
@@ -571,6 +592,25 @@ def _wait_file_available(url_list):
         pool.join()
 
 
+def _check_dataset_file_median_size(url_list):
+    fs, path_list = get_filesystem_and_path_or_paths(url_list)
+
+    # TODO: also check file size for other file system.
+    if isinstance(fs, LocalFileSystem):
+        pool = ThreadPool(64)
+        try:
+            file_size_list = pool.map(os.path.getsize, path_list)
+            mid_index = len(file_size_list) // 2
+            median_size = sorted(file_size_list)[mid_index]
+            if median_size < 50 * 1024 * 1024:
+                logger.warning('The median size (%d) of these parquet files (%s) is too small.'
+                               'Increase file sizes by repartition or coalesce spark dataframe, which '
+                               'will help improve performance.', median_size, ','.join(url_list))
+        finally:
+            pool.close()
+            pool.join()
+
+
 def make_spark_converter(
         df,
         parquet_row_group_size_bytes=DEFAULT_ROW_GROUP_SIZE_BYTES,
@@ -630,5 +670,6 @@ def make_spark_converter(
 
     dataset_size = spark_df.count()
     parquet_file_url_list = list(spark_df._jdf.inputFiles())
+    _check_dataset_file_median_size(parquet_file_url_list)
 
     return SparkDatasetConverter(dataset_cache_dir_url, parquet_file_url_list, dataset_size)

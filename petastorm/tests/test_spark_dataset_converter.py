@@ -36,6 +36,7 @@ from petastorm.fs_utils import FilesystemResolver
 from petastorm.spark import (SparkDatasetConverter, make_spark_converter,
                              spark_dataset_converter)
 from petastorm.spark.spark_dataset_converter import (
+    _check_dataset_file_median_size, _check_parent_cache_dir_url,
     _check_rank_and_size_consistent_with_horovod, _check_url,
     _get_horovod_rank_and_size, _get_parent_cache_dir_url, _make_sub_dir_url,
     _wait_file_available, register_delete_dir_handler)
@@ -47,7 +48,6 @@ except ImportError:
 
 
 class TestContext(object):
-
     def __init__(self):
         self.spark = SparkSession.builder \
             .master("local[2]") \
@@ -532,7 +532,7 @@ def test_torch_dataloader_advanced_params(mock_torch_make_batch_reader, test_ctx
     # Test default value overridden arguments.
     with conv.make_torch_dataloader(num_epochs=1, workers_count=2) as _:
         pass
-    peta_args = mock_torch_make_batch_reader.call_args[1]
+    peta_args = mock_torch_make_batch_reader.call_args.kwargs
     assert peta_args['num_epochs'] == 1 and peta_args['workers_count'] == 2
 
 
@@ -569,3 +569,45 @@ def test_wait_file_available(test_ctx):
     threading.Thread(target=delay_create_file2()).start()
 
     _wait_file_available(url_list)
+
+
+def test_check_dataset_file_median_size(test_ctx, caplog):
+    file_size_map = {
+        '/a/b/01.parquet': 50,
+        '/a/b/02.parquet': 70,
+        '/a/b/03.parquet': 60,
+        '/a/b/04.parquet': 65,
+        '/a/b/05.parquet': 999000,
+    }
+    with mock.patch('os.path.getsize') as mock_path_get_size:
+        mock_path_get_size.side_effect = lambda p: file_size_map[p]
+        url_list = ['file://' + path for path in file_size_map.keys()]
+        caplog.clear()
+        _check_dataset_file_median_size(url_list)
+        assert 'The median size (65) of these parquet files' in '\n'.join([r.message for r in caplog.records])
+        for k in file_size_map:
+            file_size_map[k] *= (1024 * 1024)
+        caplog.clear()
+        _check_dataset_file_median_size(url_list)
+        assert 'The median size (68157440) of these parquet files' not in '\n'.join([r.message for r in caplog.records])
+
+
+@mock.patch.dict(os.environ, {'DATABRICKS_RUNTIME_VERSION': '7.0'}, clear=True)
+def test_check_parent_cache_dir_url(test_ctx, caplog):
+    def log_warning_occur():
+        return 'you should specify a dbfs fuse path' in '\n'.join([r.message for r in caplog.records])
+    with mock.patch('petastorm.spark.spark_dataset_converter._is_spark_local_mode') as mock_is_local:
+        mock_is_local.return_value = False
+        caplog.clear()
+        _check_parent_cache_dir_url('file:/dbfs/a/b')
+        assert not log_warning_occur()
+        caplog.clear()
+        _check_parent_cache_dir_url('file:/a/b')
+        assert log_warning_occur()
+        mock_is_local.return_value = True
+        caplog.clear()
+        _check_parent_cache_dir_url('file:/dbfs/a/b')
+        assert not log_warning_occur()
+        caplog.clear()
+        _check_parent_cache_dir_url('file:/a/b')
+        assert not log_warning_occur()
