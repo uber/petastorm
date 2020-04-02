@@ -20,16 +20,24 @@ import shutil
 import threading
 import time
 import uuid
-import warnings
 from distutils.version import LooseVersion
 from multiprocessing.pool import ThreadPool
 
+import pyspark
 from pyarrow import LocalFileSystem
 from pyspark.sql.session import SparkSession
+from pyspark.sql.types import ArrayType, DoubleType, FloatType
 from six.moves.urllib.parse import urlparse
 
 from petastorm import make_batch_reader
-from petastorm.fs_utils import FilesystemResolver, get_filesystem_and_path_or_paths
+from petastorm.fs_utils import (FilesystemResolver,
+                                get_filesystem_and_path_or_paths)
+
+if LooseVersion(pyspark.__version__) < LooseVersion('3.0'):
+    def vector_to_array(_1, _2='float32'):
+        raise RuntimeError("Vector columns are only supported in pyspark>=3.0")
+else:
+    from pyspark.ml.functions import vector_to_array  # pylint: disable=import-error
 
 DEFAULT_ROW_GROUP_SIZE_BYTES = 32 * 1024 * 1024
 
@@ -115,7 +123,7 @@ def _delete_cache_data_atexit(dataset_url):
     try:
         _delete_cache_data(dataset_url)
     except Exception:  # pylint: disable=broad-except
-        warnings.warn('delete cache data {url} failed.'.format(url=dataset_url))
+        logger.warning('delete cache data %s failed.', dataset_url)
 
 
 def _get_horovod_rank_and_size():
@@ -150,13 +158,11 @@ def _check_rank_and_size_consistent_with_horovod(petastorm_reader_kwargs):
         if cur_shard != hvd_rank or shard_count != hvd_size:
             logger.warning(
                 'The petastorm reader arguments cur_shard(%d) and '
-                'shard_count(%d) '
-                'is not consistent with horovod environments hvd_rank(%d) and '
-                'hvd_size(%d), '
-                'If you want each horovod worker train on one corresponding '
-                'shard data, you should set '
-                'argument `cur_shard` to be `hvd.rank()` and argument '
-                '`shard_count` to be `hvd.size()`.',
+                'shard_count(%d) is not consistent with horovod '
+                'environments hvd_rank(%d) and hvd_size(%d), If you want '
+                'each horovod worker train on one corresponding shard data, '
+                'you should set argument `cur_shard` to be `hvd.rank()` '
+                'and argument `shard_count` to be `hvd.size()`.',
                 cur_shard, shard_count, hvd_rank, hvd_size)
             return False
     return True
@@ -378,7 +384,7 @@ def _get_df_plan(df):
 
 class CachedDataFrameMeta(object):
 
-    def __init__(self, df, row_group_size, compression_codec):
+    def __init__(self, df, row_group_size, compression_codec, dtype):
         self.row_group_size = row_group_size
         self.compression_codec = compression_codec
         # Note: the metadata will hold dataframe plan, but it won't
@@ -387,13 +393,18 @@ class CachedDataFrameMeta(object):
         # This means the dataframe can be released by spark gc.
         self.df_plan = _get_df_plan(df)
         self.cache_dir_url = None
+        self.dtype = dtype
 
     @classmethod
     def create_cached_dataframe(cls, df, parent_cache_dir_url, row_group_size,
-                                compression_codec):
-        meta = cls(df, row_group_size, compression_codec)
+                                compression_codec, dtype):
+        meta = cls(df, row_group_size, compression_codec, dtype)
         meta.cache_dir_url = _materialize_df(
-            df, parent_cache_dir_url, row_group_size, compression_codec)
+            df,
+            parent_cache_dir_url=parent_cache_dir_url,
+            parquet_row_group_size_bytes=row_group_size,
+            compression_codec=compression_codec,
+            dtype=dtype)
         return meta
 
 
@@ -439,7 +450,8 @@ def _make_sub_dir_url(dir_url, name):
 
 def _cache_df_or_retrieve_cache_data_url(df, parent_cache_dir_url,
                                          parquet_row_group_size_bytes,
-                                         compression_codec):
+                                         compression_codec,
+                                         dtype):
     """
     Check whether the df is cached.
     If so, return the existing cache file path.
@@ -450,6 +462,9 @@ def _cache_df_or_retrieve_cache_data_url(df, parent_cache_dir_url,
     :param parquet_row_group_size_bytes: An int denoting the number of bytes
         in a parquet row group.
     :param compression_codec: Specify compression codec.
+    :param dtype: None, 'float32' or 'float64', specifying the precision of the floating-point
+        elements in the output dataset. Integer types will remain unchanged. If None, all types
+        will remain unchanged. Default 'float32'.
     :return: A string denoting the path of the saved parquet file.
     """
     # TODO
@@ -460,14 +475,51 @@ def _cache_df_or_retrieve_cache_data_url(df, parent_cache_dir_url,
         for meta in _cache_df_meta_list:
             if meta.row_group_size == parquet_row_group_size_bytes and \
                     meta.compression_codec == compression_codec and \
-                    meta.df_plan.sameResult(df_plan):
+                    meta.df_plan.sameResult(df_plan) and \
+                    meta.dtype == dtype:
                 return meta.cache_dir_url
         # do not find cached dataframe, start materializing.
         cached_df_meta = CachedDataFrameMeta.create_cached_dataframe(
             df, parent_cache_dir_url, parquet_row_group_size_bytes,
-            compression_codec)
+            compression_codec, dtype)
         _cache_df_meta_list.append(cached_df_meta)
         return cached_df_meta.cache_dir_url
+
+
+def _convert_precision(df, dtype):
+    if dtype is None:
+        return df
+
+    if dtype != "float32" and dtype != "float64":
+        raise ValueError("dtype {} is not supported. \
+            Use 'float32' or float64".format(dtype))
+
+    source_type, target_type = (DoubleType, FloatType) \
+        if dtype == "float32" else (FloatType, DoubleType)
+
+    logger.warning("Converting floating-point columns to %s", dtype)
+
+    for field in df.schema:
+        col_name = field.name
+        if isinstance(field.dataType, source_type):
+            df = df.withColumn(col_name, df[col_name].cast(target_type()))
+        elif isinstance(field.dataType, ArrayType) and \
+                isinstance(field.dataType.elementType, source_type):
+            df = df.withColumn(col_name, df[col_name].cast(ArrayType(target_type())))
+    return df
+
+
+def _convert_vector(df, dtype):
+    from pyspark.ml.linalg import VectorUDT
+    from pyspark.mllib.linalg import VectorUDT as OldVectorUDT
+
+    for field in df.schema:
+        col_name = field.name
+        if isinstance(field.dataType, VectorUDT) or \
+                isinstance(field.dataType, OldVectorUDT):
+            df = df.withColumn(col_name,
+                               vector_to_array(df[col_name], dtype))
+    return df
 
 
 def _gen_cache_dir_name():
@@ -485,9 +537,11 @@ def _gen_cache_dir_name():
 
 
 def _materialize_df(df, parent_cache_dir_url, parquet_row_group_size_bytes,
-                    compression_codec):
+                    compression_codec, dtype):
     dir_name = _gen_cache_dir_name()
     save_to_dir_url = _make_sub_dir_url(parent_cache_dir_url, dir_name)
+    df = _convert_vector(df, dtype)
+    df = _convert_precision(df, dtype)
 
     df.write \
         .option("compression", compression_codec) \
@@ -558,7 +612,9 @@ def _check_dataset_file_median_size(url_list):
 def make_spark_converter(
         df,
         parquet_row_group_size_bytes=DEFAULT_ROW_GROUP_SIZE_BYTES,
-        compression_codec=None):
+        compression_codec=None,
+        dtype='float32'
+):
     """
     Convert a spark dataframe into a :class:`SparkDatasetConverter` object.
     It will materialize a spark dataframe to the directory specified by
@@ -581,6 +637,9 @@ def make_spark_converter(
     :param compression_codec: Specify compression codec.
         It can be one of 'uncompressed', 'bzip2', 'gzip', 'lz4', 'snappy', 'deflate'.
         Default None. If None, it will leave the data uncompressed.
+    :param dtype: None, 'float32' or 'float64', specifying the precision of the floating-point
+        elements in the output dataset. Integer types will remain unchanged. If None, all types
+        will remain unchanged. Default 'float32'.
 
     :return: a :class:`SparkDatasetConverter` object that holds the
         materialized dataframe and can be used to make one or more tensorflow
@@ -599,7 +658,7 @@ def make_spark_converter(
             "'uncompressed', 'bzip2', 'gzip', 'lz4', 'snappy', 'deflate'")
 
     dataset_cache_dir_url = _cache_df_or_retrieve_cache_data_url(
-        df, parent_cache_dir_url, parquet_row_group_size_bytes, compression_codec)
+        df, parent_cache_dir_url, parquet_row_group_size_bytes, compression_codec, dtype)
 
     # TODO: improve this by read parquet file metadata to get count
     #  Currently spark can make sure to only read the minimal column
