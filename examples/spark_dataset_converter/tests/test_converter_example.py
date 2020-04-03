@@ -6,7 +6,6 @@ import pyspark
 import pytest
 
 from examples.spark_dataset_converter.utils import download_mnist_libsvm
-from petastorm.spark import spark_dataset_converter
 
 
 @pytest.fixture(scope='module')
@@ -22,8 +21,6 @@ def mnist_dir():
     .format(pyspark.__version__))
 def test_converter_pytorch_example(mnist_dir):
     from examples.spark_dataset_converter.pytorch_converter_example import run
-    # Clean internal _parent_cache_dir_url setting so that this test can set different one
-    spark_dataset_converter._parent_cache_dir_url = None
     run(mnist_dir)
 
 
@@ -33,6 +30,4 @@ def test_converter_pytorch_example(mnist_dir):
     .format(pyspark.__version__))
 def test_converter_tf_example(mnist_dir):
     from examples.spark_dataset_converter.tensorflow_converter_example import run
-    # Clean internal _parent_cache_dir_url setting so that this test can set different one
-    spark_dataset_converter._parent_cache_dir_url = None
     run(mnist_dir)

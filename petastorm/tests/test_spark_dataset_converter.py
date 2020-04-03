@@ -57,8 +57,6 @@ class TestContext(object):
         self.temp_url = 'file://' + self.tempdir.replace(os.sep, '/')
         self.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, self.temp_url)
         self.spark.conf.set(SparkDatasetConverter.FILE_AVAILABILITY_WAIT_TIMEOUT_SECS_CONF, '2')
-        # Clean internal _parent_cache_dir_url setting so that this test can set different one
-        spark_dataset_converter._parent_cache_dir_url = None
 
     def tear_down(self):
         self.spark.stop()

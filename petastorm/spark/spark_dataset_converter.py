@@ -65,18 +65,10 @@ def _get_parent_cache_dir_url():
         raise ValueError(
             "Please set the spark config petastorm.spark.converter.parentCacheDirUrl.")
 
-    if _parent_cache_dir_url is not None:
-        if _parent_cache_dir_url != conf_url:
-            raise RuntimeError(
-                "petastorm.spark.converter.parentCacheDirUrl has been set to be "
-                "{url}, it can't be changed to {new_url} unless you restart spark "
-                "application."
-                .format(url=_parent_cache_dir_url, new_url=conf_url))
-    else:
-        _check_parent_cache_dir_url(conf_url)
-        _parent_cache_dir_url = conf_url
-        logger.info(
-            'Read petastorm.spark.converter.parentCacheDirUrl %s', _parent_cache_dir_url)
+    _check_parent_cache_dir_url(conf_url)
+    _parent_cache_dir_url = conf_url
+    logger.info(
+        'Read petastorm.spark.converter.parentCacheDirUrl %s', _parent_cache_dir_url)
 
     return _parent_cache_dir_url
 
