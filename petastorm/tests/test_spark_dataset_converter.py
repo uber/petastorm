@@ -38,7 +38,7 @@ from petastorm.spark import (SparkDatasetConverter, make_spark_converter,
 from petastorm.spark.spark_dataset_converter import (
     _check_dataset_file_median_size, _check_parent_cache_dir_url,
     _check_rank_and_size_consistent_with_horovod, _check_url,
-    _get_horovod_rank_and_size, _get_parent_cache_dir_url, _make_sub_dir_url,
+    _get_horovod_rank_and_size, _make_sub_dir_url,
     _wait_file_available, register_delete_dir_handler)
 
 try:
