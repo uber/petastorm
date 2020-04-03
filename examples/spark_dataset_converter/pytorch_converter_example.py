@@ -17,7 +17,6 @@
 # https://github.com/pytorch/examples/blob/master/mnist/main.py
 # This example runs with PySpark > 3.0.0
 ###
-import os
 import tempfile
 
 import torch
