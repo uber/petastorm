@@ -90,9 +90,11 @@ def _default_delete_dir_handler(dataset_url):
         # https://issues.apache.org/jira/browse/ARROW-7953
         # We can remove this branch once ARROW-7953 is fixed.
         local_path = parsed.path
-        shutil.rmtree(local_path, ignore_errors=False)
+        if os.path.exists(local_path):
+            shutil.rmtree(local_path, ignore_errors=False)
     else:
-        fs.delete(parsed.path, recursive=True)
+        if fs.exists(parsed.path):
+            fs.delete(parsed.path, recursive=True)
 
 
 _delete_dir_handler = _default_delete_dir_handler

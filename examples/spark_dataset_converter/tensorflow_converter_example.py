@@ -17,8 +17,9 @@
 # https://github.com/tensorflow/docs/blob/master/site/en/tutorials/quickstart/beginner.ipynb
 # This example runs with PySpark > 3.0.0
 ###
+import tempfile
 
-import tensorflow as tf
+from examples.spark_dataset_converter.utils import download_mnist_libsvm
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
 
@@ -48,43 +49,67 @@ def train(dataset, steps=1000, lr=0.001):
     return model
 
 
-def main():
+def run(data_dir):
     # Get SparkSession
     spark = SparkSession.builder \
         .master("local[2]") \
-        .appName("petastorm.spark example_tensorflow_worker") \
+        .appName("petastorm.spark tensorflow_example") \
         .getOrCreate()
 
     # Load and preprocess data using Spark
     df = spark.read.format("libsvm") \
         .option("numFeatures", "784") \
-        .load("/tmp/petastorm/mnist") \
+        .load(data_dir) \
         .select(col("features"), col("label").cast("long").alias("label"))
 
     # Randomly split data into train and test dataset
     df_train, df_test = df.randomSplit([0.9, 0.1], seed=12345)
 
-    # Set a cache directory on DBFS FUSE for intermediate data.
-    spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, "file:///tmp/petastorm/cache/tf-worker")
+    # Set a cache directory for intermediate data.
+    # The path should be accessible by both Spark workers and driver.
+    spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, "file:///tmp/petastorm/cache/tf-example")
 
-    # Train the model
+    # Train the model on the local machine
+    import tensorflow as tf
+
     converter_train = make_spark_converter(df_train)
+    with converter_train.make_tf_dataset() as dataset:
+        dataset = dataset.map(lambda x: (tf.reshape(x.features, [-1, 28, 28]), x.label))
+        model = train(dataset)
 
-    def train_on_worker(_):
-        with converter_train.make_tf_dataset() as dataset:
-            dataset = dataset.map(lambda x: (tf.reshape(x.features, [-1, 28, 28]), x.label))
-            model = train(dataset)
-        return model.get_weights()
-
-    model_weights = spark.sparkContext.parallelize(range(1)).map(train_on_worker).collect()[0]
-
-    # Evaluate the model
-    model = get_compiled_model()
-    model.set_weights(model_weights)
+    # Evaluate the model on the local machine
     converter_test = make_spark_converter(df_test)
     with converter_test.make_tf_dataset(num_epochs=1) as dataset:
         dataset = dataset.map(lambda x: (tf.reshape(x.features, [-1, 28, 28]), x.label))
         model.evaluate(dataset)
+
+    # Train and evaluate the model on a spark worker
+    def train_and_evaluate_on_worker(_):
+        import tensorflow as tf
+
+        with converter_train.make_tf_dataset() as dataset:
+            dataset = dataset.map(lambda x: (tf.reshape(x.features, [-1, 28, 28]), x.label))
+            model = train(dataset)
+
+        with converter_test.make_tf_dataset(num_epochs=1) as dataset:
+            dataset = dataset.map(lambda x: (tf.reshape(x.features, [-1, 28, 28]), x.label))
+            hist = model.evaluate(dataset)
+
+        return hist
+
+    result = spark.sparkContext.parallelize(range(1)).map(train_and_evaluate_on_worker).collect()[0]
+    print("Accuracy: {}".format(result[1]))
+
+    # Cleanup
+    converter_train.delete()
+    converter_test.delete()
+    spark.stop()
+
+
+def main():
+    mnist_dir = tempfile.mkdtemp('_mnist_data')
+    download_mnist_libsvm(mnist_dir)
+    run(data_dir=mnist_dir)
 
 
 if __name__ == '__main__':

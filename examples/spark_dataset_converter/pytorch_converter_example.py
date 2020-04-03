@@ -17,11 +17,15 @@
 # https://github.com/pytorch/examples/blob/master/mnist/main.py
 # This example runs with PySpark > 3.0.0
 ###
+import os
+import tempfile
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+
+from examples.spark_dataset_converter.utils import download_mnist_libsvm
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
 from torch.autograd import Variable
@@ -71,15 +75,16 @@ def train(data_loader, steps=100, lr=0.0005, momentum=0.5):
         loss.backward()
         optimizer.step()
         if batch_idx % 10 == 0:
-            print(f'[{batch_idx}/{steps}]\tLoss: {loss.data.item():.6f}')
+            print('[{}/{}]\tLoss: {}'.format(batch_idx, steps, loss.data.item()))
             loss_hist.append(loss.data.item())
     return model
 
 
-def test(model, test_loader, test_len):
+def test(model, test_loader):
     model.eval()
     test_loss = 0
     correct = 0
+    test_len = 0
     with torch.no_grad():
         for batch in test_loader:
             data, target = batch['features'], batch['label']
@@ -87,42 +92,69 @@ def test(model, test_loader, test_len):
             test_loss += F.nll_loss(output, target, reduction='sum').item()  # sum up batch loss
             pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
+            test_len += data.shape[0]
 
     test_loss /= test_len
+    accuracy = correct / test_len
 
     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
         test_loss, correct, test_len,
-        100. * correct / test_len))
+        100. * accuracy))
+    return accuracy
 
 
-def main():
+def run(data_dir):
     # Get SparkSession
     spark = SparkSession.builder \
         .master("local[2]") \
-        .appName("petastorm.spark example_pytorch_single_node") \
+        .appName("petastorm.spark pytorch_example") \
         .getOrCreate()
 
     # Load and preprocess data using Spark
     df = spark.read.format("libsvm") \
         .option("numFeatures", "784") \
-        .load("/tmp/petastorm/mnist") \
+        .load(data_dir) \
         .select(col("features"), col("label").cast("long").alias("label"))
 
     # Randomly split data into train and test dataset
     df_train, df_test = df.randomSplit([0.9, 0.1], seed=12345)
 
-    # Set a cache directory on DBFS FUSE for intermediate data.
-    spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, "file:///tmp/petastorm/cache/torch-single")
+    # Set a cache directory for intermediate data.
+    # The path should be accessible by both Spark workers and driver.
+    spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, "file:///tmp/petastorm/cache/torch-example")
 
-    # Train the model
+    # Train the model on the local machine
     converter_train = make_spark_converter(df_train)
     with converter_train.make_torch_dataloader() as loader:
         model = train(loader)
 
-    # Evaluate the model
+    # Evaluate the model on the local machine
     converter_test = make_spark_converter(df_test)
     with converter_test.make_torch_dataloader(num_epochs=1) as loader:
-        test(model, loader, len(converter_test))
+        test(model, loader)
+
+    # Train and evaluate the model on a spark worker
+    def train_and_evaluate_on_worker(_):
+        with converter_train.make_torch_dataloader() as loader:
+            model = train(loader)
+
+        with converter_test.make_torch_dataloader(num_epochs=1) as loader:
+            accuracy = test(model, loader)
+        return accuracy
+
+    accuracy = spark.sparkContext.parallelize(range(1)).map(train_and_evaluate_on_worker).collect()[0]
+    print("Accuracy: {}".format(accuracy))
+
+    # Cleanup
+    converter_train.delete()
+    converter_test.delete()
+    spark.stop()
+
+
+def main():
+    mnist_dir = tempfile.mkdtemp('_mnist_data')
+    download_mnist_libsvm(mnist_dir)
+    run(data_dir=mnist_dir)
 
 
 if __name__ == '__main__':

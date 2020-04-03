@@ -41,6 +41,7 @@ REQUIRED_PACKAGES = [
     'pyspark>=2.1.0',
     'pyzmq>=14.0.0',
     'pyarrow>=0.12.0',
+    'requests>=2.22.0',
     'six>=1.5.0',
 ]
 
