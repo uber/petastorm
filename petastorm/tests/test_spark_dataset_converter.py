@@ -261,20 +261,6 @@ def test_pickling_remotely(test_ctx):
     assert result == 100
 
 
-def test_change_cache_dir_raise_error(test_ctx):
-    temp_url2 = 'file://' + tempfile.mkdtemp('_spark_converter_test2').replace(os.sep, '/')
-    test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, temp_url2)
-
-    with pytest.raises(RuntimeError,
-                       match="{} has been set to be".format(
-                           SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF)):
-        _get_parent_cache_dir_url()
-
-    # restore conf (other test need use it)
-    test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, test_ctx.temp_url)
-    assert test_ctx.temp_url == _get_parent_cache_dir_url()
-
-
 def test_tf_dataset_batch_size(test_ctx):
     df1 = test_ctx.spark.range(100)
 
