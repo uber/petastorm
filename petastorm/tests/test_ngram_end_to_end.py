@@ -20,7 +20,6 @@ from decimal import Decimal
 import numpy as np
 import pytest
 import tensorflow as tf
-from tensorflow.python.framework.errors_impl import OutOfRangeError
 
 try:
     from mock import mock
@@ -371,7 +370,7 @@ def test_ngram_delta_threshold_tf(dataset_0_3_8_10_11_20_23, reader_factory):
             expected_item = _get_named_tuple_from_ngram(ngram, dataset_0_3_8_10_11_20_23.data, 5)
             _assert_equal_ngram(third_item, expected_item)
 
-            with pytest.raises(OutOfRangeError):
+            with pytest.raises(tf.errors.OutOfRangeError):
                 sess.run(tf_tensors(reader))
 
 
@@ -419,7 +418,7 @@ def test_ngram_delta_small_threshold_tf(reader_factory, dataset_range_0_99_5):
     ngram = NGram(fields=fields, delta_threshold=1, timestamp_field=TestSchema.id)
     with reader_factory(dataset_range_0_99_5.url, schema_fields=ngram) as reader:
         with tf.Session() as sess:
-            with pytest.raises(OutOfRangeError):
+            with pytest.raises(tf.errors.OutOfRangeError):
                 sess.run(tf_tensors(reader))
 
 

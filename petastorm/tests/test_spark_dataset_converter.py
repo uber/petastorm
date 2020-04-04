@@ -38,7 +38,7 @@ from petastorm.spark import (SparkDatasetConverter, make_spark_converter,
 from petastorm.spark.spark_dataset_converter import (
     _check_dataset_file_median_size, _check_parent_cache_dir_url,
     _check_rank_and_size_consistent_with_horovod, _check_url,
-    _get_horovod_rank_and_size, _get_parent_cache_dir_url, _make_sub_dir_url,
+    _get_horovod_rank_and_size, _make_sub_dir_url,
     _wait_file_available, register_delete_dir_handler)
 
 try:
@@ -259,20 +259,6 @@ def test_pickling_remotely(test_ctx):
 
     result = test_ctx.spark.sparkContext.parallelize(range(1), 1).map(map_fn).collect()[0]
     assert result == 100
-
-
-def test_change_cache_dir_raise_error(test_ctx):
-    temp_url2 = 'file://' + tempfile.mkdtemp('_spark_converter_test2').replace(os.sep, '/')
-    test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, temp_url2)
-
-    with pytest.raises(RuntimeError,
-                       match="{} has been set to be".format(
-                           SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF)):
-        _get_parent_cache_dir_url()
-
-    # restore conf (other test need use it)
-    test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, test_ctx.temp_url)
-    assert test_ctx.temp_url == _get_parent_cache_dir_url()
 
 
 def test_tf_dataset_batch_size(test_ctx):
