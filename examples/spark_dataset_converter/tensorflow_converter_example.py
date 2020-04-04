@@ -17,13 +17,18 @@
 # https://github.com/tensorflow/docs/blob/master/site/en/tutorials/quickstart/beginner.ipynb
 # This example runs with PySpark > 3.0.0
 ###
+# pylint: skip-file
 import tempfile
 
-from examples.spark_dataset_converter.utils import download_mnist_libsvm
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col
 
+from examples.spark_dataset_converter.utils import download_mnist_libsvm
 from petastorm.spark import SparkDatasetConverter, make_spark_converter
+
+try:
+    from pyspark.sql.functions import col
+except ImportError:
+    raise ImportError("This script runs with PySpark>=3.0.0")
 
 
 def get_compiled_model(lr=0.001):
@@ -69,22 +74,10 @@ def run(data_dir):
     # The path should be accessible by both Spark workers and driver.
     spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, "file:///tmp/petastorm/cache/tf-example")
 
-    # Train the model on the local machine
-    import tensorflow as tf
-
     converter_train = make_spark_converter(df_train)
-    with converter_train.make_tf_dataset() as dataset:
-        dataset = dataset.map(lambda x: (tf.reshape(x.features, [-1, 28, 28]), x.label))
-        model = train(dataset)
-
-    # Evaluate the model on the local machine
     converter_test = make_spark_converter(df_test)
-    with converter_test.make_tf_dataset(num_epochs=1) as dataset:
-        dataset = dataset.map(lambda x: (tf.reshape(x.features, [-1, 28, 28]), x.label))
-        model.evaluate(dataset)
 
-    # Train and evaluate the model on a spark worker
-    def train_and_evaluate_on_worker(_):
+    def train_and_evaluate(_=None):
         import tensorflow as tf
 
         with converter_train.make_tf_dataset() as dataset:
@@ -95,10 +88,18 @@ def run(data_dir):
             dataset = dataset.map(lambda x: (tf.reshape(x.features, [-1, 28, 28]), x.label))
             hist = model.evaluate(dataset)
 
-        return hist
+        return hist[1]
 
-    result = spark.sparkContext.parallelize(range(1)).map(train_and_evaluate_on_worker).collect()[0]
-    print("Accuracy: {}".format(result[1]))
+    # Train and evaluate the model on the local machine
+    accuracy = train_and_evaluate()
+    print("Train and evaluate the model on the local machine.")
+    print("Accuracy: {}".format(accuracy))
+
+    # Train and evaluate the model on a spark worker
+    accuracy = spark.sparkContext.parallelize(range(1)).map(train_and_evaluate).collect()[0]
+    print("Train and evaluate the model remotely on a spark worker, "
+          "which can be used for distributed hyperparameter tuning.")
+    print("Accuracy: {}".format(accuracy))
 
     # Cleanup
     converter_train.delete()

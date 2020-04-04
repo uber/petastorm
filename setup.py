@@ -41,7 +41,6 @@ REQUIRED_PACKAGES = [
     'pyspark>=2.1.0',
     'pyzmq>=14.0.0',
     'pyarrow>=0.12.0',
-    'requests>=2.22.0',
     'six>=1.5.0',
 ]
 
@@ -68,6 +67,7 @@ EXTRA_REQUIRE = {
         'pytest-forked>=0.2',
         'pytest-logger>=0.4.0',
         'pytest-timeout>=1.3.3',
+        'requests>=2.22.0',
         's3fs>=0.0.1',
         'gcsfs>=0.2.0',
     ],

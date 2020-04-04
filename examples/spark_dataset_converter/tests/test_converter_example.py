@@ -1,5 +1,4 @@
 import tempfile
-
 from distutils.version import LooseVersion
 
 import pyspark

@@ -17,19 +17,23 @@
 # https://github.com/pytorch/examples/blob/master/mnist/main.py
 # This example runs with PySpark > 3.0.0
 ###
+# pylint: skip-file
 import tempfile
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-
-from examples.spark_dataset_converter.utils import download_mnist_libsvm
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col
 from torch.autograd import Variable
 
+from examples.spark_dataset_converter.utils import download_mnist_libsvm
 from petastorm.spark import SparkDatasetConverter, make_spark_converter
+
+try:
+    from pyspark.sql.functions import col
+except ImportError:
+    raise ImportError("This script runs with PySpark>=3.0.0")
 
 
 class Net(nn.Module):
@@ -122,18 +126,10 @@ def run(data_dir):
     # The path should be accessible by both Spark workers and driver.
     spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, "file:///tmp/petastorm/cache/torch-example")
 
-    # Train the model on the local machine
     converter_train = make_spark_converter(df_train)
-    with converter_train.make_torch_dataloader() as loader:
-        model = train(loader)
-
-    # Evaluate the model on the local machine
     converter_test = make_spark_converter(df_test)
-    with converter_test.make_torch_dataloader(num_epochs=1) as loader:
-        test(model, loader)
 
-    # Train and evaluate the model on a spark worker
-    def train_and_evaluate_on_worker(_):
+    def train_and_evaluate(_=None):
         with converter_train.make_torch_dataloader() as loader:
             model = train(loader)
 
@@ -141,7 +137,15 @@ def run(data_dir):
             accuracy = test(model, loader)
         return accuracy
 
-    accuracy = spark.sparkContext.parallelize(range(1)).map(train_and_evaluate_on_worker).collect()[0]
+    # Train and evaluate the model on the local machine
+    accuracy = train_and_evaluate()
+    print("Train and evaluate the model on the local machine.")
+    print("Accuracy: {}".format(accuracy))
+
+    # Train and evaluate the model on a spark worker
+    accuracy = spark.sparkContext.parallelize(range(1)).map(train_and_evaluate).collect()[0]
+    print("Train and evaluate the model remotely on a spark worker, "
+          "which can be used for distributed hyperparameter tuning.")
     print("Accuracy: {}".format(accuracy))
 
     # Cleanup
