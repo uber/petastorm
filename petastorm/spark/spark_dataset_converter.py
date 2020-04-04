@@ -65,18 +65,10 @@ def _get_parent_cache_dir_url():
         raise ValueError(
             "Please set the spark config petastorm.spark.converter.parentCacheDirUrl.")
 
-    if _parent_cache_dir_url is not None:
-        if _parent_cache_dir_url != conf_url:
-            raise RuntimeError(
-                "petastorm.spark.converter.parentCacheDirUrl has been set to be "
-                "{url}, it can't be changed to {new_url} unless you restart spark "
-                "application."
-                .format(url=_parent_cache_dir_url, new_url=conf_url))
-    else:
-        _check_parent_cache_dir_url(conf_url)
-        _parent_cache_dir_url = conf_url
-        logger.info(
-            'Read petastorm.spark.converter.parentCacheDirUrl %s', _parent_cache_dir_url)
+    _check_parent_cache_dir_url(conf_url)
+    _parent_cache_dir_url = conf_url
+    logger.info(
+        'Read petastorm.spark.converter.parentCacheDirUrl %s', _parent_cache_dir_url)
 
     return _parent_cache_dir_url
 
@@ -90,9 +82,11 @@ def _default_delete_dir_handler(dataset_url):
         # https://issues.apache.org/jira/browse/ARROW-7953
         # We can remove this branch once ARROW-7953 is fixed.
         local_path = parsed.path
-        shutil.rmtree(local_path, ignore_errors=False)
+        if os.path.exists(local_path):
+            shutil.rmtree(local_path, ignore_errors=False)
     else:
-        fs.delete(parsed.path, recursive=True)
+        if fs.exists(parsed.path):
+            fs.delete(parsed.path, recursive=True)
 
 
 _delete_dir_handler = _default_delete_dir_handler

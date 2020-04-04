@@ -67,6 +67,7 @@ EXTRA_REQUIRE = {
         'pytest-forked>=0.2',
         'pytest-logger>=0.4.0',
         'pytest-timeout>=1.3.3',
+        'requests>=2.22.0',
         's3fs>=0.0.1',
         'gcsfs>=0.2.0',
     ],
