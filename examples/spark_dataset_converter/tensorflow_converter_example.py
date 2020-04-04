@@ -17,6 +17,7 @@
 # https://github.com/tensorflow/docs/blob/master/site/en/tutorials/quickstart/beginner.ipynb
 # This example runs with PySpark > 3.0.0
 ###
+import logging
 import tempfile
 
 from pyspark.sql import SparkSession
@@ -91,14 +92,14 @@ def run(data_dir):
 
     # Train and evaluate the model on the local machine
     accuracy = train_and_evaluate()
-    print("Train and evaluate the model on the local machine.")
-    print("Accuracy: {}".format(accuracy))
+    logging.info("Train and evaluate the model on the local machine.")
+    logging.info("Accuracy: %.6f", accuracy)
 
     # Train and evaluate the model on a spark worker
     accuracy = spark.sparkContext.parallelize(range(1)).map(train_and_evaluate).collect()[0]
-    print("Train and evaluate the model remotely on a spark worker, "
-          "which can be used for distributed hyperparameter tuning.")
-    print("Accuracy: {}".format(accuracy))
+    logging.info("Train and evaluate the model remotely on a spark worker, "
+                 "which can be used for distributed hyperparameter tuning.")
+    logging.info("Accuracy: %.6f", accuracy)
 
     # Cleanup
     converter_train.delete()

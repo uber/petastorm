@@ -18,6 +18,8 @@
 # This example runs with PySpark > 3.0.0
 ###
 from __future__ import division
+
+import logging
 import tempfile
 
 import torch
@@ -78,7 +80,7 @@ def train(data_loader, steps=100, lr=0.0005, momentum=0.5):
         loss.backward()
         optimizer.step()
         if batch_idx % 10 == 0:
-            print('[{}/{}]\tLoss: {}'.format(batch_idx, steps, loss.data.item()))
+            logging.info('[%d/%d]\tLoss: %.6f', batch_idx, steps, loss.data.item())
             loss_hist.append(loss.data.item())
     return model
 
@@ -100,9 +102,8 @@ def test(model, test_loader):
     test_loss /= test_len
     accuracy = correct / test_len
 
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-        test_loss, correct, test_len,
-        100. * accuracy))
+    logging.info('Test set: Average loss: %.4f, Accuracy: %d/%d (%.0f%%)',
+                 test_loss, correct, test_len, 100. * accuracy)
     return accuracy
 
 
@@ -139,14 +140,14 @@ def run(data_dir):
 
     # Train and evaluate the model on the local machine
     accuracy = train_and_evaluate()
-    print("Train and evaluate the model on the local machine.")
-    print("Accuracy: {}".format(accuracy))
+    logging.info("Train and evaluate the model on the local machine.")
+    logging.info("Accuracy: %.6f", accuracy)
 
     # Train and evaluate the model on a spark worker
     accuracy = spark.sparkContext.parallelize(range(1)).map(train_and_evaluate).collect()[0]
-    print("Train and evaluate the model remotely on a spark worker, "
-          "which can be used for distributed hyperparameter tuning.")
-    print("Accuracy: {}".format(accuracy))
+    logging.info("Train and evaluate the model remotely on a spark worker, "
+                 "which can be used for distributed hyperparameter tuning.")
+    logging.info("Accuracy: %.6f", accuracy)
 
     # Cleanup
     converter_train.delete()
