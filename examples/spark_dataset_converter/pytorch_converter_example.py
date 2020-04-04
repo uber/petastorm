@@ -17,7 +17,7 @@
 # https://github.com/pytorch/examples/blob/master/mnist/main.py
 # This example runs with PySpark > 3.0.0
 ###
-# pylint: skip-file
+from __future__ import division
 import tempfile
 
 import torch
@@ -46,7 +46,7 @@ class Net(nn.Module):
         self.fc1 = nn.Linear(9216, 128)
         self.fc2 = nn.Linear(128, 10)
 
-    def forward(self, x):
+    def forward(self, x):  # pylint: disable=arguments-differ
         x = x.view((-1, 1, 28, 28))
         x = self.conv1(x)
         x = F.relu(x)

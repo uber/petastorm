@@ -17,7 +17,6 @@
 # https://github.com/tensorflow/docs/blob/master/site/en/tutorials/quickstart/beginner.ipynb
 # This example runs with PySpark > 3.0.0
 ###
-# pylint: skip-file
 import tempfile
 
 from pyspark.sql import SparkSession
