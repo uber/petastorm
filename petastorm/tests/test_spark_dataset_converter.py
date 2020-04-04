@@ -56,9 +56,11 @@ class TestContext(object):
         self.tempdir = tempfile.mkdtemp('_spark_converter_test')
         self.temp_url = 'file://' + self.tempdir.replace(os.sep, '/')
         self.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, self.temp_url)
-        self.spark.conf.set(SparkDatasetConverter.FILE_AVAILABILITY_WAIT_TIMEOUT_SECS_CONF, '2')
+        spark_dataset_converter._FILE_AVAILABILITY_WAIT_TIMEOUT_SECS = 2
 
     def tear_down(self):
+        # restore default file availability wait timeout
+        spark_dataset_converter._FILE_AVAILABILITY_WAIT_TIMEOUT_SECS = 30
         self.spark.stop()
 
 
