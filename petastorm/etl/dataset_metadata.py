@@ -378,7 +378,7 @@ def get_schema_from_dataset_url(dataset_url, hdfs_driver='libhdfs3'):
     """
     resolver = FilesystemResolver(dataset_url, hdfs_driver=hdfs_driver)
     dataset = pq.ParquetDataset(resolver.get_dataset_path(), filesystem=resolver.filesystem(),
-                                validate_schema=False)
+                                validate_schema=False, metadata_nthreads=10)
 
     # Get a unischema stored in the dataset metadata.
     stored_schema = get_schema(dataset)

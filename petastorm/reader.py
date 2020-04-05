@@ -355,7 +355,7 @@ class Reader(object):
         self.is_batched_reader = is_batched_reader
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
         self.dataset = pq.ParquetDataset(dataset_path, filesystem=pyarrow_filesystem,
-                                         validate_schema=False)
+                                         validate_schema=False, metadata_nthreads=10)
 
         stored_schema = infer_or_load_unischema(self.dataset)
 
