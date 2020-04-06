@@ -49,6 +49,9 @@ def _get_spark_session():
     Get or create spark session.
     Note: This function can only be invoked from driver side.
     """
+    if pyspark.TaskContext.get() is not None:
+        # This is a safety check.
+        raise RuntimeError('_get_spark_session should not be invoked from executor side.')
     return SparkSession.builder.getOrCreate()
 
 
