@@ -46,7 +46,7 @@ class GCSFSWrapper(DaskFileSystem):
             # we check also for names like [path]/part/
             path = key['name']
             if key['storageClass'] == 'DIRECTORY':
-                if path..endswith('/'):
+                if path.endswith('/'):
                     directories.add(path[:-1])
                 else:
                     directories.add(path)
