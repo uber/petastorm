@@ -562,7 +562,7 @@ _FILE_AVAILABILITY_WAIT_TIMEOUT_SECS = 30
 
 def _wait_file_available(url_list):
     """
-    Waiting about SparkDatasetConverter.FILE_AVAILABILITY_WAIT_TIMEOUT_SECS_CONF seconds to make sure
+    Waiting about _FILE_AVAILABILITY_WAIT_TIMEOUT_SECS seconds (default 30 seconds) to make sure
     all files are available for reading. This is useful in some filesystems, such as S3 which only
     providing eventually consistency.
     """
