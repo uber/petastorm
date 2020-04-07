@@ -106,16 +106,9 @@ def register_delete_dir_handler(handler):
         _delete_dir_handler = handler
 
 
-def _delete_cache_data(dataset_url):
-    """
-    Delete the cache data in the underlying file system.
-    """
-    _delete_dir_handler(dataset_url)
-
-
 def _delete_cache_data_atexit(dataset_url):
     try:
-        _delete_cache_data(dataset_url)
+        _delete_dir_handler(dataset_url)
     except Exception:  # pylint: disable=broad-except
         logger.warning('delete cache data %s failed.', dataset_url)
 
@@ -281,7 +274,7 @@ class SparkDatasetConverter(object):
         """
         Delete cache files at self.cache_dir_url.
         """
-        _delete_cache_data(self.cache_dir_url)
+        _remove_df_from_cache(self.cache_dir_url)
 
 
 class TFDatasetContextManager(object):
@@ -390,8 +383,8 @@ class CachedDataFrameMeta(object):
         self.dtype = dtype
 
     @classmethod
-    def create_cached_dataframe(cls, df, parent_cache_dir_url, row_group_size,
-                                compression_codec, dtype):
+    def create_cached_dataframe_meta(cls, df, parent_cache_dir_url, row_group_size,
+                                     compression_codec, dtype):
         meta = cls(df, row_group_size, compression_codec, dtype)
         meta.cache_dir_url = _materialize_df(
             df,
@@ -475,11 +468,20 @@ def _cache_df_or_retrieve_cache_data_url(df, parent_cache_dir_url,
                     meta.dtype == dtype:
                 return meta.cache_dir_url
         # do not find cached dataframe, start materializing.
-        cached_df_meta = CachedDataFrameMeta.create_cached_dataframe(
+        cached_df_meta = CachedDataFrameMeta.create_cached_dataframe_meta(
             df, parent_cache_dir_url, parquet_row_group_size_bytes,
             compression_codec, dtype)
         _cache_df_meta_list.append(cached_df_meta)
         return cached_df_meta.cache_dir_url
+
+
+def _remove_df_from_cache(cache_dir_url):
+    with _cache_df_meta_list_lock:
+        for i in range(len(_cache_df_meta_list)):
+            if _cache_df_meta_list[i].cache_dir_url == cache_dir_url:
+                _cache_df_meta_list.pop(i)
+                break
+    _delete_dir_handler(cache_dir_url)
 
 
 def _convert_precision(df, dtype):

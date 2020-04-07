@@ -234,6 +234,20 @@ def test_df_caching(test_ctx):
     assert converter12.cache_dir_url != converter22.cache_dir_url
 
 
+def test_df_delete_caching_meta(test_ctx):
+    from petastorm.spark.spark_dataset_converter import _cache_df_meta_list
+    df1 = test_ctx.spark.range(10)
+    df2 = test_ctx.spark.range(20)
+    converter1 = make_spark_converter(df1)
+    converter2 = make_spark_converter(df2)
+    converter1.delete()
+    cached_list = list(map(lambda x: x.cache_dir_url, _cache_df_meta_list))
+    assert converter1.cache_dir_url not in cached_list
+    assert converter2.cache_dir_url in cached_list
+    # test recreate converter1 after delete should work.
+    make_spark_converter(df1)
+
+
 def test_check_url():
     with pytest.raises(ValueError, match='scheme-less'):
         _check_url('/a/b/c')
