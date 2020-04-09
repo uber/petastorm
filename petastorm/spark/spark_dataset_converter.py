@@ -607,8 +607,8 @@ def _check_dataset_file_median_size(url_list):
                 if median_size < SIZE_LIMIT_BYTES:
                     logger.warning('The median size %d MB (< 50 MB) of the parquet files is too small. '
                                    'Total size: %d MB. Increase the median file size by calling df.repartition(n) or '
-                                   'df.coalesce(n), which will help improve the performance.',
-                                   median_size // MB_BYTES, total_size // MB_BYTES)
+                                   'df.coalesce(n), which will help improve the performance. Parquet files: %s, ...',
+                                   median_size // MB_BYTES, total_size // MB_BYTES, url_list[0])
         finally:
             pool.close()
             pool.join()

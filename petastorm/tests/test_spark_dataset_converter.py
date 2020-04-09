@@ -573,18 +573,18 @@ def test_check_dataset_file_median_size(test_ctx, caplog):
         url_list = ['file://' + path for path in file_size_map.keys()]
         caplog.clear()
         _check_dataset_file_median_size(url_list)
-        assert len(caplog.records) == 0
+        assert 'The median size ' not in " ".join(caplog.messages)
 
         for k in file_size_map:
             file_size_map[k] *= (1024 * 1024)
         caplog.clear()
         _check_dataset_file_median_size(url_list)
-        assert 'The median size 49 MB (< 50 MB) of the parquet files' in caplog.messages[0]
+        assert 'The median size 49 MB (< 50 MB) of the parquet files' in " ".join(caplog.messages)
 
         file_size_map['/a/b/03.parquet'] = 51 * 1024 * 1024
         caplog.clear()
         _check_dataset_file_median_size(url_list)
-        assert len(caplog.records) == 0
+        assert 'The median size ' not in " ".join(caplog.messages)
 
 
 @mock.patch.dict(os.environ, {'DATABRICKS_RUNTIME_VERSION': '7.0'}, clear=True)
