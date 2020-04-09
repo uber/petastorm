@@ -603,14 +603,19 @@ def _check_dataset_file_median_size(url_list):
         try:
             file_size_list = pool.map(os.path.getsize, path_list)
             total_size = sum(file_size_list)
+            num_partitions = len(file_size_list)
             if total_size > SIZE_LIMIT_BYTES:
-                mid_index = len(file_size_list) // 2
+                mid_index = num_partitions // 2
                 median_size = sorted(file_size_list)[mid_index]
                 if median_size < SIZE_LIMIT_BYTES:
                     logger.warning('The median size %d MB (< 50 MB) of the parquet files is too small. '
                                    'Total size: %d MB. Increase the median file size by calling df.repartition(n) or '
                                    'df.coalesce(n), which will help improve the performance. Parquet files: %s, ...',
                                    median_size // MB_BYTES, total_size // MB_BYTES, url_list[0])
+            else:
+                if num_partitions > 8:
+                    logger.warning("The total size of the parquet files is small (%d MB) enough to fit in "
+                                   "a single node, consider using df.coalesce(1) to improve the performance.")
         finally:
             pool.close()
             pool.join()
