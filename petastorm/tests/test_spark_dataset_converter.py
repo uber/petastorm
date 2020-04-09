@@ -23,6 +23,7 @@ from distutils.version import LooseVersion
 import numpy as np
 import pyspark
 import pytest
+import py4j
 import tensorflow as tf
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import pandas_udf
@@ -38,8 +39,8 @@ from petastorm.spark import (SparkDatasetConverter, make_spark_converter,
 from petastorm.spark.spark_dataset_converter import (
     _check_dataset_file_median_size, _check_parent_cache_dir_url,
     _check_rank_and_size_consistent_with_horovod, _check_url,
-    _get_horovod_rank_and_size, _make_sub_dir_url,
-    _wait_file_available, register_delete_dir_handler)
+    _get_horovod_rank_and_size, _get_spark_session, _make_sub_dir_url,
+    register_delete_dir_handler, _wait_file_available)
 
 try:
     from mock import mock
@@ -56,9 +57,11 @@ class TestContext(object):
         self.tempdir = tempfile.mkdtemp('_spark_converter_test')
         self.temp_url = 'file://' + self.tempdir.replace(os.sep, '/')
         self.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, self.temp_url)
-        self.spark.conf.set(SparkDatasetConverter.FILE_AVAILABILITY_WAIT_TIMEOUT_SECS_CONF, '2')
+        spark_dataset_converter._FILE_AVAILABILITY_WAIT_TIMEOUT_SECS = 2
 
     def tear_down(self):
+        # restore default file availability wait timeout
+        spark_dataset_converter._FILE_AVAILABILITY_WAIT_TIMEOUT_SECS = 30
         self.spark.stop()
 
 
@@ -611,3 +614,12 @@ def test_check_parent_cache_dir_url(test_ctx, caplog):
         caplog.clear()
         _check_parent_cache_dir_url('file:/a/b')
         assert not log_warning_occur()
+
+
+def test_get_spark_session_safe_check(test_ctx):
+    def map_fn(_):
+        _get_spark_session()
+        return 0
+
+    with pytest.raises(py4j.protocol.Py4JJavaError):
+        test_ctx.spark.sparkContext.parallelize(range(1), 1).map(map_fn).collect()
