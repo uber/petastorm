@@ -21,7 +21,7 @@ from decimal import Decimal
 
 import numpy as np
 import pytest
-import tensorflow.compat.v1 as tf
+import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 
 try:
     from mock import mock

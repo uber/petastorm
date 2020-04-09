@@ -22,7 +22,7 @@ from enum import Enum
 
 import psutil
 import six
-import tensorflow.compat.v1 as tf
+import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 
 from petastorm import make_reader
 from petastorm.etl.dataset_metadata import get_schema_from_dataset_url

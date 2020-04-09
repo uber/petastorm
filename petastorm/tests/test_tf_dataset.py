@@ -18,7 +18,7 @@ from copy import copy
 
 import numpy as np
 import pytest
-import tensorflow.compat.v1 as tf
+import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 
 from petastorm import make_reader, make_batch_reader
 from petastorm.ngram import NGram

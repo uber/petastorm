@@ -17,7 +17,7 @@ from __future__ import division
 import numpy as np
 import pytest
 import six
-import tensorflow.compat.v1 as tf
+import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 
 from petastorm import make_reader
 from petastorm.ngram import NGram

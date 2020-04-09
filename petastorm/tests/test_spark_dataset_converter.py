@@ -24,7 +24,7 @@ import numpy as np
 import pyspark
 import pytest
 import py4j
-import tensorflow.compat.v1 as tf
+import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import pandas_udf
 from pyspark.sql.types import (ArrayType, BinaryType, BooleanType, ByteType,
