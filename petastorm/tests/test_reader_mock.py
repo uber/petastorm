@@ -16,7 +16,7 @@ import unittest
 from decimal import Decimal
 
 import pytest
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from petastorm.test_util.reader_mock import ReaderMock, schema_data_generator_example
 from petastorm.tests.test_end_to_end import TestSchema

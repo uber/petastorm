@@ -21,7 +21,7 @@ from collections import OrderedDict, namedtuple
 from decimal import Decimal
 
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 # Mapping of identical datatypes in numpy-ish and tensorflow-ish
 _NUMPY_TO_TF_DTYPES_MAPPING = {
@@ -363,7 +363,7 @@ def make_petastorm_dataset(reader):
     The elements produced by the returned dataset object are namedtuples based on the
     :class:`~petastorm.unischema.Unischema`.
 
-    >>> import tensorflow as tf
+    >>> import tensorflow.compat.v1 as tf
     >>> from petastorm.reader import Reader
     >>> from petastorm.tf_utils import make_petastorm_dataset
     >>>

@@ -19,7 +19,7 @@ from decimal import Decimal
 
 import numpy as np
 import pytest
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 try:
     from mock import mock

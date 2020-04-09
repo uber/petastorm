@@ -17,7 +17,7 @@ using tensorflow, using make_batch_reader() instead of make_reader()"""
 
 from __future__ import print_function
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from petastorm import make_batch_reader
 from petastorm.tf_utils import tf_tensors, make_petastorm_dataset

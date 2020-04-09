@@ -19,7 +19,7 @@ import pytest
 from examples.hello_world.external_dataset.generate_external_dataset import generate_external_dataset
 from examples.hello_world.external_dataset.python_hello_world import python_hello_world
 from examples.hello_world.external_dataset.pytorch_hello_world import pytorch_hello_world
-from examples.hello_world.external_dataset.tensorflow_hello_world import tensorflow_hello_world
+from examples.hello_world.external_dataset.tensorflow_hello_world import tensorflow.compat.v1_hello_world
 from petastorm import make_batch_reader
 from petastorm.tests.conftest import SyntheticDataset
 

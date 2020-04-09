@@ -18,7 +18,7 @@ from copy import copy
 
 import numpy as np
 import pytest
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from petastorm import make_reader, make_batch_reader
 from petastorm.ngram import NGram

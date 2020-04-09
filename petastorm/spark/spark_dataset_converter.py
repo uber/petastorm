@@ -317,7 +317,7 @@ class TFDatasetContextManager(object):
     def __enter__(self):
         # import locally to avoid importing tensorflow globally.
         from petastorm.tf_utils import make_petastorm_dataset
-        import tensorflow as tf
+        import tensorflow.compat.v1 as tf
 
         _wait_file_available(self.parquet_file_url_list)
         self.reader = make_batch_reader(self.parquet_file_url_list, **self.petastorm_reader_kwargs)

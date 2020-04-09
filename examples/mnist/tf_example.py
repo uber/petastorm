@@ -22,7 +22,7 @@ from __future__ import division, print_function
 import argparse
 import os
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 from examples.mnist import DEFAULT_MNIST_DATA_PATH
 from petastorm import make_reader

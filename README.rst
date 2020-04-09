@@ -238,7 +238,7 @@ Spark DataFrame containing a feature column followed by a label column.
 .. code-block:: python
 
     from petastorm.spark import SparkDatasetConverter, make_spark_converter
-    import tensorflow as tf
+    import tensorflow.compat.v1 as tf
 
     # specify a cache dir first.
     # the dir is used to save materialized spark dataframe files

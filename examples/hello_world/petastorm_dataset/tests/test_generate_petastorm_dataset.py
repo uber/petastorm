@@ -19,7 +19,7 @@ import pytest
 from examples.hello_world.petastorm_dataset.generate_petastorm_dataset import generate_petastorm_dataset
 from examples.hello_world.petastorm_dataset.pyspark_hello_world import pyspark_hello_world
 from examples.hello_world.petastorm_dataset.pytorch_hello_world import pytorch_hello_world
-from examples.hello_world.petastorm_dataset.tensorflow_hello_world import tensorflow_hello_world
+from examples.hello_world.petastorm_dataset.tensorflow_hello_world import tensorflow.compat.v1_hello_world
 from petastorm import make_reader
 from petastorm.tests.conftest import SyntheticDataset
 
