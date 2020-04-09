@@ -45,6 +45,13 @@ logger = logging.getLogger(__name__)
 
 
 def _get_spark_session():
+    """
+    Get or create spark session.
+    Note: This function can only be invoked from driver side.
+    """
+    if pyspark.TaskContext.get() is not None:
+        # This is a safety check.
+        raise RuntimeError('_get_spark_session should not be invoked from executor side.')
     return SparkSession.builder.getOrCreate()
 
 
@@ -172,7 +179,6 @@ class SparkDatasetConverter(object):
     """
 
     PARENT_CACHE_DIR_URL_CONF = 'petastorm.spark.converter.parentCacheDirUrl'
-    FILE_AVAILABILITY_WAIT_TIMEOUT_SECS_CONF = 'petastorm.spark.converter.fileAvailabilityWaitTimeoutSecs'
 
     def __init__(self, cache_dir_url, file_urls, dataset_size):
         """
@@ -551,22 +557,20 @@ def _materialize_df(df, parent_cache_dir_url, parquet_row_group_size_bytes,
     return save_to_dir_url
 
 
+_FILE_AVAILABILITY_WAIT_TIMEOUT_SECS = 30
+
+
 def _wait_file_available(url_list):
     """
-    Waiting about SparkDatasetConverter.FILE_AVAILABILITY_WAIT_TIMEOUT_SECS_CONF seconds to make sure
+    Waiting about _FILE_AVAILABILITY_WAIT_TIMEOUT_SECS seconds (default 30 seconds) to make sure
     all files are available for reading. This is useful in some filesystems, such as S3 which only
     providing eventually consistency.
     """
     fs, path_list = get_filesystem_and_path_or_paths(url_list)
-    wait_seconds = _get_spark_session().conf \
-        .get(SparkDatasetConverter.FILE_AVAILABILITY_WAIT_TIMEOUT_SECS_CONF, '30')
-    wait_seconds = int(wait_seconds)
-    if wait_seconds <= 0:
-        return
     logger.debug('Waiting some seconds until all parquet-store files appear at urls %s', ','.join(url_list))
 
     def wait_for_file(path):
-        end_time = time.time() + wait_seconds
+        end_time = time.time() + _FILE_AVAILABILITY_WAIT_TIMEOUT_SECS
         while time.time() < end_time:
             if fs.exists(path):
                 return True
