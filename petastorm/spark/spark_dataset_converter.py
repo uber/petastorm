@@ -32,6 +32,7 @@ from six.moves.urllib.parse import urlparse
 from petastorm import make_batch_reader
 from petastorm.fs_utils import (FilesystemResolver,
                                 get_filesystem_and_path_or_paths)
+from petastorm.reader import normalize_dataset_url
 
 if LooseVersion(pyspark.__version__) < LooseVersion('3.0'):
     def vector_to_array(_1, _2='float32'):
@@ -70,12 +71,13 @@ def _get_parent_cache_dir_url():
 
     if conf_url is None:
         raise ValueError(
-            "Please set the spark config petastorm.spark.converter.parentCacheDirUrl.")
+            "Please set the spark config {}.".format(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF))
 
+    conf_url = normalize_dataset_url(conf_url)
     _check_parent_cache_dir_url(conf_url)
     _parent_cache_dir_url = conf_url
     logger.info(
-        'Read petastorm.spark.converter.parentCacheDirUrl %s', _parent_cache_dir_url)
+        'Read %s %s', SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, _parent_cache_dir_url)
 
     return _parent_cache_dir_url
 
@@ -390,8 +392,8 @@ class CachedDataFrameMeta(object):
         self.parent_cache_dir_url = parent_cache_dir_url
 
     @classmethod
-    def create_cached_dataframe(cls, df, parent_cache_dir_url, row_group_size,
-                                compression_codec, dtype):
+    def create_cached_dataframe_meta(cls, df, parent_cache_dir_url, row_group_size,
+                                     compression_codec, dtype):
         meta = cls(df, parent_cache_dir_url, row_group_size, compression_codec, dtype)
         meta.cache_dir_url = _materialize_df(
             df,
