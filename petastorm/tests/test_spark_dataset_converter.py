@@ -236,6 +236,17 @@ def test_df_caching(test_ctx):
     converter22 = make_spark_converter(df1, compression_codec="snappy")
     assert converter12.cache_dir_url != converter22.cache_dir_url
 
+    ori_temp_url = test_ctx.spark.conf.get(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF)
+    tempdir = tempfile.mkdtemp('_spark_converter_test1')
+    new_temp_url = 'file://' + tempdir.replace(os.sep, '/')
+    test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF,
+                            new_temp_url)
+    assert ori_temp_url != new_temp_url
+    converter13 = make_spark_converter(df1)
+    assert converter1.cache_dir_url != converter13.cache_dir_url
+    test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF,
+                            ori_temp_url)
+
 
 def test_check_url():
     with pytest.raises(ValueError, match='scheme-less'):

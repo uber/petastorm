@@ -384,7 +384,7 @@ def _get_df_plan(df):
 
 class CachedDataFrameMeta(object):
 
-    def __init__(self, df, row_group_size, compression_codec, dtype):
+    def __init__(self, df, parent_cache_dir_url, row_group_size, compression_codec, dtype):
         self.row_group_size = row_group_size
         self.compression_codec = compression_codec
         # Note: the metadata will hold dataframe plan, but it won't
@@ -394,11 +394,12 @@ class CachedDataFrameMeta(object):
         self.df_plan = _get_df_plan(df)
         self.cache_dir_url = None
         self.dtype = dtype
+        self.parent_cache_dir_url = parent_cache_dir_url
 
     @classmethod
     def create_cached_dataframe(cls, df, parent_cache_dir_url, row_group_size,
                                 compression_codec, dtype):
-        meta = cls(df, row_group_size, compression_codec, dtype)
+        meta = cls(df, parent_cache_dir_url, row_group_size, compression_codec, dtype)
         meta.cache_dir_url = _materialize_df(
             df,
             parent_cache_dir_url=parent_cache_dir_url,
@@ -478,7 +479,8 @@ def _cache_df_or_retrieve_cache_data_url(df, parent_cache_dir_url,
             if meta.row_group_size == parquet_row_group_size_bytes and \
                     meta.compression_codec == compression_codec and \
                     meta.df_plan.sameResult(df_plan) and \
-                    meta.dtype == dtype:
+                    meta.dtype == dtype and \
+                    meta.parent_cache_dir_url == parent_cache_dir_url:
                 return meta.cache_dir_url
         # do not find cached dataframe, start materializing.
         cached_df_meta = CachedDataFrameMeta.create_cached_dataframe(
