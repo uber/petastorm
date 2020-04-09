@@ -241,7 +241,7 @@ def test_df_delete_caching_meta(test_ctx):
     converter1 = make_spark_converter(df1)
     converter2 = make_spark_converter(df2)
     converter1.delete()
-    cached_list = list(map(lambda x: x.cache_dir_url, _cache_df_meta_list))
+    cached_list = set(map(lambda x: x.cache_dir_url, _cache_df_meta_list))
     assert converter1.cache_dir_url not in cached_list
     assert converter2.cache_dir_url in cached_list
     # test recreate converter1 after delete should work.

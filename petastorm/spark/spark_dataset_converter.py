@@ -109,8 +109,8 @@ def register_delete_dir_handler(handler):
 def _delete_cache_data_atexit(dataset_url):
     try:
         _delete_dir_handler(dataset_url)
-    except Exception:  # pylint: disable=broad-except
-        logger.warning('delete cache data %s failed.', dataset_url)
+    except Exception as e:  # pylint: disable=broad-except
+        logger.warning('Delete cache data %s failed due to %s', dataset_url, repr(e))
 
 
 def _get_horovod_rank_and_size():
@@ -274,7 +274,7 @@ class SparkDatasetConverter(object):
         """
         Delete cache files at self.cache_dir_url.
         """
-        _remove_df_from_cache(self.cache_dir_url)
+        _remove_cache_metadata_and_data(self.cache_dir_url)
 
 
 class TFDatasetContextManager(object):
@@ -475,7 +475,7 @@ def _cache_df_or_retrieve_cache_data_url(df, parent_cache_dir_url,
         return cached_df_meta.cache_dir_url
 
 
-def _remove_df_from_cache(cache_dir_url):
+def _remove_cache_metadata_and_data(cache_dir_url):
     with _cache_df_meta_list_lock:
         for i in range(len(_cache_df_meta_list)):
             if _cache_df_meta_list[i].cache_dir_url == cache_dir_url:
