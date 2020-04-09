@@ -151,7 +151,7 @@ class BatchedRandomShufflingBuffer(BatchedShufflingBufferBase):
     """
 
     def __init__(self, shuffling_buffer_capacity, min_after_retrieve, extra_capacity=1000, batch_size=1):
-        """Initializes a new ShufflingBuffer instance.
+        """Initializes a new BatchedRandomShufflingBuffer instance.
 
         Items may be retrieved from the buffer once ``min_after_retrieve`` items were added to the queue
         (indicated by ``can_retrieve``).
@@ -173,6 +173,8 @@ class BatchedRandomShufflingBuffer(BatchedShufflingBufferBase):
           (due to a call to :func:`add_many` with a list of items), but must remain under ``extra_capacity``. Should be
           set to the upper bound of the number of items that can be added in a single call to :func:`add_many` (can be a
           loose bound).
+        :param batch_size: The number of items to be retrieved for each self.retrieve() call.
+        This also affects the can_add and can can_retrieve accordingly.
         """
         super().__init__(batch_size=batch_size)
         self._extra_capacity = extra_capacity
@@ -234,13 +236,14 @@ class BatchedRandomShufflingBuffer(BatchedShufflingBufferBase):
         batch_size = min(self.batch_size, self._size)
 
         if self._random_indices is None:
+            # We randomize the order of all samples ahead of time and then slice it into chunks with `batch_size`
+            # TODO: This can be improved so we don't have to resample for the whole buffer
             self._sampling_size = 0
             self._random_indices = torch.randperm(int(self._size), device=self._items[0].device)
         idx = self._random_indices[self._sampling_size:self._sampling_size + batch_size]
         self._sampling_size += batch_size
         sample = []
         for v in self._items:
-            # Clone is required because pytorch doesn't always make a copy
             sample.append(v[idx])
         self._size -= batch_size
         return sample
