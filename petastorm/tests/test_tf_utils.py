@@ -39,6 +39,13 @@ NON_NULLABLE_FIELDS = set(TestSchema.fields.values()) - \
                       {TestSchema.matrix_nullable, TestSchema.string_array_nullable, TestSchema.integer_nullable}
 
 
+def make_tf_graph(func):
+    def run_func_with_tf_graph(*args, **kwargs):
+        with tf.Graph().as_default():
+            func(*args, **kwargs)
+    return run_func_with_tf_graph
+
+
 @contextmanager
 def _tf_session():
     with tf.Session() as sess:
