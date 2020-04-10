@@ -598,18 +598,21 @@ def _wait_file_available(url_list):
 
 def _check_dataset_file_median_size(url_list):
     fs, path_list = get_filesystem_and_path_or_paths(url_list)
+    RECOMMENDED_FILE_SIZE_BYTES = 50 * 1024 * 1024
 
     # TODO: also check file size for other file system.
     if isinstance(fs, LocalFileSystem):
         pool = ThreadPool(64)
         try:
             file_size_list = pool.map(os.path.getsize, path_list)
-            mid_index = len(file_size_list) // 2
-            median_size = sorted(file_size_list)[mid_index]
-            if median_size < 50 * 1024 * 1024:
-                logger.warning('The median size (%d) of these parquet files (%s) is too small.'
-                               'Increase file sizes by repartition or coalesce spark dataframe, which '
-                               'will help improve performance.', median_size, ','.join(url_list))
+            if len(file_size_list) > 1:
+                mid_index = len(file_size_list) // 2
+                median_size = sorted(file_size_list, reverse=True)[mid_index]  # take the larger one if tie
+                if median_size < RECOMMENDED_FILE_SIZE_BYTES:
+                    logger.warning('The median size %d B (< 50 MB) of the parquet files is too small. '
+                                   'Total size: %d B. Increase the median file size by calling df.repartition(n) or '
+                                   'df.coalesce(n), which might help improve the performance. Parquet files: %s, ...',
+                                   median_size, sum(file_size_list), url_list[0])
         finally:
             pool.close()
             pool.join()

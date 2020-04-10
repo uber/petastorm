@@ -603,10 +603,10 @@ def test_wait_file_available(test_ctx):
 
 def test_check_dataset_file_median_size(test_ctx, caplog):
     file_size_map = {
-        '/a/b/01.parquet': 50,
-        '/a/b/02.parquet': 70,
-        '/a/b/03.parquet': 60,
-        '/a/b/04.parquet': 65,
+        '/a/b/01.parquet': 30,
+        '/a/b/02.parquet': 40,
+        '/a/b/03.parquet': 50,
+        '/a/b/04.parquet': 60,
         '/a/b/05.parquet': 999000,
     }
     with mock.patch('os.path.getsize') as mock_path_get_size:
@@ -614,12 +614,19 @@ def test_check_dataset_file_median_size(test_ctx, caplog):
         url_list = ['file://' + path for path in file_size_map.keys()]
         caplog.clear()
         _check_dataset_file_median_size(url_list)
-        assert 'The median size (65) of these parquet files' in '\n'.join([r.message for r in caplog.records])
+        assert 'The median size' in " ".join(caplog.messages)
+
         for k in file_size_map:
             file_size_map[k] *= (1024 * 1024)
         caplog.clear()
         _check_dataset_file_median_size(url_list)
-        assert 'The median size (68157440) of these parquet files' not in '\n'.join([r.message for r in caplog.records])
+        assert 'The median size' not in " ".join(caplog.messages)
+
+        file_size_map = {'/a/b/01.parquet': 29}
+        url_list = ['file:///a/b/01.parquet']
+        caplog.clear()
+        _check_dataset_file_median_size(url_list)
+        assert 'The median size' not in " ".join(caplog.messages)
 
 
 @mock.patch.dict(os.environ, {'DATABRICKS_RUNTIME_VERSION': '7.0'}, clear=True)
