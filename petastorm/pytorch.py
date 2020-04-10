@@ -218,7 +218,8 @@ class DataLoader(object):
 
 class BatchedDataLoader(DataLoader):
     """
-    Same as DataLoader except it uses torch-based shuffling buffers which enable batched buffering (significantly faster for small data).
+    Same as DataLoader except it uses torch-based shuffling buffers which enable batched buffering
+    (significantly faster for small data).
     """
 
     def __init__(self, reader, batch_size=1, transform_fn=torch.as_tensor,
@@ -238,7 +239,7 @@ class BatchedDataLoader(DataLoader):
         NOTE: if you are using ``make_batch_reader``, this shuffling queue will be randomizing the order of the
         entire batches and not changing the order of elements within a batch. This is likely not what you intend to do.
 
-        Unlike `DataLoader`, this class does not support special types that are not supported in PyTorch (decimal/string).
+        This class does not support special types that are not supported in PyTorch (decimal/string).
 
         :param reader: petastorm Reader instance
         :param batch_size: the number of items to return per batch; factored into the len() of this reader
