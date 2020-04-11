@@ -18,6 +18,7 @@ from calendar import timegm
 from collections import namedtuple
 from contextlib import contextmanager
 from decimal import Decimal
+from functools import wraps
 
 import numpy as np
 import pytest
@@ -40,6 +41,7 @@ NON_NULLABLE_FIELDS = set(TestSchema.fields.values()) - \
 
 
 def make_tf_graph(func):
+    @wraps(func)
     def run_func_with_tf_graph(*args, **kwargs):
         with tf.Graph().as_default():
             func(*args, **kwargs)
