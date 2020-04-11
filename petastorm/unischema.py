@@ -67,7 +67,7 @@ class UnischemaField(namedtuple('UnischemaField', ['name', 'numpy_dtype', 'shape
         """Comparing field objects via default namedtuple __repr__ representation doesn't work due to
         codec object ID changing when unpickled.
 
-        Instead, compare all field attributes, but only codec type.
+        Instead, compare all field attributes, except for codec type.
 
         Future: Give codec a mime identifier.
         """
