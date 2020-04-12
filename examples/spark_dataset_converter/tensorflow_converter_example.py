@@ -54,6 +54,7 @@ def train(dataset, steps=1000, lr=0.001):
     return model
 
 
+
 def run(data_dir):
     # Get SparkSession
     spark = SparkSession.builder \
@@ -80,13 +81,14 @@ def run(data_dir):
     def train_and_evaluate(_=None):
         import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 
-        with converter_train.make_tf_dataset() as dataset:
-            dataset = dataset.map(lambda x: (tf.reshape(x.features, [-1, 28, 28]), x.label))
-            model = train(dataset)
+        with tf.Graph().as_default():
+            with converter_train.make_tf_dataset() as dataset:
+                dataset = dataset.map(lambda x: (tf.reshape(x.features, [-1, 28, 28]), x.label))
+                model = train(dataset)
 
-        with converter_test.make_tf_dataset(num_epochs=1) as dataset:
-            dataset = dataset.map(lambda x: (tf.reshape(x.features, [-1, 28, 28]), x.label))
-            hist = model.evaluate(dataset)
+            with converter_test.make_tf_dataset(num_epochs=1) as dataset:
+                dataset = dataset.map(lambda x: (tf.reshape(x.features, [-1, 28, 28]), x.label))
+                hist = model.evaluate(dataset)
 
         return hist[1]
 

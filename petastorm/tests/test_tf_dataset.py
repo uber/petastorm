@@ -24,6 +24,7 @@ from petastorm import make_reader, make_batch_reader
 from petastorm.ngram import NGram
 from petastorm.predicates import in_lambda
 from petastorm.tests.test_common import TestSchema
+from petastorm.tests.test_tf_utils import make_tf_graph
 from petastorm.tf_utils import make_petastorm_dataset
 
 _EXCLUDE_FIELDS = set(TestSchema.fields.values()) \
@@ -61,6 +62,7 @@ def _merge_params(base, overwrite):
 
 @pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
+@make_tf_graph
 def test_with_one_shot_iterator(synthetic_dataset, reader_factory):
     """Just a bunch of read and compares of all values to the expected values"""
     with reader_factory(synthetic_dataset.url) as reader:
@@ -96,6 +98,7 @@ def test_with_one_shot_iterator(synthetic_dataset, reader_factory):
 
 @pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
+@make_tf_graph
 def test_with_dataset_repeat(synthetic_dataset, reader_factory):
     """``tf.data.Dataset``'s ``repeat`` should not be used on ``make_petastorm_dataset`` due to high costs of
     ``Reader initialization``. A user should use ``Reader`` built-in epochs support. Check that we raise an
@@ -120,6 +123,7 @@ def test_with_dataset_repeat(synthetic_dataset, reader_factory):
 
 @pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
+@make_tf_graph
 def test_some_processing_functions(synthetic_dataset, reader_factory):
     """Try several ``tf.data.Dataset`` dataset operations on make_petastorm_dataset"""
 
@@ -154,6 +158,7 @@ def test_dataset_on_ngram_not_supported(synthetic_dataset, reader_factory):
 
 
 @pytest.mark.forked
+@make_tf_graph
 def test_non_petastorm_with_many_colums_with_one_shot_iterator(many_columns_non_petastorm_dataset):
     """Just a bunch of read and compares of all values to the expected values"""
     with make_batch_reader(many_columns_non_petastorm_dataset.url, workers_count=1) as reader:
@@ -173,6 +178,7 @@ def test_non_petastorm_with_many_colums_with_one_shot_iterator(many_columns_non_
 
 
 @pytest.mark.forked
+@make_tf_graph
 def test_non_petastorm_with_many_colums_epoch_count(many_columns_non_petastorm_dataset):
     """Just a bunch of read and compares of all values to the expected values"""
     expected_num_epochs = 4

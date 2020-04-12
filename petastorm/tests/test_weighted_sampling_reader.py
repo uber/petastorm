@@ -103,12 +103,11 @@ def test_with_tf_tensors(synthetic_dataset):
     readers = [make_reader(synthetic_dataset.url, schema_fields=fields_to_read, workers_count=1),
                make_reader(synthetic_dataset.url, schema_fields=fields_to_read, workers_count=1)]
 
-    with tf.Graph().as_default():
-        with WeightedSamplingReader(readers, [0.5, 0.5]) as mixer:
-            mixed_tensors = tf_tensors(mixer)
+    with WeightedSamplingReader(readers, [0.5, 0.5]) as mixer:
+        mixed_tensors = tf_tensors(mixer)
 
-            with tf.Session() as sess:
-                sess.run(mixed_tensors)
+        with tf.Session() as sess:
+            sess.run(mixed_tensors)
 
 
 def test_schema_mismatch(synthetic_dataset):

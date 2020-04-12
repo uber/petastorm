@@ -135,13 +135,12 @@ def _read_from_tf_tensors(synthetic_dataset, count, shuffling_queue_capacity, mi
 
     schema_fields = (NON_NULLABLE_FIELDS if ngram is None else ngram)
 
-    with tf.Graph().as_default():
-        with make_reader(schema_fields=schema_fields, dataset_url=synthetic_dataset.url, reader_pool_type='dummy',
-                         shuffle_row_groups=False) as reader:
-            row_tensors = tf_tensors(reader, shuffling_queue_capacity=shuffling_queue_capacity,
-                                     min_after_dequeue=min_after_dequeue)
-            with _tf_session() as sess:
-                rows_data = [sess.run(row_tensors) for _ in range(count)]
+    with make_reader(schema_fields=schema_fields, dataset_url=synthetic_dataset.url, reader_pool_type='dummy',
+                     shuffle_row_groups=False) as reader:
+        row_tensors = tf_tensors(reader, shuffling_queue_capacity=shuffling_queue_capacity,
+                                 min_after_dequeue=min_after_dequeue)
+        with _tf_session() as sess:
+            rows_data = [sess.run(row_tensors) for _ in range(count)]
 
     return rows_data, row_tensors
 
@@ -185,6 +184,7 @@ def _assert_expected_rows_data(expected_data, rows_data):
 
 
 @pytest.mark.forked
+@make_tf_graph
 def test_simple_read_tensorflow(synthetic_dataset):
     """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
     data"""
@@ -199,6 +199,7 @@ def test_simple_read_tensorflow(synthetic_dataset):
 
 
 @pytest.mark.forked
+@make_tf_graph
 def test_shuffling_queue(synthetic_dataset):
     """Read data without tensorflow shuffling queue and with it. Check the the order is deterministic within
     unshuffled read and is random with shuffled read"""
@@ -223,6 +224,7 @@ def test_shuffling_queue(synthetic_dataset):
 
 
 @pytest.mark.forked
+@make_tf_graph
 def test_simple_ngram_read_tensorflow(synthetic_dataset):
     """Read a single ngram. Make sure all shapes are set and the data read matches reference data"""
     fields = {
@@ -245,6 +247,7 @@ def test_simple_ngram_read_tensorflow(synthetic_dataset):
 
 
 @pytest.mark.forked
+@make_tf_graph
 def test_shuffling_queue_with_ngrams(synthetic_dataset):
     """Read data without tensorflow shuffling queue and with it (no rowgroup shuffling). Read ngrams
     Check the the order is deterministic within unshuffled read and is random with shuffled read"""
@@ -294,6 +297,7 @@ def test_shuffling_queue_with_ngrams(synthetic_dataset):
 
 
 @pytest.mark.forked
+@make_tf_graph
 def test_simple_read_tensorflow_with_parquet_dataset(scalar_dataset):
     """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
     data"""
@@ -319,6 +323,7 @@ def test_simple_read_tensorflow_with_parquet_dataset(scalar_dataset):
 
 
 @pytest.mark.forked
+@make_tf_graph
 def test_simple_read_tensorflow_with_non_petastorm_many_columns_dataset(many_columns_non_petastorm_dataset):
     """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
     data"""
@@ -333,6 +338,7 @@ def test_simple_read_tensorflow_with_non_petastorm_many_columns_dataset(many_col
             assert set(batch.keys()) == set(many_columns_non_petastorm_dataset.data[0].keys())
 
 
+@make_tf_graph
 def test_shuffling_queue_with_make_batch_reader(scalar_dataset):
     with make_batch_reader(dataset_url_or_urls=scalar_dataset.url) as reader:
         with pytest.raises(ValueError):
@@ -340,6 +346,7 @@ def test_shuffling_queue_with_make_batch_reader(scalar_dataset):
 
 
 @mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
+@make_tf_graph
 def test_transform_function_new_field(synthetic_dataset):
     def double_matrix(sample):
         sample['double_matrix'] = sample['matrix'] * 2
@@ -360,6 +367,7 @@ def test_transform_function_new_field(synthetic_dataset):
 
 
 @mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
+@make_tf_graph
 def test_transform_function_new_field_batched(scalar_dataset):
     def double_float64(sample):
         sample['new_float64'] = sample['float64'] * 2
