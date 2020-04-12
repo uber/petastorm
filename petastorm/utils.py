@@ -22,7 +22,7 @@ import pyarrow
 from future.utils import raise_with_traceback
 from pyarrow.filesystem import LocalFileSystem
 
-from petastorm.compat import compat_get_metadata
+from petastorm.compat import compat_get_metadata, compat_with_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +119,7 @@ def add_to_dataset_metadata(dataset, key, value):
     # base_schema.metadata may be None, e.g.
     metadata_dict = base_schema.metadata or dict()
     metadata_dict[key] = value
-    schema = base_schema.add_metadata(metadata_dict)
+    schema = compat_with_metadata(base_schema, metadata_dict)
 
     with dataset.fs.open(common_metadata_file_path, 'wb') as metadata_file:
         pyarrow.parquet.write_metadata(schema, metadata_file)
