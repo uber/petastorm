@@ -54,7 +54,6 @@ def train(dataset, steps=1000, lr=0.001):
     return model
 
 
-
 def run(data_dir):
     # Get SparkSession
     spark = SparkSession.builder \
