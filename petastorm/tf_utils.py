@@ -19,9 +19,13 @@ import warnings
 from calendar import timegm
 from collections import OrderedDict, namedtuple
 from decimal import Decimal
+from packaging import version
 
 import numpy as np
 import tensorflow.compat.v1 as tf  # pylint: disable=import-error
+
+
+_IS_TF_VERSION_1 = version.parse(tf.__version__) < version.parse('2')
 
 # Mapping of identical datatypes in numpy-ish and tensorflow-ish
 _NUMPY_TO_TF_DTYPES_MAPPING = {
@@ -184,6 +188,7 @@ def make_namedtuple_tf_ngram(unischema, ngram, *args, **kargs):
 
 
 def _set_shape(schema, fields_as_dict, batched_output=None):
+
     # Assign static shape for all tensors
     # Workaround of an issue described here:
     # https://stackoverflow.com/questions/49161316/trailing-x00-characters-in-tensor-when-numpy-string-array-is-returned-from-tf
@@ -280,8 +285,10 @@ def _tf_tensors_ngram(reader, shuffling_queue_capacity, min_after_dequeue):
     # We change the key to str format here in order to be able to use ** later to expand the dictionary as kargs.
     fields_as_dict = {
         str(timestep): fields_as_namedtuple[timestep]._asdict() for timestep in fields_as_namedtuple}
-    for timestep in fields_as_dict:
-        _set_shape(reader.schema, fields_as_dict[timestep])
+
+    if _IS_TF_VERSION_1:
+        for timestep in fields_as_dict:
+            _set_shape(reader.schema, fields_as_dict[timestep])
 
     return make_namedtuple_tf_ngram(reader.schema, reader.ngram, **fields_as_dict)
 
@@ -395,8 +402,10 @@ def make_petastorm_dataset(reader):
 
         flat_dataset = tf.data.Dataset.from_generator(dequeue_sample_impl, tuple(_schema_to_tf_dtypes(reader.schema)))
         named_tuple_dataset = flat_dataset \
-            .map(reader.schema.make_namedtuple_tf) \
-            .map(lambda row: _set_shape_to_named_tuple(reader.schema, row, reader.batched_output))
+            .map(reader.schema.make_namedtuple_tf)
+        if _IS_TF_VERSION_1:
+            named_tuple_dataset = named_tuple_dataset.map(
+                lambda row: _set_shape_to_named_tuple(reader.schema, row, reader.batched_output))
         return named_tuple_dataset
     else:
         raise NotImplementedError('make_petastorm_dataset does not support NGram yet.')
