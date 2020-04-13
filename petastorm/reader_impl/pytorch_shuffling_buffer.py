@@ -1,4 +1,4 @@
-#  Copyright (c) 2017-2018 Uber Technologies, Inc.
+#  Copyright (c) 2017-2020 Uber Technologies, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ class BatchedShufflingBufferBase(object):
     """Shuffling implements a shuffling algorithm. Items can be added to the shuffling buffer and removed in a
     different order as defined by the concrete shuffling algorithm. A shuffling buffer is intended to be used from
     a single thread, hence, not thread safe.
-    Functionality is similar to ShufflingBufferBase except operations are batched and base on PyTorch."""
+    Functionality is similar to ShufflingBufferBase except operations are batched and based on PyTorch."""
 
     def __init__(self, batch_size=1):
         self._keys = None
@@ -104,7 +104,7 @@ class BatchedNoopShufflingBuffer(BatchedShufflingBufferBase):
     """
 
     def __init__(self, batch_size=1):
-        super().__init__(batch_size=batch_size)
+        super(BatchedNoopShufflingBuffer, self).__init__(batch_size=batch_size)
         self._batches = []
         self._num_samples = 0
         self.store = deque()
@@ -176,7 +176,7 @@ class BatchedRandomShufflingBuffer(BatchedShufflingBufferBase):
         :param batch_size: The number of items to be retrieved for each self.retrieve() call.
         This also affects the can_add and can can_retrieve accordingly.
         """
-        super().__init__(batch_size=batch_size)
+        super(BatchedRandomShufflingBuffer, self).__init__(batch_size=batch_size)
         self._extra_capacity = extra_capacity
         # Preallocate the shuffling buffer.
         self._items = None
