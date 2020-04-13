@@ -64,3 +64,17 @@ def compat_make_parquet_piece(path, open_file_func, **kwargs):
     else:
         return pq.ParquetDatasetPiece(path, open_file_func=open_file_func,  # pylint: disable=unexpected-keyword-arg
                                       **kwargs)
+
+
+def compat_with_metadata(schema, metadata):
+    if _PYARROW_BEFORE_015:
+        return schema.add_metadata(metadata)
+    else:
+        return schema.with_metadata(metadata)
+
+
+def compat_schema_field(schema, name):
+    if _PYARROW_BEFORE_013:
+        return schema.field_by_name(name)
+    else:
+        return schema.field(name)

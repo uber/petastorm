@@ -75,8 +75,8 @@ def maybe_cached_dataset(config, name, generating_func):
             dataset = generating_func()
             config.cache.set(cache_key, b64encode(pickle.dumps(dataset)).decode('ascii'))
         else:
-            logger.warn('CAUTION: %s HAS BEEN USED. USING %s CACHED TEST DATASET! MAYBE STALE!',
-                        _CACHE_FAKE_DATASET_OPTION, name)
+            logger.warning('CAUTION: %s HAS BEEN USED. USING %s CACHED TEST DATASET! MAYBE STALE!',
+                           _CACHE_FAKE_DATASET_OPTION, name)
     else:
         dataset = generating_func()
 
@@ -110,6 +110,7 @@ def scalar_dataset(request, tmpdir_factory):
 @pytest.fixture(scope="session")
 def many_columns_non_petastorm_dataset(request, tmpdir_factory):
     """This dataset has 1000 columns. All of the same int32 type."""
+
     def _dataset_no_cache():
         path = tmpdir_factory.mktemp("data").strpath
         url = 'file://' + path
