@@ -26,6 +26,7 @@ import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 
 
 _IS_TF_VERSION_1 = version.parse(tf.__version__) < version.parse('2')
+_IS_TF_VERSION_2 = version.parse(tf.__version__) >= version.parse('2')
 
 # Mapping of identical datatypes in numpy-ish and tensorflow-ish
 _NUMPY_TO_TF_DTYPES_MAPPING = {
