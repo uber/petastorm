@@ -21,6 +21,7 @@ from decimal import Decimal
 from functools import wraps
 
 import numpy as np
+from packaging import version
 import pytest
 import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 
@@ -40,12 +41,19 @@ NON_NULLABLE_FIELDS = set(TestSchema.fields.values()) - \
                       {TestSchema.matrix_nullable, TestSchema.string_array_nullable, TestSchema.integer_nullable}
 
 
-def make_tf_graph(func):
+_IS_TF_VERSION_1 = version.parse(tf.__version__) < version.parse('2')
+_IS_TF_VERSION_2 = version.parse(tf.__version__) >= version.parse('2')
+
+
+def create_tf_graph_if_tf2(func):
     @wraps(func)
     def run_func_with_tf_graph(*args, **kwargs):
         with tf.Graph().as_default():
             return func(*args, **kwargs)
-    return run_func_with_tf_graph
+    if _IS_TF_VERSION_2:
+        return run_func_with_tf_graph
+    else:
+        return func
 
 
 @contextmanager
@@ -124,7 +132,6 @@ def test_schema_to_dtype_list():
     np.testing.assert_equal(actual_tf_dtype_list, [tf.string, tf.int32, tf.int32, tf.uint8])
 
 
-@make_tf_graph
 def _read_from_tf_tensors(synthetic_dataset, count, shuffling_queue_capacity, min_after_dequeue, ngram):
     """Used by several test cases. Reads a 'count' rows using reader.
 
@@ -136,12 +143,13 @@ def _read_from_tf_tensors(synthetic_dataset, count, shuffling_queue_capacity, mi
 
     schema_fields = (NON_NULLABLE_FIELDS if ngram is None else ngram)
 
-    with make_reader(schema_fields=schema_fields, dataset_url=synthetic_dataset.url, reader_pool_type='dummy',
-                     shuffle_row_groups=False) as reader:
-        row_tensors = tf_tensors(reader, shuffling_queue_capacity=shuffling_queue_capacity,
-                                 min_after_dequeue=min_after_dequeue)
-        with _tf_session() as sess:
-            rows_data = [sess.run(row_tensors) for _ in range(count)]
+    with tf.Graph().as_default():
+        with make_reader(schema_fields=schema_fields, dataset_url=synthetic_dataset.url, reader_pool_type='dummy',
+                         shuffle_row_groups=False) as reader:
+            row_tensors = tf_tensors(reader, shuffling_queue_capacity=shuffling_queue_capacity,
+                                     min_after_dequeue=min_after_dequeue)
+            with _tf_session() as sess:
+                rows_data = [sess.run(row_tensors) for _ in range(count)]
 
     return rows_data, row_tensors
 
@@ -185,7 +193,7 @@ def _assert_expected_rows_data(expected_data, rows_data):
 
 
 @pytest.mark.forked
-@make_tf_graph
+@create_tf_graph_if_tf2
 def test_simple_read_tensorflow(synthetic_dataset):
     """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
     data"""
@@ -295,7 +303,7 @@ def test_shuffling_queue_with_ngrams(synthetic_dataset):
 
 
 @pytest.mark.forked
-@make_tf_graph
+@create_tf_graph_if_tf2
 def test_simple_read_tensorflow_with_parquet_dataset(scalar_dataset):
     """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
     data"""
@@ -321,7 +329,7 @@ def test_simple_read_tensorflow_with_parquet_dataset(scalar_dataset):
 
 
 @pytest.mark.forked
-@make_tf_graph
+@create_tf_graph_if_tf2
 def test_simple_read_tensorflow_with_non_petastorm_many_columns_dataset(many_columns_non_petastorm_dataset):
     """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
     data"""
@@ -336,7 +344,7 @@ def test_simple_read_tensorflow_with_non_petastorm_many_columns_dataset(many_col
             assert set(batch.keys()) == set(many_columns_non_petastorm_dataset.data[0].keys())
 
 
-@make_tf_graph
+@create_tf_graph_if_tf2
 def test_shuffling_queue_with_make_batch_reader(scalar_dataset):
     with make_batch_reader(dataset_url_or_urls=scalar_dataset.url) as reader:
         with pytest.raises(ValueError):
@@ -344,7 +352,7 @@ def test_shuffling_queue_with_make_batch_reader(scalar_dataset):
 
 
 @mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
-@make_tf_graph
+@create_tf_graph_if_tf2
 def test_transform_function_new_field(synthetic_dataset):
     def double_matrix(sample):
         sample['double_matrix'] = sample['matrix'] * 2
@@ -365,7 +373,7 @@ def test_transform_function_new_field(synthetic_dataset):
 
 
 @mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
-@make_tf_graph
+@create_tf_graph_if_tf2
 def test_transform_function_new_field_batched(scalar_dataset):
     def double_float64(sample):
         sample['new_float64'] = sample['float64'] * 2

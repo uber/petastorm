@@ -26,7 +26,7 @@ from petastorm.test_util.reader_mock import ReaderMock
 from petastorm.tf_utils import tf_tensors
 from petastorm.unischema import Unischema, UnischemaField
 from petastorm.weighted_sampling_reader import WeightedSamplingReader
-from petastorm.tests.test_tf_utils import make_tf_graph
+from petastorm.tests.test_tf_utils import create_tf_graph_if_tf2
 
 
 TestSchema = Unischema('TestSchema', [
@@ -100,7 +100,7 @@ def test_bad_arguments():
         WeightedSamplingReader([reader1], [0.1, 0.9])
 
 
-@make_tf_graph
+@create_tf_graph_if_tf2
 def test_with_tf_tensors(synthetic_dataset):
     fields_to_read = ['id.*', 'image_png']
     readers = [make_reader(synthetic_dataset.url, schema_fields=fields_to_read, workers_count=1),
@@ -121,7 +121,7 @@ def test_schema_mismatch(synthetic_dataset):
         WeightedSamplingReader(readers, [0.5, 0.5])
 
 
-@make_tf_graph
+@create_tf_graph_if_tf2
 def test_ngram_mix(synthetic_dataset):
     ngram1_fields = {
         -1: ['id', ],

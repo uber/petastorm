@@ -30,7 +30,7 @@ from petastorm import make_reader
 from petastorm.ngram import NGram
 from petastorm.tests.conftest import SyntheticDataset, maybe_cached_dataset
 from petastorm.tests.test_common import create_test_dataset, TestSchema
-from petastorm.tests.test_tf_utils import make_tf_graph
+from petastorm.tests.test_tf_utils import create_tf_graph_if_tf2
 from petastorm.tf_utils import tf_tensors
 
 # Tests in this module will run once for each entry in the READER_FACTORIES
@@ -114,7 +114,7 @@ def _get_named_tuple_from_ngram(ngram, dataset_dicts, starting_index):
     return expected_ngram
 
 
-@make_tf_graph
+@create_tf_graph_if_tf2
 def _test_continuous_ngram_tf(ngram_fields, dataset_num_files_1, reader_factory):
     """Tests continuous ngram in tf of a certain length. Continuous here refers to
     that this reader will always return consecutive ngrams due to shuffle being false
@@ -159,7 +159,7 @@ def _test_continuous_ngram(ngram_fields, dataset_num_files_1, reader_factory):
             expected_id = expected_id + 1
 
 
-@make_tf_graph
+@create_tf_graph_if_tf2
 def _test_noncontinuous_ngram_tf(ngram_fields, synthetic_dataset, reader_factory):
     """Test non continuous ngram in tf of a certain length. Non continuous here refers
     to that the reader will not necessarily return consecutive ngrams because partition is more
@@ -331,7 +331,7 @@ def test_ngram_basic_longer_no_overlap(synthetic_dataset, reader_factory):
 
 @pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
-@make_tf_graph
+@create_tf_graph_if_tf2
 def test_ngram_delta_threshold_tf(dataset_0_3_8_10_11_20_23, reader_factory):
     """Test to verify that delta threshold work as expected in one partition in the same ngram
     and between consecutive ngrams. delta threshold here refers that each ngram must not be
@@ -412,7 +412,7 @@ def test_ngram_delta_threshold(dataset_0_3_8_10_11_20_23, reader_factory):
 
 @pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
-@make_tf_graph
+@create_tf_graph_if_tf2
 def test_ngram_delta_small_threshold_tf(reader_factory, dataset_range_0_99_5):
     """Test to verify that a small threshold work in ngrams."""
 
@@ -476,7 +476,7 @@ def test_ngram_validation():
 
 @pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
-@make_tf_graph
+@create_tf_graph_if_tf2
 def test_ngram_length_1_tf(synthetic_dataset, reader_factory):
     """Test to verify that ngram generalize to support length 1"""
     dataset_dicts = synthetic_dataset.data
