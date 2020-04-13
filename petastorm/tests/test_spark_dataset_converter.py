@@ -219,22 +219,49 @@ def test_df_caching(test_ctx):
     df2 = test_ctx.spark.range(10)
     df3 = test_ctx.spark.range(20)
 
+    # Test caching for the dataframes with the same logical plan
     converter1 = make_spark_converter(df1)
     converter2 = make_spark_converter(df2)
     assert converter1.cache_dir_url == converter2.cache_dir_url
 
+    # Test no caching for different dataframes
     converter3 = make_spark_converter(df3)
     assert converter1.cache_dir_url != converter3.cache_dir_url
 
+    # Test no caching for the same dataframe with different row group size
     converter11 = make_spark_converter(
         df1, parquet_row_group_size_bytes=8 * 1024 * 1024)
     converter21 = make_spark_converter(
         df1, parquet_row_group_size_bytes=16 * 1024 * 1024)
     assert converter11.cache_dir_url != converter21.cache_dir_url
 
+    # Test no caching for the same dataframe with different compression_codec
     converter12 = make_spark_converter(df1, compression_codec=None)
     converter22 = make_spark_converter(df1, compression_codec="snappy")
     assert converter12.cache_dir_url != converter22.cache_dir_url
+
+    ori_temp_url = test_ctx.spark.conf.get(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF)
+    tempdir = tempfile.mkdtemp('_spark_converter_test1')
+    new_temp_url = 'file://' + tempdir.replace(os.sep, '/')
+    try:
+        # Test no caching for the same dataframe with different parent cache dirs
+        test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF,
+                                new_temp_url)
+        assert ori_temp_url != new_temp_url
+        converter13 = make_spark_converter(df1)
+        assert converter1.cache_dir_url != converter13.cache_dir_url
+
+        # Test caching for the same dataframe with different parent cache dirs
+        # that could be normalized to the same parent cache dir
+        new_temp_url_2 = new_temp_url + os.sep
+        test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF,
+                                new_temp_url_2)
+        assert new_temp_url != new_temp_url_2
+        converter14 = make_spark_converter(df1)
+        assert converter13.cache_dir_url == converter14.cache_dir_url
+    finally:
+        test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF,
+                                ori_temp_url)
 
 
 def test_df_delete_caching_meta(test_ctx):

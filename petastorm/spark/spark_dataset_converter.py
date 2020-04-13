@@ -31,7 +31,7 @@ from six.moves.urllib.parse import urlparse
 
 from petastorm import make_batch_reader
 from petastorm.fs_utils import (FilesystemResolver,
-                                get_filesystem_and_path_or_paths)
+                                get_filesystem_and_path_or_paths, normalize_dir_url)
 
 if LooseVersion(pyspark.__version__) < LooseVersion('3.0'):
     def vector_to_array(_1, _2='float32'):
@@ -70,12 +70,13 @@ def _get_parent_cache_dir_url():
 
     if conf_url is None:
         raise ValueError(
-            "Please set the spark config petastorm.spark.converter.parentCacheDirUrl.")
+            "Please set the spark config {}.".format(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF))
 
+    conf_url = normalize_dir_url(conf_url)
     _check_parent_cache_dir_url(conf_url)
     _parent_cache_dir_url = conf_url
     logger.info(
-        'Read petastorm.spark.converter.parentCacheDirUrl %s', _parent_cache_dir_url)
+        'Read %s %s', SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, _parent_cache_dir_url)
 
     return _parent_cache_dir_url
 
@@ -377,7 +378,7 @@ def _get_df_plan(df):
 
 class CachedDataFrameMeta(object):
 
-    def __init__(self, df, row_group_size, compression_codec, dtype):
+    def __init__(self, df, parent_cache_dir_url, row_group_size, compression_codec, dtype):
         self.row_group_size = row_group_size
         self.compression_codec = compression_codec
         # Note: the metadata will hold dataframe plan, but it won't
@@ -387,11 +388,12 @@ class CachedDataFrameMeta(object):
         self.df_plan = _get_df_plan(df)
         self.cache_dir_url = None
         self.dtype = dtype
+        self.parent_cache_dir_url = parent_cache_dir_url
 
     @classmethod
     def create_cached_dataframe_meta(cls, df, parent_cache_dir_url, row_group_size,
                                      compression_codec, dtype):
-        meta = cls(df, row_group_size, compression_codec, dtype)
+        meta = cls(df, parent_cache_dir_url, row_group_size, compression_codec, dtype)
         meta.cache_dir_url = _materialize_df(
             df,
             parent_cache_dir_url=parent_cache_dir_url,
@@ -471,7 +473,8 @@ def _cache_df_or_retrieve_cache_data_url(df, parent_cache_dir_url,
             if meta.row_group_size == parquet_row_group_size_bytes and \
                     meta.compression_codec == compression_codec and \
                     meta.df_plan.sameResult(df_plan) and \
-                    meta.dtype == dtype:
+                    meta.dtype == dtype and \
+                    meta.parent_cache_dir_url == parent_cache_dir_url:
                 return meta.cache_dir_url
         # do not find cached dataframe, start materializing.
         cached_df_meta = CachedDataFrameMeta.create_cached_dataframe_meta(
