@@ -195,12 +195,13 @@ def _set_shape(schema, fields_as_dict, batched_output=None):
     for k in fields_as_dict.keys():
         unischema_field = schema.fields[k]
 
-        if batched_output:
-            shape = (None,) + unischema_field.shape
-        else:
-            shape = unischema_field.shape
-        # Set static shape
-        fields_as_dict[k].set_shape(shape)
+        if fields_as_dict[k].get_shape().dims is None:
+            if batched_output:
+                shape = (None,) + unischema_field.shape
+            else:
+                shape = unischema_field.shape
+            # Set static shape
+            fields_as_dict[k].set_shape(shape)
 
 
 def _shuffling_queue(shuffling_queue_capacity, min_after_dequeue, dtypes, fields_as_list):
@@ -286,9 +287,8 @@ def _tf_tensors_ngram(reader, shuffling_queue_capacity, min_after_dequeue):
     fields_as_dict = {
         str(timestep): fields_as_namedtuple[timestep]._asdict() for timestep in fields_as_namedtuple}
 
-    if _IS_TF_VERSION_1:
-        for timestep in fields_as_dict:
-            _set_shape(reader.schema, fields_as_dict[timestep])
+    for timestep in fields_as_dict:
+        _set_shape(reader.schema, fields_as_dict[timestep])
 
     return make_namedtuple_tf_ngram(reader.schema, reader.ngram, **fields_as_dict)
 
@@ -402,10 +402,8 @@ def make_petastorm_dataset(reader):
 
         flat_dataset = tf.data.Dataset.from_generator(dequeue_sample_impl, tuple(_schema_to_tf_dtypes(reader.schema)))
         named_tuple_dataset = flat_dataset \
-            .map(reader.schema.make_namedtuple_tf)
-        if _IS_TF_VERSION_1:
-            named_tuple_dataset = named_tuple_dataset.map(
-                lambda row: _set_shape_to_named_tuple(reader.schema, row, reader.batched_output))
+            .map(reader.schema.make_namedtuple_tf) \
+            .map(lambda row: _set_shape_to_named_tuple(reader.schema, row, reader.batched_output))
         return named_tuple_dataset
     else:
         raise NotImplementedError('make_petastorm_dataset does not support NGram yet.')
