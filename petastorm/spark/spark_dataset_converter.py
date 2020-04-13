@@ -31,8 +31,7 @@ from six.moves.urllib.parse import urlparse
 
 from petastorm import make_batch_reader
 from petastorm.fs_utils import (FilesystemResolver,
-                                get_filesystem_and_path_or_paths)
-from petastorm.reader import normalize_dataset_url
+                                get_filesystem_and_path_or_paths, normalize_dir_url)
 
 if LooseVersion(pyspark.__version__) < LooseVersion('3.0'):
     def vector_to_array(_1, _2='float32'):
@@ -73,7 +72,7 @@ def _get_parent_cache_dir_url():
         raise ValueError(
             "Please set the spark config {}.".format(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF))
 
-    conf_url = normalize_dataset_url(conf_url)
+    conf_url = normalize_dir_url(conf_url)
     _check_parent_cache_dir_url(conf_url)
     _parent_cache_dir_url = conf_url
     logger.info(
