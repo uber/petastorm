@@ -44,7 +44,7 @@ def make_tf_graph(func):
     @wraps(func)
     def run_func_with_tf_graph(*args, **kwargs):
         with tf.Graph().as_default():
-            func(*args, **kwargs)
+            return func(*args, **kwargs)
     return run_func_with_tf_graph
 
 
@@ -124,6 +124,7 @@ def test_schema_to_dtype_list():
     np.testing.assert_equal(actual_tf_dtype_list, [tf.string, tf.int32, tf.int32, tf.uint8])
 
 
+@make_tf_graph
 def _read_from_tf_tensors(synthetic_dataset, count, shuffling_queue_capacity, min_after_dequeue, ngram):
     """Used by several test cases. Reads a 'count' rows using reader.
 
@@ -199,7 +200,6 @@ def test_simple_read_tensorflow(synthetic_dataset):
 
 
 @pytest.mark.forked
-@make_tf_graph
 def test_shuffling_queue(synthetic_dataset):
     """Read data without tensorflow shuffling queue and with it. Check the the order is deterministic within
     unshuffled read and is random with shuffled read"""
@@ -224,7 +224,6 @@ def test_shuffling_queue(synthetic_dataset):
 
 
 @pytest.mark.forked
-@make_tf_graph
 def test_simple_ngram_read_tensorflow(synthetic_dataset):
     """Read a single ngram. Make sure all shapes are set and the data read matches reference data"""
     fields = {
@@ -247,7 +246,6 @@ def test_simple_ngram_read_tensorflow(synthetic_dataset):
 
 
 @pytest.mark.forked
-@make_tf_graph
 def test_shuffling_queue_with_ngrams(synthetic_dataset):
     """Read data without tensorflow shuffling queue and with it (no rowgroup shuffling). Read ngrams
     Check the the order is deterministic within unshuffled read and is random with shuffled read"""
