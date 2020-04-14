@@ -45,15 +45,12 @@ _IS_TF_VERSION_1 = version.parse(tf.__version__) < version.parse('2')
 _IS_TF_VERSION_2 = version.parse(tf.__version__) >= version.parse('2')
 
 
-def create_tf_graph_if_tf2(func):
+def create_tf_graph(func):
     @wraps(func)
     def run_func_with_tf_graph(*args, **kwargs):
         with tf.Graph().as_default():
             return func(*args, **kwargs)
-    if _IS_TF_VERSION_2:
-        return run_func_with_tf_graph
-    else:
-        return func
+    return run_func_with_tf_graph
 
 
 @contextmanager
@@ -193,7 +190,7 @@ def _assert_expected_rows_data(expected_data, rows_data):
 
 
 @pytest.mark.forked
-@create_tf_graph_if_tf2
+@create_tf_graph
 def test_simple_read_tensorflow(synthetic_dataset):
     """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
     data"""
@@ -303,7 +300,7 @@ def test_shuffling_queue_with_ngrams(synthetic_dataset):
 
 
 @pytest.mark.forked
-@create_tf_graph_if_tf2
+@create_tf_graph
 def test_simple_read_tensorflow_with_parquet_dataset(scalar_dataset):
     """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
     data"""
@@ -329,7 +326,7 @@ def test_simple_read_tensorflow_with_parquet_dataset(scalar_dataset):
 
 
 @pytest.mark.forked
-@create_tf_graph_if_tf2
+@create_tf_graph
 def test_simple_read_tensorflow_with_non_petastorm_many_columns_dataset(many_columns_non_petastorm_dataset):
     """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
     data"""
@@ -344,7 +341,7 @@ def test_simple_read_tensorflow_with_non_petastorm_many_columns_dataset(many_col
             assert set(batch.keys()) == set(many_columns_non_petastorm_dataset.data[0].keys())
 
 
-@create_tf_graph_if_tf2
+@create_tf_graph
 def test_shuffling_queue_with_make_batch_reader(scalar_dataset):
     with make_batch_reader(dataset_url_or_urls=scalar_dataset.url) as reader:
         with pytest.raises(ValueError):
@@ -352,7 +349,7 @@ def test_shuffling_queue_with_make_batch_reader(scalar_dataset):
 
 
 @mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
-@create_tf_graph_if_tf2
+@create_tf_graph
 def test_transform_function_new_field(synthetic_dataset):
     def double_matrix(sample):
         sample['double_matrix'] = sample['matrix'] * 2
@@ -373,7 +370,7 @@ def test_transform_function_new_field(synthetic_dataset):
 
 
 @mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
-@create_tf_graph_if_tf2
+@create_tf_graph
 def test_transform_function_new_field_batched(scalar_dataset):
     def double_float64(sample):
         sample['new_float64'] = sample['float64'] * 2

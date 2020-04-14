@@ -1,9 +1,9 @@
 from examples.mnist import tf_example as tf_example
 from examples.mnist.generate_petastorm_mnist import mnist_data_to_petastorm_dataset
-from petastorm.tests.test_tf_utils import create_tf_graph_if_tf2
+from petastorm.tests.test_tf_utils import create_tf_graph
 
 
-@create_tf_graph_if_tf2
+@create_tf_graph
 def test_full_tf_example(large_mock_mnist_data, tmpdir):
     # First, generate mock dataset
     dataset_url = 'file://{}'.format(tmpdir)

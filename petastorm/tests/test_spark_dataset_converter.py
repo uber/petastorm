@@ -47,7 +47,7 @@ try:
 except ImportError:
     from unittest import mock
 
-from petastorm.tests.test_tf_utils import create_tf_graph_if_tf2
+from petastorm.tests.test_tf_utils import create_tf_graph
 
 
 class TestContext(object):
@@ -74,7 +74,7 @@ def test_ctx():
     ctx.tear_down()
 
 
-@create_tf_graph_if_tf2
+@create_tf_graph
 def test_primitive(test_ctx):
     schema = StructType([
         StructField("bool_col", BooleanType(), False),
@@ -133,7 +133,7 @@ def test_primitive(test_ctx):
     assert np.object_ == ts.bin_col.dtype.type
 
 
-@create_tf_graph_if_tf2
+@create_tf_graph
 def test_array_field(test_ctx):
     @pandas_udf('array<float>')
     def gen_array(v):
@@ -270,7 +270,7 @@ def test_pickling_remotely(test_ctx):
     df1 = test_ctx.spark.range(100, 101)
     converter1 = make_spark_converter(df1)
 
-    @create_tf_graph_if_tf2
+    @create_tf_graph
     def map_fn(_):
         with converter1.make_tf_dataset() as dataset:
             iterator = dataset.make_one_shot_iterator()
@@ -283,7 +283,7 @@ def test_pickling_remotely(test_ctx):
     assert result == 100
 
 
-@create_tf_graph_if_tf2
+@create_tf_graph
 def test_tf_dataset_batch_size(test_ctx):
     df1 = test_ctx.spark.range(100)
 
@@ -340,7 +340,7 @@ def test_horovod_rank_compatibility(test_ctx):
             petastorm_reader_kwargs={"cur_shard": 1, "shard_count": 3})
 
 
-@create_tf_graph_if_tf2
+@create_tf_graph
 def test_dtype(test_ctx):
     df = test_ctx.spark.range(10)
     df = df.withColumn("float_col", df.id.cast(FloatType())) \
@@ -376,7 +376,7 @@ def test_dtype(test_ctx):
         make_spark_converter(df, dtype="float16")
 
 
-@create_tf_graph_if_tf2
+@create_tf_graph
 def test_array(test_ctx):
     df = test_ctx.spark.createDataFrame(
         [([1., 2., 3.],),
@@ -398,7 +398,7 @@ def test_array(test_ctx):
     LooseVersion(pyspark.__version__) < LooseVersion("3.0"),
     reason="Vector columns are not supported for pyspark {} < 3.0.0"
     .format(pyspark.__version__))
-@create_tf_graph_if_tf2
+@create_tf_graph
 def test_vector_to_array(test_ctx):
     from pyspark.ml.linalg import Vectors
     from pyspark.mllib.linalg import Vectors as OldVectors

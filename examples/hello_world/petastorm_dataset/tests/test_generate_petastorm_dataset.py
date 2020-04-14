@@ -22,7 +22,7 @@ from examples.hello_world.petastorm_dataset.pytorch_hello_world import pytorch_h
 from examples.hello_world.petastorm_dataset.tensorflow_hello_world import tensorflow_hello_world
 from petastorm import make_reader
 from petastorm.tests.conftest import SyntheticDataset
-from petastorm.tests.test_tf_utils import create_tf_graph_if_tf2
+from petastorm.tests.test_tf_utils import create_tf_graph
 
 
 @pytest.fixture(scope="session")
@@ -61,6 +61,6 @@ def test_python_hello_world_petastorm_dataset_example(petastorm_dataset):
     pyspark_hello_world(petastorm_dataset.url)
 
 
-@create_tf_graph_if_tf2
+@create_tf_graph
 def test_tensorflow_hello_world_petastorm_dataset_example(petastorm_dataset):
     tensorflow_hello_world(petastorm_dataset.url)
