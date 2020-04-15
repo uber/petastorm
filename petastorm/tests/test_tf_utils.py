@@ -129,6 +129,7 @@ def test_schema_to_dtype_list():
     np.testing.assert_equal(actual_tf_dtype_list, [tf.string, tf.int32, tf.int32, tf.uint8])
 
 
+@create_tf_graph
 def _read_from_tf_tensors(synthetic_dataset, count, shuffling_queue_capacity, min_after_dequeue, ngram):
     """Used by several test cases. Reads a 'count' rows using reader.
 
@@ -140,13 +141,12 @@ def _read_from_tf_tensors(synthetic_dataset, count, shuffling_queue_capacity, mi
 
     schema_fields = (NON_NULLABLE_FIELDS if ngram is None else ngram)
 
-    with tf.Graph().as_default():
-        with make_reader(schema_fields=schema_fields, dataset_url=synthetic_dataset.url, reader_pool_type='dummy',
-                         shuffle_row_groups=False) as reader:
-            row_tensors = tf_tensors(reader, shuffling_queue_capacity=shuffling_queue_capacity,
-                                     min_after_dequeue=min_after_dequeue)
-            with _tf_session() as sess:
-                rows_data = [sess.run(row_tensors) for _ in range(count)]
+    with make_reader(schema_fields=schema_fields, dataset_url=synthetic_dataset.url, reader_pool_type='dummy',
+                     shuffle_row_groups=False) as reader:
+        row_tensors = tf_tensors(reader, shuffling_queue_capacity=shuffling_queue_capacity,
+                                 min_after_dequeue=min_after_dequeue)
+        with _tf_session() as sess:
+            rows_data = [sess.run(row_tensors) for _ in range(count)]
 
     return rows_data, row_tensors
 
