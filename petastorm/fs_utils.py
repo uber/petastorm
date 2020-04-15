@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import logging
 
 import pyarrow
 import six
@@ -18,6 +19,8 @@ from six.moves.urllib.parse import urlparse
 
 from petastorm.gcsfs_helpers.gcsfs_wrapper import GCSFSWrapper
 from petastorm.hdfs.namenode import HdfsNamenodeResolver, HdfsConnector
+
+logger = logging.getLogger(__name__)
 
 
 def get_dataset_path(parsed_url):
@@ -223,3 +226,12 @@ def get_filesystem_and_path_or_paths(url_or_urls, hdfs_driver='libhdfs3'):
         path_or_paths = path_list[0]
 
     return fs, path_or_paths
+
+
+def normalize_dir_url(dataset_url):
+    if dataset_url is None or not isinstance(dataset_url, six.string_types):
+        raise ValueError('directory url must be a string')
+
+    dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
+    logger.debug('directory url: %s', dataset_url)
+    return dataset_url

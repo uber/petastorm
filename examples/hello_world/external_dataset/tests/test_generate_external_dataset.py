@@ -22,6 +22,7 @@ from examples.hello_world.external_dataset.pytorch_hello_world import pytorch_he
 from examples.hello_world.external_dataset.tensorflow_hello_world import tensorflow_hello_world
 from petastorm import make_batch_reader
 from petastorm.tests.conftest import SyntheticDataset
+from petastorm.tests.test_tf_utils import create_tf_graph
 
 
 @pytest.fixture(scope="session")
@@ -56,5 +57,6 @@ def test_python_hello_world_external_dataset_example(external_dataset):
     python_hello_world(external_dataset.url)
 
 
+@create_tf_graph
 def test_tensorflow_hello_world_external_dataset_example(external_dataset):
     tensorflow_hello_world(external_dataset.url)

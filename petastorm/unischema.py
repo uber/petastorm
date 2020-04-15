@@ -29,7 +29,7 @@ from pyarrow.lib import ListType
 from pyarrow.lib import StructType as pyStructType
 from six import string_types
 
-from petastorm.compat import compat_get_metadata
+from petastorm.compat import compat_get_metadata, compat_schema_field
 
 # _UNISCHEMA_FIELD_ORDER available values are 'preserve_input_order' or 'alphabetical'
 # Current default behavior is 'preserve_input_order', the legacy behavior is 'alphabetical', which is deprecated and
@@ -67,7 +67,7 @@ class UnischemaField(namedtuple('UnischemaField', ['name', 'numpy_dtype', 'shape
         """Comparing field objects via default namedtuple __repr__ representation doesn't work due to
         codec object ID changing when unpickled.
 
-        Instead, compare all field attributes, but only codec type.
+        Instead, compare all field attributes, except for codec type.
 
         Future: Give codec a mime identifier.
         """
@@ -331,7 +331,7 @@ class Unischema(object):
             unischema_fields.append(UnischemaField(partition.name, numpy_dtype, (), None, False))
 
         for column_name in arrow_schema.names:
-            arrow_field = arrow_schema.field_by_name(column_name)
+            arrow_field = compat_schema_field(arrow_schema, column_name)
             field_type = arrow_field.type
             field_shape = ()
             if isinstance(field_type, ListType):

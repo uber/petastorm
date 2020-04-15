@@ -182,7 +182,6 @@ def test_transform_function_with_predicate(synthetic_dataset, reader_factory):
     lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs)
 ])
 def test_transform_function_returns_a_new_dict_with_predicate(synthetic_dataset, reader_factory):
-
     def transform(sample):
         return {'id': sample['id'], 'id2': -1}
 
@@ -737,31 +736,48 @@ def test_rowgroup_selector_wrong_index_name(synthetic_dataset, reader_factory):
         reader_factory(synthetic_dataset.url, rowgroup_selector=SingleIndexSelector('WrongIndexName', ['some_value']))
 
 
-def test_materialize_dataset_hadoop_config(synthetic_dataset):
+def test_materialize_dataset_hadoop_config(tmpdir_factory):
     """Test that using materialize_dataset does not alter the hadoop_config"""
+
+    path = tmpdir_factory.mktemp('data').strpath
+    tmp_url = "file://" + path
+    # This test does not properly check if parquet.enable.summary-metadata is restored properly with pyspark < 2.4
     spark = SparkSession.builder.getOrCreate()
     hadoop_config = spark.sparkContext._jsc.hadoopConfiguration()
 
-    parquet_summary_metadata = False
+    parquet_metadata_level = "COMMON_ONLY"
     parquet_row_group_check = 100
 
-    # Set the parquet summary giles and row group size check min
-    hadoop_config.setBoolean('parquet.enable.summary-metadata', parquet_summary_metadata)
+    # Set the parquet summary files and row group size check min
+    hadoop_config.set('parquet.summary.metadata.level', parquet_metadata_level)
     hadoop_config.setInt('parquet.row-group.size.row.check.min', parquet_row_group_check)
-    assert hadoop_config.get('parquet.enable.summary-metadata') == str(parquet_summary_metadata).lower()
+    assert hadoop_config.get('parquet.summary.metadata.level') == str(parquet_metadata_level)
     assert hadoop_config.get('parquet.row-group.size.row.check.min') == str(parquet_row_group_check)
-    destination = synthetic_dataset.path + '_moved'
-    create_test_dataset('file://{}'.format(destination), range(10), spark=spark)
+
+    create_test_dataset(tmp_url, range(10), spark=spark)
+
+    assert not os.path.exists(os.path.join(path, "_metadata"))
 
     # Check that they are back to the original values after writing the dataset
     hadoop_config = spark.sparkContext._jsc.hadoopConfiguration()
-    assert hadoop_config.get('parquet.enable.summary-metadata') == str(parquet_summary_metadata).lower()
+    assert hadoop_config.get('parquet.summary.metadata.level') == str(parquet_metadata_level)
     assert hadoop_config.get('parquet.row-group.size.row.check.min') == str(parquet_row_group_check)
     # Other options should return to being unset
     assert hadoop_config.get('parquet.block.size') is None
     assert hadoop_config.get('parquet.block.size.row.check.min') is None
     spark.stop()
-    rmtree(destination)
+
+
+def test_materialize_with_summary_metadata(tmpdir_factory):
+    """Verify _summary_metadata appears, when requested"""
+    path = tmpdir_factory.mktemp('data').strpath
+    tmp_url = "file://" + path
+
+    spark = SparkSession.builder.getOrCreate()
+    create_test_dataset(tmp_url, range(10), spark=spark, use_summary_metadata=True)
+
+    assert os.path.exists(os.path.join(path, "_metadata"))
+    spark.stop()
 
 
 def test_pass_in_pyarrow_filesystem_to_materialize_dataset(synthetic_dataset, tmpdir):

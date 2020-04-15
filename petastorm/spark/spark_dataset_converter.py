@@ -31,7 +31,7 @@ from six.moves.urllib.parse import urlparse
 
 from petastorm import make_batch_reader
 from petastorm.fs_utils import (FilesystemResolver,
-                                get_filesystem_and_path_or_paths)
+                                get_filesystem_and_path_or_paths, normalize_dir_url)
 
 if LooseVersion(pyspark.__version__) < LooseVersion('3.0'):
     def vector_to_array(_1, _2='float32'):
@@ -70,12 +70,13 @@ def _get_parent_cache_dir_url():
 
     if conf_url is None:
         raise ValueError(
-            "Please set the spark config petastorm.spark.converter.parentCacheDirUrl.")
+            "Please set the spark config {}.".format(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF))
 
+    conf_url = normalize_dir_url(conf_url)
     _check_parent_cache_dir_url(conf_url)
     _parent_cache_dir_url = conf_url
     logger.info(
-        'Read petastorm.spark.converter.parentCacheDirUrl %s', _parent_cache_dir_url)
+        'Read %s %s', SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, _parent_cache_dir_url)
 
     return _parent_cache_dir_url
 
@@ -310,7 +311,7 @@ class TFDatasetContextManager(object):
     def __enter__(self):
         # import locally to avoid importing tensorflow globally.
         from petastorm.tf_utils import make_petastorm_dataset
-        import tensorflow as tf
+        import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 
         _wait_file_available(self.parquet_file_url_list)
         self.reader = make_batch_reader(self.parquet_file_url_list, **self.petastorm_reader_kwargs)
@@ -377,7 +378,7 @@ def _get_df_plan(df):
 
 class CachedDataFrameMeta(object):
 
-    def __init__(self, df, row_group_size, compression_codec, dtype):
+    def __init__(self, df, parent_cache_dir_url, row_group_size, compression_codec, dtype):
         self.row_group_size = row_group_size
         self.compression_codec = compression_codec
         # Note: the metadata will hold dataframe plan, but it won't
@@ -387,11 +388,12 @@ class CachedDataFrameMeta(object):
         self.df_plan = _get_df_plan(df)
         self.cache_dir_url = None
         self.dtype = dtype
+        self.parent_cache_dir_url = parent_cache_dir_url
 
     @classmethod
     def create_cached_dataframe_meta(cls, df, parent_cache_dir_url, row_group_size,
                                      compression_codec, dtype):
-        meta = cls(df, row_group_size, compression_codec, dtype)
+        meta = cls(df, parent_cache_dir_url, row_group_size, compression_codec, dtype)
         meta.cache_dir_url = _materialize_df(
             df,
             parent_cache_dir_url=parent_cache_dir_url,
@@ -471,7 +473,8 @@ def _cache_df_or_retrieve_cache_data_url(df, parent_cache_dir_url,
             if meta.row_group_size == parquet_row_group_size_bytes and \
                     meta.compression_codec == compression_codec and \
                     meta.df_plan.sameResult(df_plan) and \
-                    meta.dtype == dtype:
+                    meta.dtype == dtype and \
+                    meta.parent_cache_dir_url == parent_cache_dir_url:
                 return meta.cache_dir_url
         # do not find cached dataframe, start materializing.
         cached_df_meta = CachedDataFrameMeta.create_cached_dataframe_meta(
@@ -594,18 +597,21 @@ def _wait_file_available(url_list):
 
 def _check_dataset_file_median_size(url_list):
     fs, path_list = get_filesystem_and_path_or_paths(url_list)
+    RECOMMENDED_FILE_SIZE_BYTES = 50 * 1024 * 1024
 
     # TODO: also check file size for other file system.
     if isinstance(fs, LocalFileSystem):
         pool = ThreadPool(64)
         try:
             file_size_list = pool.map(os.path.getsize, path_list)
-            mid_index = len(file_size_list) // 2
-            median_size = sorted(file_size_list)[mid_index]
-            if median_size < 50 * 1024 * 1024:
-                logger.warning('The median size (%d) of these parquet files (%s) is too small.'
-                               'Increase file sizes by repartition or coalesce spark dataframe, which '
-                               'will help improve performance.', median_size, ','.join(url_list))
+            if len(file_size_list) > 1:
+                mid_index = len(file_size_list) // 2
+                median_size = sorted(file_size_list)[mid_index]  # take the larger one if tie
+                if median_size < RECOMMENDED_FILE_SIZE_BYTES:
+                    logger.warning('The median size %d B (< 50 MB) of the parquet files is too small. '
+                                   'Total size: %d B. Increase the median file size by calling df.repartition(n) or '
+                                   'df.coalesce(n), which might help improve the performance. Parquet files: %s, ...',
+                                   median_size, sum(file_size_list), url_list[0])
         finally:
             pool.close()
             pool.join()

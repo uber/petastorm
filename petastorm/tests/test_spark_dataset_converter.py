@@ -24,7 +24,7 @@ import numpy as np
 import pyspark
 import pytest
 import py4j
-import tensorflow as tf
+import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import pandas_udf
 from pyspark.sql.types import (ArrayType, BinaryType, BooleanType, ByteType,
@@ -46,6 +46,8 @@ try:
     from mock import mock
 except ImportError:
     from unittest import mock
+
+from petastorm.tests.test_tf_utils import create_tf_graph
 
 
 class TestContext(object):
@@ -72,6 +74,7 @@ def test_ctx():
     ctx.tear_down()
 
 
+@create_tf_graph
 def test_primitive(test_ctx):
     schema = StructType([
         StructField("bool_col", BooleanType(), False),
@@ -130,6 +133,7 @@ def test_primitive(test_ctx):
     assert np.object_ == ts.bin_col.dtype.type
 
 
+@create_tf_graph
 def test_array_field(test_ctx):
     @pandas_udf('array<float>')
     def gen_array(v):
@@ -219,22 +223,49 @@ def test_df_caching(test_ctx):
     df2 = test_ctx.spark.range(10)
     df3 = test_ctx.spark.range(20)
 
+    # Test caching for the dataframes with the same logical plan
     converter1 = make_spark_converter(df1)
     converter2 = make_spark_converter(df2)
     assert converter1.cache_dir_url == converter2.cache_dir_url
 
+    # Test no caching for different dataframes
     converter3 = make_spark_converter(df3)
     assert converter1.cache_dir_url != converter3.cache_dir_url
 
+    # Test no caching for the same dataframe with different row group size
     converter11 = make_spark_converter(
         df1, parquet_row_group_size_bytes=8 * 1024 * 1024)
     converter21 = make_spark_converter(
         df1, parquet_row_group_size_bytes=16 * 1024 * 1024)
     assert converter11.cache_dir_url != converter21.cache_dir_url
 
+    # Test no caching for the same dataframe with different compression_codec
     converter12 = make_spark_converter(df1, compression_codec=None)
     converter22 = make_spark_converter(df1, compression_codec="snappy")
     assert converter12.cache_dir_url != converter22.cache_dir_url
+
+    ori_temp_url = test_ctx.spark.conf.get(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF)
+    tempdir = tempfile.mkdtemp('_spark_converter_test1')
+    new_temp_url = 'file://' + tempdir.replace(os.sep, '/')
+    try:
+        # Test no caching for the same dataframe with different parent cache dirs
+        test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF,
+                                new_temp_url)
+        assert ori_temp_url != new_temp_url
+        converter13 = make_spark_converter(df1)
+        assert converter1.cache_dir_url != converter13.cache_dir_url
+
+        # Test caching for the same dataframe with different parent cache dirs
+        # that could be normalized to the same parent cache dir
+        new_temp_url_2 = new_temp_url + os.sep
+        test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF,
+                                new_temp_url_2)
+        assert new_temp_url != new_temp_url_2
+        converter14 = make_spark_converter(df1)
+        assert converter13.cache_dir_url == converter14.cache_dir_url
+    finally:
+        test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF,
+                                ori_temp_url)
 
 
 def test_df_delete_caching_meta(test_ctx):
@@ -266,6 +297,7 @@ def test_pickling_remotely(test_ctx):
     df1 = test_ctx.spark.range(100, 101)
     converter1 = make_spark_converter(df1)
 
+    @create_tf_graph
     def map_fn(_):
         with converter1.make_tf_dataset() as dataset:
             iterator = dataset.make_one_shot_iterator()
@@ -278,6 +310,7 @@ def test_pickling_remotely(test_ctx):
     assert result == 100
 
 
+@create_tf_graph
 def test_tf_dataset_batch_size(test_ctx):
     df1 = test_ctx.spark.range(100)
 
@@ -334,6 +367,7 @@ def test_horovod_rank_compatibility(test_ctx):
             petastorm_reader_kwargs={"cur_shard": 1, "shard_count": 3})
 
 
+@create_tf_graph
 def test_dtype(test_ctx):
     df = test_ctx.spark.range(10)
     df = df.withColumn("float_col", df.id.cast(FloatType())) \
@@ -369,6 +403,7 @@ def test_dtype(test_ctx):
         make_spark_converter(df, dtype="float16")
 
 
+@create_tf_graph
 def test_array(test_ctx):
     df = test_ctx.spark.createDataFrame(
         [([1., 2., 3.],),
@@ -390,6 +425,7 @@ def test_array(test_ctx):
     LooseVersion(pyspark.__version__) < LooseVersion("3.0"),
     reason="Vector columns are not supported for pyspark {} < 3.0.0"
     .format(pyspark.__version__))
+@create_tf_graph
 def test_vector_to_array(test_ctx):
     from pyspark.ml.linalg import Vectors
     from pyspark.mllib.linalg import Vectors as OldVectors
@@ -576,10 +612,10 @@ def test_wait_file_available(test_ctx):
 
 def test_check_dataset_file_median_size(test_ctx, caplog):
     file_size_map = {
-        '/a/b/01.parquet': 50,
-        '/a/b/02.parquet': 70,
-        '/a/b/03.parquet': 60,
-        '/a/b/04.parquet': 65,
+        '/a/b/01.parquet': 30,
+        '/a/b/02.parquet': 40,
+        '/a/b/03.parquet': 50,
+        '/a/b/04.parquet': 60,
         '/a/b/05.parquet': 999000,
     }
     with mock.patch('os.path.getsize') as mock_path_get_size:
@@ -587,12 +623,19 @@ def test_check_dataset_file_median_size(test_ctx, caplog):
         url_list = ['file://' + path for path in file_size_map.keys()]
         caplog.clear()
         _check_dataset_file_median_size(url_list)
-        assert 'The median size (65) of these parquet files' in '\n'.join([r.message for r in caplog.records])
+        assert 'The median size' in " ".join(caplog.messages)
+
         for k in file_size_map:
             file_size_map[k] *= (1024 * 1024)
         caplog.clear()
         _check_dataset_file_median_size(url_list)
-        assert 'The median size (68157440) of these parquet files' not in '\n'.join([r.message for r in caplog.records])
+        assert 'The median size' not in " ".join(caplog.messages)
+
+        file_size_map = {'/a/b/01.parquet': 29}
+        url_list = ['file:///a/b/01.parquet']
+        caplog.clear()
+        _check_dataset_file_median_size(url_list)
+        assert 'The median size' not in " ".join(caplog.messages)
 
 
 @mock.patch.dict(os.environ, {'DATABRICKS_RUNTIME_VERSION': '7.0'}, clear=True)

@@ -17,7 +17,7 @@ using tensorflow."""
 
 from __future__ import print_function
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 
 from petastorm import make_reader
 from petastorm.tf_utils import tf_tensors, make_petastorm_dataset
