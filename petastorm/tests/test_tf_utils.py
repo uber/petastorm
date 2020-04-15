@@ -19,6 +19,7 @@ from collections import namedtuple
 from contextlib import contextmanager
 from decimal import Decimal
 from functools import wraps
+import inspect
 
 import numpy as np
 from packaging import version
@@ -46,11 +47,14 @@ _IS_TF_VERSION_2 = version.parse(tf.__version__) >= version.parse('2')
 
 
 def create_tf_graph(func):
-    @wraps(func)
     def run_func_with_tf_graph(*args, **kwargs):
         with tf.Graph().as_default():
             return func(*args, **kwargs)
-    return run_func_with_tf_graph
+    func_args = ','.join(inspect.getargspec(func).args)  # pylint: disable=deprecated-method
+    # add a lambda wrap in order to keep the function argument list unchanged.
+    # otherwise some other pytest decorator like @pytest.mark.parametrize may not work correctly in python2
+    warpped_fn = eval("lambda {func_args}: f({func_args})".format(func_args=func_args), {'f': run_func_with_tf_graph})
+    return wraps(func)(warpped_fn)
 
 
 @contextmanager
