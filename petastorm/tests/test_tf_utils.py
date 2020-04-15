@@ -53,6 +53,7 @@ def create_tf_graph(func):
     func_args = ','.join(inspect.getargspec(func).args)  # pylint: disable=deprecated-method
     # add a lambda wrap in order to keep the function argument list unchanged.
     # otherwise some other pytest decorator like @pytest.mark.parametrize may not work correctly in python2
+    # pylint: disable=eval-used
     warpped_fn = eval("lambda {func_args}: f({func_args})".format(func_args=func_args), {'f': run_func_with_tf_graph})
     return wraps(func)(warpped_fn)
 
