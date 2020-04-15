@@ -606,7 +606,7 @@ def _check_dataset_file_median_size(url_list):
             file_size_list = pool.map(os.path.getsize, path_list)
             if len(file_size_list) > 1:
                 mid_index = len(file_size_list) // 2
-                median_size = sorted(file_size_list, reverse=True)[mid_index]  # take the larger one if tie
+                median_size = sorted(file_size_list)[mid_index]  # take the larger one if tie
                 if median_size < RECOMMENDED_FILE_SIZE_BYTES:
                     logger.warning('The median size %d B (< 50 MB) of the parquet files is too small. '
                                    'Total size: %d B. Increase the median file size by calling df.repartition(n) or '
