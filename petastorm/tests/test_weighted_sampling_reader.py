@@ -17,7 +17,7 @@ from __future__ import division
 import numpy as np
 import pytest
 import six
-import tensorflow as tf
+import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 
 from petastorm import make_reader
 from petastorm.ngram import NGram
@@ -26,6 +26,8 @@ from petastorm.test_util.reader_mock import ReaderMock
 from petastorm.tf_utils import tf_tensors
 from petastorm.unischema import Unischema, UnischemaField
 from petastorm.weighted_sampling_reader import WeightedSamplingReader
+from petastorm.tests.test_tf_utils import create_tf_graph
+
 
 TestSchema = Unischema('TestSchema', [
     UnischemaField('f1', np.int32, (), None, False),
@@ -98,17 +100,17 @@ def test_bad_arguments():
         WeightedSamplingReader([reader1], [0.1, 0.9])
 
 
+@create_tf_graph
 def test_with_tf_tensors(synthetic_dataset):
     fields_to_read = ['id.*', 'image_png']
     readers = [make_reader(synthetic_dataset.url, schema_fields=fields_to_read, workers_count=1),
                make_reader(synthetic_dataset.url, schema_fields=fields_to_read, workers_count=1)]
 
-    with tf.Graph().as_default():
-        with WeightedSamplingReader(readers, [0.5, 0.5]) as mixer:
-            mixed_tensors = tf_tensors(mixer)
+    with WeightedSamplingReader(readers, [0.5, 0.5]) as mixer:
+        mixed_tensors = tf_tensors(mixer)
 
-            with tf.Session() as sess:
-                sess.run(mixed_tensors)
+        with tf.Session() as sess:
+            sess.run(mixed_tensors)
 
 
 def test_schema_mismatch(synthetic_dataset):
@@ -119,6 +121,7 @@ def test_schema_mismatch(synthetic_dataset):
         WeightedSamplingReader(readers, [0.5, 0.5])
 
 
+@create_tf_graph
 def test_ngram_mix(synthetic_dataset):
     ngram1_fields = {
         -1: ['id', ],

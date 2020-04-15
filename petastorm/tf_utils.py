@@ -21,7 +21,8 @@ from collections import OrderedDict, namedtuple
 from decimal import Decimal
 
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf  # pylint: disable=import-error
+
 
 # Mapping of identical datatypes in numpy-ish and tensorflow-ish
 _NUMPY_TO_TF_DTYPES_MAPPING = {
@@ -184,18 +185,20 @@ def make_namedtuple_tf_ngram(unischema, ngram, *args, **kargs):
 
 
 def _set_shape(schema, fields_as_dict, batched_output=None):
+
     # Assign static shape for all tensors
     # Workaround of an issue described here:
     # https://stackoverflow.com/questions/49161316/trailing-x00-characters-in-tensor-when-numpy-string-array-is-returned-from-tf
     for k in fields_as_dict.keys():
         unischema_field = schema.fields[k]
 
-        if batched_output:
-            shape = (None,) + unischema_field.shape
-        else:
-            shape = unischema_field.shape
-        # Set static shape
-        fields_as_dict[k].set_shape(shape)
+        if fields_as_dict[k].get_shape().dims is None:
+            if batched_output:
+                shape = (None,) + unischema_field.shape
+            else:
+                shape = unischema_field.shape
+            # Set static shape
+            fields_as_dict[k].set_shape(shape)
 
 
 def _shuffling_queue(shuffling_queue_capacity, min_after_dequeue, dtypes, fields_as_list):
@@ -280,6 +283,7 @@ def _tf_tensors_ngram(reader, shuffling_queue_capacity, min_after_dequeue):
     # We change the key to str format here in order to be able to use ** later to expand the dictionary as kargs.
     fields_as_dict = {
         str(timestep): fields_as_namedtuple[timestep]._asdict() for timestep in fields_as_namedtuple}
+
     for timestep in fields_as_dict:
         _set_shape(reader.schema, fields_as_dict[timestep])
 
@@ -363,7 +367,7 @@ def make_petastorm_dataset(reader):
     The elements produced by the returned dataset object are namedtuples based on the
     :class:`~petastorm.unischema.Unischema`.
 
-    >>> import tensorflow as tf
+    >>> import tensorflow.compat.v1 as tf  # pylint: disable=import-error
     >>> from petastorm.reader import Reader
     >>> from petastorm.tf_utils import make_petastorm_dataset
     >>>
