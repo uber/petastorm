@@ -106,8 +106,8 @@ class _NamedtupleCache(object):
             field_names = list(field_names)
         key = ' '.join([parent_schema_name] + field_names)
         if key not in _NamedtupleCache._store:
-            _NamedtupleCache._store[key] = \
-                _new_gt_255_compatible_namedtuple('{}_view'.format(parent_schema_name), field_names)
+            _NamedtupleCache._store[key] = _new_gt_255_compatible_namedtuple(
+                '{}_view'.format(parent_schema_name), field_names)
         return _NamedtupleCache._store[key]
 
 
@@ -195,6 +195,9 @@ class Unischema(object):
             else:
                 warnings.warn(('Can not create dynamic property {} because it conflicts with an existing property of '
                                'Unischema').format(f.name))
+
+        # Cache namedtuple first to avoid TF autograph issue.
+        self._namedtuple = self._get_namedtuple()
 
     def create_schema_view(self, fields):
         """Creates a new instance of the schema using a subset of fields.
@@ -294,10 +297,10 @@ class Unischema(object):
                 typed_dict[key] = kargs[key]
             else:
                 typed_dict[key] = None
-        return self._get_namedtuple()(**typed_dict)
+        return self._namedtuple(**typed_dict)
 
     def make_namedtuple_tf(self, *args, **kargs):
-        return self._get_namedtuple()(*args, **kargs)
+        return self._namedtuple(*args, **kargs)
 
     @classmethod
     def from_arrow_schema(cls, parquet_dataset, omit_unsupported_fields=False):
