@@ -1,3 +1,4 @@
+import logging
 from decimal import Decimal
 from packaging import version
 
@@ -183,6 +184,6 @@ def test_call_iter_on_dataloader_multiple_times(synthetic_dataset, reader_factor
     with DataLoader(reader_factory(synthetic_dataset.url, schema_fields=BATCHABLE_FIELDS,
                                    transform_spec=TransformSpec(_sensor_name_to_int))) as loader:
         for record in loader:
-            print(record)
+            logging.warning(record)
         for record in loader:
-            print(record)
+            logging.warning(record)
