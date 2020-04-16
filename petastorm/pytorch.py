@@ -130,15 +130,8 @@ class DataLoader(object):
 
         # _batch_acc accumulates samples for a single batch.
         self._batch_acc = []
-        if shuffling_queue_capacity > 0:
-            # We can not know what is the reasonable number to use for the extra capacity, so we set a huge number
-            # and give up on the unbound growth protection mechanism.
-            min_after_dequeue = shuffling_queue_capacity - 1
-            self._shuffling_buffer = RandomShufflingBuffer(shuffling_queue_capacity,
-                                                           min_after_retrieve=min_after_dequeue,
-                                                           extra_capacity=100000000)
-        else:
-            self._shuffling_buffer = NoopShufflingBuffer()
+        self.shuffling_queue_capacity = shuffling_queue_capacity
+        self._in_iter = False
 
     def __iter__(self):
         """
@@ -148,6 +141,21 @@ class DataLoader(object):
         # the requested batch_size ready.
 
         keys = None
+
+        if self._in_iter:
+            raise RuntimeError('Only after previous iteration finished we can start another iteration.')
+        self._in_iter = True
+        self.reader.reset()
+
+        if self.shuffling_queue_capacity > 0:
+            # We can not know what is the reasonable number to use for the extra capacity, so we set a huge number
+            # and give up on the unbound growth protection mechanism.
+            min_after_dequeue = self.shuffling_queue_capacity - 1
+            self._shuffling_buffer = RandomShufflingBuffer(self.shuffling_queue_capacity,
+                                                           min_after_retrieve=min_after_dequeue,
+                                                           extra_capacity=100000000)
+        else:
+            self._shuffling_buffer = NoopShufflingBuffer()
 
         for row in self.reader:
             # Default collate does not work nicely on namedtuples and treat them as lists
@@ -190,6 +198,8 @@ class DataLoader(object):
         # Yield the last and partial batch
         if self._batch_acc:
             yield self.collate_fn(self._batch_acc)
+
+        self._in_iter = False
 
     def _yield_batches(self, keys):
         while self._shuffling_buffer.can_retrieve():
