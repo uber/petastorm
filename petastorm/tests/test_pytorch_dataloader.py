@@ -177,12 +177,13 @@ def test_with_batch_reader(scalar_dataset, shuffling_queue_capacity):
             assert batches[0]['int_fixed_size_list'].shape[1] == len(scalar_dataset.data[0]['int_fixed_size_list'])
 
 
-@pytest.mark.timeout(10)
+@pytest.mark.timeout(100)
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
 def test_call_iter_on_dataloader_multiple_times(synthetic_dataset, reader_factory):
     with DataLoader(reader_factory(synthetic_dataset.url, schema_fields=BATCHABLE_FIELDS,
                                    transform_spec=TransformSpec(_sensor_name_to_int))) as loader:
-        it1 = iter(loader)
-        next(it1)   # This should work
-        it2 = iter(loader)
-        next(it2)   # This should hang forever
+        for _ in enumerate(loader):   # This should work
+            pass
+        for _ in enumerate(loader):   # This should stuck forever
+            pass
+
