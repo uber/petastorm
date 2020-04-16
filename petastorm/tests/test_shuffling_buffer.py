@@ -52,18 +52,18 @@ def test_noop_shuffling_buffer(buffer_type):
     q.finish()
 
 
-def _add_many(buffer, lst):
-    if isinstance(buffer, (NoopShufflingBuffer, RandomShufflingBuffer)):
-        buffer.add_many(lst)
+def _add_many(q, lst):
+    if isinstance(q, (NoopShufflingBuffer, RandomShufflingBuffer)):
+        q.add_many(lst)
     else:
-        buffer.add_many([lst])
+        q.add_many([lst])
 
 
-def _retrieve(buffer):
-    if isinstance(buffer, (NoopShufflingBuffer, RandomShufflingBuffer)):
-        return buffer.retrieve()
+def _retrieve(q):
+    if isinstance(q, (NoopShufflingBuffer, RandomShufflingBuffer)):
+        return q.retrieve()
     else:
-        return buffer.retrieve()[0][0].item()
+        return q.retrieve()[0][0].item()
 
 
 @pytest.mark.parametrize('buffer_type', RANDOM_SHUFFLING_BUFFERS)
@@ -145,11 +145,11 @@ def test_random_shuffling_buffer_can_add_retrieve_flags(buffer_type):
     assert q.size == 0
 
 
-def _retrieve_many(buffer):
-    if isinstance(buffer, (NoopShufflingBuffer, RandomShufflingBuffer)):
-        return [buffer.retrieve()]
+def _retrieve_many(q):
+    if isinstance(q, (NoopShufflingBuffer, RandomShufflingBuffer)):
+        return [q.retrieve()]
     else:
-        return [a.item() for a in buffer.retrieve()[0]]
+        return [a.item() for a in q.retrieve()[0]]
 
 
 def _feed_a_sequence_through_the_queue(shuffling_buffer, input_sequence):
