@@ -186,4 +186,3 @@ def test_call_iter_on_dataloader_multiple_times(synthetic_dataset, reader_factor
             pass
         for _ in enumerate(loader):   # This should stuck forever
             pass
-
