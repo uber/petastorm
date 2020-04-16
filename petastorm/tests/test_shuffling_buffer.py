@@ -145,6 +145,13 @@ def test_random_shuffling_buffer_can_add_retrieve_flags(buffer_type):
     assert q.size == 0
 
 
+def _retrieve_many(buffer):
+    if isinstance(buffer, (NoopShufflingBuffer, RandomShufflingBuffer)):
+        return [buffer.retrieve()]
+    else:
+        return [a.item() for a in buffer.retrieve()[0]]
+
+
 def _feed_a_sequence_through_the_queue(shuffling_buffer, input_sequence):
     assert shuffling_buffer.size == 0
     assert not shuffling_buffer.can_retrieve()
@@ -165,10 +172,10 @@ def _feed_a_sequence_through_the_queue(shuffling_buffer, input_sequence):
 
         for _ in range(2):
             if shuffling_buffer.can_retrieve():
-                retrieve_sequence.append(_retrieve(shuffling_buffer))
+                retrieve_sequence.extend(_retrieve_many(shuffling_buffer))
 
     while shuffling_buffer.can_retrieve():
-        retrieve_sequence.append(_retrieve(shuffling_buffer))
+        retrieve_sequence.extend(_retrieve_many(shuffling_buffer))
 
     return retrieve_sequence
 
@@ -189,6 +196,25 @@ def test_noop_shuffling_buffer_stream_through(buffer_type):
     """Feed a 0:99 sequence through a (Batched)NoopShufflingBuffer. Check that the order has not changed."""
     expected = list(range(100))
     actual = _feed_a_sequence_through_the_queue(buffer_type(), expected)
+    assert expected == actual
+
+
+@pytest.mark.parametrize('batch_size', [2, 3, 6, 10])
+def test_batched_random_shuffling_buffer_stream_through(batch_size):
+    """Feed a 0:99 sequence through a BatchedRandomShufflingBuffer. Check that the order has changed."""
+    input_sequence = range(100)
+    a = _feed_a_sequence_through_the_queue(BatchedRandomShufflingBuffer(10, 3, batch_size), input_sequence)
+    b = _feed_a_sequence_through_the_queue(BatchedRandomShufflingBuffer(10, 3, batch_size), input_sequence)
+    assert len(a) == len(input_sequence)
+    assert set(a) == set(b)
+    assert a != b
+
+
+@pytest.mark.parametrize('batch_size', [2, 3, 6, 10])
+def test_batched_buffer_stream_through(batch_size):
+    """Feed a 0:99 sequence through a BatchedNoopShufflingBuffer. Check that the order has not changed."""
+    expected = list(range(100))
+    actual = _feed_a_sequence_through_the_queue(BatchedNoopShufflingBuffer(batch_size), expected)
     assert expected == actual
 
 
