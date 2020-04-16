@@ -216,13 +216,13 @@ class DataLoader(object):
         self.reader.join()
 
 
-class BatchedDataLoader(DataLoader):
+class BatchedDataLoader(object):
     """
     Same as DataLoader except it uses torch-based shuffling buffers which enable batched buffering
     (significantly faster for small data).
     """
 
-    def __init__(self, reader, batch_size=1, transform_fn=torch.as_tensor,
+    def __init__(self, reader, batch_size=1, transform_fn=None,
                  shuffling_queue_capacity=0):
         """
         Initializes a data loader object.
@@ -249,14 +249,16 @@ class BatchedDataLoader(DataLoader):
         """
         self.reader = reader
         self.batch_size = batch_size
-        self.transform_fn = transform_fn
+        self.transform_fn = transform_fn or torch.as_tensor
 
         # _batch_acc accumulates samples for a single batch.
         self._batch_acc = []
         if shuffling_queue_capacity > 0:
             # We can not know what is the reasonable number to use for the extra capacity, so we set a huge number
             # and give up on the unbound growth protection mechanism.
+            # To keep the same behavior as DataLoader, we need to increase the shuffling_queue_capacity
             min_after_dequeue = shuffling_queue_capacity - 1
+            shuffling_queue_capacity = min_after_dequeue + batch_size
             self._shuffling_buffer = BatchedRandomShufflingBuffer(
                 shuffling_queue_capacity,
                 min_after_retrieve=min_after_dequeue,
@@ -291,7 +293,7 @@ class BatchedDataLoader(DataLoader):
                     row_as_dict[k] = self.transform_fn([v])
                 else:
                     row_as_dict[k] = self.transform_fn(v)
-            self._shuffling_buffer.add_many(row_as_dict)
+            self._shuffling_buffer.add_many(row_as_dict.values())
 
             # _yield_batches will emit as much batches as are allowed by the shuffling_buffer (RandomShufflingBuffer
             # will avoid underflowing below a certain number of samples to guarantee some samples decorrelation)
@@ -309,6 +311,10 @@ class BatchedDataLoader(DataLoader):
     def _yield_batches(self, keys):
         while self._shuffling_buffer.can_retrieve():
             batch = self._shuffling_buffer.retrieve()
+            if not isinstance(batch, dict):
+                # This is for the case of batched reads. Here we restore back the
+                # dictionary format of records
+                batch = dict(zip(keys, batch))
             yield batch
 
     # Functions needed to treat data loader as a context manager

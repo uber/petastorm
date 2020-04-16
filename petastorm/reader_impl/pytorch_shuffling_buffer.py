@@ -31,15 +31,7 @@ class BatchedShufflingBufferBase(object):
         self.batch_size = batch_size
 
     def add_many(self, items):
-        if isinstance(items, dict):
-            if self._keys is None:
-                self._keys = list(items.keys())
-            items = [items[k] for k in self._keys]
-        items = [torch.as_tensor(i) for i in items]
-        if items[0].shape == ():
-            # single value buffer
-            self._keys = ""
-            items = [torch.stack(items, 0)]
+        items = [torch.as_tensor(v) for v in items]
 
         return self._add_many(items)
 
@@ -51,19 +43,12 @@ class BatchedShufflingBufferBase(object):
         :return: None
         """
 
-    def retrieve(self):
-        sample = self._retrieve()
-        if self._keys is not None:
-            if self._keys == "":
-                return sample[0].item()
-            return {k: v for k, v in zip(self._keys, sample)}
-        return sample
-
     @abc.abstractmethod
-    def _retrieve(self):
-        """Selects an item from the buffer and returns the item to the caller. The item is removed from the buffer.
+    def retrieve(self):
+        """Selects an batch of items from the buffer and returns the batch to the caller.
+        The items are removed from the buffer.
 
-        :return: The selected item.
+        :return: The selected batch.
         """
 
     @abc.abstractmethod
@@ -75,9 +60,9 @@ class BatchedShufflingBufferBase(object):
 
     @abc.abstractmethod
     def can_retrieve(self):
-        """Checks the state of the buffer and returns whether an item can be removed from the buffer..
+        """Checks the state of the buffer and returns whether a batch can be removed from the buffer..
 
-        :return: A boolean indicating whether an item can be returned from the buffer at the time.
+        :return: A boolean indicating whether an batch can be returned from the buffer at the time.
         """
 
     @abc.abstractproperty
@@ -108,6 +93,7 @@ class BatchedNoopShufflingBuffer(BatchedShufflingBufferBase):
         self._batches = []
         self._num_samples = 0
         self.store = deque()
+        self._size = 0
 
     def _make_batch(self):
         # TODO: Add test for the zip
@@ -123,12 +109,15 @@ class BatchedNoopShufflingBuffer(BatchedShufflingBufferBase):
 
     def _add_many(self, items):
         self._num_samples += len(items[0])
+        self._size += len(items[0])
         self._batches.append(items)
         while self._num_samples >= self.batch_size:
             self._make_batch()
 
-    def _retrieve(self):
-        return self.store.popleft()
+    def retrieve(self):
+        batch = self.store.popleft()
+        self._size -= len(batch[0])
+        return batch
 
     def can_retrieve(self):
         return len(self.store) > 0
@@ -138,7 +127,7 @@ class BatchedNoopShufflingBuffer(BatchedShufflingBufferBase):
 
     @property
     def size(self):
-        return len(self.store)
+        return self._size
 
     def finish(self):
         if self._batches:
@@ -180,7 +169,6 @@ class BatchedRandomShufflingBuffer(BatchedShufflingBufferBase):
         self._extra_capacity = extra_capacity
         # Preallocate the shuffling buffer.
         self._items = None
-        self._keys = None
         self._shuffling_queue_capacity = shuffling_buffer_capacity
         self._min_after_dequeue = min_after_retrieve
         self._size = 0
@@ -192,6 +180,10 @@ class BatchedRandomShufflingBuffer(BatchedShufflingBufferBase):
     def _add_many(self, items):
         if self._done_adding:
             raise RuntimeError('Can not call add_many after done_adding() was called.')
+
+        if not self.can_add():
+            raise RuntimeError('Can not enqueue. Check the return value of "can_enqueue()" to check if more '
+                               'items can be added.')
 
         expected_size = self._size + len(items[0])
         maximal_capacity = self._shuffling_queue_capacity + self._extra_capacity
@@ -229,7 +221,7 @@ class BatchedRandomShufflingBuffer(BatchedShufflingBufferBase):
             self._items[k][self._size:expected_size] = v
         self._size = expected_size
 
-    def _retrieve(self):
+    def retrieve(self):
         if not self._done_adding and not self.can_retrieve():
             raise RuntimeError('Can not dequeue. Check the return value of "can_dequeue()" to check if any '
                                'items are available.')
@@ -242,14 +234,12 @@ class BatchedRandomShufflingBuffer(BatchedShufflingBufferBase):
             self._random_indices = torch.randperm(int(self._size), device=self._items[0].device)
         idx = self._random_indices[self._sampling_size:self._sampling_size + batch_size]
         self._sampling_size += batch_size
-        sample = []
-        for v in self._items:
-            sample.append(v[idx])
+        sample = [v[idx] for v in self._items]
         self._size -= batch_size
         return sample
 
     def can_add(self):
-        return self._size <= self._shuffling_queue_capacity - self.batch_size and not self._done_adding
+        return self._size < self._shuffling_queue_capacity and not self._done_adding
 
     def can_retrieve(self):
         return self._size >= self._min_after_dequeue + self.batch_size - 1 or (self._done_adding and self._size > 0)
