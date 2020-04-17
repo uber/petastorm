@@ -25,8 +25,9 @@ def test_tf_autograph(caplog):
     caplog.clear()
     df1 = spark_ctx.spark.range(100)
     converter1 = make_spark_converter(df1)
+    results = []
     with converter1.make_tf_dataset(num_epochs=1) as dataset:
         for batch in dataset:
-            print(batch.id)
+            results.append(batch)
     assert "AutoGraph could not transform" not in " ".join(caplog.messages)
     spark_ctx.tear_down()
