@@ -175,3 +175,13 @@ def test_with_batch_reader(scalar_dataset, shuffling_queue_capacity):
         if pa.__version__ != '0.15.0':
             assert len(scalar_dataset.data) == sum(batch['int_fixed_size_list'].shape[0] for batch in batches)
             assert batches[0]['int_fixed_size_list'].shape[1] == len(scalar_dataset.data[0]['int_fixed_size_list'])
+
+
+@pytest.mark.timeout(100)
+@pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
+def test_call_iter_on_dataloader_multiple_times(synthetic_dataset, reader_factory):
+    with DataLoader(reader_factory(synthetic_dataset.url, schema_fields=BATCHABLE_FIELDS,
+                                   transform_spec=TransformSpec(_sensor_name_to_int))) as loader:
+        num_batchs1 = sum([1 for _ in loader])
+        num_batchs2 = sum([1 for _ in loader])
+        assert num_batchs1 == num_batchs2
