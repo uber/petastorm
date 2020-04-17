@@ -180,7 +180,7 @@ def make_namedtuple_tf_ngram(unischema, ngram, *args, **kargs):
         args_timestep = args[previous_args_end:new_args_end]
         previous_args_end = new_args_end
         kargs_timestep = (kargs[str(timestep)] if str(timestep) in kargs else {})
-        ngram_result[timestep] = new_schema._get_namedtuple()(*args_timestep, **kargs_timestep)
+        ngram_result[timestep] = new_schema.get_namedtuple()(*args_timestep, **kargs_timestep)
     return ngram_result
 
 
@@ -399,8 +399,8 @@ def make_petastorm_dataset(reader):
 
         flat_dataset = tf.data.Dataset.from_generator(dequeue_sample_impl, tuple(_schema_to_tf_dtypes(reader.schema)))
 
-        named_tuple_dataset = flat_dataset.map(reader.schema.make_namedtuple_tf)
-
+        schema_tuple = reader.schema.get_namedtuple()
+        named_tuple_dataset = flat_dataset.map(schema_tuple)
         return named_tuple_dataset
     else:
         raise NotImplementedError('make_petastorm_dataset does not support NGram yet.')

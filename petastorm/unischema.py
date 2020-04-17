@@ -196,19 +196,6 @@ class Unischema(object):
                 warnings.warn(('Can not create dynamic property {} because it conflicts with an existing property of '
                                'Unischema').format(f.name))
 
-        # Cache namedtuple first to avoid TF autograph issue.
-        self._namedtuple = self._get_namedtuple()
-
-    def __getstate__(self):
-        # The self._namedtuple cannot be pickled. So we override get/set state for pickling.
-        return self._name, self._fields
-
-    def __setstate__(self, state):
-        name, fields = state
-        self._name = name
-        self._fields = fields
-        self._namedtuple = self._get_namedtuple()
-
     def create_schema_view(self, fields):
         """Creates a new instance of the schema using a subset of fields.
 
@@ -252,7 +239,7 @@ class Unischema(object):
 
         return Unischema('{}_view'.format(self._name), view_fields)
 
-    def _get_namedtuple(self):
+    def get_namedtuple(self):
         return _NamedtupleCache.get(self._name, self._fields.keys())
 
     def __str__(self):
@@ -307,10 +294,10 @@ class Unischema(object):
                 typed_dict[key] = kargs[key]
             else:
                 typed_dict[key] = None
-        return self._namedtuple(**typed_dict)
+        return self.get_namedtuple()(**typed_dict)
 
     def make_namedtuple_tf(self, *args, **kargs):
-        return self._namedtuple(*args, **kargs)
+        return self.get_namedtuple()(*args, **kargs)
 
     @classmethod
     def from_arrow_schema(cls, parquet_dataset, omit_unsupported_fields=False):
