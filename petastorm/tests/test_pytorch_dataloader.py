@@ -1,4 +1,3 @@
-import logging
 from decimal import Decimal
 from packaging import version
 
