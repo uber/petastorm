@@ -30,4 +30,3 @@ def test_tf_autograph(caplog):
             print(batch.id)
     assert "AutoGraph could not transform" not in " ".join(caplog.messages)
     spark_ctx.tear_down()
-
