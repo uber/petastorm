@@ -180,7 +180,7 @@ def make_namedtuple_tf_ngram(unischema, ngram, *args, **kargs):
         args_timestep = args[previous_args_end:new_args_end]
         previous_args_end = new_args_end
         kargs_timestep = (kargs[str(timestep)] if str(timestep) in kargs else {})
-        ngram_result[timestep] = new_schema._get_namedtuple()(*args_timestep, **kargs_timestep)
+        ngram_result[timestep] = new_schema.get_namedtuple()(*args_timestep, **kargs_timestep)
     return ngram_result
 
 
@@ -404,8 +404,9 @@ def make_petastorm_dataset(reader):
         def set_shape(row):
             return _set_shape_to_named_tuple(reader.schema, row, reader.batched_output)
 
+        schema_tuple = reader.schema.get_namedtuple()
         named_tuple_dataset = flat_dataset \
-            .map(reader.schema.make_namedtuple_tf) \
+            .map(schema_tuple) \
             .map(set_shape)
         return named_tuple_dataset
     else:
