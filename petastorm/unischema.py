@@ -199,6 +199,16 @@ class Unischema(object):
         # Cache namedtuple first to avoid TF autograph issue.
         self._namedtuple = self._get_namedtuple()
 
+    def __getstate__(self):
+        # The self._namedtuple cannot be pickled. So we override get/set state for pickling.
+        return self._name, self._fields
+
+    def __setstate__(self, state):
+        name, fields = state
+        self._name = name
+        self._fields = fields
+        self._namedtuple = self._get_namedtuple()
+
     def create_schema_view(self, fields):
         """Creates a new instance of the schema using a subset of fields.
 
