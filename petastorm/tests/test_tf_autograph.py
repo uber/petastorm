@@ -15,17 +15,19 @@
 import pytest
 
 from petastorm.spark import make_spark_converter
-from petastorm.tests.test_spark_dataset_converter import test_ctx  # pylint: disable=unused-import
+from petastorm.tests.test_spark_dataset_converter import TestContext
 from petastorm.tests.test_tf_utils import _IS_TF_VERSION_1
 
 
 @pytest.mark.skipif(_IS_TF_VERSION_1, reason="Only test autograph transform on tensorflow>=2")
-def test_tf_autograph(test_ctx, caplog):
+def test_tf_autograph(caplog):
+    spark_ctx = TestContext()
     caplog.clear()
-    df1 = test_ctx.spark.range(100)
+    df1 = spark_ctx.spark.range(100)
     converter1 = make_spark_converter(df1)
-
     with converter1.make_tf_dataset(num_epochs=1) as dataset:
         for batch in dataset:
             print(batch.id)
     assert "AutoGraph could not transform" not in " ".join(caplog.messages)
+    spark_ctx.tear_down()
+
