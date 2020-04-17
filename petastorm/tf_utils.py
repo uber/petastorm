@@ -399,14 +399,8 @@ def make_petastorm_dataset(reader):
 
         flat_dataset = tf.data.Dataset.from_generator(dequeue_sample_impl, tuple(_schema_to_tf_dtypes(reader.schema)))
 
-        # Don't write this function as a inline lambda like `dataset.map(lambda row: _set_shape_to_named_tuple(...))`,
-        # It can avoid this error: https://github.com/tensorflow/tensorflow/issues/30149
-        def set_shape(row):
-            return _set_shape_to_named_tuple(reader.schema, row, reader.batched_output)
+        named_tuple_dataset = flat_dataset.map(reader.schema.make_namedtuple_tf)
 
-        named_tuple_dataset = flat_dataset \
-            .map(reader.schema.make_namedtuple_tf) \
-            .map(set_shape)
         return named_tuple_dataset
     else:
         raise NotImplementedError('make_petastorm_dataset does not support NGram yet.')
