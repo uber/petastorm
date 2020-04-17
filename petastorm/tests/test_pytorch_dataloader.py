@@ -183,7 +183,6 @@ def test_with_batch_reader(scalar_dataset, shuffling_queue_capacity):
 def test_call_iter_on_dataloader_multiple_times(synthetic_dataset, reader_factory):
     with DataLoader(reader_factory(synthetic_dataset.url, schema_fields=BATCHABLE_FIELDS,
                                    transform_spec=TransformSpec(_sensor_name_to_int))) as loader:
-        for record in loader:
-            logging.warning(record)
-        for record in loader:
-            logging.warning(record)
+        num_batchs1 = sum([1 for _ in loader])
+        num_batchs2 = sum([1 for _ in loader])
+        assert num_batchs1 == num_batchs2
