@@ -132,6 +132,7 @@ class DataLoader(object):
         self._batch_acc = []
         self.shuffling_queue_capacity = shuffling_queue_capacity
         self._in_iter = False
+        self._iter_pass = 0
 
     def __iter__(self):
         """
@@ -145,7 +146,8 @@ class DataLoader(object):
         if self._in_iter:
             raise RuntimeError('Only after previous iteration finished we can start another iteration.')
         self._in_iter = True
-        self.reader.reset()
+        if self._iter_pass > 0:
+            self.reader.reset()
 
         if self.shuffling_queue_capacity > 0:
             # We can not know what is the reasonable number to use for the extra capacity, so we set a huge number
@@ -200,6 +202,7 @@ class DataLoader(object):
             yield self.collate_fn(self._batch_acc)
 
         self._in_iter = False
+        self._iter_pass += 1
 
     def _yield_batches(self, keys):
         while self._shuffling_buffer.can_retrieve():
