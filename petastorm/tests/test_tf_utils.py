@@ -35,7 +35,7 @@ from petastorm import make_reader, make_batch_reader, TransformSpec
 from petastorm.ngram import NGram
 from petastorm.tests.test_common import TestSchema
 from petastorm.tf_utils import _sanitize_field_tf_types, _numpy_to_tf_dtypes, \
-    _schema_to_tf_dtypes, tf_tensors
+    _schema_to_tf_dtypes, tf_tensors, _ngrams_generator, _unflatten_and_set_shape
 from petastorm.unischema import Unischema, UnischemaField
 
 NON_NULLABLE_FIELDS = set(TestSchema.fields.values()) - \
@@ -394,3 +394,31 @@ def test_transform_function_new_field_batched(scalar_dataset):
             original_sample = next(d for d in scalar_dataset.data if d['id'] == actual_id)
             expected = original_sample['float64'] * 2
             np.testing.assert_equal(expected, actual_float64)
+
+
+@create_tf_graph
+def test_ngram_generator(synthetic_dataset):
+    """Testing private _ngrams_generator and _unflatten_and_set_shape functions."""
+
+    # 1. Use _ngrams_generator to read out ngrams as flattened tuples
+    # 2. Convert flattened tuples back to ngrams of tensors
+    # 3. Evaluate tensors and make sure the
+    fields = {
+        -1: [TestSchema.id],
+        2: [TestSchema.id, TestSchema.image_png]
+    }
+    ngram = NGram(fields=fields, delta_threshold=1.5, timestamp_field=TestSchema.id)
+
+    with make_reader(schema_fields=ngram, dataset_url=synthetic_dataset.url, reader_pool_type='dummy',
+                     shuffle_row_groups=False) as reader:
+        flat_row_numpy = next(iter(_ngrams_generator(reader)))
+
+        flat_row_tf = tuple([tf.constant(x) for x in flat_row_numpy])
+        ngram_tf = _unflatten_and_set_shape(reader.schema, reader.ngram, flat_row_tf)
+
+        with _tf_session() as sess:
+            ngram_numpy = sess.run(ngram_tf)
+
+        assert ngram_numpy[-1].id == flat_row_numpy.id_0
+        assert ngram_numpy[2].id == flat_row_numpy.id_3
+        np.testing.assert_equal(ngram_numpy[2].image_png, flat_row_numpy.image_png_3)

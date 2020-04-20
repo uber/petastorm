@@ -150,11 +150,20 @@ def test_some_processing_functions(synthetic_dataset, reader_factory):
 
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
-def test_dataset_on_ngram_not_supported(synthetic_dataset, reader_factory):
-    ngram = NGram({0: list(_EXCLUDE_FIELDS), 1: [TestSchema.id]}, 100, TestSchema.id)
-    with reader_factory(synthetic_dataset.url, schema_fields=ngram) as reader:
-        with pytest.raises(NotImplementedError):
-            make_petastorm_dataset(reader)
+@create_tf_graph
+def test_dataset_with_ngrams(synthetic_dataset, reader_factory):
+    ngram = NGram({-1: [TestSchema.id, TestSchema.image_png], 2: [TestSchema.id]}, 100, TestSchema.id)
+    with reader_factory(synthetic_dataset.url, schema_fields=ngram, num_epochs=1) as reader:
+        dataset = make_petastorm_dataset(reader)
+        next_sample = dataset.make_one_shot_iterator().get_next()
+        with tf.Session() as sess:
+            while True:
+                try:
+                    actual = sess.run(next_sample)
+                    assert actual[-1].id + 3 == actual[2].id
+                    assert np.all(actual[-1].image_png.shape > (10, 10, 3))
+                except tf.errors.OutOfRangeError:
+                    break
 
 
 @pytest.mark.forked
