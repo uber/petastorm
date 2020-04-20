@@ -11,9 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import sys
+import warnings
 
 from petastorm.errors import NoDataAvailableError  # noqa: F401
 from petastorm.reader import make_reader, make_batch_reader  # noqa: F401
 from petastorm.transform import TransformSpec  # noqa: F401
 
 __version__ = '0.8.2'
+
+if sys.version_info.major < 3:
+    warnings.warn('Petastorm on python2 is deprecated and will remove python2 support in next release.')
