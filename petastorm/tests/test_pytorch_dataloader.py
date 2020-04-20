@@ -192,11 +192,27 @@ def test_with_batch_reader(scalar_dataset, shuffling_queue_capacity, data_loader
             assert batches[0]['int_fixed_size_list'].shape[1] == len(scalar_dataset.data[0]['int_fixed_size_list'])
 
 
-@pytest.mark.timeout(100)
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
-def test_call_iter_on_dataloader_multiple_times(synthetic_dataset, reader_factory):
-    with DataLoader(reader_factory(synthetic_dataset.url, schema_fields=BATCHABLE_FIELDS,
-                                   transform_spec=TransformSpec(_sensor_name_to_int))) as loader:
-        num_batchs1 = sum([1 for _ in loader])
-        num_batchs2 = sum([1 for _ in loader])
-        assert num_batchs1 == num_batchs2
+@pytest.mark.parametrize("data_loader_type", ALL_DATA_LOADERS)
+def test_call_iter_on_dataloader_multiple_times(synthetic_dataset, reader_factory, data_loader_type):
+    with data_loader_type(reader_factory(synthetic_dataset.url, schema_fields=[TestSchema.id]),
+                          batch_size=2) as loader:
+        pass1_set = set()
+        for batch in iter(loader):
+            pass1_set |= set(batch['id'].numpy())
+
+        pass2_set = set()
+        for batch in iter(loader):
+            pass2_set |= set(batch['id'].numpy())
+
+        assert pass1_set == pass2_set
+
+        with pytest.raises(RuntimeError,
+                           match='Only after previous iteration finished we can start another iteration'):
+            iter3 = iter(loader)
+            next(iter3)
+            iter4 = iter(loader)
+            next(iter4)
+
+
+

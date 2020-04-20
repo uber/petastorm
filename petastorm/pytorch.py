@@ -266,20 +266,9 @@ class BatchedDataLoader(object):
 
         # _batch_acc accumulates samples for a single batch.
         self._batch_acc = []
-        if shuffling_queue_capacity > 0:
-            # We can not know what is the reasonable number to use for the extra capacity, so we set a huge number
-            # and give up on the unbound growth protection mechanism.
-            # To keep the same behavior as DataLoader, we need to increase the shuffling_queue_capacity
-            min_after_dequeue = shuffling_queue_capacity - 1
-            shuffling_queue_capacity = min_after_dequeue + batch_size
-            self._shuffling_buffer = BatchedRandomShufflingBuffer(
-                shuffling_queue_capacity,
-                min_after_retrieve=min_after_dequeue,
-                extra_capacity=100000000,
-                batch_size=batch_size
-            )
-        else:
-            self._shuffling_buffer = BatchedNoopShufflingBuffer(batch_size=batch_size)
+        self.shuffling_queue_capacity = shuffling_queue_capacity
+        self._in_iter = False
+        self._iter_pass = 0
 
     def __iter__(self):
         """
@@ -289,6 +278,27 @@ class BatchedDataLoader(object):
         # the requested batch_size ready.
 
         keys = None
+
+        if self._in_iter:
+            raise RuntimeError('Only after previous iteration finished we can start another iteration.')
+        self._in_iter = True
+        if self._iter_pass > 0:
+            self.reader.reset()
+
+        if self.shuffling_queue_capacity > 0:
+            # We can not know what is the reasonable number to use for the extra capacity, so we set a huge number
+            # and give up on the unbound growth protection mechanism.
+            # To keep the same behavior as DataLoader, we need to increase the shuffling_queue_capacity
+            min_after_dequeue = self.shuffling_queue_capacity - 1
+            shuffling_queue_capacity = min_after_dequeue + self.batch_size
+            self._shuffling_buffer = BatchedRandomShufflingBuffer(
+                shuffling_queue_capacity,
+                min_after_retrieve=min_after_dequeue,
+                extra_capacity=100000000,
+                batch_size=self.batch_size
+            )
+        else:
+            self._shuffling_buffer = BatchedNoopShufflingBuffer(batch_size=self.batch_size)
 
         for row in self.reader:
             # Default collate does not work nicely on namedtuples and treat them as lists
@@ -320,6 +330,9 @@ class BatchedDataLoader(object):
 
         for batch in self._yield_batches(keys):
             yield batch
+
+        self._in_iter = False
+        self._iter_pass += 1
 
     def _yield_batches(self, keys):
         while self._shuffling_buffer.can_retrieve():
