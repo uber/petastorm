@@ -225,6 +225,8 @@ The minimalist example below assumes the definition of a ``Net`` class and
                                 transform_spec=transform), batch_size=1000) as test_loader:
         test(model, device, test_loader)
 
+If you are working with very large batch sizes and do not need support for Decimal/strings we provide a ``petastorm.pytorch.BatchedDataLoader`` that can buffer using Torch tensors (``cpu`` or ``cuda``) with a signficantly higher throughput.
+
 Spark Dataset Converter API
 ---------------------------
 
