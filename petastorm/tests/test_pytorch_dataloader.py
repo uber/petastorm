@@ -200,19 +200,13 @@ def test_call_iter_on_dataloader_multiple_times(synthetic_dataset, reader_factor
         pass1_set = set()
         for batch in iter(loader):
             pass1_set |= set(batch['id'].numpy())
-
         pass2_set = set()
         for batch in iter(loader):
             pass2_set |= set(batch['id'].numpy())
-
         assert pass1_set == pass2_set
-
         with pytest.raises(RuntimeError,
                            match='Only after previous iteration finished we can start another iteration'):
             iter3 = iter(loader)
             next(iter3)
             iter4 = iter(loader)
             next(iter4)
-
-
-
