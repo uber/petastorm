@@ -17,8 +17,9 @@ import warnings
 from petastorm.errors import NoDataAvailableError  # noqa: F401
 from petastorm.reader import make_reader, make_batch_reader  # noqa: F401
 from petastorm.transform import TransformSpec  # noqa: F401
+import petastorm.spark
 
-__version__ = '0.8.2'
+__version__ = '0.8.3'
 
 if sys.version_info.major < 3:
     warnings.warn('Petastorm on Python 2 is deprecated and will remove Python 2 support in next release.')
