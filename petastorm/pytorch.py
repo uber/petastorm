@@ -33,6 +33,8 @@ if PY2:
 else:
     _string_classes = (str, bytes)
 
+logger = logging.getLogger(__name__)
+
 
 def _sanitize_pytorch_types(row_as_dict):
     """Promotes values types in a dictionary to the types supported by pytorch. Raises an error if type is clear error
@@ -97,7 +99,34 @@ beginning.If you do need to terminate early and restart from beginning, please r
 loader."
 
 
-class DataLoader(object):
+class LoaderBase(object):
+
+    def __init__(self):
+        self._in_iter = None
+        self._error = None
+
+    def __iter__(self):
+        if self._error is not None:
+            raise RuntimeError('Cannot start a new iteration because last time iteration failed with error {err}.'
+                               .format(err=repr(self._error)))
+        if self._in_iter is not None and self._in_iter == True:
+            raise RuntimeError(_PARALLEL_ITER_ERROR)
+        if self._in_iter is not None:
+            self.reader.reset()
+            logger.warning('Start a new pass of Petastorm DataLoader, reset underlying Petastorm reader to position 0.')
+        self._in_iter = True
+
+        try:
+            for batch in self._iter_impl():
+                yield batch
+        except RuntimeError as e:
+            self._error = e
+            raise e
+        finally:
+            self._in_iter = False
+
+
+class DataLoader(LoaderBase):
     """
     A data loader adaptor for ``torch.utils.data.DataLoader``.
 
@@ -130,6 +159,7 @@ class DataLoader(object):
         :param shuffling_queue_capacity: Queue capacity is passed to the underlying :class:`tf.RandomShuffleQueue`
           instance. If set to 0, no suffling will be done.
         """
+        super(DataLoader, self).__init__()
         self.reader = reader
         self.batch_size = batch_size
         self.collate_fn = collate_fn
@@ -139,7 +169,7 @@ class DataLoader(object):
         self.shuffling_queue_capacity = shuffling_queue_capacity
         self._in_iter = None
 
-    def __iter__(self):
+    def _iter_impl(self):
         """
         The Data Loader iterator stops the for-loop when reader runs out of samples.
         """
@@ -147,14 +177,6 @@ class DataLoader(object):
         # the requested batch_size ready.
 
         keys = None
-
-        if self._in_iter:
-            raise RuntimeError(_PARALLEL_ITER_ERROR)
-        if self._in_iter is not None:
-            self.reader.reset()
-            logging.warn('Start a new pass of Petastorm DataLoader, reset underlying Petastorm reader to position 0.')
-        self._in_iter = True
-
         if self.shuffling_queue_capacity > 0:
             # We can not know what is the reasonable number to use for the extra capacity, so we set a huge number
             # and give up on the unbound growth protection mechanism.
@@ -207,10 +229,6 @@ class DataLoader(object):
         if self._batch_acc:
             yield self.collate_fn(self._batch_acc)
 
-        # We purposely do not wrap it under a final block, because must finish a full pass of Petastorm DataLoader
-        # before making another pass from the beginning
-        self._in_iter = False
-
     def _yield_batches(self, keys):
         while self._shuffling_buffer.can_retrieve():
             post_shuffled_row = self._shuffling_buffer.retrieve()
@@ -235,7 +253,7 @@ class DataLoader(object):
         self.reader.join()
 
 
-class BatchedDataLoader(object):
+class BatchedDataLoader(LoaderBase):
     """
     Same as DataLoader except it uses torch-based shuffling buffers which enable batched buffering
     (significantly faster for small data).
@@ -266,6 +284,7 @@ class BatchedDataLoader(object):
         :param shuffling_queue_capacity: Queue capacity is passed to the underlying :class:`tf.RandomShuffleQueue`
           instance. If set to 0, no suffling will be done.
         """
+        super(BatchedDataLoader, self).__init__()
         self.reader = reader
         self.batch_size = batch_size
         self.transform_fn = transform_fn or torch.as_tensor
@@ -275,7 +294,7 @@ class BatchedDataLoader(object):
         self.shuffling_queue_capacity = shuffling_queue_capacity
         self._in_iter = None
 
-    def __iter__(self):
+    def _iter_impl(self):
         """
         The Data Loader iterator stops the for-loop when reader runs out of samples.
         """
@@ -283,14 +302,6 @@ class BatchedDataLoader(object):
         # the requested batch_size ready.
 
         keys = None
-
-        if self._in_iter:
-            raise RuntimeError(_PARALLEL_ITER_ERROR)
-        if self._in_iter is not None:
-            self.reader.reset()
-            logging.warn('Start a new pass of Petastorm DataLoader, reset underlying Petastorm reader to position 0.')
-        self._in_iter = True
-
         if self.shuffling_queue_capacity > 0:
             # We can not know what is the reasonable number to use for the extra capacity, so we set a huge number
             # and give up on the unbound growth protection mechanism.
@@ -336,10 +347,6 @@ class BatchedDataLoader(object):
 
         for batch in self._yield_batches(keys):
             yield batch
-
-        # We purposely do not wrap it under a final block, because must finish a full pass of Petastorm DataLoader
-        # before making another pass from the beginning
-        self._in_iter = False
 
     def _yield_batches(self, keys):
         while self._shuffling_buffer.can_retrieve():
