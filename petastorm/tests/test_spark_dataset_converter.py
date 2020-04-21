@@ -25,7 +25,6 @@ import pyspark
 import pytest
 import py4j
 import tensorflow.compat.v1 as tf  # pylint: disable=import-error
-from pyspark.sql import SparkSession
 from pyspark.sql.functions import pandas_udf
 from pyspark.sql.types import (ArrayType, BinaryType, BooleanType, ByteType,
                                DoubleType, FloatType, IntegerType, LongType,
@@ -50,32 +49,8 @@ except ImportError:
 from petastorm.tests.test_tf_utils import create_tf_graph
 
 
-class TestContext(object):
-    def __init__(self):
-        self.spark = SparkSession.builder \
-            .master("local[2]") \
-            .appName("petastorm.spark tests") \
-            .getOrCreate()
-        self.tempdir = tempfile.mkdtemp('_spark_converter_test')
-        self.temp_url = 'file://' + self.tempdir.replace(os.sep, '/')
-        self.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, self.temp_url)
-        spark_dataset_converter._FILE_AVAILABILITY_WAIT_TIMEOUT_SECS = 2
-
-    def tear_down(self):
-        # restore default file availability wait timeout
-        spark_dataset_converter._FILE_AVAILABILITY_WAIT_TIMEOUT_SECS = 30
-        self.spark.stop()
-
-
-@pytest.fixture(scope='module')
-def test_ctx():
-    ctx = TestContext()
-    yield ctx
-    ctx.tear_down()
-
-
 @create_tf_graph
-def test_primitive(test_ctx):
+def test_primitive(spark_test_ctx):
     schema = StructType([
         StructField("bool_col", BooleanType(), False),
         StructField("float_col", FloatType(), False),
@@ -87,7 +62,7 @@ def test_primitive(test_ctx):
         StructField("bin_col", BinaryType(), False),
         StructField("byte_col", ByteType(), False),
     ])
-    df = test_ctx.spark.createDataFrame(
+    df = spark_test_ctx.spark.createDataFrame(
         [(True, 0.12, 432.1, 5, 5, 0, "hello",
           bytearray(b"spark\x01\x02"), -128),
          (False, 123.45, 0.987, 9, 908, 765, "petastorm",
@@ -134,11 +109,11 @@ def test_primitive(test_ctx):
 
 
 @create_tf_graph
-def test_array_field(test_ctx):
+def test_array_field(spark_test_ctx):
     @pandas_udf('array<float>')
     def gen_array(v):
         return v.map(lambda x: np.random.rand(10))
-    df1 = test_ctx.spark.range(10).withColumn('v', gen_array('id')).repartition(2)
+    df1 = spark_test_ctx.spark.range(10).withColumn('v', gen_array('id')).repartition(2)
     cv1 = make_spark_converter(df1)
     # we can auto infer one-dim array shape
     with cv1.make_tf_dataset(batch_size=4, num_epochs=1) as dataset:
@@ -149,8 +124,8 @@ def test_array_field(test_ctx):
         assert batch1.v.shape == (4, 10)
 
 
-def test_delete(test_ctx):
-    df = test_ctx.spark.createDataFrame([(1, 2), (4, 5)], ["col1", "col2"])
+def test_delete(spark_test_ctx):
+    df = spark_test_ctx.spark.createDataFrame([(1, 2), (4, 5)], ["col1", "col2"])
     # TODO add test for hdfs url
     converter = make_spark_converter(df)
     local_path = urlparse(converter.cache_dir_url).path
@@ -159,7 +134,7 @@ def test_delete(test_ctx):
     assert not os.path.exists(local_path)
 
 
-def test_atexit(test_ctx):
+def test_atexit(spark_test_ctx):
     lines = """
     from petastorm.spark import SparkDatasetConverter, make_spark_converter
     from pyspark.sql import SparkSession
@@ -171,26 +146,26 @@ def test_atexit(test_ctx):
     f = open(os.path.join('{tempdir}', 'test_atexit.out'), "w")
     f.write(converter.cache_dir_url)
     f.close()
-    """.format(tempdir=test_ctx.tempdir, temp_url=test_ctx.temp_url)
+    """.format(tempdir=spark_test_ctx.tempdir, temp_url=spark_test_ctx.temp_url)
     code_str = "; ".join(
         line.strip() for line in lines.strip().splitlines())
     ret_code = subprocess.call([sys.executable, "-c", code_str])
     assert 0 == ret_code
-    with open(os.path.join(test_ctx.tempdir, 'test_atexit.out')) as f:
+    with open(os.path.join(spark_test_ctx.tempdir, 'test_atexit.out')) as f:
         cache_dir_url = f.read()
 
     fs = FilesystemResolver(cache_dir_url).filesystem()
     assert not fs.exists(urlparse(cache_dir_url).path)
 
 
-def test_set_delete_handler(test_ctx):
+def test_set_delete_handler(spark_test_ctx):
     def test_delete_handler(dir_url):
         raise RuntimeError('Not implemented delete handler.')
 
     register_delete_dir_handler(test_delete_handler)
 
     with pytest.raises(RuntimeError, match='Not implemented delete handler'):
-        spark_dataset_converter._delete_dir_handler(test_ctx.temp_url)
+        spark_dataset_converter._delete_dir_handler(spark_test_ctx.temp_url)
 
     # Restore default delete handler (other test will use it)
     register_delete_dir_handler(None)
@@ -206,8 +181,8 @@ def _get_compression_type(data_url):
         return filename_splits[1]
 
 
-def test_compression(test_ctx):
-    df1 = test_ctx.spark.range(10)
+def test_compression(spark_test_ctx):
+    df1 = spark_test_ctx.spark.range(10)
 
     converter1 = make_spark_converter(df1)
     assert "uncompressed" == \
@@ -218,10 +193,10 @@ def test_compression(test_ctx):
            _get_compression_type(converter2.cache_dir_url).lower()
 
 
-def test_df_caching(test_ctx):
-    df1 = test_ctx.spark.range(10)
-    df2 = test_ctx.spark.range(10)
-    df3 = test_ctx.spark.range(20)
+def test_df_caching(spark_test_ctx):
+    df1 = spark_test_ctx.spark.range(10)
+    df2 = spark_test_ctx.spark.range(10)
+    df3 = spark_test_ctx.spark.range(20)
 
     # Test caching for the dataframes with the same logical plan
     converter1 = make_spark_converter(df1)
@@ -244,13 +219,13 @@ def test_df_caching(test_ctx):
     converter22 = make_spark_converter(df1, compression_codec="snappy")
     assert converter12.cache_dir_url != converter22.cache_dir_url
 
-    ori_temp_url = test_ctx.spark.conf.get(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF)
+    ori_temp_url = spark_test_ctx.spark.conf.get(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF)
     tempdir = tempfile.mkdtemp('_spark_converter_test1')
     new_temp_url = 'file://' + tempdir.replace(os.sep, '/')
     try:
         # Test no caching for the same dataframe with different parent cache dirs
-        test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF,
-                                new_temp_url)
+        spark_test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF,
+                                      new_temp_url)
         assert ori_temp_url != new_temp_url
         converter13 = make_spark_converter(df1)
         assert converter1.cache_dir_url != converter13.cache_dir_url
@@ -258,20 +233,20 @@ def test_df_caching(test_ctx):
         # Test caching for the same dataframe with different parent cache dirs
         # that could be normalized to the same parent cache dir
         new_temp_url_2 = new_temp_url + os.sep
-        test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF,
-                                new_temp_url_2)
+        spark_test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF,
+                                      new_temp_url_2)
         assert new_temp_url != new_temp_url_2
         converter14 = make_spark_converter(df1)
         assert converter13.cache_dir_url == converter14.cache_dir_url
     finally:
-        test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF,
-                                ori_temp_url)
+        spark_test_ctx.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF,
+                                      ori_temp_url)
 
 
-def test_df_delete_caching_meta(test_ctx):
+def test_df_delete_caching_meta(spark_test_ctx):
     from petastorm.spark.spark_dataset_converter import _cache_df_meta_list
-    df1 = test_ctx.spark.range(10)
-    df2 = test_ctx.spark.range(20)
+    df1 = spark_test_ctx.spark.range(10)
+    df2 = spark_test_ctx.spark.range(20)
     converter1 = make_spark_converter(df1)
     converter2 = make_spark_converter(df2)
     converter1.delete()
@@ -293,8 +268,8 @@ def test_make_sub_dir_url():
     assert _make_sub_dir_url('hdfs://nn1:9000/a/b', 'c') == 'hdfs://nn1:9000/a/b/c'
 
 
-def test_pickling_remotely(test_ctx):
-    df1 = test_ctx.spark.range(100, 101)
+def test_pickling_remotely(spark_test_ctx):
+    df1 = spark_test_ctx.spark.range(100, 101)
     converter1 = make_spark_converter(df1)
 
     @create_tf_graph
@@ -306,13 +281,13 @@ def test_pickling_remotely(test_ctx):
                 ts = sess.run(tensor)
         return getattr(ts, 'id')[0]
 
-    result = test_ctx.spark.sparkContext.parallelize(range(1), 1).map(map_fn).collect()[0]
+    result = spark_test_ctx.spark.sparkContext.parallelize(range(1), 1).map(map_fn).collect()[0]
     assert result == 100
 
 
 @create_tf_graph
-def test_tf_dataset_batch_size(test_ctx):
-    df1 = test_ctx.spark.range(100)
+def test_tf_dataset_batch_size(spark_test_ctx):
+    df1 = spark_test_ctx.spark.range(100)
 
     batch_size = 30
     converter1 = make_spark_converter(df1)
@@ -326,8 +301,8 @@ def test_tf_dataset_batch_size(test_ctx):
 
 
 @mock.patch('petastorm.spark.spark_dataset_converter.make_batch_reader')
-def test_tf_dataset_petastorm_args(mock_make_batch_reader, test_ctx):
-    df1 = test_ctx.spark.range(100).repartition(4)
+def test_tf_dataset_petastorm_args(mock_make_batch_reader, spark_test_ctx):
+    df1 = spark_test_ctx.spark.range(100).repartition(4)
     conv1 = make_spark_converter(df1)
 
     mock_make_batch_reader.return_value = make_batch_reader(conv1.cache_dir_url)
@@ -347,7 +322,7 @@ def test_tf_dataset_petastorm_args(mock_make_batch_reader, test_ctx):
     assert peta_args['num_epochs'] == 1 and peta_args['workers_count'] == 2
 
 
-def test_horovod_rank_compatibility(test_ctx):
+def test_horovod_rank_compatibility(spark_test_ctx):
     with mock.patch.dict(os.environ, {'HOROVOD_RANK': '1', 'HOROVOD_SIZE': '3'}, clear=True):
         assert (1, 3) == _get_horovod_rank_and_size()
         assert _check_rank_and_size_consistent_with_horovod(
@@ -368,8 +343,8 @@ def test_horovod_rank_compatibility(test_ctx):
 
 
 @create_tf_graph
-def test_dtype(test_ctx):
-    df = test_ctx.spark.range(10)
+def test_dtype(spark_test_ctx):
+    df = spark_test_ctx.spark.range(10)
     df = df.withColumn("float_col", df.id.cast(FloatType())) \
         .withColumn("double_col", df.id.cast(DoubleType()))
 
@@ -404,8 +379,8 @@ def test_dtype(test_ctx):
 
 
 @create_tf_graph
-def test_array(test_ctx):
-    df = test_ctx.spark.createDataFrame(
+def test_array(spark_test_ctx):
+    df = spark_test_ctx.spark.createDataFrame(
         [([1., 2., 3.],),
          ([4., 5., 6.],)],
         StructType([
@@ -426,13 +401,13 @@ def test_array(test_ctx):
     reason="Vector columns are not supported for pyspark {} < 3.0.0"
     .format(pyspark.__version__))
 @create_tf_graph
-def test_vector_to_array(test_ctx):
+def test_vector_to_array(spark_test_ctx):
     from pyspark.ml.linalg import Vectors
     from pyspark.mllib.linalg import Vectors as OldVectors
-    df = test_ctx.spark.createDataFrame([
+    df = spark_test_ctx.spark.createDataFrame([
         (Vectors.dense(1.0, 2.0, 3.0), OldVectors.dense(10.0, 20.0, 30.0)),
-        (Vectors.dense(5.0, 6.0, 7.0), OldVectors.dense(50.0, 60.0, 70.0))],
-                                        ["vec", "oldVec"])
+        (Vectors.dense(5.0, 6.0, 7.0), OldVectors.dense(50.0, 60.0, 70.0))
+    ], ["vec", "oldVec"])
     converter1 = make_spark_converter(df)
     with converter1.make_tf_dataset(num_epochs=1) as dataset:
         iterator = dataset.make_one_shot_iterator()
@@ -451,7 +426,7 @@ def test_vector_to_array(test_ctx):
            ([50., 60., 70] == old_vec_col[1]).all()
 
 
-def test_torch_primitive(test_ctx):
+def test_torch_primitive(spark_test_ctx):
     import torch
 
     schema = StructType([
@@ -463,7 +438,7 @@ def test_torch_primitive(test_ctx):
         StructField("long_col", LongType(), False),
         StructField("byte_col", ByteType(), False),
     ])
-    df = test_ctx.spark.createDataFrame(
+    df = spark_test_ctx.spark.createDataFrame(
         [(True, 0.12, 432.1, 5, 5, 0, -128),
          (False, 123.45, 0.987, 9, 908, 765, 127)],
         schema=schema).coalesce(1)
@@ -495,8 +470,8 @@ def test_torch_primitive(test_ctx):
     assert torch.int16 == batch["short_col"].dtype
 
 
-def test_torch_pickling_remotely(test_ctx):
-    df1 = test_ctx.spark.range(100, 101)
+def test_torch_pickling_remotely(spark_test_ctx):
+    df1 = spark_test_ctx.spark.range(100, 101)
     converter1 = make_spark_converter(df1)
 
     def map_fn(_):
@@ -505,13 +480,13 @@ def test_torch_pickling_remotely(test_ctx):
                 ret = batch["id"][0]
         return ret
 
-    result = test_ctx.spark.sparkContext.parallelize(range(1), 1) \
+    result = spark_test_ctx.spark.sparkContext.parallelize(range(1), 1) \
         .map(map_fn).collect()[0]
     assert result == 100
 
 
-def test_torch_batch_size(test_ctx):
-    df = test_ctx.spark.range(8)
+def test_torch_batch_size(spark_test_ctx):
+    df = spark_test_ctx.spark.range(8)
     conv = make_spark_converter(df)
     batch_size = 2
     with conv.make_torch_dataloader(batch_size=batch_size,
@@ -520,8 +495,8 @@ def test_torch_batch_size(test_ctx):
             assert batch_size == batch['id'].shape[0]
 
 
-def test_torch_transform_spec(test_ctx):
-    df = test_ctx.spark.range(8)
+def test_torch_transform_spec(spark_test_ctx):
+    df = spark_test_ctx.spark.range(8)
     conv = make_spark_converter(df)
 
     from torchvision import transforms
@@ -540,8 +515,8 @@ def test_torch_transform_spec(test_ctx):
             assert min(batch['id']) >= 0 and max(batch['id']) < 1
 
 
-def test_torch_unexpected_param(test_ctx):
-    df = test_ctx.spark.range(8)
+def test_torch_unexpected_param(spark_test_ctx):
+    df = spark_test_ctx.spark.range(8)
     conv = make_spark_converter(df)
 
     with pytest.raises(TypeError, match="unexpected keyword argument 'xyz'"):
@@ -550,9 +525,9 @@ def test_torch_unexpected_param(test_ctx):
 
 
 @mock.patch('petastorm.spark.spark_dataset_converter.make_batch_reader')
-def test_torch_dataloader_advanced_params(mock_torch_make_batch_reader, test_ctx):
+def test_torch_dataloader_advanced_params(mock_torch_make_batch_reader, spark_test_ctx):
     SHARD_COUNT = 3
-    df = test_ctx.spark.range(100).repartition(SHARD_COUNT)
+    df = spark_test_ctx.spark.range(100).repartition(SHARD_COUNT)
     conv = make_spark_converter(df)
 
     mock_torch_make_batch_reader.return_value = \
@@ -575,8 +550,8 @@ def test_torch_dataloader_advanced_params(mock_torch_make_batch_reader, test_ctx
     assert peta_args['num_epochs'] == 1 and peta_args['workers_count'] == 2
 
 
-def test_wait_file_available(test_ctx):
-    pq_dir = os.path.join(test_ctx.tempdir, 'test_ev')
+def test_wait_file_available(spark_test_ctx):
+    pq_dir = os.path.join(spark_test_ctx.tempdir, 'test_ev')
     os.makedirs(pq_dir)
     file1_path = os.path.join(pq_dir, 'file1')
     file2_path = os.path.join(pq_dir, 'file2')
@@ -610,7 +585,7 @@ def test_wait_file_available(test_ctx):
     _wait_file_available(url_list)
 
 
-def test_check_dataset_file_median_size(test_ctx, caplog):
+def test_check_dataset_file_median_size(spark_test_ctx, caplog):
     file_size_map = {
         '/a/b/01.parquet': 30,
         '/a/b/02.parquet': 40,
@@ -639,7 +614,7 @@ def test_check_dataset_file_median_size(test_ctx, caplog):
 
 
 @mock.patch.dict(os.environ, {'DATABRICKS_RUNTIME_VERSION': '7.0'}, clear=True)
-def test_check_parent_cache_dir_url(test_ctx, caplog):
+def test_check_parent_cache_dir_url(spark_test_ctx, caplog):
     def log_warning_occur():
         return 'you should specify a dbfs fuse path' in '\n'.join([r.message for r in caplog.records])
     with mock.patch('petastorm.spark.spark_dataset_converter._is_spark_local_mode') as mock_is_local:
@@ -659,10 +634,10 @@ def test_check_parent_cache_dir_url(test_ctx, caplog):
         assert not log_warning_occur()
 
 
-def test_get_spark_session_safe_check(test_ctx):
+def test_get_spark_session_safe_check(spark_test_ctx):
     def map_fn(_):
         _get_spark_session()
         return 0
 
     with pytest.raises(py4j.protocol.Py4JJavaError):
-        test_ctx.spark.sparkContext.parallelize(range(1), 1).map(map_fn).collect()
+        spark_test_ctx.spark.sparkContext.parallelize(range(1), 1).map(map_fn).collect()

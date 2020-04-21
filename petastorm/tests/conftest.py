@@ -14,14 +14,17 @@
 import logging
 import os
 import pickle
+import tempfile
 from base64 import b64encode, b64decode
 from collections import namedtuple
 
 import pytest
 import six
 
+from petastorm.spark import spark_dataset_converter, SparkDatasetConverter
 from petastorm.tests.test_common import create_test_dataset, create_test_scalar_dataset, \
     create_many_columns_non_petastorm_dataset
+from pyspark.sql import SparkSession
 
 SyntheticDataset = namedtuple('synthetic_dataset', ['url', 'data', 'path'])
 
@@ -119,3 +122,29 @@ def many_columns_non_petastorm_dataset(request, tmpdir_factory):
         return dataset
 
     return maybe_cached_dataset(request.config, 'many_column_non_petastorm', _dataset_no_cache)
+
+
+class SparkTestContext(object):
+    def __init__(self):
+        self.spark = SparkSession.builder \
+            .master("local[2]") \
+            .appName("petastorm.spark tests") \
+            .getOrCreate()
+        self.tempdir = tempfile.mkdtemp('_spark_converter_test')
+        self.temp_url = 'file://' + self.tempdir.replace(os.sep, '/')
+        self.spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, self.temp_url)
+        spark_dataset_converter._FILE_AVAILABILITY_WAIT_TIMEOUT_SECS = 2
+
+    def tear_down(self):
+        # restore default file availability wait timeout
+        spark_dataset_converter._FILE_AVAILABILITY_WAIT_TIMEOUT_SECS = 30
+        self.spark.stop()
+
+
+@pytest.fixture(scope='module')
+def spark_test_ctx():
+    ctx = SparkTestContext()
+    try:
+        yield ctx
+    finally:
+        ctx.tear_down()
