@@ -119,9 +119,10 @@ class LoaderBase(object):
         try:
             for batch in self._iter_impl():
                 yield batch
-        except RuntimeError as e:
+        except Exception as e:
             self._error = e
-            raise e
+            logger.error('Iteration on Petastorm DataLoader raise error: %s', repr(e))
+            raise
         finally:
             self._in_iter = False
 
