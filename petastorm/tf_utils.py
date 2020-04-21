@@ -375,9 +375,16 @@ def make_petastorm_dataset(reader):
                 yield _sanitize_field_tf_types(row)
 
         flat_dataset = tf.data.Dataset.from_generator(dequeue_sample_impl, tuple(_schema_to_tf_dtypes(reader.schema)))
+
+        # Don't write this function as a inline lambda like `dataset.map(lambda row: _set_shape_to_named_tuple(...))`,
+        # It can avoid this error: https://github.com/tensorflow/tensorflow/issues/30149
+        def set_shape(row):
+            return _set_shape_to_named_tuple(reader.schema, row, reader.batched_output)
+
+        schema_tuple = reader.schema._get_namedtuple()
         named_tuple_dataset = flat_dataset \
-            .map(reader.schema.make_namedtuple_tf) \
-            .map(lambda row: _set_shape_to_named_tuple(reader.schema, row, reader.batched_output))
+            .map(schema_tuple) \
+            .map(set_shape)
         return named_tuple_dataset
     else:
         # flat_dataset is a tf.data.Dataset with a tuple containined ngram field stored in one flat tuple produced by
