@@ -21,4 +21,4 @@ from petastorm.transform import TransformSpec  # noqa: F401
 __version__ = '0.8.2'
 
 if sys.version_info.major < 3:
-    warnings.warn('Petastorm on python2 is deprecated and will remove python2 support in next release.')
+    warnings.warn('Petastorm on Python 2 is deprecated and will remove Python 2 support in next release.')
