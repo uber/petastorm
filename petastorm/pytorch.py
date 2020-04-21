@@ -16,7 +16,7 @@ import collections
 import decimal
 # Must import pyarrow before torch. See: https://github.com/uber/petastorm/blob/master/docs/troubleshoot.rst
 import re
-
+import logging
 import numpy as np
 from six import PY2
 from torch.utils.data.dataloader import default_collate
@@ -92,6 +92,11 @@ def decimal_friendly_collate(batch):
         return default_collate(batch)
 
 
+_PARALLEL_ITER_ERROR = "You must finish a full pass of Petastorm DataLoader before making another pass from the \
+beginning.If you do need to terminate early and restart from beginning, please re-create the reader and the data \
+loader."
+
+
 class DataLoader(object):
     """
     A data loader adaptor for ``torch.utils.data.DataLoader``.
@@ -132,8 +137,7 @@ class DataLoader(object):
         # _batch_acc accumulates samples for a single batch.
         self._batch_acc = []
         self.shuffling_queue_capacity = shuffling_queue_capacity
-        self._in_iter = False
-        self._iter_pass = 0
+        self._in_iter = None
 
     def __iter__(self):
         """
@@ -145,10 +149,11 @@ class DataLoader(object):
         keys = None
 
         if self._in_iter:
-            raise RuntimeError('Only after previous iteration finished we can start another iteration.')
-        self._in_iter = True
-        if self._iter_pass > 0:
+            raise RuntimeError(_PARALLEL_ITER_ERROR)
+        if self._in_iter is not None:
             self.reader.reset()
+            logging.warn('Start a new pass of Petastorm DataLoader, reset underlying Petastorm reader.')
+        self._in_iter = True
 
         if self.shuffling_queue_capacity > 0:
             # We can not know what is the reasonable number to use for the extra capacity, so we set a huge number
@@ -202,8 +207,9 @@ class DataLoader(object):
         if self._batch_acc:
             yield self.collate_fn(self._batch_acc)
 
+        # We purposely do not wrap it under a final block, because must finish a full pass of Petastorm DataLoader
+        # before making another pass from the beginning
         self._in_iter = False
-        self._iter_pass += 1
 
     def _yield_batches(self, keys):
         while self._shuffling_buffer.can_retrieve():
@@ -267,8 +273,7 @@ class BatchedDataLoader(object):
         # _batch_acc accumulates samples for a single batch.
         self._batch_acc = []
         self.shuffling_queue_capacity = shuffling_queue_capacity
-        self._in_iter = False
-        self._iter_pass = 0
+        self._in_iter = None
 
     def __iter__(self):
         """
@@ -280,10 +285,11 @@ class BatchedDataLoader(object):
         keys = None
 
         if self._in_iter:
-            raise RuntimeError('Only after previous iteration finished we can start another iteration.')
-        self._in_iter = True
-        if self._iter_pass > 0:
+            raise RuntimeError(_PARALLEL_ITER_ERROR)
+        if self._in_iter is not None:
             self.reader.reset()
+            logging.warn('Start a new pass of Petastorm DataLoader, reset underlying Petastorm reader.')
+        self._in_iter = True
 
         if self.shuffling_queue_capacity > 0:
             # We can not know what is the reasonable number to use for the extra capacity, so we set a huge number
@@ -331,8 +337,9 @@ class BatchedDataLoader(object):
         for batch in self._yield_batches(keys):
             yield batch
 
+        # We purposely do not wrap it under a final block, because must finish a full pass of Petastorm DataLoader
+        # before making another pass from the beginning
         self._in_iter = False
-        self._iter_pass += 1
 
     def _yield_batches(self, keys):
         while self._shuffling_buffer.can_retrieve():
