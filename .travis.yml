@@ -82,12 +82,14 @@ script:
     --ignore=examples/mnist/tests/test_pytorch_mnist.py
     --ignore=petastorm/tests/test_pytorch_utils.py
     --ignore=petastorm/tests/test_pytorch_dataloader.py
+    --ignore=petastorm/tests/test_tf_autograph.py
     petastorm examples
 
-  - $RUN $PYTEST -m "not forked" -v -Y  --cov-append
+  - $RUN $PYTEST -m "not forked" -Y  --cov-append
       --ignore=examples/mnist/tests/test_pytorch_mnist.py
       --ignore=petastorm/tests/test_pytorch_utils.py
       --ignore=petastorm/tests/test_pytorch_dataloader.py
+      --ignore=petastorm/tests/test_tf_autograph.py
       petastorm examples
 
     # Tensorflow and pytorch tests confict (segfault). Split into separate runs.
@@ -95,6 +97,9 @@ script:
       examples/mnist/tests/test_pytorch_mnist.py
       petastorm/tests/test_pytorch_dataloader.py
       petastorm/tests/test_pytorch_utils.py
+
+    # Run test_tf_autograph separately because the error message "AutoGraph could not transform..." only show once, so we need ensure no other TF tests run before it.
+  - $RUN $PYTEST -Y --cov-append petastorm/tests/test_tf_autograph.py
 
 after_success:
   - codecov --required
