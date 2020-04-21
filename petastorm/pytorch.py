@@ -109,7 +109,7 @@ class LoaderBase(object):
         if self._error is not None:
             raise RuntimeError('Cannot start a new iteration because last time iteration failed with error {err}.'
                                .format(err=repr(self._error)))
-        if self._in_iter is not None and self._in_iter == True:
+        if self._in_iter is not None and self._in_iter == True:  # noqa: E712
             raise RuntimeError(_PARALLEL_ITER_ERROR)
         if self._in_iter is not None:
             self.reader.reset()
