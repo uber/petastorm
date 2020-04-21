@@ -152,7 +152,7 @@ class DataLoader(object):
             raise RuntimeError(_PARALLEL_ITER_ERROR)
         if self._in_iter is not None:
             self.reader.reset()
-            logging.warn('Start a new pass of Petastorm DataLoader, reset underlying Petastorm reader.')
+            logging.warn('Start a new pass of Petastorm DataLoader, reset underlying Petastorm reader to position 0.')
         self._in_iter = True
 
         if self.shuffling_queue_capacity > 0:
@@ -288,7 +288,7 @@ class BatchedDataLoader(object):
             raise RuntimeError(_PARALLEL_ITER_ERROR)
         if self._in_iter is not None:
             self.reader.reset()
-            logging.warn('Start a new pass of Petastorm DataLoader, reset underlying Petastorm reader.')
+            logging.warn('Start a new pass of Petastorm DataLoader, reset underlying Petastorm reader to position 0.')
         self._in_iter = True
 
         if self.shuffling_queue_capacity > 0:
