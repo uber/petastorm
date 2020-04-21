@@ -239,7 +239,7 @@ class Unischema(object):
 
         return Unischema('{}_view'.format(self._name), view_fields)
 
-    def get_namedtuple(self):
+    def _get_namedtuple(self):
         return _NamedtupleCache.get(self._name, self._fields.keys())
 
     def __str__(self):
@@ -294,10 +294,10 @@ class Unischema(object):
                 typed_dict[key] = kargs[key]
             else:
                 typed_dict[key] = None
-        return self.get_namedtuple()(**typed_dict)
+        return self._get_namedtuple()(**typed_dict)
 
     def make_namedtuple_tf(self, *args, **kargs):
-        return self.get_namedtuple()(*args, **kargs)
+        return self._get_namedtuple()(*args, **kargs)
 
     @classmethod
     def from_arrow_schema(cls, parquet_dataset, omit_unsupported_fields=False):
