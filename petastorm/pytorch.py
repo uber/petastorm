@@ -16,7 +16,7 @@ import collections
 import decimal
 # Must import pyarrow before torch. See: https://github.com/uber/petastorm/blob/master/docs/troubleshoot.rst
 import re
-
+import logging
 import numpy as np
 from six import PY2
 from torch.utils.data.dataloader import default_collate
@@ -32,6 +32,8 @@ if PY2:
     _string_classes = basestring  # noqa: F821
 else:
     _string_classes = (str, bytes)
+
+logger = logging.getLogger(__name__)
 
 
 def _sanitize_pytorch_types(row_as_dict):
@@ -92,7 +94,40 @@ def decimal_friendly_collate(batch):
         return default_collate(batch)
 
 
-class DataLoader(object):
+_PARALLEL_ITER_ERROR = "You must finish a full pass of Petastorm DataLoader before making another pass from the \
+beginning.If you do need to terminate early and restart from beginning, please re-create the reader and the data \
+loader."
+
+
+class LoaderBase(object):
+
+    def __init__(self):
+        self._in_iter = None
+        self._error = None
+
+    def __iter__(self):
+        if self._error is not None:
+            raise RuntimeError('Cannot start a new iteration because last time iteration failed with error {err}.'
+                               .format(err=repr(self._error)))
+        if self._in_iter is not None and self._in_iter == True:  # noqa: E712
+            raise RuntimeError(_PARALLEL_ITER_ERROR)
+        if self._in_iter is not None:
+            self.reader.reset()
+            logger.warning('Start a new pass of Petastorm DataLoader, reset underlying Petastorm reader to position 0.')
+        self._in_iter = True
+
+        try:
+            for batch in self._iter_impl():
+                yield batch
+        except Exception as e:
+            self._error = e
+            logger.error('Iteration on Petastorm DataLoader raise error: %s', repr(e))
+            raise
+        finally:
+            self._in_iter = False
+
+
+class DataLoader(LoaderBase):
     """
     A data loader adaptor for ``torch.utils.data.DataLoader``.
 
@@ -125,23 +160,17 @@ class DataLoader(object):
         :param shuffling_queue_capacity: Queue capacity is passed to the underlying :class:`tf.RandomShuffleQueue`
           instance. If set to 0, no suffling will be done.
         """
+        super(DataLoader, self).__init__()
         self.reader = reader
         self.batch_size = batch_size
         self.collate_fn = collate_fn
 
         # _batch_acc accumulates samples for a single batch.
         self._batch_acc = []
-        if shuffling_queue_capacity > 0:
-            # We can not know what is the reasonable number to use for the extra capacity, so we set a huge number
-            # and give up on the unbound growth protection mechanism.
-            min_after_dequeue = shuffling_queue_capacity - 1
-            self._shuffling_buffer = RandomShufflingBuffer(shuffling_queue_capacity,
-                                                           min_after_retrieve=min_after_dequeue,
-                                                           extra_capacity=100000000)
-        else:
-            self._shuffling_buffer = NoopShufflingBuffer()
+        self.shuffling_queue_capacity = shuffling_queue_capacity
+        self._in_iter = None
 
-    def __iter__(self):
+    def _iter_impl(self):
         """
         The Data Loader iterator stops the for-loop when reader runs out of samples.
         """
@@ -149,6 +178,15 @@ class DataLoader(object):
         # the requested batch_size ready.
 
         keys = None
+        if self.shuffling_queue_capacity > 0:
+            # We can not know what is the reasonable number to use for the extra capacity, so we set a huge number
+            # and give up on the unbound growth protection mechanism.
+            min_after_dequeue = self.shuffling_queue_capacity - 1
+            self._shuffling_buffer = RandomShufflingBuffer(self.shuffling_queue_capacity,
+                                                           min_after_retrieve=min_after_dequeue,
+                                                           extra_capacity=100000000)
+        else:
+            self._shuffling_buffer = NoopShufflingBuffer()
 
         for row in self.reader:
             # Default collate does not work nicely on namedtuples and treat them as lists
@@ -216,7 +254,7 @@ class DataLoader(object):
         self.reader.join()
 
 
-class BatchedDataLoader(object):
+class BatchedDataLoader(LoaderBase):
     """
     Same as DataLoader except it uses torch-based shuffling buffers which enable batched buffering
     (significantly faster for small data).
@@ -247,28 +285,17 @@ class BatchedDataLoader(object):
         :param shuffling_queue_capacity: Queue capacity is passed to the underlying :class:`tf.RandomShuffleQueue`
           instance. If set to 0, no suffling will be done.
         """
+        super(BatchedDataLoader, self).__init__()
         self.reader = reader
         self.batch_size = batch_size
         self.transform_fn = transform_fn or torch.as_tensor
 
         # _batch_acc accumulates samples for a single batch.
         self._batch_acc = []
-        if shuffling_queue_capacity > 0:
-            # We can not know what is the reasonable number to use for the extra capacity, so we set a huge number
-            # and give up on the unbound growth protection mechanism.
-            # To keep the same behavior as DataLoader, we need to increase the shuffling_queue_capacity
-            min_after_dequeue = shuffling_queue_capacity - 1
-            shuffling_queue_capacity = min_after_dequeue + batch_size
-            self._shuffling_buffer = BatchedRandomShufflingBuffer(
-                shuffling_queue_capacity,
-                min_after_retrieve=min_after_dequeue,
-                extra_capacity=100000000,
-                batch_size=batch_size
-            )
-        else:
-            self._shuffling_buffer = BatchedNoopShufflingBuffer(batch_size=batch_size)
+        self.shuffling_queue_capacity = shuffling_queue_capacity
+        self._in_iter = None
 
-    def __iter__(self):
+    def _iter_impl(self):
         """
         The Data Loader iterator stops the for-loop when reader runs out of samples.
         """
@@ -276,6 +303,20 @@ class BatchedDataLoader(object):
         # the requested batch_size ready.
 
         keys = None
+        if self.shuffling_queue_capacity > 0:
+            # We can not know what is the reasonable number to use for the extra capacity, so we set a huge number
+            # and give up on the unbound growth protection mechanism.
+            # To keep the same behavior as DataLoader, we need to increase the shuffling_queue_capacity
+            min_after_dequeue = self.shuffling_queue_capacity - 1
+            shuffling_queue_capacity = min_after_dequeue + self.batch_size
+            self._shuffling_buffer = BatchedRandomShufflingBuffer(
+                shuffling_queue_capacity,
+                min_after_retrieve=min_after_dequeue,
+                extra_capacity=100000000,
+                batch_size=self.batch_size
+            )
+        else:
+            self._shuffling_buffer = BatchedNoopShufflingBuffer(batch_size=self.batch_size)
 
         for row in self.reader:
             # Default collate does not work nicely on namedtuples and treat them as lists
