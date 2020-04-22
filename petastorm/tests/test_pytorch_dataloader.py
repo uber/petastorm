@@ -190,3 +190,23 @@ def test_with_batch_reader(scalar_dataset, shuffling_queue_capacity, data_loader
         if pa.__version__ != '0.15.0':
             assert len(scalar_dataset.data) == sum(batch['int_fixed_size_list'].shape[0] for batch in batches)
             assert batches[0]['int_fixed_size_list'].shape[1] == len(scalar_dataset.data[0]['int_fixed_size_list'])
+
+
+@pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
+@pytest.mark.parametrize("data_loader_type", ALL_DATA_LOADERS)
+def test_call_iter_on_dataloader_multiple_times(synthetic_dataset, reader_factory, data_loader_type):
+    with data_loader_type(reader_factory(synthetic_dataset.url, schema_fields=[TestSchema.id]),
+                          batch_size=2) as loader:
+        pass1_set = set()
+        for batch in iter(loader):
+            pass1_set |= set(batch['id'].numpy())
+        pass2_set = set()
+        for batch in iter(loader):
+            pass2_set |= set(batch['id'].numpy())
+        assert pass1_set == pass2_set
+        match_str = 'You must finish a full pass of Petastorm DataLoader before making another pass from the beginning'
+        with pytest.raises(RuntimeError, match=match_str):
+            iter3 = iter(loader)
+            next(iter3)
+            iter4 = iter(loader)
+            next(iter4)
