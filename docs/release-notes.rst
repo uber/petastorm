@@ -20,6 +20,7 @@ Major features
 
 Bug fixes and additional features
 ---------------------------------
+- `PR 513 <https://github.com/uber/petastorm/pull/513>`_: Preserve spark dataframe schema order in a namedtuples produced by `make_reader` and `make_batch_reader`. A backward compatiility flag is `here <https://github.com/uber/petastorm/blob/63c1faf9de3ebc56a386117bdd68deccd896fe25/petastorm/unischema.py#L37>`_.
 - `PR 490 <https://github.com/uber/petastorm/pull/490>`_: TransformSpecs was not being applied if there was also a row predicate specified when using make_reader.
 - `PR 495 <https://github.com/uber/petastorm/pull/495>`_: Removed spurious warning: “schema_fields behavior has changed. Now, regular expression pattern must match the entire field name...the following fields: “
 - `PR 498 <https://github.com/uber/petastorm/pull/498>`_: Raise an explicit error if a non-scalar value is used as a value for a scalar field.
