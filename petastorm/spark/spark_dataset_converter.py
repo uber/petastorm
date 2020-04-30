@@ -45,10 +45,7 @@ logger = logging.getLogger(__name__)
 
 
 def _get_spark_session():
-    """
-    Get or create spark session.
-    Note: This function can only be invoked from driver side.
-    """
+    """Get or create spark session. Note: This function can only be invoked from driver side."""
     if pyspark.TaskContext.get() is not None:
         # This is a safety check.
         raise RuntimeError('_get_spark_session should not be invoked from executor side.')
@@ -59,8 +56,7 @@ _parent_cache_dir_url = None
 
 
 def _get_parent_cache_dir_url():
-    """
-    Get parent cache dir url from `petastorm.spark.converter.parentCacheDirUrl`
+    """Get parent cache dir url from `petastorm.spark.converter.parentCacheDirUrl`
     We can only set the url config once.
     """
     global _parent_cache_dir_url  # pylint: disable=global-statement
@@ -101,11 +97,12 @@ _delete_dir_handler = _default_delete_dir_handler
 
 
 def register_delete_dir_handler(handler):
-    """
-    Register a handler for delete a directory url.
+    """Register a handler for delete a directory url.
+
     :param handler: A deleting function which take a argument of directory url.
-                    If None, use the default handler, note the default handler
+                    If ``None``, use the default handler, note the default handler
                     will use libhdfs3 driver.
+
     """
     global _delete_dir_handler  # pylint: disable=global-statement
     if handler is None:
@@ -122,9 +119,7 @@ def _delete_cache_data_atexit(dataset_url):
 
 
 def _get_horovod_rank_and_size():
-    """
-    Get rank and size from environment, return (rank, size), if failed, return (None, None)
-    """
+    """Get rank and size from environment, return (rank, size), if failed, return (``None``, ``None``)"""
     rank_env = ['HOROVOD_RANK', 'OMPI_COMM_WORLD_RANK', 'PMI_RANK']
     size_env = ['HOROVOD_SIZE', 'OMPI_COMM_WORLD_SIZE', 'PMI_SIZE']
 
@@ -140,10 +135,10 @@ def _get_horovod_rank_and_size():
 
 
 def _check_rank_and_size_consistent_with_horovod(petastorm_reader_kwargs):
-    """
-    Check whether the cur_shard and shard_count args are consistent with horovod environment variables.
-    If not consistent with horovod environment variables, log warning message and return False.
-    If there're no related horovod environment variable set, return True.
+    """Check whether the ``cur_shard`` and ``shard_count`` args are consistent with horovod environment variables.
+
+    If not consistent with horovod environment variables, log warning message and return ``False``.
+    If there're no related horovod environment variable set, return ``True``.
     """
     hvd_rank, hvd_size = _get_horovod_rank_and_size()
     cur_shard = petastorm_reader_kwargs.get('cur_shard')
@@ -164,8 +159,7 @@ def _check_rank_and_size_consistent_with_horovod(petastorm_reader_kwargs):
 
 
 class SparkDatasetConverter(object):
-    """
-    A `SparkDatasetConverter` object holds one materialized spark dataframe and
+    """A `SparkDatasetConverter` object holds one materialized spark dataframe and
     can be used to make one or more tensorflow datasets or torch dataloaders.
     The `SparkDatasetConverter` object is picklable and can be used in remote
     processes.
@@ -208,28 +202,27 @@ class SparkDatasetConverter(object):
             workers_count=None,
             **petastorm_reader_kwargs
     ):
-        """
-        Make a tensorflow dataset.
+        """Make a tensorflow dataset.
 
         This method will do the following two steps:
           1) Open a petastorm reader on the materialized dataset dir.
           2) Create a tensorflow dataset based on the reader created in (1)
 
-        :param batch_size: The number of items to return per batch. Default None.
-            If None, current implementation will set batch size to be 32, in future,
-            None value will denotes auto tuned best value for batch size.
-        :param prefetch: Prefetch size for tensorflow dataset. If None will use
+        :param batch_size: The number of items to return per batch. Default ``None``.
+            If ``None``, current implementation will set batch size to be 32, in future,
+            ``None`` value will denotes auto tuned best value for batch size.
+        :param prefetch: Prefetch size for tensorflow dataset. If ``None`` will use
             tensorflow autotune size. Note only available on tensorflow>=1.14
         :param num_epochs: An epoch is a single pass over all rows in the dataset.
             Setting ``num_epochs`` to ``None`` will result in an infinite number
             of epochs.
         :param workers_count: An int for the number of workers to use in the
             reader pool. This only is used for the thread or process pool.
-            None denotes auto tune best value (current implementation when auto tune,
+            ``None`` denotes auto tune best value (current implementation when auto tune,
             it will always use 4 workers, but it may be improved in future)
-            Default value None.
+            Default value ``None``.
         :param petastorm_reader_kwargs: arguments for `petastorm.make_batch_reader()`,
-            exclude these arguments: "dataset_url", "num_epochs", "workers_count".
+            exclude these arguments: ``dataset_url``, ``num_epochs``, ``workers_count``.
 
         :return: a context manager for a `tf.data.Dataset` object.
                  when exit the returned context manager, the reader
@@ -248,23 +241,24 @@ class SparkDatasetConverter(object):
                               num_epochs=None,
                               workers_count=None,
                               **petastorm_reader_kwargs):
-        """
-        Make a PyTorch DataLoader.
+        """Make a PyTorch DataLoader.
 
         This method will do the following two steps:
           1) Open a petastorm reader on the materialized dataset dir.
           2) Create a PyTorch DataLoader based on the reader created in (1)
 
-        :param batch_size: The number of items to return per batch
+        :param batch_size: The number of items to return per batch. Default ``None``.
+            If ``None``, current implementation will set batch size to be 32, in future,
+            ``None`` value will denotes auto tuned best value for batch size.
         :param num_epochs: An epoch is a single pass over all rows in the
             dataset. Setting ``num_epochs`` to ``None`` will result in an
             infinite number of epochs.
         :param workers_count: An int for the number of workers to use in the
             reader pool. This only is used for the thread or process pool.
-            Defaults value None, which means using the default value from
+            Defaults value ``None``, which means using the default value from
             `petastorm.make_batch_reader()`. We can autotune it in the future.
-        :param petastorm_reader_kwargs: all the arguments for
-            `petastorm.make_batch_reader()`.
+        :param petastorm_reader_kwargs: arguments for `petastorm.make_batch_reader()`,
+            exclude these arguments: ``dataset_url``, ``num_epochs``, ``workers_count``.
 
         :return: a context manager for a `torch.utils.data.DataLoader` object.
                  when exit the returned context manager, the reader
@@ -278,15 +272,12 @@ class SparkDatasetConverter(object):
             petastorm_reader_kwargs=petastorm_reader_kwargs)
 
     def delete(self):
-        """
-        Delete cache files at self.cache_dir_url.
-        """
+        """Delete cache files at self.cache_dir_url."""
         _remove_cache_metadata_and_data(self.cache_dir_url)
 
 
 class TFDatasetContextManager(object):
-    """
-    A context manager that manages the creation and termination of a
+    """A context manager that manages the creation and termination of a
     :class:`petastorm.Reader`.
     """
 
@@ -343,15 +334,19 @@ class TFDatasetContextManager(object):
 
 
 class TorchDatasetContextManager(object):
-    """
-    A context manager that manages the creation and termination of a
+    """A context manager that manages the creation and termination of a
     :class:`petastorm.Reader`.
     """
 
     def __init__(self, parquet_file_url_list, batch_size, petastorm_reader_kwargs):
         """
-        :param parquet_file_url_list: A string specifying the data URL.
-        See `SparkDatasetConverter.make_torch_dataloader()` for the definitions
+        :param parquet_file_url_list: A string specifying the parquet file URL list.
+        :param batch_size: The number of items to return per batch. Default ``None``.
+            If ``None``, current implementation will set batch size to be 32, in future,
+            ``None`` value will denotes auto tuned best value for batch size.
+        :param petastorm_reader_kwargs: other arguments for petastorm reader
+
+        See `SparkDatasetConverter.make_torch_dataloader()`  for the definitions
         of the other parameters.
         """
         self.parquet_file_url_list = parquet_file_url_list
@@ -412,9 +407,7 @@ def _is_spark_local_mode():
 
 
 def _check_url(dir_url):
-    """
-    Check dir url, will check scheme, raise error if empty scheme
-    """
+    """Check dir url, will check scheme, raise error if empty scheme"""
     parsed = urlparse(dir_url)
     if not parsed.scheme:
         raise ValueError(
@@ -423,9 +416,7 @@ def _check_url(dir_url):
 
 
 def _check_parent_cache_dir_url(dir_url):
-    """
-    Check dir url whether is suitable to be used as parent cache directory.
-    """
+    """Check dir url whether is suitable to be used as parent cache directory."""
     _check_url(dir_url)
     fs, dir_path = get_filesystem_and_path_or_paths(dir_url)
     if 'DATABRICKS_RUNTIME_VERSION' in os.environ and not _is_spark_local_mode():
@@ -449,8 +440,8 @@ def _cache_df_or_retrieve_cache_data_url(df, parent_cache_dir_url,
                                          parquet_row_group_size_bytes,
                                          compression_codec,
                                          dtype):
-    """
-    Check whether the df is cached.
+    """Check whether the df is cached.
+
     If so, return the existing cache file path.
     If not, cache the df into the cache_dir in parquet format and return the
     cache file path.
@@ -459,8 +450,8 @@ def _cache_df_or_retrieve_cache_data_url(df, parent_cache_dir_url,
     :param parquet_row_group_size_bytes: An int denoting the number of bytes
         in a parquet row group.
     :param compression_codec: Specify compression codec.
-    :param dtype: None, 'float32' or 'float64', specifying the precision of the floating-point
-        elements in the output dataset. Integer types will remain unchanged. If None, all types
+    :param dtype: ``None``, 'float32' or 'float64', specifying the precision of the floating-point
+        elements in the output dataset. Integer types will remain unchanged. If ``None``, all types
         will remain unchanged. Default 'float32'.
     :return: A string denoting the path of the saved parquet file.
     """
@@ -530,8 +521,7 @@ def _convert_vector(df, dtype):
 
 
 def _gen_cache_dir_name():
-    """
-    Generate a random directory name for storing dataset.
+    """Generate a random directory name for storing dataset.
     The directory name format is:
       {datetime}-{spark_application_id}-{uuid4}
     This will help user to find the related spark application for a directory.
@@ -566,8 +556,7 @@ _FILE_AVAILABILITY_WAIT_TIMEOUT_SECS = 30
 
 
 def _wait_file_available(url_list):
-    """
-    Waiting about _FILE_AVAILABILITY_WAIT_TIMEOUT_SECS seconds (default 30 seconds) to make sure
+    """Waiting about _FILE_AVAILABILITY_WAIT_TIMEOUT_SECS seconds (default 30 seconds) to make sure
     all files are available for reading. This is useful in some filesystems, such as S3 which only
     providing eventually consistency.
     """
@@ -623,8 +612,7 @@ def make_spark_converter(
         compression_codec=None,
         dtype='float32'
 ):
-    """
-    Convert a spark dataframe into a :class:`SparkDatasetConverter` object.
+    """Convert a spark dataframe into a :class:`SparkDatasetConverter` object.
     It will materialize a spark dataframe to the directory specified by
     spark conf 'petastorm.spark.converter.parentCacheDirUrl'.
     The dataframe will be materialized in parquet format, and we can specify
@@ -644,9 +632,9 @@ def make_spark_converter(
         in a parquet row group when materializing the dataframe.
     :param compression_codec: Specify compression codec.
         It can be one of 'uncompressed', 'bzip2', 'gzip', 'lz4', 'snappy', 'deflate'.
-        Default None. If None, it will leave the data uncompressed.
-    :param dtype: None, 'float32' or 'float64', specifying the precision of the floating-point
-        elements in the output dataset. Integer types will remain unchanged. If None, all types
+        Default ``None``. If ``None``, it will leave the data uncompressed.
+    :param dtype: ``None``, 'float32' or 'float64', specifying the precision of the floating-point
+        elements in the output dataset. Integer types will remain unchanged. If ``None``, all types
         will remain unchanged. Default 'float32'.
 
     :return: a :class:`SparkDatasetConverter` object that holds the

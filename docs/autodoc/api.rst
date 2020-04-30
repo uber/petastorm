@@ -11,10 +11,6 @@ Reader
 .. automodule:: petastorm.weighted_sampling_reader
 .. automodule:: petastorm.ngram
 
-TransformSpec
--------------
-.. automodule:: petastorm.transform
-
 Tensorflow
 ----------
 .. automodule:: petastorm.tf_utils
@@ -23,10 +19,17 @@ PyTorch
 -------
 .. automodule:: petastorm.pytorch
 
+PySpark Dataset Converter
+-------------------------
+.. automodule:: petastorm.spark.spark_dataset_converter
+
 PySpark & SQL
 -------------
 .. automodule:: petastorm.spark_utils
 
+TransformSpec
+-------------
+.. automodule:: petastorm.transform
 
 Row queries
 -----------
