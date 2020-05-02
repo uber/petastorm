@@ -78,7 +78,7 @@ def run(data_dir):
     converter_test = make_spark_converter(df_test)
 
     def train_and_evaluate(_=None):
-        import tensorflow as tf
+        import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 
         with converter_train.make_tf_dataset() as dataset:
             dataset = dataset.map(lambda x: (tf.reshape(x.features, [-1, 28, 28]), x.label))

@@ -24,7 +24,7 @@ from petastorm.cache import NullCache
 from petastorm.errors import NoDataAvailableError
 from petastorm.etl import dataset_metadata, rowgroup_indexing
 from petastorm.etl.dataset_metadata import PetastormMetadataError, infer_or_load_unischema
-from petastorm.fs_utils import get_filesystem_and_path_or_paths
+from petastorm.fs_utils import get_filesystem_and_path_or_paths, normalize_dir_url
 from petastorm.local_disk_arrow_table_cache import LocalDiskArrowTableCache
 from petastorm.local_disk_cache import LocalDiskCache
 from petastorm.ngram import NGram
@@ -47,22 +47,13 @@ logger = logging.getLogger(__name__)
 _VENTILATE_EXTRA_ROWGROUPS = 2
 
 
-def normalize_dataset_url(dataset_url):
-    if dataset_url is None or not isinstance(dataset_url, six.string_types):
-        raise ValueError('dataset url must be a string')
-
-    dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
-    logger.debug('dataset url: %s', dataset_url)
-    return dataset_url
-
-
 def normalize_dataset_url_or_urls(dataset_url_or_urls):
     if isinstance(dataset_url_or_urls, list):
         if not dataset_url_or_urls:
             raise ValueError('dataset url list must be non-empty.')
-        return [normalize_dataset_url(url) for url in dataset_url_or_urls]
+        return [normalize_dir_url(url) for url in dataset_url_or_urls]
     else:
-        return normalize_dataset_url(dataset_url_or_urls)
+        return normalize_dir_url(dataset_url_or_urls)
 
 
 def make_reader(dataset_url,
@@ -128,7 +119,7 @@ def make_reader(dataset_url,
         on the ``reader_pool_type`` value).
     :return: A :class:`Reader` object
     """
-    dataset_url = normalize_dataset_url(dataset_url)
+    dataset_url = normalize_dir_url(dataset_url)
 
     filesystem, dataset_path = get_filesystem_and_path_or_paths(dataset_url, hdfs_driver)
 
@@ -366,7 +357,7 @@ class Reader(object):
         self.is_batched_reader = is_batched_reader
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
         self.dataset = pq.ParquetDataset(dataset_path, filesystem=pyarrow_filesystem,
-                                         validate_schema=False)
+                                         validate_schema=False, metadata_nthreads=10)
 
         if self.dataset.partitions is None:
             # When read from parquet file list, the `dataset.partitions` will be None.

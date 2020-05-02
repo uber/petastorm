@@ -21,7 +21,7 @@ from collections import OrderedDict, namedtuple
 from decimal import Decimal
 
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 
 # Mapping of identical datatypes in numpy-ish and tensorflow-ish
 _NUMPY_TO_TF_DTYPES_MAPPING = {
@@ -190,12 +190,13 @@ def _set_shape(schema, fields_as_dict, batched_output=None):
     for k in fields_as_dict.keys():
         unischema_field = schema.fields[k]
 
-        if batched_output:
-            shape = (None,) + unischema_field.shape
-        else:
-            shape = unischema_field.shape
-        # Set static shape
-        fields_as_dict[k].set_shape(shape)
+        if fields_as_dict[k].get_shape().dims is None:
+            if batched_output:
+                shape = (None,) + unischema_field.shape
+            else:
+                shape = unischema_field.shape
+            # Set static shape
+            fields_as_dict[k].set_shape(shape)
 
 
 def _shuffling_queue(shuffling_queue_capacity, min_after_dequeue, dtypes, fields_as_list):
@@ -255,19 +256,7 @@ def _tf_tensors_ngram(reader, shuffling_queue_capacity, min_after_dequeue):
     """A tensorflow data adapter for ngrams. Return value is a named tuple with tensorflow tensors supplying
     the data directly into a Tensoflow graph. See `tf_tensor` documentation for input/output arguments meaning."""
 
-    # TODO(yevgeni): implement a mechanism for signaling that we have no more data
-    def dequeue_sample_impl(x):
-        next_sample = next(reader)
-        assert isinstance(next_sample, dict)
-
-        # Create a dictionary, where each key is a timestep, and value is named tuple or dictionary.
-        ngram = {}
-        for timestep in next_sample:
-            ngram[timestep] = _sanitize_field_tf_types(next_sample[timestep])
-
-        return _flatten(ngram)
-
-    fields_as_list = tf.py_func(dequeue_sample_impl, [tf.constant(1)],
+    fields_as_list = tf.py_func(lambda _: _sanitize_and_flatten(next(reader)), [tf.constant(1)],
                                 _schema_to_tf_dtypes_ngram(reader.schema, reader.ngram))
 
     if shuffling_queue_capacity > 0:
@@ -275,15 +264,7 @@ def _tf_tensors_ngram(reader, shuffling_queue_capacity, min_after_dequeue):
         fields_as_list = _shuffling_queue(shuffling_queue_capacity, min_after_dequeue,
                                           _schema_to_tf_dtypes_ngram(reader.schema, reader.ngram), fields_as_list)
 
-    fields_as_namedtuple = make_namedtuple_tf_ngram(reader.schema, reader.ngram, *fields_as_list)
-
-    # We change the key to str format here in order to be able to use ** later to expand the dictionary as kargs.
-    fields_as_dict = {
-        str(timestep): fields_as_namedtuple[timestep]._asdict() for timestep in fields_as_namedtuple}
-    for timestep in fields_as_dict:
-        _set_shape(reader.schema, fields_as_dict[timestep])
-
-    return make_namedtuple_tf_ngram(reader.schema, reader.ngram, **fields_as_dict)
+    return _unflatten_and_set_shape(reader.schema, reader.ngram, fields_as_list)
 
 
 def tf_tensors(reader, shuffling_queue_capacity=0, min_after_dequeue=0):
@@ -363,7 +344,7 @@ def make_petastorm_dataset(reader):
     The elements produced by the returned dataset object are namedtuples based on the
     :class:`~petastorm.unischema.Unischema`.
 
-    >>> import tensorflow as tf
+    >>> import tensorflow.compat.v1 as tf  # pylint: disable=import-error
     >>> from petastorm.reader import Reader
     >>> from petastorm.tf_utils import make_petastorm_dataset
     >>>
@@ -394,9 +375,59 @@ def make_petastorm_dataset(reader):
                 yield _sanitize_field_tf_types(row)
 
         flat_dataset = tf.data.Dataset.from_generator(dequeue_sample_impl, tuple(_schema_to_tf_dtypes(reader.schema)))
+
+        # Don't write this function as a inline lambda like `dataset.map(lambda row: _set_shape_to_named_tuple(...))`,
+        # It can avoid this error: https://github.com/tensorflow/tensorflow/issues/30149
+        def set_shape(row):
+            return _set_shape_to_named_tuple(reader.schema, row, reader.batched_output)
+
+        schema_tuple = reader.schema._get_namedtuple()
         named_tuple_dataset = flat_dataset \
-            .map(reader.schema.make_namedtuple_tf) \
-            .map(lambda row: _set_shape_to_named_tuple(reader.schema, row, reader.batched_output))
+            .map(schema_tuple) \
+            .map(set_shape)
         return named_tuple_dataset
     else:
-        raise NotImplementedError('make_petastorm_dataset does not support NGram yet.')
+        # flat_dataset is a tf.data.Dataset with a tuple containined ngram field stored in one flat tuple produced by
+        # _flatten() function.
+        flat_dataset = tf.data.Dataset.from_generator(lambda: _ngrams_generator(reader),
+                                                      tuple(_schema_to_tf_dtypes_ngram(reader.schema, reader.ngram)))
+
+        # Unflatten the tuple into a dictionary
+        named_tuple_dataset = flat_dataset.map(
+            lambda *nargs: _unflatten_and_set_shape(reader.schema, reader.ngram, nargs))
+
+        return named_tuple_dataset
+
+
+def _unflatten_and_set_shape(schema, ngram, fields_as_list):
+    """Takes a flat list of fields produced by _flatten function and unflatten it back into an ngrams dictionary"""
+    fields_as_namedtuple = make_namedtuple_tf_ngram(schema, ngram, *fields_as_list)
+
+    # We change the key to str format here in order to be able to use ** later to expand the dictionary as kargs.
+    fields_as_dict = {str(timestep): fields_as_namedtuple[timestep]._asdict() for timestep in fields_as_namedtuple}
+
+    for timestep in fields_as_dict:
+        _set_shape(schema, fields_as_dict[timestep])
+
+    return make_namedtuple_tf_ngram(schema, ngram, **fields_as_dict)
+
+
+def _ngrams_generator(reader):
+    """A generator producing flattened and sanitized ngrams"""
+    if reader.last_row_consumed:
+        # This means that Dataset is trying to create a new instance of the generator. Can not do that
+        # (nor want to do that) since this is an expensive operation. num_epochs is a more efficient way
+        # to do this.
+        raise RuntimeError('Multiple iterations over make_petastorm_dataset are not supported. '
+                           'Multiple iterations can be triggered by calling \'repeat\' method of Datset class.'
+                           'Use Reader\'s num_epochs contructor arguments to set number of iterations.')
+
+    for next_sample in reader:
+        yield _sanitize_and_flatten(next_sample)
+
+
+def _sanitize_and_flatten(ngram):
+    """Fetches next sample from the reader, sanitizes tf types and flattens ngram to a list of values"""
+    sanitized_ngram = {k: _sanitize_field_tf_types(v) for k, v in ngram.items()}
+
+    return _flatten(sanitized_ngram)

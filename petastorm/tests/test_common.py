@@ -95,13 +95,14 @@ def _randomize_row(id_num):
     return row_dict
 
 
-def create_test_dataset(tmp_url, rows, num_files=2, spark=None):
+def create_test_dataset(tmp_url, rows, num_files=2, spark=None, use_summary_metadata=False):
     """
     Creates a test dataset under tmp_dir, with rows and num_files that has TestSchema.
     :param tmp_url: The URL of the temp directory to store the test dataset in.
     :param rows: The number of rows for the dataset.
     :param num_files: The number of files to partition the data between.
     :param spark: An optional spark session to use
+    :param use_summary_metadata: If True, _metadata file will be created.
     :return: A list of the dataset dictionary.
     """
 
@@ -116,7 +117,7 @@ def create_test_dataset(tmp_url, rows, num_files=2, spark=None):
         shutdown = True
     spark_context = spark.sparkContext
 
-    with materialize_dataset(spark, tmp_url, TestSchema):
+    with materialize_dataset(spark, tmp_url, TestSchema, use_summary_metadata=use_summary_metadata):
         id_rdd = spark_context.parallelize(rows, numSlices=40)
 
         # Make up some random data and store it for referencing in the tests

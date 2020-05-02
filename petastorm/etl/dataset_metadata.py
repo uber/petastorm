@@ -28,6 +28,7 @@ from petastorm.compat import compat_get_metadata, compat_make_parquet_piece
 from petastorm.etl.legacy import depickle_legacy_package_name_compatible
 from petastorm.fs_utils import FilesystemResolver, get_filesystem_and_path_or_paths
 from petastorm.unischema import Unischema
+from packaging import version
 
 logger = logging.getLogger(__name__)
 
@@ -137,9 +138,18 @@ def _init_spark(spark, current_spark_config, row_group_size_mb=None, use_summary
     Initializes spark and hdfs config with necessary options for petastorm datasets
     before running the spark job.
     """
+
+    # It's important to keep pyspark import local because when placed at the top level it somehow messes up with
+    # namedtuple serialization code and we end up getting UnischemaFields objects depickled without overriden __eq__
+    # and __hash__ methods.
+    import pyspark
+    _PYSPARK_BEFORE_24 = version.parse(pyspark.__version__) < version.parse('2.4')
+
     hadoop_config = spark.sparkContext._jsc.hadoopConfiguration()
 
     # Store current values so we can restore them later
+    current_spark_config['parquet.summary.metadata.level'] = \
+        hadoop_config.get('parquet.summary.metadata.level')
     current_spark_config['parquet.enable.summary-metadata'] = \
         hadoop_config.get('parquet.enable.summary-metadata')
     current_spark_config['parquet.summary.metadata.propagate-errors'] = \
@@ -151,7 +161,11 @@ def _init_spark(spark, current_spark_config, row_group_size_mb=None, use_summary
     current_spark_config['parquet.block.size'] = \
         hadoop_config.get('parquet.block.size')
 
-    hadoop_config.setBoolean('parquet.enable.summary-metadata', use_summary_metadata)
+    if _PYSPARK_BEFORE_24:
+        hadoop_config.setBoolean("parquet.enable.summary-metadata", use_summary_metadata)
+    else:
+        hadoop_config.set('parquet.summary.metadata.level', "ALL" if use_summary_metadata else "NONE")
+
     # Our atg fork includes https://github.com/apache/parquet-mr/pull/502 which creates this
     # option. This forces a job to fail if the summary metadata files cannot be created
     # instead of just having them fail to be created silently
@@ -378,7 +392,7 @@ def get_schema_from_dataset_url(dataset_url_or_urls, hdfs_driver='libhdfs3'):
     """
     fs, path_or_paths = get_filesystem_and_path_or_paths(dataset_url_or_urls, hdfs_driver)
 
-    dataset = pq.ParquetDataset(path_or_paths, filesystem=fs, validate_schema=False)
+    dataset = pq.ParquetDataset(path_or_paths, filesystem=fs, validate_schema=False, metadata_nthreads=10)
 
     # Get a unischema stored in the dataset metadata.
     stored_schema = get_schema(dataset)

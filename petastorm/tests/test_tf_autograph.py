@@ -11,14 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import sys
-import warnings
 
-from petastorm.errors import NoDataAvailableError  # noqa: F401
-from petastorm.reader import make_reader, make_batch_reader  # noqa: F401
-from petastorm.transform import TransformSpec  # noqa: F401
+import pytest
 
-__version__ = '0.9.0'
+from petastorm.spark import make_spark_converter
+from petastorm.tests.test_tf_utils import _IS_TF_VERSION_1
 
-if sys.version_info.major < 3:
-    warnings.warn('Petastorm on Python 2 is deprecated and will remove Python 2 support in next release.')
+
+@pytest.mark.skipif(_IS_TF_VERSION_1, reason="Only test autograph transform on tensorflow>=2")
+def test_tf_autograph(spark_test_ctx, caplog):
+    caplog.clear()
+    df1 = spark_test_ctx.spark.range(100)
+    converter1 = make_spark_converter(df1)
+    results = []
+    with converter1.make_tf_dataset(num_epochs=1) as dataset:
+        for batch in dataset:
+            results.append(batch)
+    assert "AutoGraph could not transform" not in " ".join(caplog.messages)

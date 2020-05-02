@@ -4,6 +4,33 @@
 Release notes
 =============
 
+
+Release 0.9.0
+=============
+
+Thanks to our contributors: Weichen Xu, Liang Zhang, Felipe Petroski Such, Jennifer Blight and Greg Arutiunian!
+
+Major features
+--------------
+
+- Apache PySpark 3.0 (Preview) support
+- TensorFlow 2 support
+- PR 540: petastorm.pytorch.BatchedDataLoader is a much faster version of petastorm.pytorch.DataLoader. petastorm.pytorch.BatchedDataLoader support only types that can be converted to pytorch tensors.
+- Spark Dataset Converter: Spark converter API simplifies the data conversion from Spark to TensorFlow or PyTorch. The input Spark DataFrame is first materialized in the parquet format and then loaded as a tf.data.Dataset or torch.utils.data.DataLoader.
+
+Bug fixes and additional features
+---------------------------------
+- `PR 513 <https://github.com/uber/petastorm/pull/513>`_: Preserve spark dataframe schema order in a namedtuples produced by `make_reader` and `make_batch_reader`. A backward compatiility flag is `here <https://github.com/uber/petastorm/blob/63c1faf9de3ebc56a386117bdd68deccd896fe25/petastorm/unischema.py#L37>`_.
+- `PR 490 <https://github.com/uber/petastorm/pull/490>`_: TransformSpecs was not being applied if there was also a row predicate specified when using make_reader.
+- `PR 495 <https://github.com/uber/petastorm/pull/495>`_: Removed spurious warning: “schema_fields behavior has changed. Now, regular expression pattern must match the entire field name...the following fields: “
+- `PR 498 <https://github.com/uber/petastorm/pull/498>`_: Raise an explicit error if a non-scalar value is used as a value for a scalar field.
+- `PR 529 <https://github.com/uber/petastorm/pull/529>`_: Using parquet.summary.metadata.level to control summary metadata file creation. This eliminates depreciation warning.
+- `PR 533 <https://github.com/uber/petastorm/pull/533>`_:  make_petastorm_dataset (TF tf.data API) function supports ngrams.
+- `PR 544 <https://github.com/uber/petastorm/pull/544>`_: Enable multiple iterations over the same petastorm.pytorch.DataLoader instance.
+
+Python 2 support is deprecated and it will be removed in the next release.
+
+
 Release 0.8.2
 =============
 

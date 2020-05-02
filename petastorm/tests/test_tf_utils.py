@@ -18,10 +18,13 @@ from calendar import timegm
 from collections import namedtuple
 from contextlib import contextmanager
 from decimal import Decimal
+from functools import wraps
+import inspect
 
 import numpy as np
+from packaging import version
 import pytest
-import tensorflow as tf
+import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 
 try:
     from mock import mock
@@ -32,11 +35,27 @@ from petastorm import make_reader, make_batch_reader, TransformSpec
 from petastorm.ngram import NGram
 from petastorm.tests.test_common import TestSchema
 from petastorm.tf_utils import _sanitize_field_tf_types, _numpy_to_tf_dtypes, \
-    _schema_to_tf_dtypes, tf_tensors
+    _schema_to_tf_dtypes, tf_tensors, _ngrams_generator, _unflatten_and_set_shape
 from petastorm.unischema import Unischema, UnischemaField
 
 NON_NULLABLE_FIELDS = set(TestSchema.fields.values()) - \
                       {TestSchema.matrix_nullable, TestSchema.string_array_nullable, TestSchema.integer_nullable}
+
+
+_IS_TF_VERSION_1 = version.parse(tf.__version__) < version.parse('2')
+_IS_TF_VERSION_2 = version.parse(tf.__version__) >= version.parse('2')
+
+
+def create_tf_graph(func):
+    def run_func_with_tf_graph(*args, **kwargs):
+        with tf.Graph().as_default():
+            return func(*args, **kwargs)
+    func_args = ','.join(inspect.getargspec(func).args)  # pylint: disable=deprecated-method
+    # add a lambda wrap in order to keep the function argument list unchanged.
+    # otherwise some other pytest decorator like @pytest.mark.parametrize may not work correctly in python2
+    # pylint: disable=eval-used
+    warpped_fn = eval("lambda {func_args}: f({func_args})".format(func_args=func_args), {'f': run_func_with_tf_graph})
+    return wraps(func)(warpped_fn)
 
 
 @contextmanager
@@ -115,6 +134,7 @@ def test_schema_to_dtype_list():
     np.testing.assert_equal(actual_tf_dtype_list, [tf.string, tf.int32, tf.int32, tf.uint8])
 
 
+@create_tf_graph
 def _read_from_tf_tensors(synthetic_dataset, count, shuffling_queue_capacity, min_after_dequeue, ngram):
     """Used by several test cases. Reads a 'count' rows using reader.
 
@@ -126,13 +146,12 @@ def _read_from_tf_tensors(synthetic_dataset, count, shuffling_queue_capacity, mi
 
     schema_fields = (NON_NULLABLE_FIELDS if ngram is None else ngram)
 
-    with tf.Graph().as_default():
-        with make_reader(schema_fields=schema_fields, dataset_url=synthetic_dataset.url, reader_pool_type='dummy',
-                         shuffle_row_groups=False) as reader:
-            row_tensors = tf_tensors(reader, shuffling_queue_capacity=shuffling_queue_capacity,
-                                     min_after_dequeue=min_after_dequeue)
-            with _tf_session() as sess:
-                rows_data = [sess.run(row_tensors) for _ in range(count)]
+    with make_reader(schema_fields=schema_fields, dataset_url=synthetic_dataset.url, reader_pool_type='dummy',
+                     shuffle_row_groups=False) as reader:
+        row_tensors = tf_tensors(reader, shuffling_queue_capacity=shuffling_queue_capacity,
+                                 min_after_dequeue=min_after_dequeue)
+        with _tf_session() as sess:
+            rows_data = [sess.run(row_tensors) for _ in range(count)]
 
     return rows_data, row_tensors
 
@@ -176,6 +195,7 @@ def _assert_expected_rows_data(expected_data, rows_data):
 
 
 @pytest.mark.forked
+@create_tf_graph
 def test_simple_read_tensorflow(synthetic_dataset):
     """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
     data"""
@@ -285,6 +305,7 @@ def test_shuffling_queue_with_ngrams(synthetic_dataset):
 
 
 @pytest.mark.forked
+@create_tf_graph
 def test_simple_read_tensorflow_with_parquet_dataset(scalar_dataset):
     """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
     data"""
@@ -310,6 +331,7 @@ def test_simple_read_tensorflow_with_parquet_dataset(scalar_dataset):
 
 
 @pytest.mark.forked
+@create_tf_graph
 def test_simple_read_tensorflow_with_non_petastorm_many_columns_dataset(many_columns_non_petastorm_dataset):
     """Read couple of rows. Make sure all tensors have static shape sizes assigned and the data matches reference
     data"""
@@ -324,6 +346,7 @@ def test_simple_read_tensorflow_with_non_petastorm_many_columns_dataset(many_col
             assert set(batch.keys()) == set(many_columns_non_petastorm_dataset.data[0].keys())
 
 
+@create_tf_graph
 def test_shuffling_queue_with_make_batch_reader(scalar_dataset):
     with make_batch_reader(dataset_url_or_urls=scalar_dataset.url) as reader:
         with pytest.raises(ValueError):
@@ -331,6 +354,7 @@ def test_shuffling_queue_with_make_batch_reader(scalar_dataset):
 
 
 @mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
+@create_tf_graph
 def test_transform_function_new_field(synthetic_dataset):
     def double_matrix(sample):
         sample['double_matrix'] = sample['matrix'] * 2
@@ -351,6 +375,7 @@ def test_transform_function_new_field(synthetic_dataset):
 
 
 @mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
+@create_tf_graph
 def test_transform_function_new_field_batched(scalar_dataset):
     def double_float64(sample):
         sample['new_float64'] = sample['float64'] * 2
@@ -369,3 +394,31 @@ def test_transform_function_new_field_batched(scalar_dataset):
             original_sample = next(d for d in scalar_dataset.data if d['id'] == actual_id)
             expected = original_sample['float64'] * 2
             np.testing.assert_equal(expected, actual_float64)
+
+
+@create_tf_graph
+def test_ngram_generator(synthetic_dataset):
+    """Testing private _ngrams_generator and _unflatten_and_set_shape functions."""
+
+    # 1. Use _ngrams_generator to read out ngrams as flattened tuples
+    # 2. Convert flattened tuples back to ngrams of tensors
+    # 3. Evaluate tensors and make sure the
+    fields = {
+        -1: [TestSchema.id],
+        2: [TestSchema.id, TestSchema.image_png]
+    }
+    ngram = NGram(fields=fields, delta_threshold=1.5, timestamp_field=TestSchema.id)
+
+    with make_reader(schema_fields=ngram, dataset_url=synthetic_dataset.url, reader_pool_type='dummy',
+                     shuffle_row_groups=False) as reader:
+        flat_row_numpy = next(iter(_ngrams_generator(reader)))
+
+        flat_row_tf = tuple([tf.constant(x) for x in flat_row_numpy])
+        ngram_tf = _unflatten_and_set_shape(reader.schema, reader.ngram, flat_row_tf)
+
+        with _tf_session() as sess:
+            ngram_numpy = sess.run(ngram_tf)
+
+        assert ngram_numpy[-1].id == flat_row_numpy.id_0
+        assert ngram_numpy[2].id == flat_row_numpy.id_3
+        np.testing.assert_equal(ngram_numpy[2].image_png, flat_row_numpy.image_png_3)
