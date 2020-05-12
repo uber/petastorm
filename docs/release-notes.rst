@@ -4,6 +4,13 @@
 Release notes
 =============
 
+Release 0.9.1
+=============
+
+Bug fixes and additional features
+---------------------------------
+- `PR 554 <https://github.com/uber/petastorm/pull/554>`_: Fixed ``make_petastorm_dataset`` compatibility issue with ``WeightedSamplingReader``.
+
 
 Release 0.9.0
 =============
