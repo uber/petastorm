@@ -94,6 +94,10 @@ class WeightedSamplingReader(object):
     def next(self):
         return self.__next__()
 
+    @property
+    def last_row_consumed(self):
+        return any(map(lambda r: r.last_row_consumed, self._readers))
+
     # Functions needed to treat reader as a context manager
     def __enter__(self):
         return self
