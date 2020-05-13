@@ -10,6 +10,7 @@ Release 0.9.1
 Bug fixes and additional features
 ---------------------------------
 - `PR 554 <https://github.com/uber/petastorm/pull/554>`_: Fixed ``make_petastorm_dataset`` compatibility issue with ``WeightedSamplingReader``.
+- `PR 535 <https://github.com/uber/petastorm/pull/535>`_: Stip trailing ``/`` from directory names when using ``GCSFSWrapper``'s ``walk``.
 
 
 Release 0.9.0
