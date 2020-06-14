@@ -12,10 +12,7 @@ class GCSFSWrapper(DaskFileSystem):
         path = norm_path(_stringify_path(path))
         try:
             contents = self.fs.ls(path)
-            if len(contents) == 1 and contents[0] == path:
-                return False
-            else:
-                return True
+            return not(len(contents) == 1 and contents[0] == path)
         except OSError:
             return False
 
@@ -41,26 +38,23 @@ class GCSFSWrapper(DaskFileSystem):
         directories = set()
         files = set()
 
-        for key in self.fs.ls(path, detail=True):
+        for obj in self.fs.ls(path, detail=True):
             # each info name must be at least [path]/part , but here
             # we check also for names like [path]/part/
-            path = key['name']
-            if key['storageClass'] == 'DIRECTORY':
-                if path.endswith('/'):
-                    directories.add(path[:-1])
-                else:
-                    directories.add(path)
-            elif key['storageClass'] == 'BUCKET':
-                pass
-            else:
-                files.add(path)
+            obj_path = obj['name']
+            if obj_path == path:
+                continue
+            if obj['type'] == 'directory':
+                directories.add(obj_path)
+            elif obj['type'] == 'file':
+                files.add(obj_path)
 
-        files = sorted([posixpath.split(f)[1] for f in files
-                        if f not in directories])
-        directories = sorted([posixpath.split(x)[1]
-                              for x in directories])
+        rel_files = sorted([posixpath.split(f)[1] for f in files
+                            if f not in directories])
+        rel_directories = sorted([posixpath.split(x[:-1])[1]
+                                  for x in directories])
 
-        yield path, directories, files
+        yield path, rel_directories, rel_files
 
         for directory in directories:
             for tup in self.walk(directory):
