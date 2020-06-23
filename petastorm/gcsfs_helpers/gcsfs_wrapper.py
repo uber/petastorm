@@ -42,7 +42,7 @@ class GCSFSWrapper(DaskFileSystem):
             # each info name must be at least [path]/part , but here
             # we check also for names like [path]/part/
             obj_path = obj['name']
-            if obj_path == path:
+            if obj_path.strip('/') == path.strip('/'):
                 continue
             if obj['type'] == 'directory':
                 directories.add(obj_path)
