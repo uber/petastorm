@@ -33,7 +33,6 @@ REQUIRED_PACKAGES = [
     'dill>=0.2.1',
     'diskcache>=3.0.0',
     'future>=0.10.2',
-    'futures>=2.0; python_version == "2.7"',  # TODO(yevgeni): check if 2.0 is the minimum
     'numpy>=1.13.3',
     'packaging>=15.0',
     'pandas>=0.19.0',
@@ -96,15 +95,17 @@ setup(
     },
     url='https://github.com/uber/petastorm',
     author='Uber Technologies, Inc.',
+    python_requires='>=3',
     classifiers=[
         'Environment :: Console',
         'Environment :: Web Environment',
         'Intended Audience :: Developers',
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: Apache Software License',
-        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
     ],
 )
