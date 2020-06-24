@@ -16,14 +16,12 @@ import os
 import pickle
 import textwrap
 import unittest
+from typing import Dict
 
 import pytest
 from pyarrow.lib import ArrowIOError
 
-try:
-    from unittest import mock
-except ImportError:
-    from mock import mock
+from unittest import mock
 
 from petastorm.hdfs.namenode import HdfsNamenodeResolver, HdfsConnector, \
     HdfsConnectError, MaxFailoversExceeded, HAHdfsClient, namenode_failover
@@ -295,7 +293,7 @@ class MockHdfsConnector(HdfsConnector):
     # static member for static hdfs_connect_namenode to access
     _n_failovers = 0
     _fail_n_next_connect = 0
-    _connect_attempted = {}
+    _connect_attempted: Dict[str, int] = {}
 
     @classmethod
     def reset(cls):

@@ -27,10 +27,7 @@ from petastorm.codecs import ScalarCodec, NdarrayCodec
 from petastorm.unischema import Unischema, UnischemaField, dict_to_spark_row, \
     insert_explicit_nulls, match_unischema_fields, _new_gt_255_compatible_namedtuple, _fullmatch
 
-try:
-    from unittest import mock
-except ImportError:
-    from mock import mock
+from unittest import mock
 
 
 def _mock_parquet_dataset(partitions, arrow_schema):
