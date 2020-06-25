@@ -4,6 +4,14 @@
 Release notes
 =============
 
+Release 0.9.2 (unreleased)
+==========================
+
+Major features
+--------------
+- Retire support for Python 2.
+
+
 Release 0.9.2
 =============
 - `PR 556 <https://github.com/uber/petastorm/pull/556>`_: Remove driver param for hdfs.connect when using pyarrow 0.17 and above.
