@@ -15,8 +15,6 @@ RUN apt-get -qq install -y \
   libxrender1 \
   libsm6 \
   python \
-  python2.7 \
-  python2.7-dev \
   python-pip \
   python3-pip \
   python3.7 \
@@ -37,12 +35,6 @@ RUN python3.7 -m pip install wheel
 RUN python3.7 -m venv /petastorm_venv3.7
 RUN /petastorm_venv3.7/bin/pip3.7 install --no-cache -e /petastorm/[test,tf,torch,docs,opencv]
 RUN /petastorm_venv3.7/bin/pip3.7 uninstall -y petastorm
-
-# Set up Python2 environment
-RUN virtualenv /petastorm_venv2.7
-RUN python2.7 -m pip install pip --upgrade
-RUN /petastorm_venv2.7/bin/pip2.7 install --no-cache -e /petastorm/[test,tf,torch,docs,opencv]
-RUN /petastorm_venv2.7/bin/pip2.7 uninstall -y petastorm
 
 # Clean up
 RUN rm -r /petastorm
