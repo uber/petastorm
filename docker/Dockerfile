@@ -21,7 +21,11 @@ RUN apt-get -qq install -y \
   python3.7-dev \
   python3.7-venv \
   virtualenv \
+  wget \
   && rm -rf /var/lib/apt/lists/*
+
+# Download and bake the mnist data into the docker image
+RUN wget https://raw.githubusercontent.com/uber/petastorm/master/.travis.yml -P /data/mnist/
 
 # Temporarily add files needed for env setup.
 RUN mkdir /petastorm

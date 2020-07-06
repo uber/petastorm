@@ -18,17 +18,18 @@
 # This example runs with PySpark > 3.0.0
 ###
 import logging
-import tempfile
 
 from pyspark.sql import SparkSession
 
-from examples.spark_dataset_converter.utils import download_mnist_libsvm
 from petastorm.spark import SparkDatasetConverter, make_spark_converter
 
 try:
     from pyspark.sql.functions import col
 except ImportError:
     raise ImportError("This script runs with PySpark>=3.0.0")
+
+# This folder is baked into the docker image
+MNIST_DATA_DIR = "/data/mnist/"
 
 
 def get_compiled_model(lr=0.001):
@@ -72,7 +73,8 @@ def run(data_dir):
 
     # Set a cache directory for intermediate data.
     # The path should be accessible by both Spark workers and driver.
-    spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF, "file:///tmp/petastorm/cache/tf-example")
+    spark.conf.set(SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF,
+                   "file:///tmp/petastorm/cache/tf-example")
 
     converter_train = make_spark_converter(df_train)
     converter_test = make_spark_converter(df_test)
@@ -108,9 +110,7 @@ def run(data_dir):
 
 
 def main():
-    mnist_dir = tempfile.mkdtemp('_mnist_data')
-    download_mnist_libsvm(mnist_dir)
-    run(data_dir=mnist_dir)
+    run(data_dir=MNIST_DATA_DIR)
 
 
 if __name__ == '__main__':
