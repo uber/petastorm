@@ -25,7 +25,7 @@ RUN apt-get -qq install -y \
   && rm -rf /var/lib/apt/lists/*
 
 # Download and bake the mnist data into the docker image
-RUN wget https://raw.githubusercontent.com/uber/petastorm/master/.travis.yml -P /data/mnist/
+RUN wget https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/multiclass/mnist.bz2 -P /data/mnist/
 
 # Temporarily add files needed for env setup.
 RUN mkdir /petastorm
