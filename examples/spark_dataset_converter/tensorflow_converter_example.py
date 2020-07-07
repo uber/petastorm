@@ -21,15 +21,13 @@ import logging
 
 from pyspark.sql import SparkSession
 
+from examples.spark_dataset_converter.utils import get_mnist_dir
 from petastorm.spark import SparkDatasetConverter, make_spark_converter
 
 try:
     from pyspark.sql.functions import col
 except ImportError:
     raise ImportError("This script runs with PySpark>=3.0.0")
-
-# This folder is baked into the docker image
-MNIST_DATA_DIR = "/data/mnist/"
 
 
 def get_compiled_model(lr=0.001):
@@ -110,7 +108,8 @@ def run(data_dir):
 
 
 def main():
-    run(data_dir=MNIST_DATA_DIR)
+    mnist_dir = get_mnist_dir
+    run(data_dir=mnist_dir)
 
 
 if __name__ == '__main__':
