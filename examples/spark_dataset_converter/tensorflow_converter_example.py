@@ -108,7 +108,7 @@ def run(data_dir):
 
 
 def main():
-    mnist_dir = get_mnist_dir
+    mnist_dir = get_mnist_dir()
     run(data_dir=mnist_dir)
 
 
