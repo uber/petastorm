@@ -297,6 +297,19 @@ def test_tf_dataset_batch_size(spark_test_ctx):
     assert len(ts.id) == batch_size
 
 
+def test_tf_make_reader_fn(spark_test_ctx):
+    from petastorm import make_reader
+
+    df = spark_test_ctx.spark.range(8)
+    conv = make_spark_converter(df)
+    with conv.make_tf_dataset(make_reader_fn=make_reader,
+                              pyarrow_serialize=True,
+                              batch_size=2,
+                              num_epochs=1) as dataset:
+        # Keyword arg `pyarrow_serialize` only available with `make_reader`.
+        pass
+
+
 @mock.patch('petastorm.spark.spark_dataset_converter.make_batch_reader')
 def test_tf_dataset_petastorm_args(mock_make_batch_reader, spark_test_ctx):
     df1 = spark_test_ctx.spark.range(100).repartition(4)
@@ -519,6 +532,31 @@ def test_torch_unexpected_param(spark_test_ctx):
     with pytest.raises(TypeError, match="unexpected keyword argument 'xyz'"):
         with conv.make_torch_dataloader(xyz=1) as _:
             pass
+
+
+def test_torch_make_reader_fn(spark_test_ctx):
+    from petastorm import make_reader
+
+    df = spark_test_ctx.spark.range(8)
+    conv = make_spark_converter(df)
+    with conv.make_torch_dataloader(make_reader_fn=make_reader,
+                                    pyarrow_serialize=True,
+                                    batch_size=2,
+                                    num_epochs=1) as dataloader:
+        # Keyword arg `pyarrow_serialize` only available with `make_reader`.
+        pass
+
+
+def test_torch_data_loader_fn(spark_test_ctx):
+    from petastorm.pytorch import BatchedDataLoader
+
+    df = spark_test_ctx.spark.range(8)
+    conv = make_spark_converter(df)
+    with conv.make_torch_dataloader(data_loader_fn=BatchedDataLoader,
+                                    pyarrow_serialize=True,
+                                    batch_size=2,
+                                    num_epochs=1) as dataloader:
+        assert isinstance(dataloader, BatchedDataLoader)
 
 
 @mock.patch('petastorm.spark.spark_dataset_converter.make_batch_reader')
