@@ -305,7 +305,7 @@ def test_tf_make_reader_fn(spark_test_ctx):
     with conv.make_tf_dataset(make_reader_fn=make_reader,
                               pyarrow_serialize=True,
                               batch_size=2,
-                              num_epochs=1) as dataset:
+                              num_epochs=1):
         # Keyword arg `pyarrow_serialize` only available with `make_reader`.
         pass
 
@@ -542,7 +542,7 @@ def test_torch_make_reader_fn(spark_test_ctx):
     with conv.make_torch_dataloader(make_reader_fn=make_reader,
                                     pyarrow_serialize=True,
                                     batch_size=2,
-                                    num_epochs=1) as dataloader:
+                                    num_epochs=1):
         # Keyword arg `pyarrow_serialize` only available with `make_reader`.
         pass
 
