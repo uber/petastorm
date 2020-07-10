@@ -201,7 +201,7 @@ class SparkDatasetConverter(object):
             prefetch=None,
             num_epochs=None,
             workers_count=None,
-            shuffle_queue_capacity=None,
+            shuffling_queue_capacity=None,
             make_reader_fn=None,
             **petastorm_reader_kwargs
     ):
@@ -224,7 +224,7 @@ class SparkDatasetConverter(object):
             ``None`` denotes auto tune best value (current implementation when auto tune,
             it will always use 4 workers, but it may be improved in future)
             Default value ``None``.
-        :param shuffle_queue_capacity: An int specifying the number of items to fill into a queue
+        :param shuffling_queue_capacity: An int specifying the number of items to fill into a queue
             from which items are sampled each step to form batches. The larger the capacity, the
             better shuffling of the elements within the dataset. The default value of ``None``
             results in no shuffling.
@@ -244,7 +244,7 @@ class SparkDatasetConverter(object):
             batch_size=batch_size,
             prefetch=prefetch,
             petastorm_reader_kwargs=petastorm_reader_kwargs,
-            shuffle_queue_capacity=shuffle_queue_capacity,
+            shuffling_queue_capacity=shuffling_queue_capacity,
             make_reader_fn=make_reader_fn)
 
     def make_torch_dataloader(self,
@@ -311,7 +311,7 @@ class TFDatasetContextManager(object):
             batch_size,
             prefetch,
             petastorm_reader_kwargs,
-            shuffle_queue_capacity,
+            shuffling_queue_capacity,
             make_reader_fn
     ):
         """
@@ -319,14 +319,14 @@ class TFDatasetContextManager(object):
         :param batch_size: batch size for tensorflow dataset.
         :param prefetch: the prefectch size for tensorflow dataset.
         :param petastorm_reader_kwargs: other arguments for petastorm reader
-        :param shuffle_queue_capacity: the shuffle queue capacity for the tensorflow dataset
+        :param shuffling_queue_capacity: the shuffle queue capacity for the tensorflow dataset
         :param make_reader_fn: function to generate the Petastorm reader.
         """
         self.parquet_file_url_list = parquet_file_url_list
         self.batch_size = batch_size
         self.prefetch = prefetch
         self.petastorm_reader_kwargs = petastorm_reader_kwargs
-        self.shuffle_queue_capacity = shuffle_queue_capacity
+        self.shuffling_queue_capacity = shuffling_queue_capacity
         self.make_reader_fn = make_reader_fn
 
     def __enter__(self):
@@ -343,8 +343,8 @@ class TFDatasetContextManager(object):
         dataset = make_petastorm_dataset(self.reader).flat_map(
             tf.data.Dataset.from_tensor_slices)
 
-        if self.shuffle_queue_capacity:
-            dataset = dataset.shuffle(self.shuffle_queue_capacity)
+        if self.shuffling_queue_capacity:
+            dataset = dataset.shuffle(self.shuffling_queue_capacity)
 
         # TODO: auto tune best batch size in default case.
         batch_size = self.batch_size or 32
