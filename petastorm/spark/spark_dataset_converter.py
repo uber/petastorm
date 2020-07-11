@@ -22,6 +22,7 @@ import time
 import uuid
 from distutils.version import LooseVersion
 from multiprocessing.pool import ThreadPool
+from typing import List, Any
 
 import pyspark
 from pyarrow import LocalFileSystem
@@ -37,7 +38,7 @@ if LooseVersion(pyspark.__version__) < LooseVersion('3.0'):
     def vector_to_array(_1, _2='float32'):
         raise RuntimeError("Vector columns are only supported in pyspark>=3.0")
 else:
-    from pyspark.ml.functions import vector_to_array  # pylint: disable=import-error
+    from pyspark.ml.functions import vector_to_array  # type: ignore  # pylint: disable=import-error
 
 DEFAULT_ROW_GROUP_SIZE_BYTES = 32 * 1024 * 1024
 
@@ -398,7 +399,7 @@ class CachedDataFrameMeta(object):
         return meta
 
 
-_cache_df_meta_list = []
+_cache_df_meta_list: List[Any] = []  # TODO(Yevgeni): can be more precise with the type (instead of Any)
 _cache_df_meta_list_lock = threading.Lock()
 
 
