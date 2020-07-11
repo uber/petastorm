@@ -15,10 +15,7 @@ from time import sleep
 
 import six
 
-try:
-    from unittest import mock
-except ImportError:
-    from mock import mock
+from unittest import mock
 
 from petastorm.benchmark.throughput import reader_throughput, _time_warmup_and_work, WorkerPoolType, ReadMethod
 

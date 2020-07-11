@@ -33,6 +33,7 @@ REQUIRED_PACKAGES = [
     'dill>=0.2.1',
     'diskcache>=3.0.0',
     'future>=0.10.2',
+    'gcsfs>=0.2.0',
     'numpy>=1.13.3',
     'packaging>=15.0',
     'pandas>=0.19.0',
@@ -55,11 +56,12 @@ EXTRA_REQUIRE = {
     'tf': ['tensorflow>=1.14.0'],
     'tf_gpu': ['tensorflow-gpu>=1.14.0'],
     'test': [
-        'Pillow>=3.0',
+        'Pillow>=6.2.1',
         'codecov>=2.0.15',
-        'mock>=2.0.0',
-        'opencv-python>=3.2.0.6',
         'flake8',
+        'mock>=2.0.0',
+        'mypy',
+        'opencv-python>=3.2.0.6',
         'pylint>=1.9',
         'pytest>=3.0.0',
         'pytest-cov>=2.5.1',
@@ -68,9 +70,8 @@ EXTRA_REQUIRE = {
         'pytest-timeout>=1.3.3',
         'requests>=2.22.0',
         's3fs>=0.0.1',
-        'gcsfs>=0.2.0',
     ],
-    'torch': ['torchvision>=0.2.1'],
+    'torch': ['torchvision>=0.2.1', 'torch>=1.5.0'],
 }
 
 packages = setuptools.find_packages()

@@ -60,6 +60,8 @@ before_script:
 
   - $RUN pip list
 
+  - $RUN mypy petastorm
+
   # We run a bunch of linting in before_script to fail fast and not run unit tests in case of lint failure.
   - $RUN flake8 . --count --show-source --statistics
   - $RUN flake8 . --count --exit-zero --max-complexity=10 --statistics
