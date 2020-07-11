@@ -21,7 +21,11 @@ RUN apt-get -qq install -y \
   python3.7-dev \
   python3.7-venv \
   virtualenv \
+  wget \
   && rm -rf /var/lib/apt/lists/*
+
+# Download and bake the mnist data into the docker image
+RUN wget https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/multiclass/mnist.bz2 -P /data/mnist/
 
 # Temporarily add files needed for env setup.
 RUN mkdir /petastorm

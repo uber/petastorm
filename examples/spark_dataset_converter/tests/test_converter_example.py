@@ -1,17 +1,14 @@
-import tempfile
 from distutils.version import LooseVersion
 
 import pyspark
 import pytest
 
-from examples.spark_dataset_converter.utils import download_mnist_libsvm
+from examples.spark_dataset_converter.utils import get_mnist_dir
 
 
 @pytest.fixture(scope='module')
 def mnist_dir():
-    tmp_dir = tempfile.mkdtemp('_converter_example_test')
-    download_mnist_libsvm(tmp_dir)
-    return tmp_dir
+    return get_mnist_dir()
 
 
 @pytest.mark.skipif(
