@@ -871,7 +871,7 @@ def test_pyarrow_filters_make_reader(synthetic_dataset):
         assert uv == {'p_5'}
 
 
-def test_transform_function_batched_auto_deleting_column(scalar_dataset):
+def test_pyarrow_filters_make_batch_reader(scalar_dataset):
     date_partition = pd.Timestamp(datetime.date(2019, 1, 3))
     with make_batch_reader(scalar_dataset.url
         , filters=[('datetime', '=', date_partition), ]) as reader:
