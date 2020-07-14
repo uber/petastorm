@@ -103,7 +103,7 @@ def scalar_dataset(request, tmpdir_factory):
     def _pure_parquet_dataset_no_cache():
         path = tmpdir_factory.mktemp("data").strpath
         url = 'file://' + path
-        data = create_test_scalar_dataset(url, 100)
+        data = create_test_scalar_dataset(url, 100, partition_by=['datetime'])
         dataset = SyntheticDataset(url=url, path=path, data=data)
         return dataset
 

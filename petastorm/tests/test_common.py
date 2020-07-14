@@ -192,7 +192,9 @@ def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None, pa
     def expected_row(i):
         result = {'id': np.int32(i),
                   'id_div_700': np.int32(i // 700),
-                  'datetime': np.datetime64('2019-01-02'),
+                  # Need to generate at least two dates to ensure there is more than one partition
+                  # when partition_key is datetime
+                  'datetime': np.datetime64('2019-01-02') if i % 2 == 0 else np.datetime64('2019-01-03'),
                   'timestamp': np.datetime64('2005-02-25T03:30'),
                   'string': np.unicode_('hello_{}'.format(i)),
                   'string2': np.unicode_('world_{}'.format(i)),

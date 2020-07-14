@@ -108,6 +108,7 @@ class PyDictReaderWorker(WorkerBase):
         self._split_pieces = args[4]
         self._local_cache = args[5]
         self._transform_spec = args[6]
+        self._arrow_filters = args[8]
 
         # We create datasets lazily in the first invocation of 'def process'. This speeds up startup time since
         # all Worker constructors are serialized
@@ -135,7 +136,7 @@ class PyDictReaderWorker(WorkerBase):
             self._dataset = pq.ParquetDataset(
                 self._dataset_path,
                 filesystem=self._filesystem,
-                validate_schema=False)
+                validate_schema=False, filters=self._arrow_filters)
 
         piece = self._split_pieces[piece_index]
 

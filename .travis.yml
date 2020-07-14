@@ -27,11 +27,11 @@ services:
   - docker
 
 install:
-  # We will use selitvin/petastorm_ci:latest as docker image for running on travis-ci.
+  # We will use selitvin/petastorm_ci_auto:release-mnist as docker image for running on travis-ci.
   # To rebuild the ci image, see docker/Makefile.The image contains all petastorm dependencies
-  # installed, we do rerun dependencies installation to refresh ersions of the dependencies
+  # installed, we do rerun dependencies installation to refresh versions of the dependencies
   # on each build if needed
-  - export CI_IMAGE=selitvin/petastorm_ci_auto:ci-2020-07-01-00
+  - export CI_IMAGE=selitvin/petastorm_ci_auto:release-mnist
   - docker pull $CI_IMAGE
   - docker images
   - pip install -U codecov
