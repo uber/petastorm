@@ -11,7 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+from collections import namedtuple
 import datetime
+import tempfile
 import operator
 import os
 from concurrent.futures import ThreadPoolExecutor
@@ -33,7 +36,7 @@ from petastorm.errors import NoDataAvailableError
 from petastorm.etl.dataset_metadata import materialize_dataset
 from petastorm.predicates import in_lambda
 from petastorm.selectors import SingleIndexSelector, IntersectIndexSelector, UnionIndexSelector
-from petastorm.tests.test_common import create_test_dataset, TestSchema
+from petastorm.tests.test_common import create_test_dataset, TestSchema, create_test_scalar_dataset
 from petastorm.tests.test_end_to_end_predicates_impl import \
     PartitionKeyInSetPredicate, EqualPredicate, VectorizedEqualPredicate
 from petastorm.unischema import UnischemaField, Unischema
@@ -870,8 +873,14 @@ def test_pyarrow_filters_make_reader(synthetic_dataset):
 
         assert uv == {'p_5'}
 
+def test_pyarrow_filters_make_batch_reader():
+    path = tempfile.mkdtemp()
+    url = 'file://' + path
 
-def test_pyarrow_filters_make_batch_reader(scalar_dataset):
+    data = create_test_scalar_dataset(url, 100, partition_by=['datetime'], two_datetime_vals=True)
+    SyntheticDataset = namedtuple('synthetic_dataset', ['url', 'data', 'path'])
+    scalar_dataset = SyntheticDataset(url=url, path=path, data=data)
+
     date_partition = pd.Timestamp(datetime.date(2019, 1, 3))
     with make_batch_reader(scalar_dataset.url,
                            filters=[('datetime', '=', date_partition), ]) as reader:

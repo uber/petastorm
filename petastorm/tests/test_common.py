@@ -159,7 +159,8 @@ def create_test_dataset(tmp_url, rows, num_files=2, spark=None, use_summary_meta
     return dataset_dicts
 
 
-def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None, partition_by=None):
+def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None,
+                               partition_by=None, two_datetime_vals=False):
     """Creates a dataset in tmp_url location. The dataset emulates non-petastorm dataset, i.e. contains only native
     parquet types.
 
@@ -189,12 +190,17 @@ def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None, pa
         hadoop_config = spark.sparkContext._jsc.hadoopConfiguration()
         hadoop_config.setInt('parquet.block.size', 100)
 
+    def gen_datetime(i):
+        if two_datetime_vals:
+            return np.datetime64('2019-01-02') if i % 2 == 0 else np.datetime64('2019-01-03')
+        return np.datetime64('2019-01-02')
+
     def expected_row(i):
         result = {'id': np.int32(i),
                   'id_div_700': np.int32(i // 700),
                   # Need to generate at least two dates to ensure there is more than one partition
                   # when partition_key is datetime
-                  'datetime': np.datetime64('2019-01-02') if i % 2 == 0 else np.datetime64('2019-01-03'),
+                  'datetime': gen_datetime(i),
                   'timestamp': np.datetime64('2005-02-25T03:30'),
                   'string': np.unicode_('hello_{}'.format(i)),
                   'string2': np.unicode_('world_{}'.format(i)),
