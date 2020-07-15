@@ -873,6 +873,7 @@ def test_pyarrow_filters_make_reader(synthetic_dataset):
 
         assert uv == {'p_5'}
 
+
 def test_pyarrow_filters_make_batch_reader():
     path = tempfile.mkdtemp()
     url = 'file://' + path
