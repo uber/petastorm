@@ -172,6 +172,7 @@ def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None,
     :param num_files: Number of parquet files that will be written into the parquet store
     :param spark: An instance of spark session object. If `None` (default), a new spark session is created.
     :param partition_by: A list of fields to partition the parquet store by.
+    :param two_datetime_vals: If true, two unique values will be used in the datetime field.
     :return: A list of records with a copy of the data written to the dataset.
     """
 
