@@ -202,7 +202,6 @@ class SparkDatasetConverter(object):
             num_epochs=None,
             workers_count=None,
             shuffling_queue_capacity=None,
-            make_reader_fn=None,
             **petastorm_reader_kwargs
     ):
         """Make a tensorflow dataset.
@@ -228,8 +227,6 @@ class SparkDatasetConverter(object):
             from which items are sampled each step to form batches. The larger the capacity, the
             better shuffling of the elements within the dataset. The default value of ``None``
             results in no shuffling.
-        :param make_reader_fn: A function that generates a Petastorm reader. The default value of
-            ``None`` uses `petastorm.make_batch_reader()`.
         :param petastorm_reader_kwargs: arguments for `petastorm.make_batch_reader()`,
             exclude these arguments: ``dataset_url``, ``num_epochs``, ``workers_count``.
 
@@ -244,15 +241,13 @@ class SparkDatasetConverter(object):
             batch_size=batch_size,
             prefetch=prefetch,
             petastorm_reader_kwargs=petastorm_reader_kwargs,
-            shuffling_queue_capacity=shuffling_queue_capacity,
-            make_reader_fn=make_reader_fn)
+            shuffling_queue_capacity=shuffling_queue_capacity)
 
     def make_torch_dataloader(self,
                               batch_size=32,
                               num_epochs=None,
                               workers_count=None,
                               shuffling_queue_capacity=0,
-                              make_reader_fn=None,
                               data_loader_fn=None,
                               **petastorm_reader_kwargs):
         """Make a PyTorch DataLoader.
@@ -273,8 +268,6 @@ class SparkDatasetConverter(object):
             `petastorm.make_batch_reader()`. We can autotune it in the future.
         :param shuffling_queue_capacity: Queue capacity is passed to the underlying
             :class:`tf.RandomShuffleQueue` instance. If set to 0, no suffling will be done.
-        :param make_reader_fn: A function that generates a Petastorm reader. The default value of
-            ``None`` uses `petastorm.make_batch_reader()`.
         :param data_loader_fn: A function (or class) that generates a
             `torch.utils.data.DataLoader` object. The default value of ``None`` uses
             `petastorm.pytorch.DataLoader`.
@@ -292,7 +285,6 @@ class SparkDatasetConverter(object):
             batch_size=batch_size,
             petastorm_reader_kwargs=petastorm_reader_kwargs,
             shuffling_queue_capacity=shuffling_queue_capacity,
-            make_reader_fn=make_reader_fn,
             data_loader_fn=data_loader_fn)
 
     def delete(self):
@@ -312,7 +304,6 @@ class TFDatasetContextManager(object):
             prefetch,
             petastorm_reader_kwargs,
             shuffling_queue_capacity,
-            make_reader_fn
     ):
         """
         :param parquet_file_url_list: A string specifying the parquet file URL list.
@@ -320,14 +311,12 @@ class TFDatasetContextManager(object):
         :param prefetch: the prefectch size for tensorflow dataset.
         :param petastorm_reader_kwargs: other arguments for petastorm reader
         :param shuffling_queue_capacity: the shuffle queue capacity for the tensorflow dataset
-        :param make_reader_fn: function to generate the Petastorm reader.
         """
         self.parquet_file_url_list = parquet_file_url_list
         self.batch_size = batch_size
         self.prefetch = prefetch
         self.petastorm_reader_kwargs = petastorm_reader_kwargs
         self.shuffling_queue_capacity = shuffling_queue_capacity
-        self.make_reader_fn = make_reader_fn
 
     def __enter__(self):
         # import locally to avoid importing tensorflow globally.
@@ -336,8 +325,7 @@ class TFDatasetContextManager(object):
 
         _wait_file_available(self.parquet_file_url_list)
 
-        make_reader_fn = self.make_reader_fn or make_batch_reader
-        self.reader = make_reader_fn(self.parquet_file_url_list, **self.petastorm_reader_kwargs)
+        self.reader = make_batch_reader(self.parquet_file_url_list, **self.petastorm_reader_kwargs)
 
         # unroll dataset
         dataset = make_petastorm_dataset(self.reader).flat_map(
@@ -378,7 +366,6 @@ class TorchDatasetContextManager(object):
                  batch_size,
                  petastorm_reader_kwargs,
                  shuffling_queue_capacity,
-                 make_reader_fn,
                  data_loader_fn):
         """
         :param parquet_file_url_list: A string specifying the parquet file URL list.
@@ -388,7 +375,6 @@ class TorchDatasetContextManager(object):
         :param petastorm_reader_kwargs: other arguments for petastorm reader
         :param shuffling_queue_capacity: Queue capacity is passed to the underlying
             :class:`tf.RandomShuffleQueue` instance. If set to 0, no suffling will be done.
-        :param make_reader_fn: function to generate the Petastorm reader.
         :param data_loader_fn: function to generate the PyTorch DataLoader.
 
         See `SparkDatasetConverter.make_torch_dataloader()`  for the definitions
@@ -398,7 +384,6 @@ class TorchDatasetContextManager(object):
         self.batch_size = batch_size
         self.petastorm_reader_kwargs = petastorm_reader_kwargs
         self.shuffling_queue_capacity = shuffling_queue_capacity
-        self.make_reader_fn = make_reader_fn
         self.data_loader_fn = data_loader_fn
 
     def __enter__(self):
@@ -406,8 +391,7 @@ class TorchDatasetContextManager(object):
 
         _wait_file_available(self.parquet_file_url_list)
 
-        make_reader = self.make_reader_fn or make_batch_reader
-        self.reader = make_reader(self.parquet_file_url_list, **self.petastorm_reader_kwargs)
+        self.reader = make_batch_reader(self.parquet_file_url_list, **self.petastorm_reader_kwargs)
 
         data_loader_fn = self.data_loader_fn or DataLoader
         self.loader = data_loader_fn(reader=self.reader,
