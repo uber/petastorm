@@ -521,6 +521,17 @@ def test_torch_unexpected_param(spark_test_ctx):
             pass
 
 
+def test_torch_data_loader_fn(spark_test_ctx):
+    from petastorm.pytorch import BatchedDataLoader
+
+    df = spark_test_ctx.spark.range(8)
+    conv = make_spark_converter(df)
+    with conv.make_torch_dataloader(data_loader_fn=BatchedDataLoader,
+                                    batch_size=2,
+                                    num_epochs=1) as dataloader:
+        assert isinstance(dataloader, BatchedDataLoader)
+
+
 @mock.patch('petastorm.spark.spark_dataset_converter.make_batch_reader')
 def test_torch_dataloader_advanced_params(mock_torch_make_batch_reader, spark_test_ctx):
     SHARD_COUNT = 3
