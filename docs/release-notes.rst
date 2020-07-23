@@ -4,12 +4,13 @@
 Release notes
 =============
 
-Release 0.9.2 (unreleased)
+Release 0.9.3 (unreleased)
 ==========================
 
 Major features
 --------------
 - Retire support for Python 2.
+- `PR 568 <https://github.com/uber/petastorm/pull/568>`_: Added additional kwargs for Spark Dataset Converter.
 
 
 Release 0.9.2
