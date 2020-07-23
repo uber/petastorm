@@ -4,11 +4,15 @@
 Release notes
 =============
 
-Release 0.9.3 (unreleased)
+Release 0.9.4 (unreleased)
 ==========================
 
-Major features
---------------
+
+Release 0.9.3
+==========================
+
+Thanks to our new contributors: Travis Addair and Ryan (rb-determined-ai).
+
 - Retire support for Python 2.
 - `PR 568 <https://github.com/uber/petastorm/pull/568>`_: Added additional kwargs for Spark Dataset Converter.
 
