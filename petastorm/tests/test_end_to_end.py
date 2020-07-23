@@ -23,10 +23,7 @@ import pytest
 from pyspark.sql import SparkSession
 from pyspark.sql.types import LongType, ShortType, StringType
 
-try:
-    from mock import mock
-except ImportError:
-    from unittest import mock
+from unittest import mock
 
 from petastorm import make_reader, make_batch_reader, TransformSpec
 from petastorm.codecs import ScalarCodec, CompressedImageCodec

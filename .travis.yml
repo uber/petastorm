@@ -31,7 +31,7 @@ install:
   # To rebuild the ci image, see docker/Makefile.The image contains all petastorm dependencies
   # installed, we do rerun dependencies installation to refresh ersions of the dependencies
   # on each build if needed
-  - export CI_IMAGE=selitvin/petastorm_ci_auto:ci-2020-31-01-09
+  - export CI_IMAGE=selitvin/petastorm_ci_auto:ci-2020-07-01-00
   - docker pull $CI_IMAGE
   - docker images
   - pip install -U codecov
@@ -56,10 +56,11 @@ before_script:
   # (or optionally install pyarrow from source instead of through binaries)
   - $RUN pip install --upgrade numpy
 
-  - $RUN pip install -U pyarrow==${PYARROW_VERSION} tensorflow==${TF_VERSION}
-  - if [[ ${PYSPARK_VERSION} > "3" ]] ; then $RUN pip install https://ml-team-public-read.s3-us-west-2.amazonaws.com/pyspark-3.1.0.dev0-60dd1a690fed62b1d6442cdc8cf3f89ef4304d5a.tar.gz --force-reinstall --upgrade ; fi
+  - $RUN pip install -U pyarrow==${PYARROW_VERSION} tensorflow==${TF_VERSION} pyspark==${PYSPARK_VERSION}   
 
   - $RUN pip list
+
+  - $RUN mypy petastorm
 
   # We run a bunch of linting in before_script to fail fast and not run unit tests in case of lint failure.
   - $RUN flake8 . --count --show-source --statistics

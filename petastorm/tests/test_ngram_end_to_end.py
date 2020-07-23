@@ -21,10 +21,7 @@ import numpy as np
 import pytest
 import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 
-try:
-    from mock import mock
-except ImportError:
-    from unittest import mock
+from unittest import mock
 
 from petastorm import make_reader
 from petastorm.ngram import NGram

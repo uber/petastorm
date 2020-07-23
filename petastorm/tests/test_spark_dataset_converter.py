@@ -41,10 +41,7 @@ from petastorm.spark.spark_dataset_converter import (
     _get_horovod_rank_and_size, _get_spark_session, _make_sub_dir_url,
     register_delete_dir_handler, _wait_file_available)
 
-try:
-    from mock import mock
-except ImportError:
-    from unittest import mock
+from unittest import mock
 
 from petastorm.tests.test_tf_utils import create_tf_graph
 
@@ -309,7 +306,7 @@ def test_tf_dataset_petastorm_args(mock_make_batch_reader, spark_test_ctx):
 
     with conv1.make_tf_dataset(reader_pool_type='dummy', cur_shard=1, shard_count=4):
         pass
-    peta_args = mock_make_batch_reader.call_args.kwargs
+    peta_args = mock_make_batch_reader.call_args[1]
     assert peta_args['reader_pool_type'] == 'dummy' and \
         peta_args['cur_shard'] == 1 and \
         peta_args['shard_count'] == 4 and \
@@ -318,7 +315,7 @@ def test_tf_dataset_petastorm_args(mock_make_batch_reader, spark_test_ctx):
 
     with conv1.make_tf_dataset(num_epochs=1, workers_count=2):
         pass
-    peta_args = mock_make_batch_reader.call_args.kwargs
+    peta_args = mock_make_batch_reader.call_args[1]
     assert peta_args['num_epochs'] == 1 and peta_args['workers_count'] == 2
 
 
@@ -524,6 +521,17 @@ def test_torch_unexpected_param(spark_test_ctx):
             pass
 
 
+def test_torch_data_loader_fn(spark_test_ctx):
+    from petastorm.pytorch import BatchedDataLoader
+
+    df = spark_test_ctx.spark.range(8)
+    conv = make_spark_converter(df)
+    with conv.make_torch_dataloader(data_loader_fn=BatchedDataLoader,
+                                    batch_size=2,
+                                    num_epochs=1) as dataloader:
+        assert isinstance(dataloader, BatchedDataLoader)
+
+
 @mock.patch('petastorm.spark.spark_dataset_converter.make_batch_reader')
 def test_torch_dataloader_advanced_params(mock_torch_make_batch_reader, spark_test_ctx):
     SHARD_COUNT = 3
@@ -536,7 +544,7 @@ def test_torch_dataloader_advanced_params(mock_torch_make_batch_reader, spark_te
     with conv.make_torch_dataloader(reader_pool_type='dummy', cur_shard=1,
                                     shard_count=SHARD_COUNT) as _:
         pass
-    peta_args = mock_torch_make_batch_reader.call_args.kwargs
+    peta_args = mock_torch_make_batch_reader.call_args[1]
     assert peta_args['reader_pool_type'] == 'dummy' and \
         peta_args['cur_shard'] == 1 and \
         peta_args['shard_count'] == SHARD_COUNT and \
@@ -546,7 +554,7 @@ def test_torch_dataloader_advanced_params(mock_torch_make_batch_reader, spark_te
     # Test default value overridden arguments.
     with conv.make_torch_dataloader(num_epochs=1, workers_count=2) as _:
         pass
-    peta_args = mock_torch_make_batch_reader.call_args.kwargs
+    peta_args = mock_torch_make_batch_reader.call_args[1]
     assert peta_args['num_epochs'] == 1 and peta_args['workers_count'] == 2
 
 

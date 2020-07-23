@@ -26,7 +26,7 @@ from packaging import version
 from petastorm.reader_impl.shuffling_buffer import RandomShufflingBuffer, NoopShufflingBuffer
 from petastorm.reader_impl.pytorch_shuffling_buffer import BatchedRandomShufflingBuffer, BatchedNoopShufflingBuffer
 
-_TORCH_BEFORE_1_1 = version.parse(torch.__version__) < version.parse('1.1.0')
+_TORCH_BEFORE_1_1 = version.parse(torch.__version__) < version.parse('1.1.0')  # type: ignore
 
 if PY2:
     _string_classes = basestring  # noqa: F821

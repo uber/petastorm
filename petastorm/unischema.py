@@ -21,6 +21,7 @@ import sys
 import warnings
 from collections import namedtuple, OrderedDict
 from decimal import Decimal
+from typing import Dict, Any
 
 import numpy as np
 import pyarrow as pa
@@ -48,7 +49,8 @@ def _fields_as_tuple(field):
     return (field.name, field.numpy_dtype, field.shape, field.nullable)
 
 
-class UnischemaField(namedtuple('UnischemaField', ['name', 'numpy_dtype', 'shape', 'codec', 'nullable'])):
+class UnischemaField(namedtuple('UnischemaField', ['name', 'numpy_dtype', 'shape', 'codec', 'nullable'],
+                                defaults=(None, False))):
     """A type used to describe a single field in the schema:
 
     - name: name of the field.
@@ -80,16 +82,11 @@ class UnischemaField(namedtuple('UnischemaField', ['name', 'numpy_dtype', 'shape
         return hash(_fields_as_tuple(self))
 
 
-# Defines default arguments for UnischemaField namedtuple:
-# Makes the signature equivalent to UnischemaField(name, numpy_dtype, shape, codec=None, nullable=False)
-UnischemaField.__new__.__defaults__ = (None, False)
-
-
 class _NamedtupleCache(object):
     """_NamedtupleCache makes sure the same instance of a namedtuple is returned for a given schema and a set of
      fields. This makes comparison between types possible. For example, `tf.data.Dataset.concatenate` implementation
      compares types to make sure two datasets can be concatenated."""
-    _store = dict()
+    _store: Dict[str, Any] = dict()
 
     @staticmethod
     def get(parent_schema_name, field_names):
@@ -351,6 +348,9 @@ class Unischema(object):
                     raise
             unischema_fields.append(UnischemaField(column_name, np_type, field_shape, None, arrow_field.nullable))
         return Unischema('inferred_schema', unischema_fields)
+
+    def __getattr__(self, item) -> Any:
+        return super().__getattribute__(item)
 
 
 def dict_to_spark_row(unischema, row_dict):
