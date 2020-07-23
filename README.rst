@@ -67,6 +67,14 @@ Here is a minimalistic example writing out a table with some random data.
 
 .. code-block:: python
 
+    import numpy as np
+    from petastorm.codecs import CompressedImageCodec, NdarrayCodec, ScalarCodec
+    from petastorm.etl.dataset_metadata import materialize_dataset
+    from petastorm.unischema import Unischema, UnischemaField, dict_to_spark_row
+    from pyspark.sql import SparkSession
+    from pyspark.sql.types import IntegerType
+
+
     HelloWorldSchema = Unischema('HelloWorldSchema', [
        UnischemaField('id', np.int32, (), ScalarCodec(IntegerType()), False),
        UnischemaField('image1', np.uint8, (128, 256, 3), CompressedImageCodec('png'), False),
@@ -162,6 +170,8 @@ function:
 
 .. code-block:: python
 
+    from petastorm.tf_utils import tf_tensors
+
     with make_reader('file:///some/localpath/a_dataset') as reader:
        row_tensors = tf_tensors(reader)
        with tf.Session() as session:
@@ -171,6 +181,8 @@ function:
 Alternatively, you can use new ``tf.data.Dataset`` API;
 
 .. code-block:: python
+
+    from petastorm.tf_utils import make_petastorm_dataset
 
     with make_reader('file:///some/localpath/a_dataset') as reader:
         dataset = make_petastorm_dataset(reader)
