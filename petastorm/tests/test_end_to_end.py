@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections import namedtuple
-import datetime
 import tempfile
 import operator
 import os
@@ -21,7 +19,6 @@ from concurrent.futures import ThreadPoolExecutor
 from shutil import rmtree, copytree
 from six.moves.urllib.parse import urlparse
 
-import pandas as pd
 import numpy as np
 import pyarrow.hdfs
 import pytest
