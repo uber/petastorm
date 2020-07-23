@@ -44,7 +44,7 @@ before_script:
   - sleep 20
   # ARROW_PRE_0_15_IPC_FORMAT=1 is required when spark<3.0 and pyarrow>=0.15
   - export RUN="docker exec -e ARROW_PRE_0_15_IPC_FORMAT=$ARROW_PRE_0_15_IPC_FORMAT petastorm_ci bash /run_in_venv.sh ${PY}"
-  - export PYTEST="pytest --timeout=180 -v --color=yes --cov=./ --cov-report xml:coverage.xml"
+  - export PYTEST="pytest --timeout=360 -v --color=yes --cov=./ --cov-report xml:coverage.xml"
   # Refresh our dependencies' versions as in the CI image, they may go stale
   - $RUN pip install -e /petastorm/[test,tf,torch,docs,opencv]
 
