@@ -159,8 +159,7 @@ def create_test_dataset(tmp_url, rows, num_files=2, spark=None, use_summary_meta
     return dataset_dicts
 
 
-def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None,
-                               partition_by=None, two_datetime_vals=False):
+def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None, partition_by=None):
     """Creates a dataset in tmp_url location. The dataset emulates non-petastorm dataset, i.e. contains only native
     parquet types.
 
@@ -172,7 +171,6 @@ def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None,
     :param num_files: Number of parquet files that will be written into the parquet store
     :param spark: An instance of spark session object. If `None` (default), a new spark session is created.
     :param partition_by: A list of fields to partition the parquet store by.
-    :param two_datetime_vals: If true, two unique values will be used in the datetime field.
     :return: A list of records with a copy of the data written to the dataset.
     """
 
@@ -191,17 +189,12 @@ def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None,
         hadoop_config = spark.sparkContext._jsc.hadoopConfiguration()
         hadoop_config.setInt('parquet.block.size', 100)
 
-    def gen_datetime(i):
-        if two_datetime_vals:
-            return np.datetime64('2019-01-02') if i % 2 == 0 else np.datetime64('2019-01-03')
-        return np.datetime64('2019-01-02')
-
     def expected_row(i):
         result = {'id': np.int32(i),
                   'id_div_700': np.int32(i // 700),
                   # Need to generate at least two dates to ensure there is more than one partition
                   # when partition_key is datetime
-                  'datetime': gen_datetime(i),
+                  'datetime': np.datetime64('2019-01-02'),
                   'timestamp': np.datetime64('2005-02-25T03:30'),
                   'string': np.unicode_('hello_{}'.format(i)),
                   'string2': np.unicode_('world_{}'.format(i)),

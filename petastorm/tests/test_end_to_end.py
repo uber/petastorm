@@ -869,7 +869,7 @@ def test_pyarrow_filters_make_reader(synthetic_dataset):
                      filters=[('partition_key', '=', 'p_5'), ]) as reader:
         uv = set()
         for data in reader:
-            uv.add(data[0])
+            uv.add(data.partition_key)
 
         assert uv == {'p_5'}
 
@@ -877,17 +877,11 @@ def test_pyarrow_filters_make_reader(synthetic_dataset):
 def test_pyarrow_filters_make_batch_reader():
     path = tempfile.mkdtemp()
     url = 'file://' + path
-
-    data = create_test_scalar_dataset(url, 100, partition_by=['datetime'], two_datetime_vals=True)
-    SyntheticDataset = namedtuple('synthetic_dataset', ['url', 'data', 'path'])
-    scalar_dataset = SyntheticDataset(url=url, path=path, data=data)
-
-    date_partition = pd.Timestamp(datetime.date(2019, 1, 3))
-    with make_batch_reader(scalar_dataset.url,
-                           filters=[('datetime', '=', date_partition), ]) as reader:
+    create_test_scalar_dataset(url, 3000, partition_by=['id_div_700'])
+    with make_batch_reader(url, filters=[('id_div_700', '=', 2), ]) as reader:
         uv = set()
         for data in reader:
-            for _datetime in data[0]:
-                uv.add(_datetime)
+            for _id_div_700 in data.id_div_700:
+                uv.add(_id_div_700)
 
-        assert uv == {'2019-01-03'}
+        assert uv == {2}
