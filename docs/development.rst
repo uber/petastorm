@@ -168,7 +168,7 @@ Release procedure
    d. Create a future release entry and tag it with ``(unreleased))`` string.
 
 4. Commit the changes.
-5. Tag as ``vX.X.Xrc0`` (git tag vX.X.Xrc0) and push both master and the tag (``git push origin master vX.X.Xrc0``). This will trigger build and pypi release.
+5. Tag as ``vX.X.Xrc0`` (``git tag vX.X.Xrc0``) and push both master and the tag (``git push origin master vX.X.Xrc0``). This will trigger build and pypi release.
 6. Provide an opportunity for users to test the new release (slack channel/tweater). Create new release candidates as needed.
 7. Tag as ``vX.X.X`` (``git tag vX.X.X``) and push both master and the tag (``git push origin master vX.X.X``). This will trigger build and pypi release
 8. Once the build finishes, a new python wheel will be pushed to public pypi server.
