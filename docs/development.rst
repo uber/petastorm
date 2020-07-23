@@ -156,4 +156,22 @@ auto-generated API doc will require:
 .. _RTD output: https://petastorm.readthedocs.io/en/apidoc_experiment
 
 
+Release procedure
+-----------------
+1. Make sure you are on the latest mater in your local workspace (``git checkout master && git pull``).
+2. Update ``__version__`` in ``petastorm/__init__.py`` and commit.
+3. Update ``docs/release-notes.rst``.
+
+   a. Delete ``(unreleased)`` from the release we are about to release.
+   b. Add any additional information if needed.
+   c. Add kudos message to any new contributors who contributed to the release.
+   d. Create a future release entry and tag it with ``(unreleased))`` string.
+
+4. Commit the changes.
+5. Tag as ``vX.X.Xrc0`` (``git tag vX.X.Xrc0``) and push both master and the tag (``git push origin master vX.X.Xrc0``). This will trigger build and pypi release.
+6. Provide an opportunity for users to test the new release (slack channel/tweater). Create new release candidates as needed.
+7. Tag as ``vX.X.X`` (``git tag vX.X.X``) and push both master and the tag (``git push origin master vX.X.X``). This will trigger build and pypi release
+8. Once the build finishes, a new python wheel will be pushed to public pypi server.
+9. Navigate to https://readthedocs.org/ --> "My Projects" --> "Builds" --> Trigger build of the 'latest' documentation (not clear when RTD picks up new tags from github, so you may see only outdated release versions there).
+
 .. inclusion-marker-end-do-not-remove
