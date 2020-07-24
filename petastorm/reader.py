@@ -67,7 +67,8 @@ def make_reader(dataset_url,
                 cache_type='null', cache_location=None, cache_size_limit=None,
                 cache_row_size_estimate=None, cache_extra_settings=None,
                 hdfs_driver='libhdfs3',
-                transform_spec=None):
+                transform_spec=None,
+                filters=None):
     """
     Creates an instance of Reader for reading Petastorm datasets. A Petastorm dataset is a dataset generated using
     :func:`~petastorm.etl.dataset_metadata.materialize_dataset` context manager as explained
@@ -117,6 +118,9 @@ def make_reader(dataset_url,
     :param transform_spec: An instance of :class:`~petastorm.transform.TransformSpec` object defining how a record
         is transformed after it is loaded and decoded. The transformation occurs on a worker thread/process (depends
         on the ``reader_pool_type`` value).
+    :param filters: (List[Tuple] or List[List[Tuple]]): Standard PyArrow filters.
+        These will be applied when loading the parquet file with PyArrow. More information
+        here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
     :return: A :class:`Reader` object
     """
     dataset_url = normalize_dir_url(dataset_url)
@@ -161,6 +165,7 @@ def make_reader(dataset_url,
         'shard_count': shard_count,
         'cache': cache,
         'transform_spec': transform_spec,
+        'filters': filters
     }
 
     try:
@@ -187,7 +192,8 @@ def make_batch_reader(dataset_url_or_urls,
                       cache_type='null', cache_location=None, cache_size_limit=None,
                       cache_row_size_estimate=None, cache_extra_settings=None,
                       hdfs_driver='libhdfs3',
-                      transform_spec=None):
+                      transform_spec=None,
+                      filters=None):
     """
     Creates an instance of Reader for reading batches out of a non-Petastorm Parquet store.
 
@@ -241,6 +247,9 @@ def make_batch_reader(dataset_url_or_urls,
     :param transform_spec: An instance of :class:`~petastorm.transform.TransformSpec` object defining how a record
         is transformed after it is loaded and decoded. The transformation occurs on a worker thread/process (depends
         on the ``reader_pool_type`` value).
+    :param filters: (List[Tuple] or List[List[Tuple]]): Standard PyArrow filters.
+        These will be applied when loading the parquet file with PyArrow. More information
+        here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
     :return: A :class:`Reader` object
     """
     dataset_url_or_urls = normalize_dataset_url_or_urls(dataset_url_or_urls)
@@ -287,7 +296,8 @@ def make_batch_reader(dataset_url_or_urls,
                   shard_count=shard_count,
                   cache=cache,
                   transform_spec=transform_spec,
-                  is_batched_reader=True)
+                  is_batched_reader=True,
+                  filters=filters)
 
 
 class Reader(object):
@@ -300,7 +310,7 @@ class Reader(object):
                  shuffle_row_groups=True, shuffle_row_drop_partitions=1,
                  predicate=None, rowgroup_selector=None, reader_pool=None, num_epochs=1,
                  cur_shard=None, shard_count=None, cache=None, worker_class=None,
-                 transform_spec=None, is_batched_reader=False):
+                 transform_spec=None, is_batched_reader=False, filters=None):
         """Initializes a reader object.
 
         :param pyarrow_filesystem: An instance of ``pyarrow.FileSystem`` that will be used. If not specified,
@@ -336,9 +346,11 @@ class Reader(object):
             to the main data store is either slow or expensive and the local machine has large enough storage
             to store entire dataset (or a partition of a dataset if shards are used).
             By default, use the :class:`.NullCache` implementation.
-
         :param worker_class: This is the class that will be instantiated on a different thread/process. It's
             responsibility is to load and filter the data.
+        :param filters: (List[Tuple] or List[List[Tuple]]): Standard PyArrow filters.
+            These will be applied when loading the parquet file with PyArrow. More information
+            here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
         """
 
         # 1. Open the parquet storage (dataset)
@@ -357,7 +369,8 @@ class Reader(object):
         self.is_batched_reader = is_batched_reader
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
         self.dataset = pq.ParquetDataset(dataset_path, filesystem=pyarrow_filesystem,
-                                         validate_schema=False, metadata_nthreads=10)
+                                         validate_schema=False, metadata_nthreads=10,
+                                         filters=filters)
 
         if self.dataset.partitions is None:
             # When read from parquet file list, the `dataset.partitions` will be None.
@@ -412,8 +425,9 @@ class Reader(object):
                                                   self._workers_pool.workers_count + _VENTILATE_EXTRA_ROWGROUPS)
 
         # 5. Start workers pool
-        self._workers_pool.start(worker_class, (pyarrow_filesystem, dataset_path, storage_schema, self.ngram,
-                                                row_groups, cache, transform_spec, self.schema),
+        self._workers_pool.start(worker_class, (pyarrow_filesystem, dataset_path, storage_schema,
+                                                self.ngram, row_groups, cache, transform_spec,
+                                                self.schema, filters),
                                  ventilator=self.ventilator)
         logger.debug('Workers pool started')
 

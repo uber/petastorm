@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+import tempfile
 import operator
 import os
 from concurrent.futures import ThreadPoolExecutor
@@ -31,7 +33,7 @@ from petastorm.errors import NoDataAvailableError
 from petastorm.etl.dataset_metadata import materialize_dataset
 from petastorm.predicates import in_lambda
 from petastorm.selectors import SingleIndexSelector, IntersectIndexSelector, UnionIndexSelector
-from petastorm.tests.test_common import create_test_dataset, TestSchema
+from petastorm.tests.test_common import create_test_dataset, TestSchema, create_test_scalar_dataset
 from petastorm.tests.test_end_to_end_predicates_impl import \
     PartitionKeyInSetPredicate, EqualPredicate, VectorizedEqualPredicate
 from petastorm.unischema import UnischemaField, Unischema
@@ -857,3 +859,26 @@ def test_make_batch_reader_with_url_list(scalar_dataset):
             row_count += len(batch.id)
 
         assert row_count == 100
+
+
+def test_pyarrow_filters_make_reader(synthetic_dataset):
+    with make_reader(synthetic_dataset.url, workers_count=5, num_epochs=1,
+                     filters=[('partition_key', '=', 'p_5'), ]) as reader:
+        uv = set()
+        for data in reader:
+            uv.add(data.partition_key)
+
+        assert uv == {'p_5'}
+
+
+def test_pyarrow_filters_make_batch_reader():
+    path = tempfile.mkdtemp()
+    url = 'file://' + path
+    create_test_scalar_dataset(url, 3000, partition_by=['id_div_700'])
+    with make_batch_reader(url, filters=[('id_div_700', '=', 2), ]) as reader:
+        uv = set()
+        for data in reader:
+            for _id_div_700 in data.id_div_700:
+                uv.add(_id_div_700)
+
+        assert uv == {2}

@@ -15,6 +15,8 @@ Thanks to our new contributors: Travis Addair and Ryan (rb-determined-ai).
 
 - Retire support for Python 2.
 - `PR 568 <https://github.com/uber/petastorm/pull/568>`_: Added additional kwargs for Spark Dataset Converter.
+- `PR 564 <https://github.com/uber/petastorm/pull/564>`_: Expose filters (PyArrow filters) argument in make_reader and make_batch_reader
+
 
 
 Release 0.9.2
