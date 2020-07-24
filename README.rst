@@ -361,6 +361,8 @@ The reader returns one record at a time.                            The reader r
                                                                     size.
 ------------------------------------------------------------------  -----------------------------------------------------
 Predicates passed to ``make_reader`` are evaluated per single row.  Predicates passed to ``make_batch_reader`` are evaluated per batch.
+------------------------------------------------------------------  -----------------------------------------------------
+Can filter parquet file based on the ``filters`` argument.          Can filter parquet file based on the ``filters`` argument
 ==================================================================  =====================================================
 
 

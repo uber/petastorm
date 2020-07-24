@@ -99,6 +99,7 @@ class ArrowReaderWorker(WorkerBase):
         self._local_cache = args[5]
         self._transform_spec = args[6]
         self._transformed_schema = args[7]
+        self._arrow_filters = args[8]
 
         if self._ngram:
             raise NotImplementedError('ngrams are not supported by ArrowReaderWorker')
@@ -129,7 +130,7 @@ class ArrowReaderWorker(WorkerBase):
             self._dataset = pq.ParquetDataset(
                 self._dataset_path_or_paths,
                 filesystem=self._filesystem,
-                validate_schema=False)
+                validate_schema=False, filters=self._arrow_filters)
 
         if self._dataset.partitions is None:
             # When read from parquet file list, the `dataset.partitions` will be None.
