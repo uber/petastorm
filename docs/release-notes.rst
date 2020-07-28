@@ -4,7 +4,11 @@
 Release notes
 =============
 
-Release 0.9.4 (unreleased)
+Release 0.9.5 (unreleased)
+==========================
+
+
+Release 0.9.4
 ==========================
 
 - Fixed Python3.6 compatibility issue of UnischemaField namedtuple class.
