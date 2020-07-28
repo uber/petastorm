@@ -21,7 +21,7 @@ import sys
 import warnings
 from collections import namedtuple, OrderedDict
 from decimal import Decimal
-from typing import Dict, Any
+from typing import Dict, Any, Tuple, Optional, NamedTuple
 
 import numpy as np
 import pyarrow as pa
@@ -49,8 +49,7 @@ def _fields_as_tuple(field):
     return (field.name, field.numpy_dtype, field.shape, field.nullable)
 
 
-class UnischemaField(namedtuple('UnischemaField', ['name', 'numpy_dtype', 'shape', 'codec', 'nullable'],
-                                defaults=(None, False))):
+class UnischemaField(NamedTuple):
     """A type used to describe a single field in the schema:
 
     - name: name of the field.
@@ -64,6 +63,12 @@ class UnischemaField(namedtuple('UnischemaField', ['name', 'numpy_dtype', 'shape
     A field is considered immutable, so we override both equality and hash operators for consistency
     and efficiency.
     """
+
+    name: str
+    numpy_dtype: Any
+    shape: Tuple[Optional[int], ...]
+    codec: Optional[Any] = None
+    nullable: Optional[bool] = False
 
     def __eq__(self, other):
         """Comparing field objects via default namedtuple __repr__ representation doesn't work due to
