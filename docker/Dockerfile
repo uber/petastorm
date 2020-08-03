@@ -17,6 +17,9 @@ RUN apt-get -qq install -y \
   python \
   python-pip \
   python3-pip \
+  python3.6 \
+  python3.6-dev \
+  python3.6-venv \
   python3.7 \
   python3.7-dev \
   python3.7-venv \
@@ -32,6 +35,13 @@ RUN mkdir /petastorm
 ADD setup.py /petastorm/
 ADD README.rst /petastorm/
 ADD petastorm /petastorm/petastorm
+
+# Set up Python3.6 environment
+RUN python3.6 -m pip install pip --upgrade
+RUN python3.6 -m pip install wheel
+RUN python3.6 -m venv /petastorm_venv3.6
+RUN /petastorm_venv3.6/bin/pip3.6 install --no-cache -e /petastorm/[test,tf,torch,docs,opencv]
+RUN /petastorm_venv3.6/bin/pip3.6 uninstall -y petastorm
 
 # Set up Python3 environment
 RUN python3.7 -m pip install pip --upgrade
