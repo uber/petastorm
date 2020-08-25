@@ -29,6 +29,7 @@ class BatchedShufflingBufferBase(object):
     def __init__(self, batch_size=1):
         self._keys = None
         self.batch_size = batch_size
+        self._done_adding = False
 
     def add_many(self, items):
         items = [torch.as_tensor(v) for v in items]
@@ -277,3 +278,131 @@ class BatchedRandomShufflingBuffer(BatchedShufflingBufferBase):
 
     def finish(self):
         self._done_adding = True
+
+
+class BatchedRandomShufflingBufferWithMemCache(BatchedShufflingBufferBase):
+    """
+    A random shuffling buffer implementation that caches the added data in memory for fast loading
+    and high performance.
+    """
+
+    def __init__(self, cache_size, batch_size=1, num_epochs_to_load=1):
+        """Initializes a new BatchedRandomShufflingBufferWithMemCache instance.
+
+        The buffer caches all the data in memory from reader and then start loading it.
+
+        Items may be retrieved from the buffer once all the data is read. Data cannot be loaded
+        before data reading is done.
+
+        Items may be added to the buffer as long as the number of items in the buffer does not
+        exceed the ``cache_size``. ``cache_size`` is a hard limit. This cache does not evict any
+        members or invalidate existing items. That will defeat the purpose of this cache which
+        is to provide a very high performance data access for the training and avoiding the disk or
+        network bottleneck. The partition of data that is read has to fit in this cache,
+        otherwise an error will be raised.
+
+        Data will be shuffled once after reading is complete. There will be no automatic shuffling
+        but user can trigger data shuffle by calling ``shuffle`` method.
+
+        :param cache_size: The maximum number of items that can be stored in memory cache. We will
+            throw an error if the number of elements grows beyond the cache_size.
+        :param batch_size: The number of items to be retrieved for each self.retrieve() call.
+            This also affects the can_add and can can_retrieve accordingly.
+        :param num_epochs_to_load: Tells the buffer how many times every instance of the data
+            will be loaded. When using a memory cache, the readers reads the data only once, but
+            loader will load it num_epochs_to_load. num_epochs_to_load is essentially the number of
+            training epochs from the model's point of view.
+        """
+        super(BatchedRandomShufflingBufferWithMemCache, self).__init__(batch_size=batch_size)
+        self._num_epochs_to_load = num_epochs_to_load
+        self._cache_size = cache_size
+
+        # Preallocate the shuffling buffer.
+        self._items = None
+        self._size = 0
+
+        self.next_sample_head = 0
+        self._retrieved_samples_so_far = 0
+
+    def shuffle(self):
+        for k in range(len(self._items)):
+            random_indices = torch.randperm(int(self._size), device=self._items[0].device)
+            self._items[k][:self._size] = self._items[k][random_indices]
+
+        self.next_sample_head = 0
+
+    def _add_many(self, items):
+        if self._done_adding:
+            raise RuntimeError('Can not call add_many after done_adding() was called.')
+
+        if not self.can_add():
+            raise RuntimeError(
+                'Can not enqueue. Check the return value of "can_enqueue()" to check if more '
+                'items can be added.')
+
+        expected_size = self._size + len(items[0])
+        maximal_capacity = self._cache_size
+        if expected_size > maximal_capacity:
+            raise RuntimeError(
+                'Attempt to cache more elements than the memory cache capacity allows. Please '
+                'increase your cache size. Current size: {}, new size {}, '
+                'maximum number of samples allowed: {}'.format(self._size, expected_size,
+                                                               self._cache_size))
+
+        # 2 is an arbitrary number to start to grow from there.
+        new_capacity = 2
+        while new_capacity < expected_size:
+            # Will double capacity until it is large enough to fit new batch
+            new_capacity *= 2
+
+        if self._items is None:
+            # Create Buffer:
+            self._items = []
+            for v in items:
+                self._items.append(
+                    torch.empty((new_capacity,) + v.shape[1:], dtype=v.dtype, device=v.device))
+
+        if new_capacity > self._items[0].shape[0]:
+            for k, v in enumerate(self._items):
+                self._items[k] = torch.empty((new_capacity,) + v.shape[1:], dtype=v.dtype,
+                                             device=v.device)
+                self._items[k][:self._size] = v[:self._size]
+
+        # Copy new items over
+        for k, v in enumerate(items):
+            self._items[k][self._size:expected_size] = v
+        self._size = expected_size
+
+    def retrieve(self):
+        if not self.can_retrieve():
+            raise RuntimeError(
+                'Can not dequeue. Check the return value of "can_retrieve()" to check if any '
+                'items are available.')
+
+        batch_size = min(self.batch_size, self._size)
+        if self.next_sample_head + batch_size < self._size:
+            sample = [v[self.next_sample_head:self.next_sample_head + batch_size] for v in self._items]
+        else:
+            overflow_idx = self.next_sample_head + batch_size - self._size
+            sample = [torch.cat([v[self.next_sample_head:self._size], v[:overflow_idx]], dim=0) for v in self._items]
+        self.next_sample_head = (self.next_sample_head + batch_size) % self._size
+        self._retrieved_samples_so_far += batch_size
+        return sample
+
+    def can_add(self):
+        return self._size < self._cache_size
+
+    def can_retrieve(self):
+        if not self._done_adding:
+            return False
+
+        return self._retrieved_samples_so_far < self._num_epochs_to_load * self._size or \
+            self._num_epochs_to_load is None
+
+    @property
+    def size(self):
+        return self._size
+
+    def finish(self):
+        self._done_adding = True
+        self.shuffle()

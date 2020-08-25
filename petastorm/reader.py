@@ -45,6 +45,9 @@ logger = logging.getLogger(__name__)
 # worker pool. This guarantees that we don't run out of memory if data consumer is slower than the Reader.
 _VENTILATE_EXTRA_ROWGROUPS = 2
 
+LOCAL_DISK_CACHE = 'local-disk'
+NULL_CACHE = 'null'
+
 
 def normalize_dataset_url_or_urls(dataset_url_or_urls):
     if isinstance(dataset_url_or_urls, list):
@@ -63,7 +66,7 @@ def make_reader(dataset_url,
                 rowgroup_selector=None,
                 num_epochs=1,
                 cur_shard=None, shard_count=None,
-                cache_type='null', cache_location=None, cache_size_limit=None,
+                cache_type=NULL_CACHE, cache_location=None, cache_size_limit=None,
                 cache_row_size_estimate=None, cache_extra_settings=None,
                 hdfs_driver='libhdfs3',
                 transform_spec=None,
@@ -137,9 +140,9 @@ def make_reader(dataset_url,
         filesystem=filesystem
     )
 
-    if cache_type is None or cache_type == 'null':
+    if cache_type is None or cache_type == NULL_CACHE:
         cache = NullCache()
-    elif cache_type == 'local-disk':
+    elif cache_type == LOCAL_DISK_CACHE:
         cache = LocalDiskCache(cache_location, cache_size_limit, cache_row_size_estimate, **cache_extra_settings or {})
     else:
         raise ValueError('Unknown cache_type: {}'.format(cache_type))
@@ -148,8 +151,8 @@ def make_reader(dataset_url,
         dataset_metadata.get_schema_from_dataset_url(dataset_url, hdfs_driver=hdfs_driver,
                                                      s3_config_kwargs=s3_config_kwargs, filesystem=filesystem)
     except PetastormMetadataError:
-        raise RuntimeError('Currently make_reader supports reading only Petastorm datasets. '
-                           'To read from a non-Petastorm Parquet store use make_batch_reader')
+        warnings.warn('Currently make_reader supports reading only Petastorm datasets. '
+                      'To read from a non-Petastorm Parquet store use make_batch_reader')
 
     if reader_pool_type == 'thread':
         reader_pool = ThreadPool(workers_count, results_queue_size)
@@ -289,9 +292,9 @@ def make_batch_reader(dataset_url_or_urls,
     except PetastormMetadataError:
         pass
 
-    if cache_type is None or cache_type == 'null':
+    if cache_type is None or cache_type == NULL_CACHE:
         cache = NullCache()
-    elif cache_type == 'local-disk':
+    elif cache_type == LOCAL_DISK_CACHE:
         cache = LocalDiskArrowTableCache(cache_location, cache_size_limit, cache_row_size_estimate,
                                          **cache_extra_settings or {})
     else:
@@ -390,6 +393,7 @@ class Reader(object):
             raise ValueError('Fields must be either None, an iterable collection of Unischema fields '
                              'or an NGram object.')
 
+        self.num_epochs_to_read = num_epochs
         self.is_batched_reader = is_batched_reader
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
         self.dataset = pq.ParquetDataset(dataset_path, filesystem=pyarrow_filesystem,
@@ -447,7 +451,8 @@ class Reader(object):
         normalized_shuffle_row_drop_partitions = \
             self._normalize_shuffle_options(shuffle_row_drop_partitions, self.dataset)
         self.ventilator = self._create_ventilator(filtered_row_group_indexes, shuffle_row_groups,
-                                                  normalized_shuffle_row_drop_partitions, num_epochs, worker_predicate,
+                                                  normalized_shuffle_row_drop_partitions,
+                                                  self.num_epochs_to_read, worker_predicate,
                                                   self._workers_pool.workers_count + _VENTILATE_EXTRA_ROWGROUPS)
 
         # 5. Start workers pool

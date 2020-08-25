@@ -16,8 +16,9 @@ import numpy as np
 import pytest
 import six
 
+from petastorm.reader_impl.pytorch_shuffling_buffer import BatchedNoopShufflingBuffer, \
+    BatchedRandomShufflingBuffer, BatchedRandomShufflingBufferWithMemCache
 from petastorm.reader_impl.shuffling_buffer import NoopShufflingBuffer, RandomShufflingBuffer
-from petastorm.reader_impl.pytorch_shuffling_buffer import BatchedNoopShufflingBuffer, BatchedRandomShufflingBuffer
 
 NOOP_SHUFFLING_BUFFERS = [NoopShufflingBuffer, BatchedNoopShufflingBuffer]
 RANDOM_SHUFFLING_BUFFERS = [RandomShufflingBuffer, BatchedRandomShufflingBuffer]
@@ -62,6 +63,9 @@ def _add_many(q, lst):
 def _retrieve(q):
     if isinstance(q, (NoopShufflingBuffer, RandomShufflingBuffer)):
         return q.retrieve()
+    elif isinstance(q, (BatchedRandomShufflingBufferWithMemCache,
+                        BatchedNoopShufflingBufferWithMemCache)):
+        return q.retrieve()[0]
     else:
         return q.retrieve()[0][0].item()
 
@@ -69,7 +73,7 @@ def _retrieve(q):
 @pytest.mark.parametrize('buffer_type', RANDOM_SHUFFLING_BUFFERS)
 def test_random_shuffling_buffer_can_add_retrieve_flags(buffer_type):
     """Check can_add/can_retrieve flags at all possible states"""
-    q = buffer_type(5, 3)
+    q = buffer_type(shuffling_buffer_capacity=5, min_after_retrieve=3)
 
     # Empty buffer. Can start adding, nothing to retrieve yet
     assert q.size == 0
@@ -144,6 +148,101 @@ def test_random_shuffling_buffer_can_add_retrieve_flags(buffer_type):
     assert not q.can_retrieve()
     assert q.size == 0
 
+def test_random_shuffling_buffer_with_memory_cache_can_add_retrieve_flags():
+    """Check can_add/can_retrieve flags at all possible states"""
+    batch_size = 2
+    cache_size = 5
+    q = BatchedRandomShufflingBufferWithMemCache(cache_size=cache_size, batch_size=batch_size,
+                                                 num_epochs_to_load=2)
+
+    # Empty buffer. Can start adding, nothing to retrieve yet
+    assert q.size == 0
+    assert q.can_add()
+    assert not q.can_retrieve()
+
+    # Adding is not done, so can not retrieve just yet
+    _add_many(q, [1, 2])
+    assert q.can_add()
+    assert not q.can_retrieve()
+    assert q.size == 2
+
+    # Got to cache_size elements. Cache is full.
+    _add_many(q, [3, 4])
+    assert q.size == 4
+
+    # Adding two more elements will need more than cache_size space. We should get runtime error.
+    with pytest.raises(RuntimeError):
+        _add_many(q, [5, 6])
+
+    # We still have space so we should be able to add one more element
+    assert q.can_add()
+    _add_many(q, [5])
+    # Adding data is not done yet, so cannot retrieve just yet
+    assert not q.can_retrieve()
+    assert q.size == 5
+
+    # Cache is full. We cannot add anymore.
+    assert not q.can_add()
+
+    # All the data is added. Now we should be able to retrieve. Also we cannot add anymore.
+    q.finish()
+    assert q.can_retrieve()
+    assert not q.can_add()
+    with pytest.raises(RuntimeError):
+        _add_many(q, [6])
+    assert q.size == 5
+
+    # The smallest power of 2 above 10 is 16.
+    assert len(q._items[0]) == 8
+    assert q.next_sample_head == 0
+
+    batch = _retrieve(q)
+    assert len(batch) == batch_size
+    assert q.size == 5
+    assert q.next_sample_head == 2
+
+    batch = _retrieve(q)
+    assert len(batch) == batch_size
+    assert q.size == 5
+    assert q.next_sample_head == 4
+
+    batch = _retrieve(q)
+    assert len(batch) == 2
+    assert q.size == 5
+    assert q.next_sample_head == 1
+
+    batch = _retrieve(q)
+    assert len(batch) == 2
+    assert q.size == 5
+    assert q.next_sample_head == 3
+
+    batch = _retrieve(q)
+    assert len(batch) == 2
+    assert q.size == 5
+    assert q.next_sample_head == 0
+
+    # We have loaded the data in two epochs. So we should not be able to retrieve anymore.
+    assert not q.can_retrieve()
+
+
+def test_random_shuffling_buffer_with_memory_cache_shuffle():
+    """Check can_add/can_retrieve flags at all possible states"""
+    batch_size = 2
+    cache_size = 5
+    q = BatchedRandomShufflingBufferWithMemCache(cache_size=cache_size, batch_size=batch_size,
+                                                 num_epochs_to_load=2)
+
+    _add_many(q, [1, 2, 3, 4, 5])
+    items_before_shuffle = q._items[0].clone()
+    q.shuffle()
+    items_after_shuffle = q._items[0].clone()
+
+    # the elements should have been shuffled.
+    assert not all(items_after_shuffle[:q._size].eq(items_before_shuffle[:q._size]).tolist())
+
+    # The extrar elements should not have changed.
+    assert all(items_after_shuffle[q._size:].eq(items_before_shuffle[q._size:]).tolist())
+
 
 def _retrieve_many(q):
     if isinstance(q, (NoopShufflingBuffer, RandomShufflingBuffer)):
@@ -169,7 +268,6 @@ def _feed_a_sequence_through_the_queue(shuffling_buffer, input_sequence):
             if to >= len(input_sequence):
                 shuffling_buffer.finish()
                 break
-
         for _ in range(2):
             if shuffling_buffer.can_retrieve():
                 retrieve_sequence.extend(_retrieve_many(shuffling_buffer))
@@ -203,8 +301,10 @@ def test_noop_shuffling_buffer_stream_through(buffer_type):
 def test_batched_random_shuffling_buffer_stream_through(batch_size):
     """Feed a 0:99 sequence through a BatchedRandomShufflingBuffer. Check that the order has changed."""
     input_sequence = range(100)
-    a = _feed_a_sequence_through_the_queue(BatchedRandomShufflingBuffer(10, 3, batch_size), input_sequence)
-    b = _feed_a_sequence_through_the_queue(BatchedRandomShufflingBuffer(10, 3, batch_size), input_sequence)
+    a = _feed_a_sequence_through_the_queue(
+        BatchedRandomShufflingBuffer(20, 3, batch_size=batch_size), input_sequence)
+    b = _feed_a_sequence_through_the_queue(
+        BatchedRandomShufflingBuffer(20, 3, batch_size=batch_size), input_sequence)
     assert len(a) == len(input_sequence)
     assert set(a) == set(b)
     assert a != b
