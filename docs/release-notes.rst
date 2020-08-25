@@ -4,8 +4,13 @@
 Release notes
 =============
 
-Release 0.9.5 (unreleased)
+Release 0.9.6 (unreleased)
 ==========================
+
+
+Release 0.9.5
+==========================
+- Removed gcsfs mandatory dependency from the python wheel.
 
 
 Release 0.9.4
