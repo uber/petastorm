@@ -17,7 +17,6 @@ import decimal
 import logging
 # Must import pyarrow before torch. See: https://github.com/uber/petastorm/blob/master/docs/troubleshoot.rst
 import re
-import warnings
 
 import numpy as np
 import torch
