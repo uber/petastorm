@@ -28,6 +28,7 @@ from petastorm.tests.test_common import create_many_columns_non_petastorm_datase
 
 MEMORY_CACHE = 'mem_cache'
 
+
 class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -52,8 +53,8 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
         with make_batch_reader(self._dataset_url,
                                num_epochs=2) as reader:
             with pytest.raises(ValueError, match=error_string):
-                _ = BatchedDataLoader(reader, cache_in_loader_memory=True, cache_size_limit=100,
-                                      cache_row_size_estimate=1)
+                BatchedDataLoader(reader, cache_in_loader_memory=True, cache_size_limit=100,
+                                  cache_row_size_estimate=1)
 
     def test_mem_cache_reader_cache_enabled_error(self):
         error_string = "num_epochs_to_load needs to be specified when cache_in_loader_memory is " \
@@ -61,7 +62,7 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
         with make_batch_reader(self._dataset_url,
                                num_epochs=2) as reader:
             with pytest.raises(ValueError, match=error_string):
-                _ = BatchedDataLoader(reader, num_epochs_to_load=2)
+                BatchedDataLoader(reader, num_epochs_to_load=2)
 
     def test_mem_size_not_specified_error(self):
         error_string = 'Cannot create a in-memory cache. cache_size_limit and ' \
@@ -69,21 +70,21 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
         with make_batch_reader(self._dataset_url,
                                num_epochs=1) as reader:
             with pytest.raises(ValueError, match=error_string):
-                _ = BatchedDataLoader(reader, cache_in_loader_memory=True, cache_size_limit=100,
-                                      cache_row_size_estimate=0)
+                BatchedDataLoader(reader, cache_in_loader_memory=True, cache_size_limit=100,
+                                  cache_row_size_estimate=0)
             with pytest.raises(ValueError, match=error_string):
-                _ = BatchedDataLoader(reader, cache_in_loader_memory=True, cache_size_limit=0,
-                                      cache_row_size_estimate=1)
+                BatchedDataLoader(reader, cache_in_loader_memory=True, cache_size_limit=0,
+                                  cache_row_size_estimate=1)
             with pytest.raises(ValueError, match=error_string):
-                _ = BatchedDataLoader(reader, cache_in_loader_memory=True)
+                BatchedDataLoader(reader, cache_in_loader_memory=True)
 
     def test_shuffling_q_size_error(self):
         error_string = "When using in-memory cache, shuffling_queue_capacity has no effect."
         with make_batch_reader(self._dataset_url,
                                num_epochs=1) as reader:
             with pytest.raises(ValueError, match=error_string):
-                _ = BatchedDataLoader(reader, cache_in_loader_memory=True, cache_size_limit=100,
-                                      cache_row_size_estimate=1, shuffling_queue_capacity=100)
+                BatchedDataLoader(reader, cache_in_loader_memory=True, cache_size_limit=100,
+                                  cache_row_size_estimate=1, shuffling_queue_capacity=100)
 
     def test_in_memory_cache_two_epoch(self):
         batch_size = 10

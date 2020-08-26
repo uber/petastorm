@@ -147,6 +147,7 @@ def test_random_shuffling_buffer_can_add_retrieve_flags(buffer_type):
     assert not q.can_retrieve()
     assert q.size == 0
 
+
 def test_random_shuffling_buffer_with_memory_cache_can_add_retrieve_flags():
     """Check can_add/can_retrieve flags at all possible states"""
     batch_size = 2

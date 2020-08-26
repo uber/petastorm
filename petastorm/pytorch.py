@@ -335,7 +335,6 @@ class BatchedDataLoader(LoaderBase):
         if self.shuffling_queue_capacity > 0 and self.cache_in_loader_memory:
             raise ValueError("When using in-memory cache, shuffling_queue_capacity has no effect.")
 
-
     def _iter_impl(self):
         """
         The Data Loader iterator stops the for-loop when reader runs out of samples.
