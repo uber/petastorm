@@ -45,14 +45,45 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
         """ Remove everything created in setUpClass. """
         rmtree(cls._dataset_dir)
 
-    def test_mem_cache_reader_error(self):
+    def test_mem_cache_reader_num_epochs_error(self):
         error_string = "When cache in loader memory is activated, reader.num_epochs_to_read " \
                        "must be set to 1. When caching the data in memory, we need to read " \
                        "the data only once. The rest of the time, we serve it from memory."
         with make_batch_reader(self._dataset_url,
                                num_epochs=2) as reader:
             with pytest.raises(ValueError, match=error_string):
-                _ = BatchedDataLoader(reader)
+                _ = BatchedDataLoader(reader, cache_in_loader_memory=True, cache_size_limit=100,
+                                      cache_row_size_estimate=1)
+
+    def test_mem_cache_reader_cache_enabled_error(self):
+        error_string = "num_epochs_to_load needs to be specified when cache_in_loader_memory is " \
+                       "enabled."
+        with make_batch_reader(self._dataset_url,
+                               num_epochs=2) as reader:
+            with pytest.raises(ValueError, match=error_string):
+                _ = BatchedDataLoader(reader, num_epochs_to_load=2)
+
+    def test_mem_size_not_specified_error(self):
+        error_string = 'Cannot create a in-memory cache. cache_size_limit and ' \
+                       'cache_row_size_estimate must be larger than zero.'
+        with make_batch_reader(self._dataset_url,
+                               num_epochs=1) as reader:
+            with pytest.raises(ValueError, match=error_string):
+                _ = BatchedDataLoader(reader, cache_in_loader_memory=True, cache_size_limit=100,
+                                      cache_row_size_estimate=0)
+            with pytest.raises(ValueError, match=error_string):
+                _ = BatchedDataLoader(reader, cache_in_loader_memory=True, cache_size_limit=0,
+                                      cache_row_size_estimate=1)
+            with pytest.raises(ValueError, match=error_string):
+                _ = BatchedDataLoader(reader, cache_in_loader_memory=True)
+
+    def test_shuffling_q_size_error(self):
+        error_string = "When using in-memory cache, shuffling_queue_capacity has no effect."
+        with make_batch_reader(self._dataset_url,
+                               num_epochs=1) as reader:
+            with pytest.raises(ValueError, match=error_string):
+                _ = BatchedDataLoader(reader, cache_in_loader_memory=True, cache_size_limit=100,
+                                      cache_row_size_estimate=1, shuffling_queue_capacity=100)
 
     def test_in_memory_cache_two_epoch(self):
         batch_size = 10
@@ -67,6 +98,7 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
                     if cache_type == 'mem_cache':
                         extra_loader_params = dict(cache_size_limit=1000,
                                                    cache_row_size_estimate=1,
+                                                   cache_in_loader_memory=True,
                                                    num_epochs_to_load=2)
                         extra_reader_params = dict(num_epochs=1)
                         print("extra_reader_params", extra_reader_params)
@@ -134,6 +166,7 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
                     if cache_type == 'mem_cache':
                         extra_loader_params = dict(cache_size_limit=1000,
                                                    cache_row_size_estimate=1,
+                                                   cache_in_loader_memory=True,
                                                    num_epochs_to_load=1)
                         extra_reader_params = dict(num_epochs=1)
                         print("extra_reader_params", extra_reader_params)

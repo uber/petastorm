@@ -63,8 +63,7 @@ def _add_many(q, lst):
 def _retrieve(q):
     if isinstance(q, (NoopShufflingBuffer, RandomShufflingBuffer)):
         return q.retrieve()
-    elif isinstance(q, (BatchedRandomShufflingBufferWithMemCache,
-                        BatchedNoopShufflingBufferWithMemCache)):
+    elif isinstance(q, BatchedRandomShufflingBufferWithMemCache):
         return q.retrieve()[0]
     else:
         return q.retrieve()[0][0].item()

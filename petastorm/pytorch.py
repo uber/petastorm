@@ -26,8 +26,7 @@ from six import PY2
 from torch.utils.data.dataloader import default_collate
 
 from petastorm.reader_impl.pytorch_shuffling_buffer import BatchedRandomShufflingBuffer, \
-    BatchedRandomShufflingBufferWithMemCache, BatchedNoopShufflingBuffer, \
-    BatchedNoopShufflingBufferWithMemCache
+    BatchedRandomShufflingBufferWithMemCache, BatchedNoopShufflingBuffer
 from petastorm.reader_impl.shuffling_buffer import RandomShufflingBuffer, NoopShufflingBuffer
 
 _TORCH_BEFORE_1_1 = version.parse(torch.__version__) < version.parse('1.1.0')  # type: ignore
@@ -333,8 +332,7 @@ class BatchedDataLoader(LoaderBase):
                              "cache_row_size_estimate must be larger than zero.")
 
         if self.shuffling_queue_capacity > 0 and self.cache_in_loader_memory:
-            warnings.warn("When using in-memory cache, shuffling_queue_capacity has no effect."
-                          "buffer size is the same as in-memory cache.")
+            raise ValueError("When using in-memory cache, shuffling_queue_capacity has no effect.")
 
 
     def _iter_impl(self):
