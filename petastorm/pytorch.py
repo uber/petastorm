@@ -299,6 +299,8 @@ class BatchedDataLoader(LoaderBase):
             this flag is set, an Exception will be raised.
         :param cache_size_limit: An int specifying the size limit of the cache in bytes
         :param cache_row_size_estimate: An int specifying the estimated size of a row in the dataset
+        :param num_epochs_to_load: Number of epochs to load when in memory cache is enabled. If
+            set to None, loader will loads batches indefinitely.
         """
         super(BatchedDataLoader, self).__init__()
         self.reader = reader
