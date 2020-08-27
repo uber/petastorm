@@ -6,6 +6,7 @@ Release notes
 
 Release 0.9.6 (unreleased)
 ==========================
+- `PR 588 <https://github.com/uber/petastorm/pull/588>`_: ``make_reader`` can now open a parquet dataset from a subdirectory in an s3 bucket.
 
 
 Release 0.9.5

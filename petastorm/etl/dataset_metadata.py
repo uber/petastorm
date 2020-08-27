@@ -281,9 +281,13 @@ def load_row_groups(dataset):
         # If we are not using absolute paths, we need to convert the path to a relative path for
         # looking up the number of row groups.
         row_groups_key = os.path.relpath(piece.path, dataset.paths)
-        for row_group in range(row_groups_per_file[row_groups_key]):
-            rowgroups.append(compat_make_parquet_piece(piece.path, dataset.fs.open, row_group=row_group,
-                                                       partition_keys=piece.partition_keys))
+
+        # When reading parquet store directly from an s3 bucket, a separate piece is created for root directory.
+        # This is not a real "piece" and we won't have row_groups_per_file recorded for it.
+        if row_groups_key != ".":
+            for row_group in range(row_groups_per_file[row_groups_key]):
+                rowgroups.append(compat_make_parquet_piece(piece.path, dataset.fs.open, row_group=row_group,
+                                                           partition_keys=piece.partition_keys))
     return rowgroups
 
 
