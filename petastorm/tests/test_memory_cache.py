@@ -69,7 +69,7 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
                        'cache_row_size_estimate must be larger than zero.'
         with make_batch_reader(self._dataset_url,
                                num_epochs=1) as reader:
-            
+
             with pytest.raises(ValueError, match=error_string):
                 BatchedDataLoader(reader, cache_in_loader_memory=True, cache_size_limit=100,
                                   cache_row_size_estimate=0)
