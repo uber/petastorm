@@ -118,3 +118,8 @@ def test_invalid_image_size():
 
     with pytest.raises(ValueError):
         codec.encode(field, np.zeros((10, 10, 10, 10), dtype=np.uint8))
+
+
+def test_str_special_method():
+    codec = CompressedImageCodec('png', 80)
+    assert str(codec) == 'CompressedImageCodec(\'png\', 80)'
