@@ -382,7 +382,7 @@ def get_schema(dataset):
     return schema
 
 
-def get_schema_from_dataset_url(dataset_url_or_urls, hdfs_driver='libhdfs3'):
+def get_schema_from_dataset_url(dataset_url_or_urls, hdfs_driver='libhdfs3', filters=None):
     """Returns a :class:`petastorm.unischema.Unischema` object loaded from a dataset specified by a url.
 
     :param dataset_url_or_urls: a url to a parquet directory or a url list (with the same scheme) to parquet files.
@@ -392,7 +392,7 @@ def get_schema_from_dataset_url(dataset_url_or_urls, hdfs_driver='libhdfs3'):
     """
     fs, path_or_paths = get_filesystem_and_path_or_paths(dataset_url_or_urls, hdfs_driver)
 
-    dataset = pq.ParquetDataset(path_or_paths, filesystem=fs, validate_schema=False)
+    dataset = pq.ParquetDataset(path_or_paths, filesystem=fs, validate_schema=False, filters=filters)
 
     # Get a unischema stored in the dataset metadata.
     stored_schema = get_schema(dataset)
