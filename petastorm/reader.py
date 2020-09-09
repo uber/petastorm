@@ -68,7 +68,8 @@ def make_reader(dataset_url,
                 cache_row_size_estimate=None, cache_extra_settings=None,
                 hdfs_driver='libhdfs3',
                 transform_spec=None,
-                filters=None):
+                filters=None,
+                zmq_copy_buffers=True):
     """
     Creates an instance of Reader for reading Petastorm datasets. A Petastorm dataset is a dataset generated using
     :func:`~petastorm.etl.dataset_metadata.materialize_dataset` context manager as explained
@@ -121,6 +122,7 @@ def make_reader(dataset_url,
     :param filters: (List[Tuple] or List[List[Tuple]]): Standard PyArrow filters.
         These will be applied when loading the parquet file with PyArrow. More information
         here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
+    :param zmq_copy_buffers: A bool indicating whether to use 0mq copy buffers with ProcessPool.
     :return: A :class:`Reader` object
     """
     dataset_url = normalize_dir_url(dataset_url)
@@ -147,7 +149,7 @@ def make_reader(dataset_url,
             serializer = PyArrowSerializer()
         else:
             serializer = PickleSerializer()
-        reader_pool = ProcessPool(workers_count, serializer)
+        reader_pool = ProcessPool(workers_count, serializer, zmq_copy_buffers=zmq_copy_buffers)
     elif reader_pool_type == 'dummy':
         reader_pool = DummyPool()
     else:
@@ -193,7 +195,8 @@ def make_batch_reader(dataset_url_or_urls,
                       cache_row_size_estimate=None, cache_extra_settings=None,
                       hdfs_driver='libhdfs3',
                       transform_spec=None,
-                      filters=None):
+                      filters=None,
+                      zmq_copy_buffers=True):
     """
     Creates an instance of Reader for reading batches out of a non-Petastorm Parquet store.
 
@@ -250,6 +253,7 @@ def make_batch_reader(dataset_url_or_urls,
     :param filters: (List[Tuple] or List[List[Tuple]]): Standard PyArrow filters.
         These will be applied when loading the parquet file with PyArrow. More information
         here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
+    :param zmq_copy_buffers: A bool indicating whether to use 0mq copy buffers with ProcessPool.
     :return: A :class:`Reader` object
     """
     dataset_url_or_urls = normalize_dataset_url_or_urls(dataset_url_or_urls)
@@ -277,7 +281,7 @@ def make_batch_reader(dataset_url_or_urls,
         reader_pool = ThreadPool(workers_count)
     elif reader_pool_type == 'process':
         serializer = ArrowTableSerializer()
-        reader_pool = ProcessPool(workers_count, serializer)
+        reader_pool = ProcessPool(workers_count, serializer, zmq_copy_buffers=zmq_copy_buffers)
     elif reader_pool_type == 'dummy':
         reader_pool = DummyPool()
     else:
