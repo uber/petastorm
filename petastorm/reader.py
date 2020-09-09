@@ -369,8 +369,7 @@ class Reader(object):
         self.is_batched_reader = is_batched_reader
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
         self.dataset = pq.ParquetDataset(dataset_path, filesystem=pyarrow_filesystem,
-                                         validate_schema=False, metadata_nthreads=10,
-                                         filters=filters)
+                                         validate_schema=False, filters=filters)
 
         if self.dataset.partitions is None:
             # When read from parquet file list, the `dataset.partitions` will be None.
