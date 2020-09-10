@@ -123,3 +123,8 @@ def test_encode_non_scalar_type_is_passed(non_scalar_value):
     field = UnischemaField(name='field_float', numpy_dtype=np.float32, shape=(), codec=codec, nullable=False)
     with pytest.raises(TypeError, match='Expected a scalar'):
         codec.encode(field, non_scalar_value)
+
+
+def test_str_special_method():
+    codec = ScalarCodec(FloatType())
+    assert str(codec) == 'ScalarCodec(FloatType())'
