@@ -49,6 +49,11 @@ class DataframeColumnCodec(object):
         """Spark datatype to be used for underlying storage"""
         raise RuntimeError('Abstract method was called')
 
+    @abstractmethod
+    def __str__(self):
+        """String representation sufficient to re-construct this Codec"""
+        raise RuntimeError('Abstract method was called')
+
 
 class CompressedImageCodec(DataframeColumnCodec):
     def __init__(self, image_codec='png', quality=80):
@@ -117,6 +122,13 @@ class CompressedImageCodec(DataframeColumnCodec):
 
         return sql_types.BinaryType()
 
+    def __str__(self):
+        """Represent this as the following form:
+
+        >>> CompressedImageCodec(image_codec, quality)
+        """
+        return f'{type(self).__name__}(\'{self.image_codec}\', {self._quality})'
+
 
 class NdarrayCodec(DataframeColumnCodec):
     """Encodes numpy ndarray into, or decodes an ndarray from, a spark dataframe field."""
@@ -151,6 +163,13 @@ class NdarrayCodec(DataframeColumnCodec):
 
         return sql_types.BinaryType()
 
+    def __str__(self):
+        """Represent this as the following form:
+
+        >>> NdarrayCodec()
+        """
+        return f'{type(self).__name__}()'
+
 
 class CompressedNdarrayCodec(DataframeColumnCodec):
     """Encodes numpy ndarray with compression into a spark dataframe field"""
@@ -184,6 +203,13 @@ class CompressedNdarrayCodec(DataframeColumnCodec):
         import pyspark.sql.types as sql_types
 
         return sql_types.BinaryType()
+
+    def __str__(self):
+        """Represent this as the following form:
+
+        >>> CompressedNdarrayCodec()
+        """
+        return f'{type(self).__name__}()'
 
 
 class ScalarCodec(DataframeColumnCodec):
@@ -236,6 +262,13 @@ class ScalarCodec(DataframeColumnCodec):
 
     def spark_dtype(self):
         return self._spark_type
+
+    def __str__(self):
+        """Represent this as the following form:
+
+        >>> ScalarCodec(spark_type)
+        """
+        return f'{type(self).__name__}({type(self._spark_type).__name__}())'
 
 
 def _is_compliant_shape(a, b):

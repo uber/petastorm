@@ -35,3 +35,11 @@ def test_ndarray_codec(codec_factory):
         actual = codec.decode(field, codec.encode(field, expected))
         np.testing.assert_equal(actual, expected)
         assert expected.dtype == actual.dtype
+
+
+def test_str_special_method():
+    codec = NdarrayCodec()
+    assert str(codec) == 'NdarrayCodec()'
+
+    codec = CompressedNdarrayCodec()
+    assert str(codec) == 'CompressedNdarrayCodec()'
