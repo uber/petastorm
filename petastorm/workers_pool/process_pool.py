@@ -311,6 +311,7 @@ class ProcessPool(object):
             'items_consumed': self._ventilated_items,
             'items_produced': self._ventilated_items_processed,
             'items_inprocess': self._ventilated_items - self._ventilated_items_processed,
+            'zmq_copy_buffers': self._zmq_copy_buffers
         }
 
 
