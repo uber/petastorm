@@ -72,8 +72,9 @@ def test_bound_size_of_output_queue_size_reader(synthetic_dataset):
 def test_disable_zmq_copy_buffers_in_reader(synthetic_dataset):
     """Assert that the underlying ProcessPool has zmq_copy_buffers disabled"""
 
-    with make_reader(synthetic_dataset.url, reader_pool_type='process', workers_count=1, zmq_copy_buffers=False) as reader:
-        assert reader.diagnostics['zmq_copy_buffers'] == False
+    with make_reader(synthetic_dataset.url, reader_pool_type='process',
+                     workers_count=1, zmq_copy_buffers=False) as reader:
+        assert not reader.diagnostics['zmq_copy_buffers']
 
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
