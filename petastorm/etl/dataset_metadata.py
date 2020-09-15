@@ -26,7 +26,7 @@ from six.moves.urllib.parse import urlparse
 from petastorm import utils
 from petastorm.compat import compat_get_metadata, compat_make_parquet_piece
 from petastorm.etl.legacy import depickle_legacy_package_name_compatible
-from petastorm.fs_utils import FilesystemResolver, get_filesystem_and_path_or_paths
+from petastorm.fs_utils import FilesystemResolver, get_filesystem_and_path_or_paths, get_dataset_path
 from petastorm.unischema import Unischema
 from packaging import version
 
@@ -102,7 +102,7 @@ def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_
         filesystem_factory = resolver.filesystem_factory()
         dataset_path = resolver.get_dataset_path()
     else:
-        dataset_path = urlparse(dataset_url).path
+        dataset_path = get_dataset_path(urlparse(dataset_url))
     filesystem = filesystem_factory()
 
     dataset = pq.ParquetDataset(
