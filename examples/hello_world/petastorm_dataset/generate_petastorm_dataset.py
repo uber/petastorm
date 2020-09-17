@@ -19,7 +19,7 @@ sample dataset with some random data.
 
 import numpy as np
 from pyspark.sql import SparkSession
-from pyspark.sql.types import IntegerType
+from pyspark.sql.types import IntegerType, StringType
 
 from petastorm.codecs import ScalarCodec, CompressedImageCodec, NdarrayCodec
 from petastorm.etl.dataset_metadata import materialize_dataset
@@ -27,17 +27,17 @@ from petastorm.unischema import dict_to_spark_row, Unischema, UnischemaField
 
 # The schema defines how the dataset schema looks like
 HelloWorldSchema = Unischema('HelloWorldSchema', [
-    UnischemaField('id', np.int32, (), ScalarCodec(IntegerType()), False),
-    UnischemaField('image1', np.uint8, (128, 256, 3), CompressedImageCodec('png'), False),
-    UnischemaField('array_4d', np.uint8, (None, 128, 30, None), NdarrayCodec(), False),
+    # Frames
+    UnischemaField('frame', np.uint8, (1080, 1280, 3), CompressedImageCodec('png'), True),
+    # Annotations
+    UnischemaField('annotations', np.string_, (), ScalarCodec(StringType()), True)
 ])
 
 
 def row_generator(x):
     """Returns a single entry in the generated dataset. Return a bunch of random values as an example."""
-    return {'id': x,
-            'image1': np.random.randint(0, 255, dtype=np.uint8, size=(128, 256, 3)),
-            'array_4d': np.random.randint(0, 255, dtype=np.uint8, size=(4, 128, 30, 3))}
+    return {'frame': np.random.randint(0, 255, dtype=np.uint8, size=(1080, 1280, 3)),
+            'annotations': 'some_string'}
 
 
 def generate_petastorm_dataset(output_url='file:///tmp/hello_world_dataset'):
@@ -48,7 +48,7 @@ def generate_petastorm_dataset(output_url='file:///tmp/hello_world_dataset'):
 
     # Wrap dataset materialization portion. Will take care of setting up spark environment variables as
     # well as save petastorm specific metadata
-    rows_count = 10
+    rows_count = 100
     with materialize_dataset(spark, output_url, HelloWorldSchema, rowgroup_size_mb):
 
         rows_rdd = sc.parallelize(range(rows_count))\
