@@ -149,7 +149,7 @@ def make_reader(dataset_url,
         raise ValueError('Unknown cache_type: {}'.format(cache_type))
 
     try:
-        dataset_metadata.get_schema_from_dataset_url(dataset_url, hdfs_driver=hdfs_driver)
+        dataset_metadata.get_schema_from_dataset_url(dataset_url, hdfs_driver=hdfs_driver, filesystem=filesystem)
     except PetastormMetadataError:
         raise RuntimeError('Currently make_reader supports reading only Petastorm datasets. '
                            'To read from a non-Petastorm Parquet store use make_batch_reader')
@@ -285,7 +285,8 @@ def make_batch_reader(dataset_url_or_urls,
         dataset_path_or_paths = [get_dataset_path(urlparse(url)) for url in url_list]
 
     try:
-        dataset_metadata.get_schema_from_dataset_url(dataset_url_or_urls, hdfs_driver=hdfs_driver)
+        dataset_metadata.get_schema_from_dataset_url(dataset_url_or_urls, hdfs_driver=hdfs_driver,
+                                                     filesystem=filesystem)
         warnings.warn('Please use make_reader (instead of \'make_batch_dataset\' function to read this dataset. '
                       'You may get unexpected results. '
                       'Currently make_batch_reader supports reading only Parquet stores that contain '
