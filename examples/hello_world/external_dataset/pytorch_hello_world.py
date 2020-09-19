@@ -16,13 +16,21 @@
 using pytorch, using make_batch_reader() instead of make_reader()"""
 
 from __future__ import print_function
+import numpy as np
 
-from petastorm import make_batch_reader
-from petastorm.pytorch import DataLoader
+from petastorm import make_batch_reader, TransformSpec
+from petastorm.pytorch import DataLoader, BatchedDataLoader
+
+
+def tokenize(df):
+    df["tokenized"] = [np.array([1]), np.array([1,2]), np.array([1,2,3]), np.array([1,2,3,4]), np.array([1,2,3,4,5])]
+    return df
 
 
 def pytorch_hello_world(dataset_url='file:///tmp/external_dataset'):
-    with DataLoader(make_batch_reader(dataset_url)) as train_loader:
+    with BatchedDataLoader(make_batch_reader(dataset_url, reader_pool_type='dummy', transform_spec=TransformSpec(tokenize, edit_fields=[('tokenized', None, (None,), False)]))) as train_loader:
+        for sample in train_loader:
+            print(sample)
         sample = next(iter(train_loader))
         # Because we are using make_batch_reader(), each read returns a batch of rows instead of a single row
         print("id batch: {0}".format(sample['id']))

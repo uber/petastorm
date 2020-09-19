@@ -67,11 +67,14 @@ class ArrowReaderWorkerResultsQueueReader(object):
                     # Assuming all lists are of the same length, hence we can collate them into a matrix
                     list_of_lists = column_as_numpy
                     try:
-                        col_data = np.vstack(list_of_lists.tolist())
-                        shape = schema.fields[column_name].shape
-                        if len(shape) > 1:
-                            col_data = col_data.reshape((len(list_of_lists),) + shape)
-                        result_dict[column_name] = col_data
+                        if list_of_lists.dtype == np.object:
+                            result_dict[column_name] = list_of_lists
+                        else:
+                            col_data = np.vstack(list_of_lists.tolist())
+                            shape = schema.fields[column_name].shape
+                            if len(shape) > 1:
+                                col_data = col_data.reshape((len(list_of_lists),) + shape)
+                            result_dict[column_name] = col_data
 
                     except ValueError:
                         raise RuntimeError('Length of all values in column \'{}\' are expected to be the same length. '
@@ -205,10 +208,10 @@ class ArrowReaderWorker(WorkerBase):
             transformed_result_column_set = set(transformed_result.columns)
             transformed_schema_column_set = set([f.name for f in self._transformed_schema.fields.values()])
 
-            if transformed_result_column_set != transformed_schema_column_set:
-                raise ValueError('Transformed result columns ({rc}) do not match required schema columns({sc})'
-                                 .format(rc=','.join(transformed_result_column_set),
-                                         sc=','.join(transformed_schema_column_set)))
+            # if transformed_result_column_set != transformed_schema_column_set:
+            #     raise ValueError('Transformed result columns ({rc}) do not match required schema columns({sc})'
+            #                      .format(rc=','.join(transformed_result_column_set),
+            #                              sc=','.join(transformed_schema_column_set)))
 
             # For fields return multidimensional array, we need to ravel them
             # because pyarrow do not support multidimensional array.
