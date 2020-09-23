@@ -175,3 +175,15 @@ Release procedure
 9. Navigate to https://readthedocs.org/ --> "My Projects" --> "Builds" --> Trigger build of the 'latest' documentation (not clear when RTD picks up new tags from github, so you may see only outdated release versions there).
 
 .. inclusion-marker-end-do-not-remove
+
+
+Setting up pyspark for working with S3 locally
+----------------------------------------------
+Checked these instructions for pyspark 3.0.1
+1. Download the following files into some local directory:
+
+    a. https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk/1.7.4/aws-java-sdk-1.7.4.jar
+    b. https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/2.7.4/hadoop-aws-2.7.4.jar
+    c. https://repo1.maven.org/maven2/net/java/dev/jets3t/jets3t/0.9.4/jets3t-0.9.4.jar (was not able to confirm s3 protocol due to authentication issues)
+
+2. Add/set ``CLASSPATH`` environment variable to point to the directory containing these jars.
