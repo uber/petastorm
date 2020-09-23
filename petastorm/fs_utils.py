@@ -29,7 +29,7 @@ def get_dataset_path(parsed_url):
     For example s3fs expects the bucket name to be included in the path and doesn't support
     paths that start with a `/`
     """
-    if parsed_url.scheme.lower() in ['s3', 'gs', 'gcs']:
+    if parsed_url.scheme.lower() in ['s3', 's3a', 's3n', 'gs', 'gcs']:
         # s3/gs/gcs filesystem expects paths of the form `bucket/path`
         return parsed_url.netloc + parsed_url.path
 
@@ -125,7 +125,7 @@ class FilesystemResolver(object):
                     lambda url=self._dataset_url, user=user: \
                     connector.hdfs_connect_namenode(urlparse(url), hdfs_driver, user=user)
 
-        elif self._parsed_dataset_url.scheme == 's3':
+        elif self._parsed_dataset_url.scheme in ('s3', 's3a', 's3n'):
             # Case 5
             # S3 support requires s3fs to be installed
             try:
