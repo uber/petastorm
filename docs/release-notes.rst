@@ -11,10 +11,12 @@ Release 0.9.7 (unreleased)
 Release 0.9.6
 ==========================
 Thanks to our new contributor - David McGuire!
+
 - `PR 588 <https://github.com/uber/petastorm/pull/588>`_: ``make_reader`` can now open a parquet dataset from a subdirectory in an s3 bucket.
 - `PR 594 <https://github.com/uber/petastorm/pull/594>`_: Parameterize factory methods with s3 configs
 - `PR 596 <https://github.com/uber/petastorm/pull/596>`_: Add a flag to factory methods to allow zmq copy buffers to be disabled
 - `PR 601 <https://github.com/uber/petastorm/pull/601>`_: Allow user to use s3, s3a and s3n url schemes when writing datasets.
+
 
 Release 0.9.5
 ==========================
