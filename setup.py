@@ -52,6 +52,7 @@ EXTRA_REQUIRE = {
         'alabaster>=0.7.11'
     ],
     'opencv': ['opencv-python>=3.2.0.6'],
+    's3fs': ['s3fs>=0.5.0'],
     'tf': ['tensorflow>=1.14.0'],
     'tf_gpu': ['tensorflow-gpu>=1.14.0'],
     'test': [
