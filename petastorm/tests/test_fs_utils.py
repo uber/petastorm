@@ -15,9 +15,10 @@ import unittest
 
 import dill
 import mock
-from pyarrow.filesystem import LocalFileSystem, S3FSWrapper
+from pyarrow.filesystem import LocalFileSystem
 from pyarrow.lib import ArrowIOError
 from six.moves.urllib.parse import urlparse
+import s3fs
 
 from petastorm.fs_utils import FilesystemResolver, get_filesystem_and_path_or_paths
 from petastorm.gcsfs_helpers.gcsfs_wrapper import GCSFSWrapper
@@ -178,7 +179,7 @@ class FilesystemResolverTest(unittest.TestCase):
 
     def test_s3_url(self):
         suj = FilesystemResolver('s3://bucket{}'.format(ABS_PATH), self._hadoop_configuration, connector=self.mock)
-        self.assertTrue(isinstance(suj.filesystem(), S3FSWrapper))
+        self.assertTrue(isinstance(suj.filesystem(), s3fs.S3FileSystem))
         self.assertEqual('bucket', suj.parsed_dataset_url().netloc)
         self.assertEqual('bucket' + ABS_PATH, suj.get_dataset_path())
 

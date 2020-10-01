@@ -138,9 +138,9 @@ class FilesystemResolver(object):
                 raise ValueError('URLs must be of the form s3://bucket/path')
 
             fs = s3fs.S3FileSystem(config_kwargs=s3_config_kwargs)
-            self._filesystem = pyarrow.filesystem.S3FSWrapper(fs)
-            self._filesystem_factory = lambda: pyarrow.filesystem.S3FSWrapper(
-                s3fs.S3FileSystem(config_kwargs=s3_config_kwargs)
+            self._filesystem = fs
+            self._filesystem_factory = lambda: s3fs.S3FileSystem(
+                config_kwargs=s3_config_kwargs
             )
 
         elif self._parsed_dataset_url.scheme in ['gs', 'gcs']:
