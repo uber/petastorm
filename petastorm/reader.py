@@ -421,6 +421,8 @@ class Reader(object):
             fields = schema_fields if isinstance(schema_fields, collections.Iterable) else None
 
         storage_schema = stored_schema.create_schema_view(fields) if fields else stored_schema
+        if len(storage_schema.fields) == 0:
+            raise RuntimeError(f"No fields matching the criteria '{fields}' were found in the dataset {dataset_path}.")
         if transform_spec:
             self.schema = transform_schema(storage_schema, transform_spec)
         else:
