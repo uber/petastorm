@@ -145,7 +145,7 @@ def test_random_table_size_and_random_batch_sizes():
             if not batcher.empty():
                 read_batch = batcher.get()
                 for value in compat_column_data(read_batch.columns[0]):
-                    assert value == read_seq
+                    assert value.as_py() == read_seq
                     read_seq += 1
 
     assert read_seq > 0
