@@ -147,11 +147,8 @@ def test_invalid_column_name(scalar_dataset, reader_factory):
     all_fields = list(scalar_dataset.data[0].keys())
     bad_field = _get_bad_field_name(all_fields)
     requested_fields = [bad_field]
-
-    with reader_factory(scalar_dataset.url, schema_fields=requested_fields) as reader:
-        with pytest.raises(StopIteration):
-            sample = next(reader)._asdict()
-            assert not sample
+    with pytest.raises(RuntimeError, match=f"No fields matching the criteria.*{bad_field}.*"):
+        reader_factory(scalar_dataset.url, schema_fields=requested_fields)
 
 
 @pytest.mark.parametrize('reader_factory', _D)
@@ -165,8 +162,7 @@ def test_invalid_and_valid_column_names(scalar_dataset, reader_factory):
     with reader_factory(scalar_dataset.url, schema_fields=requested_fields) as reader:
         sample = next(reader)._asdict()
         assert len(sample) == 1
-        with pytest.raises(KeyError):
-            assert sample[bad_field] == ""
+        assert bad_field not in sample
 
 
 @pytest.mark.parametrize('reader_factory', _D)
