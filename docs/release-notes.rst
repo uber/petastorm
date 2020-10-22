@@ -8,6 +8,8 @@ Release 0.9.7 (unreleased)
 ==========================
 
 - `PR 611 <https://github.com/uber/petastorm/pull/611>`_: Bugfix: S3FSWrapper is deprecated at s3fs 0.5.0. Minimal s3fs version required by petastorm wheel is now 0.5.0.
+- `PR 615 <https://github.com/uber/petastorm/pull/615>`_: Raising an error if an empty list of columns is selected by a user.
+
 
 Release 0.9.6
 ==========================
