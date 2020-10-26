@@ -471,6 +471,8 @@ def _numpy_and_codec_from_arrow_type(field_type):
 
     if types.is_int8(field_type):
         np_type = np.int8
+    elif types.is_uint8(field_type):
+        np_type = np.uint8
     elif types.is_int16(field_type):
         np_type = np.int16
     elif types.is_int32(field_type):
