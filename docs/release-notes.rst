@@ -4,7 +4,12 @@
 Release notes
 =============
 
-Release 0.9.7 (unreleased)
+
+Release 0.9.8 (unreleased)
+==========================
+
+
+Release 0.9.7
 ==========================
 
 - `PR 611 <https://github.com/uber/petastorm/pull/611>`_: Bugfix: S3FSWrapper is deprecated at s3fs 0.5.0. Minimal s3fs version required by petastorm wheel is now 0.5.0.
