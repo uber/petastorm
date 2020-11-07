@@ -267,13 +267,6 @@ def test_transform_function_with_predicate_batched(scalar_dataset):
             np.testing.assert_equal(expected_matrix, actual_float64)
 
 
-def test_simple_read_with_pyarrow_serialize(synthetic_dataset):
-    """Same as test_simple_read, but don't check type correctness as pyarrow_serialize messes up integer types"""
-    with make_reader(synthetic_dataset.url, reader_pool_type='process', workers_count=1,
-                     pyarrow_serialize=True) as reader:
-        _check_simple_reader(reader, synthetic_dataset.data, check_types=False)
-
-
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
 @pytest.mark.forked
 def test_simple_read_with_disk_cache(synthetic_dataset, reader_factory, tmpdir):

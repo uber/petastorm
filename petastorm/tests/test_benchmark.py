@@ -26,12 +26,6 @@ def test_pure_python_process_pool_run(synthetic_dataset):
                       spawn_new_process=False)
 
 
-def test_pure_python_process_pool_run_with_pyarrow_serialize(synthetic_dataset):
-    reader_throughput(synthetic_dataset.url, ['id'], warmup_cycles_count=5, measure_cycles_count=5,
-                      pool_type=WorkerPoolType.PROCESS, loaders_count=1, read_method=ReadMethod.PYTHON,
-                      spawn_new_process=False, pyarrow_serialize=True)
-
-
 def test_tf_thread_pool_run(synthetic_dataset):
     reader_throughput(synthetic_dataset.url, ['id', 'id2'], warmup_cycles_count=5, measure_cycles_count=5,
                       pool_type=WorkerPoolType.THREAD, loaders_count=1, read_method=ReadMethod.TF)

@@ -68,11 +68,6 @@ def _parse_args(args):
                              'Default value is set to {}%% of the --shuffling-queue-size '
                              'parameter'.format(100 * DEFAULT_MIN_AFTER_DEQUEUE_TO_QUEUE_SIZE_RATIO))
 
-    parser.add_argument('--pyarrow-serialize', action='store_true', required=False,
-                        help='When specified, faster pyarrow.serialize library is used. However, it does not support '
-                             'all data types and implicitly converts some datatypes (e.g. int64->int32) which may'
-                             'trigger errors when reading the data from Tensorflow.')
-
     parser.add_argument('-vv', action='store_true', default=False, help='Sets logging level to DEBUG.')
     parser.add_argument('-v', action='store_true', default=False, help='Sets logging level to INFO.')
 
@@ -97,7 +92,7 @@ def _main(args):
                                 measure_cycles_count=args.measure_cycles, pool_type=args.pool_type,
                                 loaders_count=args.workers_count, profile_threads=args.profile_threads,
                                 read_method=args.read_method, shuffling_queue_size=args.shuffling_queue_size,
-                                min_after_dequeue=args.min_after_dequeue, pyarrow_serialize=args.pyarrow_serialize)
+                                min_after_dequeue=args.min_after_dequeue)
 
     logger.info('Done')
     print('Average sample read rate: {:1.2f} samples/sec; RAM {:1.2f} MB (rss); '

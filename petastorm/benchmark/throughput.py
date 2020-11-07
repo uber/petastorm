@@ -27,7 +27,6 @@ import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 from petastorm import make_reader
 from petastorm.etl.dataset_metadata import get_schema_from_dataset_url
 from petastorm.reader_impl.pickle_serializer import PickleSerializer
-from petastorm.reader_impl.pyarrow_serializer import PyArrowSerializer
 from petastorm.tf_utils import tf_tensors
 from petastorm.unischema import match_unischema_fields
 from petastorm.workers_pool.dummy_pool import DummyPool
@@ -113,7 +112,7 @@ def _time_warmup_and_work_tf(reader, warmup_cycles_count, measure_cycles_count, 
 def reader_throughput(dataset_url, field_regex=None, warmup_cycles_count=300, measure_cycles_count=1000,
                       pool_type=WorkerPoolType.THREAD, loaders_count=3, profile_threads=False,
                       read_method=ReadMethod.PYTHON, shuffling_queue_size=500, min_after_dequeue=400,
-                      reader_extra_args=None, pyarrow_serialize=False, spawn_new_process=True):
+                      reader_extra_args=None, spawn_new_process=True):
     """Constructs a Reader instance and uses it to performs throughput measurements.
 
     The function will spawn a new process if ``spawn_separate_process`` is set. This is needed to make memory footprint
@@ -133,7 +132,6 @@ def reader_throughput(dataset_url, field_regex=None, warmup_cycles_count=300, me
     :param shuffling_queue_size: Maximum number of elements in the shuffling queue.
     :param min_after_dequeue: Minimum number of elements in a shuffling queue before entries can be read from it.
     :param reader_extra_args: Extra arguments that would be passed to Reader constructor.
-    :param pyarrow_serialize: When True, pyarrow.serialize library will be used for serializing decoded payloads.
     :param spawn_new_process: This function will respawn itself in a new process if the argument is True. Spawning
       a new process is needed to get an accurate memory footprint.
 
@@ -160,7 +158,7 @@ def reader_throughput(dataset_url, field_regex=None, warmup_cycles_count=300, me
 
     with make_reader(dataset_url,
                      num_epochs=None,
-                     reader_pool_type=str(pool_type), workers_count=loaders_count, pyarrow_serialize=pyarrow_serialize,
+                     reader_pool_type=str(pool_type), workers_count=loaders_count,
                      **reader_extra_args) as reader:
 
         if read_method == ReadMethod.PYTHON:
@@ -184,13 +182,12 @@ def _create_concurrent_executor(pool_type, decoders_count):
     return decoder_pool_executor
 
 
-def _create_worker_pool(pool_type, workers_count, profiling_enabled, pyarrow_serialize):
+def _create_worker_pool(pool_type, workers_count, profiling_enabled):
     """Different worker pool implementation (in process none or thread-pool, out of process pool)"""
     if pool_type == WorkerPoolType.THREAD:
         worker_pool = ThreadPool(workers_count, profiling_enabled=profiling_enabled)
     elif pool_type == WorkerPoolType.PROCESS:
-        worker_pool = ProcessPool(workers_count,
-                                  serializer=PyArrowSerializer() if pyarrow_serialize else PickleSerializer())
+        worker_pool = ProcessPool(workers_count, serializer=PickleSerializer())
     elif pool_type == WorkerPoolType.NONE:
         worker_pool = DummyPool()
     else:
