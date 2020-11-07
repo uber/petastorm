@@ -20,9 +20,7 @@ from multiprocessing import Pool
 import numpy as np
 import pyarrow
 from future.utils import raise_with_traceback
-from pyarrow.filesystem import LocalFileSystem
-
-from petastorm.compat import compat_get_metadata, compat_with_metadata
+from pyarrow import fs
 
 logger = logging.getLogger(__name__)
 
@@ -112,14 +110,14 @@ def add_to_dataset_metadata(dataset, key, value):
         with dataset.fs.open(metadata_file_path) as f:
             arrow_metadata = pyarrow.parquet.read_metadata(f)
     else:
-        arrow_metadata = compat_get_metadata(dataset.pieces[0], dataset.fs.open)
+        arrow_metadata = dataset.pieces[0].get_metadata()
 
     base_schema = arrow_metadata.schema.to_arrow_schema()
 
     # base_schema.metadata may be None, e.g.
     metadata_dict = base_schema.metadata or dict()
     metadata_dict[key] = value
-    schema = compat_with_metadata(base_schema, metadata_dict)
+    schema = base_schema.with_metadata(metadata_dict)
 
     with dataset.fs.open(common_metadata_file_path, 'wb') as metadata_file:
         pyarrow.parquet.write_metadata(schema, metadata_file)
@@ -127,8 +125,9 @@ def add_to_dataset_metadata(dataset, key, value):
     # We have just modified _common_metadata file, but the filesystem implementation used by pyarrow does not
     # update the .crc value. We better delete the .crc to make sure there is no mismatch between _common_metadata
     # content and the checksum.
-    if isinstance(dataset.fs, LocalFileSystem) and dataset.fs.exists(common_metadata_file_crc_path):
-        try:
-            dataset.fs.rm(common_metadata_file_crc_path)
-        except NotImplementedError:
-            os.remove(common_metadata_file_crc_path)
+    if isinstance(dataset.fs, fs.LocalFileSystem):
+        if dataset.fs.get_file_info(common_metadata_file_crc_path).is_file:
+            try:
+                dataset.fs.delete_file(common_metadata_file_crc_path)
+            except NotImplementedError:
+                os.remove(common_metadata_file_crc_path)

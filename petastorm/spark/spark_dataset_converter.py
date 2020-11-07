@@ -25,14 +25,13 @@ from multiprocessing.pool import ThreadPool
 from typing import List, Any
 
 import pyspark
-from pyarrow import LocalFileSystem
+from pyarrow import fs
 from pyspark.sql.session import SparkSession
 from pyspark.sql.types import ArrayType, DoubleType, FloatType
 from six.moves.urllib.parse import urlparse
 
 from petastorm import make_batch_reader
-from petastorm.fs_utils import (FilesystemResolver,
-                                get_filesystem_and_path_or_paths, normalize_dir_url)
+from petastorm.fs_utils import get_filesystem_and_path_or_paths, normalize_dir_url
 
 if LooseVersion(pyspark.__version__) < LooseVersion('3.0'):
     def vector_to_array(_1, _2='float32'):
@@ -79,10 +78,9 @@ def _get_parent_cache_dir_url():
 
 
 def _default_delete_dir_handler(dataset_url):
-    resolver = FilesystemResolver(dataset_url)
-    fs = resolver.filesystem()
+    filesystem, path = fs.FileSystem.from_uri(dataset_url)
     parsed = urlparse(dataset_url)
-    if isinstance(fs, LocalFileSystem):
+    if isinstance(filesystem, fs.LocalFileSystem):
         # pyarrow has a bug: LocalFileSystem.delete() is not implemented.
         # https://issues.apache.org/jira/browse/ARROW-7953
         # We can remove this branch once ARROW-7953 is fixed.
@@ -90,8 +88,8 @@ def _default_delete_dir_handler(dataset_url):
         if os.path.exists(local_path):
             shutil.rmtree(local_path, ignore_errors=False)
     else:
-        if fs.exists(parsed.path):
-            fs.delete(parsed.path, recursive=True)
+        if filesystem.get_file_info(parsed.path).type == fs.FileType.Directory:
+            filesystem.delete_dir(parsed.path)
 
 
 _delete_dir_handler = _default_delete_dir_handler
@@ -455,9 +453,9 @@ def _check_url(dir_url):
 def _check_parent_cache_dir_url(dir_url):
     """Check dir url whether is suitable to be used as parent cache directory."""
     _check_url(dir_url)
-    fs, dir_path = get_filesystem_and_path_or_paths(dir_url)
+    filesystem, dir_path = get_filesystem_and_path_or_paths(dir_url)
     if 'DATABRICKS_RUNTIME_VERSION' in os.environ and not _is_spark_local_mode():
-        if isinstance(fs, LocalFileSystem):
+        if isinstance(filesystem, fs.LocalFileSystem):
             # User need to use dbfs fuse URL.
             if not dir_path.startswith('/dbfs/'):
                 logger.warning(
@@ -597,13 +595,13 @@ def _wait_file_available(url_list):
     all files are available for reading. This is useful in some filesystems, such as S3 which only
     providing eventually consistency.
     """
-    fs, path_list = get_filesystem_and_path_or_paths(url_list)
+    filesystem, path_list = get_filesystem_and_path_or_paths(url_list)
     logger.debug('Waiting some seconds until all parquet-store files appear at urls %s', ','.join(url_list))
 
     def wait_for_file(path):
         end_time = time.time() + _FILE_AVAILABILITY_WAIT_TIMEOUT_SECS
         while time.time() < end_time:
-            if fs.exists(path):
+            if filesystem.get_file_info(path).type == fs.FileType.File:
                 return True
             time.sleep(0.1)
         return False
@@ -622,11 +620,11 @@ def _wait_file_available(url_list):
 
 
 def _check_dataset_file_median_size(url_list):
-    fs, path_list = get_filesystem_and_path_or_paths(url_list)
+    filesystem, path_list = get_filesystem_and_path_or_paths(url_list)
     RECOMMENDED_FILE_SIZE_BYTES = 50 * 1024 * 1024
 
     # TODO: also check file size for other file system.
-    if isinstance(fs, LocalFileSystem):
+    if isinstance(filesystem, fs.LocalFileSystem):
         pool = ThreadPool(64)
         try:
             file_size_list = pool.map(os.path.getsize, path_list)

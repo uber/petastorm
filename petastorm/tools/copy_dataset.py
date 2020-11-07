@@ -25,10 +25,9 @@ from functools import reduce  # pylint: disable=W0622
 
 from pyspark.sql import SparkSession
 
-from petastorm.unischema import match_unischema_fields
 from petastorm.etl.dataset_metadata import materialize_dataset, get_schema_from_dataset_url
 from petastorm.tools.spark_session_cli import add_configure_spark_arguments, configure_spark
-from petastorm.fs_utils import FilesystemResolver
+from petastorm.unischema import match_unischema_fields
 
 
 def copy_dataset(spark, source_url, target_url, field_regex, not_null_fields, overwrite_output, partitions_count,
@@ -67,10 +66,7 @@ def copy_dataset(spark, source_url, target_url, field_regex, not_null_fields, ov
     else:
         subschema = schema
 
-    resolver = FilesystemResolver(target_url, spark.sparkContext._jsc.hadoopConfiguration(),
-                                  hdfs_driver=hdfs_driver, user=spark.sparkContext.sparkUser())
-    with materialize_dataset(spark, target_url, subschema, row_group_size_mb,
-                             filesystem_factory=resolver.filesystem_factory()):
+    with materialize_dataset(spark, target_url, subschema, row_group_size_mb):
         data_frame = spark.read \
             .parquet(source_url)
 

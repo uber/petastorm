@@ -33,7 +33,8 @@ from unittest import mock
 def _mock_parquet_dataset(partitions, arrow_schema):
     """Creates a pyarrow.ParquetDataset mock capable of returning:
 
-        parquet_dataset.pieces[0].get_metadata(parquet_dataset.fs.open).schema.to_arrow_schema() == schema
+        parquet_dataset.pieces[0].get_metadata(parquet_dataset.fs.open
+        ).schema.to_arrow_schema() == schema
         parquet_dataset.partitions = partitions
 
     :param partitions: expected to be a list of pa.parquet.PartitionSet

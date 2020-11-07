@@ -12,20 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import tempfile
 import operator
 import os
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from shutil import rmtree, copytree
-from six.moves.urllib.parse import urlparse
+from unittest import mock
 
 import numpy as np
-import pyarrow.hdfs
 import pytest
+from pyarrow import fs
 from pyspark.sql import SparkSession
 from pyspark.sql.types import LongType, ShortType, StringType
-
-from unittest import mock
+from six.moves.urllib.parse import urlparse
 
 from petastorm import make_reader, make_batch_reader, TransformSpec
 from petastorm.codecs import ScalarCodec, CompressedImageCodec
@@ -783,7 +782,7 @@ def test_pass_in_pyarrow_filesystem_to_materialize_dataset(synthetic_dataset, tm
     a_moved_path = tmpdir.join('moved').strpath
     copytree(synthetic_dataset.path, a_moved_path)
 
-    local_fs = pyarrow.LocalFileSystem
+    local_fs = fs.LocalFileSystem
     os.remove(a_moved_path + '/_common_metadata')
 
     spark = SparkSession.builder.getOrCreate()

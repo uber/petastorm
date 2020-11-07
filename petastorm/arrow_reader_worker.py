@@ -23,7 +23,6 @@ from pyarrow import parquet as pq
 from pyarrow.parquet import ParquetFile
 
 from petastorm.cache import NullCache
-from petastorm.compat import compat_piece_read, compat_table_columns_gen, compat_column_data
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.worker_base import WorkerBase
 
@@ -45,11 +44,12 @@ class ArrowReaderWorkerResultsQueueReader(object):
             # Convert arrow table columns into numpy. Strings are handled differently since to_pandas() returns
             # numpy array of dtype=object.
             result_dict = dict()
-            for column_name, column in compat_table_columns_gen(result_table):
+            for column_name in result_table.column_names:
+                column = result_table.column(column_name)
                 # Assume we get only one chunk since reader worker reads one rowgroup at a time
 
                 # `to_pandas` works slower when called on the entire `data` rather directly on a chunk.
-                if compat_column_data(result_table.column(0)).num_chunks == 1:
+                if result_table.column(0).num_chunks == 1:
                     column_as_pandas = column.data.chunks[0].to_pandas()
                 else:
                     column_as_pandas = column.data.to_pandas()
@@ -130,7 +130,7 @@ class ArrowReaderWorker(WorkerBase):
             self._dataset = pq.ParquetDataset(
                 self._dataset_path_or_paths,
                 filesystem=self._filesystem,
-                validate_schema=False, filters=self._arrow_filters)
+                validate_schema=False, filters=self._arrow_filters, use_legacy_dataset=True)
 
         if self._dataset.partitions is None:
             # When read from parquet file list, the `dataset.partitions` will be None.
@@ -287,13 +287,13 @@ class ArrowReaderWorker(WorkerBase):
         partition_names = self._dataset.partitions.partition_names
 
         # pyarrow would fail if we request a column names that the dataset is partitioned by
-        table = compat_piece_read(piece, lambda _: pq_file, columns=column_names - partition_names,
-                                  partitions=self._dataset.partitions)
+        table = piece.read(columns=column_names - partition_names, partitions=self._dataset.partitions)
 
         # Drop columns we did not explicitly request. This may happen when a table is partitioned. Besides columns
         # requested, pyarrow will also return partition values. Having these unexpected fields will break some
         # downstream code.
-        loaded_column_names = set(column[0] for column in compat_table_columns_gen(table))
+
+        loaded_column_names = set(table.column_names)
         unasked_for_columns = loaded_column_names - column_names
         if unasked_for_columns:
             table = table.drop(unasked_for_columns)

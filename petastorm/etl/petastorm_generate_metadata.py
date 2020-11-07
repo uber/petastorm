@@ -18,12 +18,12 @@ import argparse
 import sys
 from pydoc import locate
 
+from pyarrow import fs
 from pyarrow import parquet as pq
 from pyspark.sql import SparkSession
 
 from petastorm.etl.dataset_metadata import materialize_dataset, get_schema, ROW_GROUPS_PER_FILE_KEY
 from petastorm.etl.rowgroup_indexing import ROWGROUPS_INDEX_KEY
-from petastorm.fs_utils import FilesystemResolver
 from petastorm.unischema import Unischema
 from petastorm.utils import add_to_dataset_metadata
 
@@ -60,13 +60,12 @@ def generate_petastorm_metadata(spark, dataset_url, unischema_class=None, use_su
     """
     sc = spark.sparkContext
 
-    resolver = FilesystemResolver(dataset_url, sc._jsc.hadoopConfiguration(), hdfs_driver=hdfs_driver,
-                                  user=spark.sparkContext.sparkUser())
-    fs = resolver.filesystem()
+    filesystem, path = fs.FileSystem.from_uri(dataset_url)
     dataset = pq.ParquetDataset(
-        resolver.get_dataset_path(),
-        filesystem=fs,
-        validate_schema=False)
+        path,
+        filesystem=filesystem,
+        validate_schema=False,
+        use_legacy_dataset=True)
 
     if unischema_class:
         schema = locate(unischema_class)
@@ -85,8 +84,11 @@ def generate_petastorm_metadata(spark, dataset_url, unischema_class=None, use_su
     # overwriting the metadata to keep row group indexes and the old row group per file index
     arrow_metadata = dataset.common_metadata or None
 
+    def filesystem_factory():
+        return fs.FileSystem.from_uri(dataset_url)[0]
+
     with materialize_dataset(spark, dataset_url, schema, use_summary_metadata=use_summary_metadata,
-                             filesystem_factory=resolver.filesystem_factory()):
+                             filesystem_factory=filesystem_factory):
         if use_summary_metadata:
             # Inside the materialize dataset context we just need to write the metadata file as the schema will
             # be written by the context manager.
