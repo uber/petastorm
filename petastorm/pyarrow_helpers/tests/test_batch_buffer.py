@@ -15,7 +15,6 @@
 import numpy as np
 import pyarrow as pa
 
-from petastorm.compat import compat_column_data
 from petastorm.pyarrow_helpers.batching_table_queue import BatchingTableQueue
 
 
@@ -43,16 +42,16 @@ def test_single_table_of_10_rows_added_and_2_batches_of_4_read():
     next_batch = batcher.get()
 
     assert 4 == next_batch.num_rows
-    np.testing.assert_equal(compat_column_data(next_batch.column(0)).to_pylist(), list(range(0, 4)))
-    np.testing.assert_equal(compat_column_data(next_batch.column(1)).to_pylist(), list(range(0, 4)))
+    np.testing.assert_equal(next_batch.column(0).to_pylist(), list(range(0, 4)))
+    np.testing.assert_equal(next_batch.column(1).to_pylist(), list(range(0, 4)))
 
     # Get second batch of 4
     assert not batcher.empty()
     next_batch = batcher.get()
 
     assert 4 == next_batch.num_rows
-    np.testing.assert_equal(compat_column_data(next_batch.column(0)).to_pylist(), list(range(4, 8)))
-    np.testing.assert_equal(compat_column_data(next_batch.column(1)).to_pylist(), list(range(4, 8)))
+    np.testing.assert_equal(next_batch.column(0).to_pylist(), list(range(4, 8)))
+    np.testing.assert_equal(next_batch.column(1).to_pylist(), list(range(4, 8)))
 
     # No more batches available
     assert batcher.empty()
@@ -77,8 +76,8 @@ def test_two_tables_of_10_added_reading_5_batches_of_4():
 
         assert 4 == next_batch.num_rows
         expected_values = list(range(i * 4, i * 4 + 4))
-        np.testing.assert_equal(compat_column_data(next_batch.column(0)).to_pylist(), expected_values)
-        np.testing.assert_equal(compat_column_data(next_batch.column(1)).to_pylist(), expected_values)
+        np.testing.assert_equal(next_batch.column(0).to_pylist(), expected_values)
+        np.testing.assert_equal(next_batch.column(1).to_pylist(), expected_values)
 
 
 def test_read_batches_larger_than_a_table_added():
@@ -94,15 +93,15 @@ def test_read_batches_larger_than_a_table_added():
     next_batch = batcher.get()
 
     assert 4 == next_batch.num_rows
-    np.testing.assert_equal(compat_column_data(next_batch.column(0)).to_pylist(), list(range(0, 4)))
-    np.testing.assert_equal(compat_column_data(next_batch.column(1)).to_pylist(), list(range(0, 4)))
+    np.testing.assert_equal(next_batch.column(0).to_pylist(), list(range(0, 4)))
+    np.testing.assert_equal(next_batch.column(1).to_pylist(), list(range(0, 4)))
 
     assert not batcher.empty()
     next_batch = batcher.get()
 
     assert 4 == next_batch.num_rows
-    np.testing.assert_equal(compat_column_data(next_batch.column(0)).to_pylist(), list(range(4, 8)))
-    np.testing.assert_equal(compat_column_data(next_batch.column(1)).to_pylist(), list(range(4, 8)))
+    np.testing.assert_equal(next_batch.column(0).to_pylist(), list(range(4, 8)))
+    np.testing.assert_equal(next_batch.column(1).to_pylist(), list(range(4, 8)))
 
     assert batcher.empty()
 
@@ -144,7 +143,7 @@ def test_random_table_size_and_random_batch_sizes():
         for _ in range(next_read):
             if not batcher.empty():
                 read_batch = batcher.get()
-                for value in compat_column_data(read_batch.columns[0]):
+                for value in read_batch.columns[0]:
                     assert value.as_py() == read_seq
                     read_seq += 1
 
