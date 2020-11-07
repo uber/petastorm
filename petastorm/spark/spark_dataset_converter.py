@@ -88,8 +88,8 @@ def _default_delete_dir_handler(dataset_url):
         if os.path.exists(local_path):
             shutil.rmtree(local_path, ignore_errors=False)
     else:
-        if fs.exists(parsed.path):
-            fs.delete(parsed.path, recursive=True)
+        if filesystem.get_file_info(parsed.path).type == fs.FileType.Directory:
+            filesystem.delete_dir(parsed.path)
 
 
 _delete_dir_handler = _default_delete_dir_handler
@@ -620,11 +620,11 @@ def _wait_file_available(url_list):
 
 
 def _check_dataset_file_median_size(url_list):
-    fs, path_list = get_filesystem_and_path_or_paths(url_list)
+    filesystem, path_list = get_filesystem_and_path_or_paths(url_list)
     RECOMMENDED_FILE_SIZE_BYTES = 50 * 1024 * 1024
 
     # TODO: also check file size for other file system.
-    if isinstance(fs, fs.LocalFileSystem):
+    if isinstance(filesystem, fs.LocalFileSystem):
         pool = ThreadPool(64)
         try:
             file_size_list = pool.map(os.path.getsize, path_list)
