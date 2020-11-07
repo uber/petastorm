@@ -130,7 +130,7 @@ class ArrowReaderWorker(WorkerBase):
             self._dataset = pq.ParquetDataset(
                 self._dataset_path_or_paths,
                 filesystem=self._filesystem,
-                validate_schema=False, filters=self._arrow_filters)
+                validate_schema=False, filters=self._arrow_filters, use_legacy_dataset=True)
 
         if self._dataset.partitions is None:
             # When read from parquet file list, the `dataset.partitions` will be None.

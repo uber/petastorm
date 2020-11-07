@@ -386,7 +386,7 @@ class Reader(object):
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
         self.dataset = pq.ParquetDataset(dataset_path, filesystem=pyarrow_filesystem,
                                          validate_schema=False, metadata_nthreads=10,
-                                         filters=filters)
+                                         filters=filters, use_legacy_dataset=True)
 
         if self.dataset.partitions is None:
             # When read from parquet file list, the `dataset.partitions` will be None.

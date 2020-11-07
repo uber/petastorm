@@ -13,11 +13,10 @@
 # limitations under the License.
 
 """A set of Spark specific helper functions for the petastorm dataset"""
-from six.moves.urllib.parse import urlparse
 
 from petastorm import utils
 from petastorm.etl.dataset_metadata import get_schema_from_dataset_url
-from petastorm.fs_utils import FilesystemResolver
+from petastorm.fs_utils import get_dataset_path
 
 
 def dataset_as_rdd(dataset_url, spark_session, schema_fields=None, hdfs_driver='libhdfs3'):
@@ -33,12 +32,7 @@ def dataset_as_rdd(dataset_url, spark_session, schema_fields=None, hdfs_driver='
     """
     schema = get_schema_from_dataset_url(dataset_url, hdfs_driver=hdfs_driver)
 
-    dataset_url_parsed = urlparse(dataset_url)
-
-    resolver = FilesystemResolver(dataset_url_parsed, spark_session.sparkContext._jsc.hadoopConfiguration(),
-                                  hdfs_driver=hdfs_driver)
-
-    dataset_df = spark_session.read.parquet(resolver.get_dataset_path())
+    dataset_df = spark_session.read.parquet(get_dataset_path(dataset_url))
     if schema_fields is not None:
         # If wanting a subset of fields, create the schema view and run a select on those fields
         schema = schema.create_schema_view(schema_fields)

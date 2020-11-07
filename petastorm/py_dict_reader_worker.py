@@ -135,7 +135,7 @@ class PyDictReaderWorker(WorkerBase):
             self._dataset = pq.ParquetDataset(
                 self._dataset_path,
                 filesystem=self._filesystem,
-                validate_schema=False, filters=self._arrow_filters)
+                validate_schema=False, filters=self._arrow_filters, use_legacy_dataset=True)
 
         piece = self._split_pieces[piece_index]
 

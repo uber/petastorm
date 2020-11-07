@@ -20,7 +20,7 @@ from multiprocessing import Pool
 import numpy as np
 import pyarrow
 from future.utils import raise_with_traceback
-from pyarrow.filesystem import LocalFileSystem
+from pyarrow import fs
 
 logger = logging.getLogger(__name__)
 
@@ -125,8 +125,9 @@ def add_to_dataset_metadata(dataset, key, value):
     # We have just modified _common_metadata file, but the filesystem implementation used by pyarrow does not
     # update the .crc value. We better delete the .crc to make sure there is no mismatch between _common_metadata
     # content and the checksum.
-    if isinstance(dataset.fs, LocalFileSystem) and dataset.fs.exists(common_metadata_file_crc_path):
-        try:
-            dataset.fs.rm(common_metadata_file_crc_path)
-        except NotImplementedError:
-            os.remove(common_metadata_file_crc_path)
+    if isinstance(dataset.fs, fs.LocalFileSystem):
+        if dataset.fs.get_file_info(common_metadata_file_crc_path).is_file:
+            try:
+                dataset.fs.delete_file(common_metadata_file_crc_path)
+            except NotImplementedError:
+                os.remove(common_metadata_file_crc_path)

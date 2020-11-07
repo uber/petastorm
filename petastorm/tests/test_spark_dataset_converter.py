@@ -25,6 +25,7 @@ import pyspark
 import pytest
 import py4j
 import tensorflow.compat.v1 as tf  # pylint: disable=import-error
+from pyarrow import fs
 from pyspark.sql.functions import pandas_udf
 from pyspark.sql.types import (ArrayType, BinaryType, BooleanType, ByteType,
                                DoubleType, FloatType, IntegerType, LongType,
@@ -32,7 +33,6 @@ from pyspark.sql.types import (ArrayType, BinaryType, BooleanType, ByteType,
 from six.moves.urllib.parse import urlparse
 
 from petastorm import make_batch_reader
-from petastorm.fs_utils import FilesystemResolver
 from petastorm.spark import (SparkDatasetConverter, make_spark_converter,
                              spark_dataset_converter)
 from petastorm.spark.spark_dataset_converter import (
@@ -151,8 +151,8 @@ def test_atexit(spark_test_ctx):
     with open(os.path.join(spark_test_ctx.tempdir, 'test_atexit.out')) as f:
         cache_dir_url = f.read()
 
-    fs = FilesystemResolver(cache_dir_url).filesystem()
-    assert not fs.exists(urlparse(cache_dir_url).path)
+    filesystem, path = fs.LocalFileSystem.from_uri(cache_dir_url)
+    assert not filesystem.get_file_info(path).is_file
 
 
 def test_set_delete_handler(spark_test_ctx):

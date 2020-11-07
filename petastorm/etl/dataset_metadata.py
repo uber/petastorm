@@ -21,12 +21,13 @@ from operator import attrgetter
 from urllib.parse import urlparse
 
 from packaging import version
+from pyarrow import fs
 from pyarrow import parquet as pq
 from six.moves import cPickle as pickle
 
 from petastorm import utils
 from petastorm.etl.legacy import depickle_legacy_package_name_compatible
-from petastorm.fs_utils import FilesystemResolver, get_filesystem_and_path_or_paths, get_dataset_path
+from petastorm.fs_utils import get_filesystem_and_path_or_paths, get_dataset_path
 from petastorm.unischema import Unischema
 
 logger = logging.getLogger(__name__)
@@ -73,15 +74,6 @@ def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_
     A user may provide their own recipe for creation of pyarrow filesystem object in ``filesystem_factory``
     argument (otherwise, petastorm will create a default one based on the url).
 
-    The following example shows how a custom pyarrow HDFS filesystem, instantiated using ``libhdfs`` driver can be used
-    during Petastorm dataset generation:
-
-    >>> resolver=FilesystemResolver(dataset_url, spark.sparkContext._jsc.hadoopConfiguration(),
-    >>>                             hdfs_driver='libhdfs')
-    >>> with materialize_dataset(..., filesystem_factory=resolver.filesystem_factory()):
-    >>>     ...
-
-
     :param spark: The spark session you are using
     :param dataset_url: The dataset url to output your dataset to (e.g. ``hdfs:///path/to/dataset``)
     :param schema: The :class:`petastorm.unischema.Unischema` definition of your dataset
@@ -96,18 +88,18 @@ def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_
     yield
     # After job completes, add the unischema metadata and check for the metadata summary file
     if filesystem_factory is None:
-        resolver = FilesystemResolver(dataset_url, spark.sparkContext._jsc.hadoopConfiguration(),
-                                      user=spark.sparkContext.sparkUser())
-        filesystem_factory = resolver.filesystem_factory()
-        dataset_path = resolver.get_dataset_path()
+        filesystem, dataset_path = fs.FileSystem.from_uri(dataset_url)
+
+        def filesystem_factory():
+            return fs.FileSystem.from_uri(dataset_url)[0]
     else:
         dataset_path = get_dataset_path(urlparse(dataset_url))
-    filesystem = filesystem_factory()
+        filesystem = filesystem_factory()
 
     dataset = pq.ParquetDataset(
         dataset_path,
         filesystem=filesystem,
-        validate_schema=False)
+        validate_schema=False, use_legacy_dataset=True)
 
     _generate_unischema_metadata(dataset, schema)
     if not use_summary_metadata:
@@ -117,7 +109,7 @@ def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_
     dataset = pq.ParquetDataset(
         dataset_path,
         filesystem=filesystem,
-        validate_schema=False)
+        validate_schema=False, use_legacy_dataset=True)
     try:
         # Try to load the row groups, if it fails that means the metadata was not generated properly
         load_row_groups(dataset)
@@ -228,7 +220,7 @@ def _generate_num_row_groups_per_file(dataset, spark_context, filesystem_factory
     def get_row_group_info(path):
         fs = filesystem_factory()
         relative_path = os.path.relpath(path, base_path)
-        pq_file = fs.open(path)
+        pq_file = fs.open_input_file(path)
         num_row_groups = pq.read_metadata(pq_file).num_row_groups
         pq_file.close()
         return relative_path, num_row_groups
@@ -395,7 +387,8 @@ def get_schema_from_dataset_url(dataset_url_or_urls, hdfs_driver='libhdfs3'):
     """
     fs, path_or_paths = get_filesystem_and_path_or_paths(dataset_url_or_urls, hdfs_driver)
 
-    dataset = pq.ParquetDataset(path_or_paths, filesystem=fs, validate_schema=False, metadata_nthreads=10)
+    dataset = pq.ParquetDataset(path_or_paths, filesystem=fs, validate_schema=False, metadata_nthreads=10,
+                                use_legacy_dataset=True)
 
     # Get a unischema stored in the dataset metadata.
     stored_schema = get_schema(dataset)

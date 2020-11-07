@@ -14,7 +14,7 @@
 
 import numpy as np
 import pytest
-import pyarrow
+from pyarrow import fs
 from pyspark.sql import SparkSession
 from pyspark.sql.types import IntegerType
 
@@ -33,9 +33,6 @@ def test_get_schema_from_dataset_url_bogus_url():
     with pytest.raises(IOError):
         get_schema_from_dataset_url('file:///non-existing-path')
 
-    with pytest.raises(ValueError):
-        get_schema_from_dataset_url('/invalid_url')
-
 
 def test_serialize_filesystem_factory(tmpdir):
     SimpleSchema = Unischema('SimpleSchema', [
@@ -43,7 +40,7 @@ def test_serialize_filesystem_factory(tmpdir):
         UnischemaField('foo', np.int32, (), ScalarCodec(IntegerType()), False),
     ])
 
-    class BogusFS(pyarrow.LocalFileSystem):
+    class BogusFS(fs.LocalFileSystem):
         def __getstate__(self):
             raise RuntimeError("can not serialize")
 
@@ -53,8 +50,8 @@ def test_serialize_filesystem_factory(tmpdir):
     spark = SparkSession.builder.config('spark.driver.memory', '2g').master('local[2]').getOrCreate()
     sc = spark.sparkContext
     with materialize_dataset(spark, output_url, SimpleSchema, rowgroup_size_mb, filesystem_factory=BogusFS):
-        rows_rdd = sc.parallelize(range(rows_count))\
-            .map(lambda x: {'id': x, 'foo': x})\
+        rows_rdd = sc.parallelize(range(rows_count)) \
+            .map(lambda x: {'id': x, 'foo': x}) \
             .map(lambda x: dict_to_spark_row(SimpleSchema, x))
 
         spark.createDataFrame(rows_rdd, SimpleSchema.as_spark_schema()) \

@@ -219,7 +219,7 @@ def get_filesystem_and_path_or_paths(url_or_urls, hdfs_driver='libhdfs3', s3_con
         if parsed_url.scheme != first_scheme or parsed_url.netloc != first_netloc:
             raise ValueError('The dataset url list must contain url with the same scheme and netloc.')
 
-    fs = FilesystemResolver(url_list[0], hdfs_driver=hdfs_driver, s3_config_kwargs=s3_config_kwargs).filesystem()
+    fs, _ = pyarrow.fs.FileSystem.from_uri(url_list[0])
     path_list = [get_dataset_path(parsed_url) for parsed_url in parsed_url_list]
 
     if isinstance(url_or_urls, list):
