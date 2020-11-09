@@ -115,8 +115,8 @@ def make_batched_reader_and_loader(num_epochs=1,
                                    **kwargs):
 
     if cache_in_loader_memory:
-        # When caching in memory, reader reads data from source only once. The rest of epochs are
-        # served from on memory cached buffer in loader.
+        # When caching in memory, reader reads the data from source only once. Rest of the epochs
+        # are served from in-memory cached buffer in the loader.
         num_epochs_to_load = num_epochs
         num_epochs = 1
 
