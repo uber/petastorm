@@ -26,7 +26,7 @@ from torch.utils.data.dataloader import default_collate
 
 from contextlib import contextmanager
 
-from petastorm.reader import make_batch_reader
+from petastorm.reader import make_batch_reader, make_reader
 from petastorm.reader_impl.pytorch_shuffling_buffer import BatchedRandomShufflingBuffer, \
     BatchedRandomShufflingBufferWithMemCache, BatchedNoopShufflingBuffer
 from petastorm.reader_impl.shuffling_buffer import RandomShufflingBuffer, NoopShufflingBuffer
@@ -112,6 +112,7 @@ def make_batched_reader_and_loader(num_epochs=1,
                                    cache_in_loader_memory=False,
                                    cache_size_limit=None,
                                    cache_row_size_estimate=None,
+                                   transform_spec=None,
                                    **kwargs):
 
     if cache_in_loader_memory:
@@ -120,7 +121,18 @@ def make_batched_reader_and_loader(num_epochs=1,
         num_epochs_to_load = num_epochs
         num_epochs = 1
 
-    reader = make_batch_reader(num_epochs=num_epochs, **kwargs)
+    # In general, make_batch_reader is faster than make_reader for reading the dataset.
+    # However, we found out that make_reader performs data transformations much faster than
+    # make_batch_reader with parallel worker processes. Therefore, the default reader
+    # we choose is make_batch_reader unless there are data transformations.
+    if transform_spec:
+        reader_factory = make_reader
+        if 'pyarrow_serialize' not in kwargs:
+            kwargs['pyarrow_serialize'] = True
+    else:
+        reader_factory = make_batch_reader
+
+    reader = reader_factory(num_epochs=num_epochs, **kwargs)
     try:
         loader = BatchedDataLoader(reader,
                                    batch_size=batch_size,

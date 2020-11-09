@@ -159,7 +159,7 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
         for cache_type in [MEMORY_CACHE, None]:
 
             for shuffling_queue_capacity in [0, 20]:
-                print("testing args: {}, cache_type: {}, shuffling_queue_capacity: {}"
+                print("testing args: cache_type: {}, shuffling_queue_capacity: {}"
                       .format(cache_type,
                               shuffling_queue_capacity))
 
