@@ -114,8 +114,7 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
                                         reader_pool_type='thread',
                                         workers_count=2,
                                         hdfs_driver='libhdfs',
-                                        schema_fields=['col_0'],
-                                        **extra_reader_params) as reader:
+                                        schema_fields=['col_0'], **extra_reader_params) as reader:
 
                         loader = BatchedDataLoader(reader,
                                                    batch_size=batch_size,
@@ -174,16 +173,15 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
                 print("make_fn_params", make_fn_params)
 
                 with make_batched_reader_and_loader(
-                    batch_size=batch_size,
-                    transform_fn=partial(torch.as_tensor, device='cpu'),
-                    dataset_url_or_urls=self._dataset_url,
-                    cur_shard=0,
-                    shard_count=1,
-                    reader_pool_type='thread',
-                    workers_count=2,
-                    hdfs_driver='libhdfs',
-                    schema_fields=['col_0'],
-                    **make_fn_params) as loader:
+                        batch_size=batch_size,
+                        transform_fn=partial(torch.as_tensor, device='cpu'),
+                        dataset_url_or_urls=self._dataset_url,
+                        cur_shard=0,
+                        shard_count=1,
+                        reader_pool_type='thread',
+                        workers_count=2,
+                        hdfs_driver='libhdfs',
+                        schema_fields=['col_0'], **make_fn_params) as loader:
 
                     it = iter(loader)
                     retrieved_so_far = None
