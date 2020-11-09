@@ -24,6 +24,9 @@ from packaging import version
 from six import PY2
 from torch.utils.data.dataloader import default_collate
 
+from contextlib import contextmanager
+
+from petastorm.reader import make_batch_reader
 from petastorm.reader_impl.pytorch_shuffling_buffer import BatchedRandomShufflingBuffer, \
     BatchedRandomShufflingBufferWithMemCache, BatchedNoopShufflingBuffer
 from petastorm.reader_impl.shuffling_buffer import RandomShufflingBuffer, NoopShufflingBuffer
@@ -99,6 +102,38 @@ def decimal_friendly_collate(batch):
 _PARALLEL_ITER_ERROR = "You must finish a full pass of Petastorm DataLoader before making another pass from the \
 beginning.If you do need to terminate early and restart from beginning, please re-create the reader and the data \
 loader."
+
+
+@contextmanager
+def make_batched_reader_and_loader(num_epochs=1,
+                                   batch_size=1,
+                                   transform_fn=None,
+                                   shuffling_queue_capacity=0,
+                                   cache_in_loader_memory=False,
+                                   cache_size_limit=None,
+                                   cache_row_size_estimate=None,
+                                   **kwargs):
+
+    if cache_in_loader_memory:
+        # When caching in memory, reader reads data from source only once. The rest of epochs are
+        # served from on memory cached buffer in loader.
+        num_epochs_to_load = num_epochs
+        num_epochs = 1
+
+    reader = make_batch_reader(num_epochs=num_epochs, **kwargs)
+    try:
+        loader = BatchedDataLoader(reader,
+                                   batch_size=batch_size,
+                                   transform_fn=transform_fn,
+                                   shuffling_queue_capacity=shuffling_queue_capacity,
+                                   cache_in_loader_memory=cache_in_loader_memory,
+                                   cache_size_limit=cache_size_limit,
+                                   cache_row_size_estimate=cache_row_size_estimate,
+                                   num_epochs_to_load=num_epochs_to_load)
+
+        yield loader
+    finally:
+        reader.__exit__()
 
 
 class LoaderBase(object):
@@ -290,7 +325,7 @@ class BatchedDataLoader(LoaderBase):
         :param batch_size: the number of items to return per batch; factored into the len() of this reader
         :param transform_fn: an optional callable to convert batches from the reader to PyTorch tensors
         :param shuffling_queue_capacity: Queue capacity is passed to the underlying :class:`tf.RandomShuffleQueue`
-          instance. If set to 0, no suffling will be done.
+          instance. If set to 0, no shuffling will be done.
         :param cache_in_loader_memory: This is a boolean flag that indicates if we want to cache the
             data in memory. Note that the data will be cached in the Shuffling buffer and not in the
             reader itself because we do not want to cache it twice. Currently, only
