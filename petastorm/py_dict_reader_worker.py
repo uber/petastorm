@@ -22,7 +22,6 @@ from pyarrow.parquet import ParquetFile
 
 from petastorm import utils
 from petastorm.cache import NullCache
-from petastorm.compat import compat_piece_read
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.worker_base import WorkerBase
 
@@ -255,8 +254,8 @@ class PyDictReaderWorker(WorkerBase):
     def _read_with_shuffle_row_drop(self, piece, pq_file, column_names, shuffle_row_drop_partition):
         # If integer_object_nulls is set to False, nullable integer fields are return as floats
         # with nulls translated to nans
-        data_frame = compat_piece_read(piece, lambda _: pq_file, columns=column_names,
-                                       partitions=self._dataset.partitions).to_pandas(integer_object_nulls=True)
+        data_frame = piece.read(columns=column_names, partitions=self._dataset.partitions).to_pandas(
+            integer_object_nulls=True)
 
         num_rows = len(data_frame)
         num_partitions = shuffle_row_drop_partition[1]
