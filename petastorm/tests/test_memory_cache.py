@@ -160,8 +160,7 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
 
             for shuffling_queue_capacity in [0, 20]:
                 print("testing args: cache_type: {}, shuffling_queue_capacity: {}"
-                      .format(cache_type,
-                              shuffling_queue_capacity))
+                      .format(cache_type, shuffling_queue_capacity))
 
                 if cache_type == MEMORY_CACHE:
                     make_fn_params = dict(cache_size_limit=1000,
