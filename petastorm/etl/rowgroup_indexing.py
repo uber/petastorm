@@ -21,7 +21,6 @@ from six.moves import cPickle as pickle
 from six.moves import range
 
 from petastorm import utils
-from petastorm.compat import compat_piece_read, compat_make_parquet_piece
 from petastorm.etl import dataset_metadata
 from petastorm.etl.legacy import depickle_legacy_package_name_compatible
 from petastorm.fs_utils import FilesystemResolver
@@ -98,8 +97,8 @@ def _index_columns(piece_info, dataset_url, partitions, indexers, schema, hdfs_d
     fs = resolver.filesystem()
 
     # Create pyarrow piece
-    piece = compat_make_parquet_piece(piece_info.path, fs.open, row_group=piece_info.row_group,
-                                      partition_keys=piece_info.partition_keys)
+    piece = pq.ParquetDatasetPiece(piece_info.path, open_file_func=fs.open, row_group=piece_info.row_group,
+                                   partition_keys=piece_info.partition_keys)
 
     # Collect column names needed for indexing
     column_names = set()
@@ -107,8 +106,7 @@ def _index_columns(piece_info, dataset_url, partitions, indexers, schema, hdfs_d
         column_names.update(indexer.column_names)
 
     # Read columns needed for indexing
-    column_rows = compat_piece_read(piece, fs.open, columns=list(column_names),
-                                    partitions=partitions).to_pandas().to_dict('records')
+    column_rows = piece.read(columns=list(column_names), partitions=partitions).to_pandas().to_dict('records')
 
     # Decode columns values
     decoded_rows = [utils.decode_row(row, schema) for row in column_rows]

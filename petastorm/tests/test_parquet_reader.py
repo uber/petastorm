@@ -21,7 +21,6 @@ from pyarrow import parquet as pq
 from petastorm import make_batch_reader
 from petastorm.arrow_reader_worker import ArrowReaderWorker
 # pylint: disable=unnecessary-lambda
-from petastorm.compat import compat_get_metadata
 from petastorm.tests.test_common import create_test_scalar_dataset
 from petastorm.transform import TransformSpec
 from petastorm.unischema import UnischemaField
@@ -128,7 +127,7 @@ def test_asymetric_parquet_pieces(reader_factory, tmpdir):
 
     # We verify we have pieces with different number of row-groups
     dataset = pq.ParquetDataset(tmpdir.strpath)
-    row_group_counts = set(compat_get_metadata(piece, dataset.fs.open).num_row_groups for piece in dataset.pieces)
+    row_group_counts = set(piece.get_metadata().num_row_groups for piece in dataset.pieces)
     assert len(row_group_counts) > 1
 
     # Make sure we are not missing any rows.

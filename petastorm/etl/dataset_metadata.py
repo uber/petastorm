@@ -25,7 +25,6 @@ from pyarrow import parquet as pq
 from six.moves import cPickle as pickle
 
 from petastorm import utils
-from petastorm.compat import compat_get_metadata, compat_make_parquet_piece
 from petastorm.etl.legacy import depickle_legacy_package_name_compatible
 from petastorm.fs_utils import FilesystemResolver, get_filesystem_and_path_or_paths, get_dataset_path
 from petastorm.unischema import Unischema
@@ -286,8 +285,8 @@ def load_row_groups(dataset):
         # This is not a real "piece" and we won't have row_groups_per_file recorded for it.
         if row_groups_key != ".":
             for row_group in range(row_groups_per_file[row_groups_key]):
-                rowgroups.append(compat_make_parquet_piece(piece.path, dataset.fs.open, row_group=row_group,
-                                                           partition_keys=piece.partition_keys))
+                rowgroups.append(pq.ParquetDatasetPiece(piece.path, open_file_func=dataset.fs.open, row_group=row_group,
+                                                        partition_keys=piece.partition_keys))
     return rowgroups
 
 
@@ -323,18 +322,18 @@ def _split_row_groups(dataset):
             continue
 
         for row_group in range(row_groups_per_file[relative_path]):
-            split_piece = compat_make_parquet_piece(piece.path, dataset.fs.open, row_group=row_group,
-                                                    partition_keys=piece.partition_keys)
+            split_piece = pq.ParquetDatasetPiece(piece.path, open_file_func=dataset.fs.open, row_group=row_group,
+                                                 partition_keys=piece.partition_keys)
             split_pieces.append(split_piece)
 
     return split_pieces
 
 
 def _split_piece(piece, fs_open):
-    metadata = compat_get_metadata(piece, fs_open)
-    return [compat_make_parquet_piece(piece.path, fs_open,
-                                      row_group=row_group,
-                                      partition_keys=piece.partition_keys)
+    metadata = piece.get_metadata()
+    return [pq.ParquetDatasetPiece(piece.path, open_file_func=fs_open,
+                                   row_group=row_group,
+                                   partition_keys=piece.partition_keys)
             for row_group in range(metadata.num_row_groups)]
 
 
