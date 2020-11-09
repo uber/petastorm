@@ -122,7 +122,6 @@ class ProcessPool(object):
         :param workers_count: Number of processes to be spawned
         :param serializer: An object that would be used for data payload serialization when sending data from a worker
           process to the main process. ``PickleSerializer`` is used by default. May use
-          :class:`petastorm.reader_impl.PyarrowSerializer` or
           :class:`petastorm.reader_impl.ArrowTableSerializer` (should be used together with
           :class:`petastorm.reader.ArrowReader`)
         :param zmq_copy_buffers: When set to False, we will use a zero-memory-copy feature of recv_multipart.
@@ -249,8 +248,6 @@ class ProcessPool(object):
             if not socks:
                 continue
             # Result message is a tuple containing data payload and possible exception (or None).
-            # By specifying pyarrow_serialize=True, we may choose to use pyarrow serializer which is faster, but
-            # does not support all data types correctly.
             fast_serialized, pickle_serialized = self._results_receiver.recv_multipart(copy=self._zmq_copy_buffers)
             pickle_serialized = pickle.loads(pickle_serialized)
 
@@ -317,8 +314,6 @@ class ProcessPool(object):
 
 def _serialize_result_and_send(socket, serializer, data):
     # Result message is a tuple containing data payload and possible exception (or None).
-    # By specifying pyarrow_serialize=True, we may choose to use pyarrow serializer which is faster, but
-    # does not support all data types correctly.
     socket.send_multipart([serializer.serialize(data), pickle.dumps(None)])
 
 

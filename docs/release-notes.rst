@@ -7,6 +7,7 @@ Release notes
 
 Release 0.9.8 (unreleased)
 ==========================
+- `PR 617 <https://github.com/uber/petastorm/pull/617>`_: Deprecating `pyarrow_serialize` argument of `petastorm.make_reader`.
 
 
 Release 0.9.7
