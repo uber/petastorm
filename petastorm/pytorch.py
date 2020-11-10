@@ -109,13 +109,11 @@ def make_torch_reader_and_loader(dataset_url_or_urls,
                                  batch_size=1,
                                  transform_fn=None,
                                  shuffling_queue_capacity=0,
-                                 cache_in_loader_memory=False,
-                                 cache_size_limit=None,
-                                 cache_row_size_estimate=None,
+                                 in_memory_cache_size=0,
                                  transform_spec=None,
                                  **kwargs):
     num_epochs_to_load = None
-    if cache_in_loader_memory:
+    if in_memory_cache_size:
         # When caching in memory, reader reads the data from source only once. Rest of the epochs
         # are served from in-memory cached buffer in the loader.
         num_epochs_to_load = num_epochs
@@ -138,9 +136,7 @@ def make_torch_reader_and_loader(dataset_url_or_urls,
                                    batch_size=batch_size,
                                    transform_fn=transform_fn,
                                    shuffling_queue_capacity=shuffling_queue_capacity,
-                                   cache_in_loader_memory=cache_in_loader_memory,
-                                   cache_size_limit=cache_size_limit,
-                                   cache_row_size_estimate=cache_row_size_estimate,
+                                   in_memory_cache_size=in_memory_cache_size,
                                    num_epochs_to_load=num_epochs_to_load)
 
         yield loader
@@ -313,9 +309,7 @@ class BatchedDataLoader(LoaderBase):
     def __init__(self, reader, batch_size=1,
                  transform_fn=None,
                  shuffling_queue_capacity=0,
-                 cache_in_loader_memory=False,
-                 cache_size_limit=None,
-                 cache_row_size_estimate=None,
+                 in_memory_cache_size=0,
                  num_epochs_to_load=None):
         """
         Initializes a data loader object.
@@ -339,13 +333,11 @@ class BatchedDataLoader(LoaderBase):
         :param transform_fn: an optional callable to convert batches from the reader to PyTorch tensors
         :param shuffling_queue_capacity: Queue capacity is passed to the underlying :class:`tf.RandomShuffleQueue`
           instance. If set to 0, no shuffling will be done.
-        :param cache_in_loader_memory: This is a boolean flag that indicates if we want to cache the
-            data in memory. Note that the data will be cached in the Shuffling buffer and not in the
+        :param in_memory_cache_size: This is an integer that indicates the size of in-memory cache.
+            Note that the data will be cached in the Shuffling buffer and not in the
             reader itself because we do not want to cache it twice. Currently, only
-            BatchedDataLoader supports in-memory caching. If other types of loader are used when
-            this flag is set, an Exception will be raised.
-        :param cache_size_limit: An int specifying the size limit of the cache in bytes
-        :param cache_row_size_estimate: An int specifying the estimated size of a row in the dataset
+            BatchedDataLoader supports in-memory caching. If set to 0, in memory-caching will be
+            disabled.
         :param num_epochs_to_load: Number of epochs to load when in memory cache is enabled. If
             set to None, loader will loads batches indefinitely.
         """
@@ -359,28 +351,23 @@ class BatchedDataLoader(LoaderBase):
         self.shuffling_queue_capacity = shuffling_queue_capacity
         self._in_iter = None
 
-        self.cache_in_loader_memory = cache_in_loader_memory
-        self.cache_size_limit = cache_size_limit
-        self.cache_row_size_estimate = cache_row_size_estimate
+        self.in_memory_cache_size = in_memory_cache_size
 
-        if self.cache_in_loader_memory and self.reader.num_epochs_to_read != 1:
+        if self.in_memory_cache_size > 0 and self.reader.num_epochs_to_read != 1:
             raise ValueError("When cache in loader memory is activated, reader.num_epochs_to_read "
                              "must be set to 1. When caching the data in memory, we need to read "
                              "the data only once. The rest of the time, we serve it from memory.")
 
         # This is only relevant if in memory caching is activated.
         self.num_epochs_to_load = num_epochs_to_load
-        if not self.cache_in_loader_memory and self.num_epochs_to_load is not None:
+        if self.in_memory_cache_size == 0 and self.num_epochs_to_load:
             raise ValueError("num_epochs_to_load needs to be specified when "
                              "cache_in_loader_memory is enabled.")
 
-        if self.cache_in_loader_memory and \
-            (not self.cache_size_limit or not self.cache_row_size_estimate or
-             self.cache_size_limit <= 0 or self.cache_row_size_estimate <= 0):
-            raise ValueError("Cannot create a in-memory cache. cache_size_limit and "
-                             "cache_row_size_estimate must be larger than zero.")
+        if self.in_memory_cache_size < 0:
+            raise ValueError("Cannot create a in-memory cache. cache_size_limit larger than zero.")
 
-        if self.shuffling_queue_capacity > 0 and self.cache_in_loader_memory:
+        if self.shuffling_queue_capacity > 0 and self.in_memory_cache_size:
             raise ValueError("When using in-memory cache, shuffling_queue_capacity has no effect.")
 
     def _iter_impl(self):
@@ -392,11 +379,9 @@ class BatchedDataLoader(LoaderBase):
 
         keys = None
 
-        if self.cache_in_loader_memory:
-            cache_size = \
-                int(self.cache_size_limit // self.cache_in_loader_memory) + 1
+        if self.in_memory_cache_size:
             self._shuffling_buffer = BatchedRandomShufflingBufferWithMemCache(
-                cache_size=cache_size,
+                cache_size=self.in_memory_cache_size,
                 num_epochs_to_load=self.num_epochs_to_load,
                 batch_size=self.batch_size
             )
