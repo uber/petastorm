@@ -164,17 +164,16 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
                 if cache_type == MEMORY_CACHE:
                     make_fn_params = dict(cache_size_limit=1000,
                                           cache_row_size_estimate=1,
-                                          cache_in_loader_memory=True,
-                                          num_epochs=1)
+                                          cache_in_loader_memory=True)
                 else:
                     make_fn_params = \
-                        dict(shuffling_queue_capacity=shuffling_queue_capacity,
-                             num_epochs=2)
+                        dict(shuffling_queue_capacity=shuffling_queue_capacity)
                 print("make_fn_params", make_fn_params)
 
                 with make_torch_reader_and_loader(
                         batch_size=batch_size,
                         transform_fn=partial(torch.as_tensor, device='cpu'),
+                        num_epochs=2,
                         dataset_url_or_urls=self._dataset_url,
                         cur_shard=0,
                         shard_count=1,
@@ -184,9 +183,9 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
                         schema_fields=['col_0'], **make_fn_params) as loader:
 
                     retrieved_so_far = None
-
+                    it = iter(loader)
                     for _ in range(5):
-                        batch = next(loader)
+                        batch = next(it)
                         this_batch = batch['col_0'].clone()
                         assert list(this_batch.shape)[0] == batch_size
 
@@ -203,7 +202,7 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
                         assert len(set(retrieved_so_far.tolist())) == self._num_rows
 
                     for _ in range(5):
-                        batch = next(loader)
+                        batch = next(it)
                         if cache_type == MEMORY_CACHE:
                             assert loader._shuffling_buffer._done_adding
                         this_batch = batch['col_0'].clone()
@@ -211,7 +210,7 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
                         retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
 
                     with pytest.raises(StopIteration):
-                        next(loader)
+                        next(it)
 
     def test_in_memory_cache_one_epoch(self):
         batch_size = 10

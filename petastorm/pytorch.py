@@ -114,6 +114,7 @@ def make_torch_reader_and_loader(dataset_url_or_urls,
                                  cache_row_size_estimate=None,
                                  transform_spec=None,
                                  **kwargs):
+    num_epochs_to_load = None
     if cache_in_loader_memory:
         # When caching in memory, reader reads the data from source only once. Rest of the epochs
         # are served from in-memory cached buffer in the loader.
