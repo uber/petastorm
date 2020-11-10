@@ -145,7 +145,8 @@ def make_batched_reader_and_loader(num_epochs=1,
 
         yield loader
     finally:
-        reader.__exit__()
+        reader.stop()
+        reader.join()
 
 
 class LoaderBase(object):
