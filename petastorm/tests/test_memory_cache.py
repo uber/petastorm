@@ -183,11 +183,10 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
                         hdfs_driver='libhdfs',
                         schema_fields=['col_0'], **make_fn_params) as loader:
 
-                    it = iter(loader)
                     retrieved_so_far = None
 
                     for _ in range(5):
-                        batch = next(it)
+                        batch = next(loader)
                         this_batch = batch['col_0'].clone()
                         assert list(this_batch.shape)[0] == batch_size
 

@@ -104,7 +104,8 @@ loader."
 
 
 @contextmanager
-def make_torch_reader_and_loader(num_epochs=1,
+def make_torch_reader_and_loader(dataset_url_or_urls,
+                                 num_epochs=1,
                                  batch_size=1,
                                  transform_fn=None,
                                  shuffling_queue_capacity=0,
@@ -130,7 +131,7 @@ def make_torch_reader_and_loader(num_epochs=1,
     else:
         reader_factory = make_batch_reader
 
-    reader = reader_factory(num_epochs=num_epochs, **kwargs)
+    reader = reader_factory(dataset_url_or_urls, num_epochs=num_epochs, **kwargs)
     try:
         loader = BatchedDataLoader(reader,
                                    batch_size=batch_size,
