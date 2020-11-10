@@ -203,7 +203,7 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
                         assert len(set(retrieved_so_far.tolist())) == self._num_rows
 
                     for _ in range(5):
-                        batch = next(it)
+                        batch = next(loader)
                         if cache_type == MEMORY_CACHE:
                             assert loader._shuffling_buffer._done_adding
                         this_batch = batch['col_0'].clone()
@@ -211,7 +211,7 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
                         retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
 
                     with pytest.raises(StopIteration):
-                        next(it)
+                        next(loader)
 
     def test_in_memory_cache_one_epoch(self):
         batch_size = 10
