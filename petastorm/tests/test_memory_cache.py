@@ -22,7 +22,7 @@ from tempfile import mkdtemp
 import pytest
 import torch
 
-from petastorm.pytorch import BatchedDataLoader, make_batched_reader_and_loader
+from petastorm.pytorch import BatchedDataLoader, make_torch_reader_and_loader
 from petastorm.reader import make_batch_reader, make_reader
 from petastorm.tests.test_common import create_many_columns_non_petastorm_dataset
 
@@ -172,7 +172,7 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
                              num_epochs=2)
                 print("make_fn_params", make_fn_params)
 
-                with make_batched_reader_and_loader(
+                with make_torch_reader_and_loader(
                         batch_size=batch_size,
                         transform_fn=partial(torch.as_tensor, device='cpu'),
                         dataset_url_or_urls=self._dataset_url,

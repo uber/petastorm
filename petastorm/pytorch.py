@@ -20,11 +20,10 @@ import re
 
 import numpy as np
 import torch
+from contextlib import contextmanager
 from packaging import version
 from six import PY2
 from torch.utils.data.dataloader import default_collate
-
-from contextlib import contextmanager
 
 from petastorm.reader import make_batch_reader, make_reader
 from petastorm.reader_impl.pytorch_shuffling_buffer import BatchedRandomShufflingBuffer, \
@@ -105,16 +104,15 @@ loader."
 
 
 @contextmanager
-def make_batched_reader_and_loader(num_epochs=1,
-                                   batch_size=1,
-                                   transform_fn=None,
-                                   shuffling_queue_capacity=0,
-                                   cache_in_loader_memory=False,
-                                   cache_size_limit=None,
-                                   cache_row_size_estimate=None,
-                                   transform_spec=None,
-                                   **kwargs):
-
+def make_torch_reader_and_loader(num_epochs=1,
+                                 batch_size=1,
+                                 transform_fn=None,
+                                 shuffling_queue_capacity=0,
+                                 cache_in_loader_memory=False,
+                                 cache_size_limit=None,
+                                 cache_row_size_estimate=None,
+                                 transform_spec=None,
+                                 **kwargs):
     if cache_in_loader_memory:
         # When caching in memory, reader reads the data from source only once. Rest of the epochs
         # are served from in-memory cached buffer in the loader.
