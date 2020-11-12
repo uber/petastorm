@@ -430,6 +430,8 @@ class BatchedDataLoader(LoaderBase):
         # buffer completely, regardless its min_after_dequeue setting.
         self._shuffling_buffer.finish()
 
+        print("Fardin Abdi done with caching")
+
         for batch in self._yield_batches(keys):
             yield batch
 

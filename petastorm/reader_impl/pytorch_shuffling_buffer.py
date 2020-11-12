@@ -395,9 +395,13 @@ class BatchedRandomShufflingBufferWithMemCache(BatchedShufflingBufferBase):
     def can_retrieve(self):
         if not self._done_adding:
             return False
-
-        return self._retrieved_samples_so_far < self._num_epochs_to_load * self._size or \
-            self._num_epochs_to_load is None
+        print("can_retrieve",
+              "self._num_epochs_to_load", self._num_epochs_to_load,
+              "self._retrieved_samples_so_far", self._retrieved_samples_so_far,
+              "self._num_epochs_to_load * self._size", self._num_epochs_to_load * self._size
+              )
+        return self._num_epochs_to_load is None or \
+            self._retrieved_samples_so_far < self._num_epochs_to_load * self._size
 
     @property
     def size(self):
