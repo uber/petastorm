@@ -105,6 +105,23 @@ def test_primitive(spark_test_ctx):
     assert np.object_ == ts.bin_col.dtype.type
 
 
+def test_row_order(spark_test_ctx):
+    n_rows = 10
+    df = spark_test_ctx.spark.range(n_rows)
+    spark_converter = make_spark_converter(df)
+    with spark_converter.make_tf_dataset(
+        batch_size=2,
+        shuffle_row_groups=False,
+        workers_count=1,
+        num_epochs=1,
+    ) as tf_dataset:
+        expected_order = list(range(n_rows))
+        actual_order = np.concatenate(
+            [batch.id.numpy() for batch in tf_dataset]
+        ).ravel().tolist()
+        assert expected_order == actual_order
+
+
 @create_tf_graph
 def test_array_field(spark_test_ctx):
     @pandas_udf('array<float>')

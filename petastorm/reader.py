@@ -50,7 +50,7 @@ def normalize_dataset_url_or_urls(dataset_url_or_urls):
     if isinstance(dataset_url_or_urls, list):
         if not dataset_url_or_urls:
             raise ValueError('dataset url list must be non-empty.')
-        return [normalize_dir_url(url) for url in dataset_url_or_urls]
+        return list(sorted(normalize_dir_url(url) for url in dataset_url_or_urls))
     else:
         return normalize_dir_url(dataset_url_or_urls)
 
