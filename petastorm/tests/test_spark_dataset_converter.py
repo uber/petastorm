@@ -117,7 +117,7 @@ def test_row_order(spark_test_ctx):
     ) as tf_dataset:
         expected_order = list(range(n_rows))
         actual_order = np.concatenate(
-            [batch.id.numpy() for batch in tf_dataset]
+            [batch.id.numpy() for batch in iter(tf_dataset)]
         ).ravel().tolist()
         assert expected_order == actual_order
 
