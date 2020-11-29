@@ -17,7 +17,6 @@ import logging
 import warnings
 
 import six
-from six.moves.urllib.parse import urlparse
 from pyarrow import parquet as pq
 
 from petastorm.arrow_reader_worker import ArrowReaderWorker
@@ -25,7 +24,7 @@ from petastorm.cache import NullCache
 from petastorm.errors import NoDataAvailableError
 from petastorm.etl import dataset_metadata, rowgroup_indexing
 from petastorm.etl.dataset_metadata import PetastormMetadataError, infer_or_load_unischema
-from petastorm.fs_utils import get_filesystem_and_path_or_paths, normalize_dir_url, get_dataset_path
+from petastorm.fs_utils import get_filesystem_and_path_or_paths, normalize_dir_url
 from petastorm.local_disk_arrow_table_cache import LocalDiskArrowTableCache
 from petastorm.local_disk_cache import LocalDiskCache
 from petastorm.ngram import NGram
