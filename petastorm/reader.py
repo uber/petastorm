@@ -17,6 +17,7 @@ import logging
 import warnings
 
 import six
+from six.moves.urllib.parse import urlparse
 from pyarrow import parquet as pq
 
 from petastorm.arrow_reader_worker import ArrowReaderWorker
@@ -24,7 +25,7 @@ from petastorm.cache import NullCache
 from petastorm.errors import NoDataAvailableError
 from petastorm.etl import dataset_metadata, rowgroup_indexing
 from petastorm.etl.dataset_metadata import PetastormMetadataError, infer_or_load_unischema
-from petastorm.fs_utils import get_filesystem_and_path_or_paths, normalize_dir_url
+from petastorm.fs_utils import get_filesystem_and_path_or_paths, normalize_dir_url, get_dataset_path
 from petastorm.local_disk_arrow_table_cache import LocalDiskArrowTableCache
 from petastorm.local_disk_cache import LocalDiskCache
 from petastorm.ngram import NGram
@@ -69,7 +70,8 @@ def make_reader(dataset_url,
                 transform_spec=None,
                 filters=None,
                 s3_config_kwargs=None,
-                zmq_copy_buffers=True):
+                zmq_copy_buffers=True,
+                filesystem=None):
     """
     Creates an instance of Reader for reading Petastorm datasets. A Petastorm dataset is a dataset generated using
     :func:`~petastorm.etl.dataset_metadata.materialize_dataset` context manager as explained
@@ -123,6 +125,7 @@ def make_reader(dataset_url,
         here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
     :param s3_config_kwargs: dict of parameters passed to ``botocore.client.Config``
     :param zmq_copy_buffers: A bool indicating whether to use 0mq copy buffers with ProcessPool.
+    :param filesystem: A filesystem to use. Will ignore s3_config_kwargs and other filesystem configs if it's provided.
     :return: A :class:`Reader` object
     """
     dataset_url = normalize_dir_url(dataset_url)
@@ -130,7 +133,8 @@ def make_reader(dataset_url,
     filesystem, dataset_path = get_filesystem_and_path_or_paths(
         dataset_url,
         hdfs_driver,
-        s3_config_kwargs=s3_config_kwargs
+        s3_config_kwargs=s3_config_kwargs,
+        filesystem=filesystem
     )
 
     if cache_type is None or cache_type == 'null':
@@ -141,7 +145,8 @@ def make_reader(dataset_url,
         raise ValueError('Unknown cache_type: {}'.format(cache_type))
 
     try:
-        dataset_metadata.get_schema_from_dataset_url(dataset_url, hdfs_driver=hdfs_driver)
+        dataset_metadata.get_schema_from_dataset_url(dataset_url, hdfs_driver=hdfs_driver,
+                                                     s3_config_kwargs=s3_config_kwargs, filesystem=filesystem)
     except PetastormMetadataError:
         raise RuntimeError('Currently make_reader supports reading only Petastorm datasets. '
                            'To read from a non-Petastorm Parquet store use make_batch_reader')
@@ -201,7 +206,8 @@ def make_batch_reader(dataset_url_or_urls,
                       transform_spec=None,
                       filters=None,
                       s3_config_kwargs=None,
-                      zmq_copy_buffers=True):
+                      zmq_copy_buffers=True,
+                      filesystem=None):
     """
     Creates an instance of Reader for reading batches out of a non-Petastorm Parquet store.
 
@@ -260,6 +266,7 @@ def make_batch_reader(dataset_url_or_urls,
         here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
     :param s3_config_kwargs: dict of parameters passed to ``botocore.client.Config``
     :param zmq_copy_buffers: A bool indicating whether to use 0mq copy buffers with ProcessPool.
+    :param filesystem: A filesystem to use. Will ignore s3_config_kwargs and other filesystem configs if it's provided.
     :return: A :class:`Reader` object
     """
     dataset_url_or_urls = normalize_dataset_url_or_urls(dataset_url_or_urls)
@@ -267,11 +274,13 @@ def make_batch_reader(dataset_url_or_urls,
     filesystem, dataset_path_or_paths = get_filesystem_and_path_or_paths(
         dataset_url_or_urls,
         hdfs_driver,
-        s3_config_kwargs=s3_config_kwargs
+        s3_config_kwargs=s3_config_kwargs,
+        filesystem=filesystem
     )
 
     try:
-        dataset_metadata.get_schema_from_dataset_url(dataset_url_or_urls, hdfs_driver=hdfs_driver)
+        dataset_metadata.get_schema_from_dataset_url(dataset_url_or_urls, hdfs_driver=hdfs_driver,
+                                                     s3_config_kwargs=s3_config_kwargs, filesystem=filesystem)
         warnings.warn('Please use make_reader (instead of \'make_batch_dataset\' function to read this dataset. '
                       'You may get unexpected results. '
                       'Currently make_batch_reader supports reading only Parquet stores that contain '
