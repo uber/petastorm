@@ -31,6 +31,7 @@ class ReaderMock(object):
         if ngram is not None:
             raise ValueError('Sequence argument not supported for ReaderMock')
         self.ngram = ngram
+        self.batched_output = False
 
     def fetch(self):
         """
@@ -77,12 +78,5 @@ def schema_data_generator_example(schema):
             fields_as_dict[field.name] = Decimal('0.0')
         else:
             field_shape = tuple([10 if dim is None else dim for dim in field.shape])
-            if field.numpy_dtype == np.string_:
-                if field_shape == ():
-                    default_val = 'default'
-                else:
-                    default_val = ['default'] * field_shape[0]
-                fields_as_dict[field.name] = np.array(default_val, dtype=field.numpy_dtype)
-            else:
-                fields_as_dict[field.name] = np.zeros(field_shape, dtype=field.numpy_dtype)
+            fields_as_dict[field.name] = np.zeros(field_shape, dtype=field.numpy_dtype)
     return fields_as_dict

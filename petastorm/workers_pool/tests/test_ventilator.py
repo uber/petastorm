@@ -13,10 +13,9 @@
 # limitations under the License.
 
 
-
 import time
-
 import unittest
+
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.dummy_pool import DummyPool
 from petastorm.workers_pool.process_pool import ProcessPool
@@ -67,6 +66,50 @@ class TestWorkersPool(unittest.TestCase):
             # After stopping the ventilator queue, we should only get 10 results
             ventilator.stop()
             for _ in range(max_ventilation_size):
+                pool.get_results()
+
+            with self.assertRaises(EmptyResultError):
+                pool.get_results()
+
+            pool.stop()
+            pool.join()
+
+    def test_reset_in_the_middle_of_ventilation(self):
+        """Can not reset ventilator in the middle of ventilation"""
+        for pool in [DummyPool(), ThreadPool(10)]:
+            ventilator = ConcurrentVentilator(ventilate_fn=pool.ventilate,
+                                              items_to_ventilate=[{'item': i} for i in range(100)],
+                                              iterations=None)
+            pool.start(IdentityWorker, ventilator=ventilator)
+
+            # Resetting is supported only when the ventilator has finished
+            with self.assertRaises(NotImplementedError):
+                ventilator.reset()
+
+            pool.stop()
+            pool.join()
+
+    def test_reset_ventilator(self):
+        """Resetting ventilator after all items were ventilated will make it re-ventilate the same items"""
+        items_count = 100
+        for pool in [DummyPool(), ThreadPool(10)]:
+            ventilator = ConcurrentVentilator(ventilate_fn=pool.ventilate,
+                                              items_to_ventilate=[{'item': i} for i in range(items_count)],
+                                              iterations=1)
+            pool.start(IdentityWorker, ventilator=ventilator)
+
+            # Readout all ventilated items
+            for _ in range(items_count):
+                pool.get_results()
+
+            # Should fail reading the next, as all items were read by now
+            with self.assertRaises(EmptyResultError):
+                pool.get_results()
+
+            # Resetting, hence will be read out the items all over again
+            ventilator.reset()
+
+            for _ in range(items_count):
                 pool.get_results()
 
             with self.assertRaises(EmptyResultError):

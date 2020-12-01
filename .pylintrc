@@ -354,7 +354,7 @@ single-line-if-stmt=no
 # List of decorators that produce context managers, such as
 # contextlib.contextmanager. Add to this list to register other decorators that
 # produce valid context managers.
-contextmanager-decorators=contextlib.contextmanager
+contextmanager-decorators=contextlib.contextmanager,tensorflow.python.util.tf_contextlib.contextmanager
 
 # List of members which are set dynamically and missed by pylint inference
 # system, and so shouldn't trigger E1101 when accessed. Python regular
@@ -386,7 +386,10 @@ ignored-classes=optparse.Values,thread._local,_thread._local
 # (useful for modules/projects where namespaces are manipulated during runtime
 # and thus existing member attributes cannot be deduced by static analysis. It
 # supports qualified module names, as well as Unix pattern matching.
-ignored-modules=
+
+# Ignoring distutils because of the conflict with virtualenv as described
+# here: https://github.com/PyCQA/pylint/issues/73
+ignored-modules=distutils
 
 # Show a hint with possible names when a member name was not found. The aspect
 # of finding the hint is based on edit distance.

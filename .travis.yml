@@ -12,44 +12,98 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-dist: xenial
+dist: trusty
 language: python
-cache: pip
 python:
   - '2.7'
-  - '3.6'
+env:
+  # ARROW_PRE_0_15_IPC_FORMAT is set for pyarrow compatibility
+  # See https://spark.apache.org/docs/3.0.0-preview/sql-pyspark-pandas-with-arrow.html#compatibiliy-setting-for-pyarrow--0150-and-spark-23x-24x
+  - PYARROW_VERSION=1.0.1 TF_VERSION=1.15.0 DEPLOYABLE=1 PY=3.7 PYSPARK_VERSION=2.4.4 ARROW_PRE_0_15_IPC_FORMAT=1
+  - PYARROW_VERSION=1.0.1 TF_VERSION=1.15.0 DEPLOYABLE=0 PY=3.7 PYSPARK_VERSION=3.0.0 ARROW_PRE_0_15_IPC_FORMAT=0
+  - PYARROW_VERSION=1.0.1 TF_VERSION=2.1.0 DEPLOYABLE=0 PY=3.7 PYSPARK_VERSION=3.0.0 ARROW_PRE_0_15_IPC_FORMAT=0
+  - PYARROW_VERSION=2.0.0 TF_VERSION=2.1.0 DEPLOYABLE=0 PY=3.7 PYSPARK_VERSION=3.0.0 ARROW_PRE_0_15_IPC_FORMAT=0
+  - PYARROW_VERSION=0.17.1 TF_VERSION=2.1.0 DEPLOYABLE=0 PY=3.7 PYSPARK_VERSION=3.0.0 ARROW_PRE_0_15_IPC_FORMAT=0
+services:
+  - docker
 
 install:
-  # Upgrade pip to avoid weird failures, such as failing to install torchvision
-  - pip install --upgrade pip==18.0
-  # This will use requirements from setup.py and install them in the tavis's virtual environment
-  # [tf] chooses to depend on cpu version of tensorflow (alternatively, could do [tf_gpu])
-  - pip install -q -e .[tf,test,torch]
-  # pyarrow was compiled against a newer version of numpy than we require so we need to upgrade it
-  # (or optionally install pyarrow from source instead of through binaries)
-  - pip install --upgrade numpy
+  # We will use selitvin/petastorm_ci:latest as docker image for running on travis-ci.
+  # To rebuild the ci image, see docker/Makefile.The image contains all petastorm dependencies
+  # installed, we do rerun dependencies installation to refresh ersions of the dependencies
+  # on each build if needed
+  - export CI_IMAGE=selitvin/petastorm_ci_auto:ci-2020-07-01-00
+  - docker pull $CI_IMAGE
+  - docker images
+  - pip install -U codecov
 
 before_script:
+  # run docker container for an hour. Will execute all docker commands inside this container
+  - docker run -v `pwd`:/petastorm --name petastorm_ci $CI_IMAGE /bin/sh -c "sleep 3600" &
+
+  # wait for docker to start
+  - sleep 20
+  # ARROW_PRE_0_15_IPC_FORMAT=1 is required when spark<3.0 and pyarrow>=0.15
+  - export RUN="docker exec -e ARROW_PRE_0_15_IPC_FORMAT=$ARROW_PRE_0_15_IPC_FORMAT petastorm_ci bash /run_in_venv.sh ${PY}"
+  - export PYTEST="pytest --timeout=360 -v --color=yes --cov=./ --cov-report xml:coverage.xml"
+  # Refresh our dependencies' versions as in the CI image, they may go stale
+  - $RUN pip install -e /petastorm/[test,tf,torch,docs,opencv]
+
+
+  # Upgrade pip to avoid weird failures, such as failing to install torchvision
+  # This will use requirements from setup.py and install them in the tavis's virtual environment
+  # [tf] chooses to depend on cpu version of tensorflow (alternatively, could do [tf_gpu])
+  # pyarrow was compiled against a newer version of numpy than we require so we need to upgrade it
+  # (or optionally install pyarrow from source instead of through binaries)
+  - $RUN pip install --upgrade numpy
+
+  - $RUN pip install -U pyarrow==${PYARROW_VERSION} tensorflow==${TF_VERSION} pyspark==${PYSPARK_VERSION}   
+
+  - $RUN pip list
+
+  - $RUN mypy petastorm
+
+  # We run a bunch of linting in before_script to fail fast and not run unit tests in case of lint failure.
+  - $RUN flake8 . --count --show-source --statistics
+  - $RUN flake8 . --count --exit-zero --max-complexity=10 --statistics
+  - $RUN pylint --rcfile=.pylintrc petastorm examples -f parseable -r n
+
   # enable core dumps
-  - ulimit -c unlimited -S
+  - $RUN ulimit -c unlimited -S
 
 script:
-  - pylint --rcfile=.pylintrc petastorm examples -f parseable -r n
-  # Ignore two pytorch tests to prevent static-TLS-caused torch-import seg-fault
-  - pytest -v --cov=./ --trace-config
-    --ignore=examples/mnist/tests/test_generate_mnist_dataset.py
-    --ignore=petastorm/tests/test_pytorch_utils.py
-  # Run the pytorch tests separately, in this order, but accumulate code coverage data
-  # Temporary disabled until we figure out (a) segfaults in the first test with `import torch`,
-  # and (b) hanging in `test_read_mnist_dataset`
-  # - pytest -v examples/mnist/tests/test_generate_mnist_dataset.py petastorm/tests/test_pytorch_utils.py --cov=./ --cov-append
+  # Build documentation
+  - $RUN bash -c "cd /petastorm/docs/autodoc && pwd && make html"
 
-  # Verify caching of synthetic dataset is working (at least not failing)
-  - pytest --cache-synthetic-dataset --log-cli-level info petastorm/tests/test_end_to_end.py::test_reading_subset_of_columns
-  - pytest --cache-synthetic-dataset --log-cli-level info petastorm/tests/test_end_to_end.py::test_reading_subset_of_columns
+  # Running pytest twice: first tests that do not have to be forked.
+  # `-Y` will result in datasets generated for testing to be persisted between runs in pytest cache.
+
+  - $RUN $PYTEST -m "forked" --forked -Y
+    --ignore=examples/mnist/tests/test_pytorch_mnist.py
+    --ignore=petastorm/tests/test_pytorch_utils.py
+    --ignore=petastorm/tests/test_pytorch_dataloader.py
+    --ignore=petastorm/tests/test_tf_autograph.py
+    petastorm examples
+
+  - $RUN $PYTEST -m "not forked" -Y  --cov-append
+      --ignore=examples/mnist/tests/test_pytorch_mnist.py
+      --ignore=petastorm/tests/test_pytorch_utils.py
+      --ignore=petastorm/tests/test_pytorch_dataloader.py
+      --ignore=petastorm/tests/test_tf_autograph.py
+      petastorm examples
+
+    # Tensorflow and pytorch tests confict (segfault). Split into separate runs.
+  - $RUN $PYTEST  --cov-append
+      examples/mnist/tests/test_pytorch_mnist.py
+      petastorm/tests/test_pytorch_dataloader.py
+      petastorm/tests/test_pytorch_utils.py
+
+    # Run test_tf_autograph separately because the error message "AutoGraph could not transform..." only show once, so we need ensure no other TF tests run before it.
+  - $RUN $PYTEST -Y --cov-append petastorm/tests/test_tf_autograph.py
 
 after_success:
-  - codecov
+  - codecov --required
+  - $RUN git clean -dfx
 
 after_failure:
   # Only upon failure, install gdb to process core dump
@@ -59,12 +113,30 @@ after_failure:
   # If it's possible to run with python2.7-dbg, then gdb hook py-bt will do its magic.
   - if [[ -f "$COREFILE" ]]; then gdb -c "$COREFILE" python -ex "thread apply all bt" -ex "set pagination 0" -batch; fi
 
+before_deploy:
+  # Build a python wheel before deployment
+  - python setup.py bdist_wheel
+
 deploy:
-  provider: pypi
-  user: uber
-  password:
-    secure: gDx2UHI5mcBBAJCM71CBiyn6N2QF+HUx7+42BDc5uR3tL7Mk0fgNsl9tygG3hAabsujsG6eTotHGWUw3zRRN2+htyfQ4iiprivS+9LkPW/N9rp3IwcqfygoJk4ZTYRAnYAOtGJ+EWQU/8L8hekxAmuDKuWZfqO0gUSjxyKzE5bP9ly0HHk7pm201NdkoVUpl2DR/WCazbEuOTeHgNz72NirB00hkG7ScdIP1c6dnNqGe4UH7lbd6ZDHkTfvJAOR0BTTzGjP29e303AeHum++R47ddleUTgeiwBdhhgNhaSZY5IhWq32oNLWNd+j8mDpc1YaAb3AzWPS0CJvFPtH/bWyVUvlw343WinxjD5y4svlcoqxYzYtvKwAgO70Txdi9VLuc0F7FHz5CxcoP7L4OCf9nMA3v/0LK9P3dbBb4q9VK9pla6SyaHVR64BUHm/7+uPM8qPlZWV+NCiSrKy5R83zMpxDwXrxa9xXVKIHdrs7osmxMg5/AVMmIu/UVjs58LmLCSQWMYnpYJBgfycYzqA2fSXlelJxSL9wsDjBtkt9sZ0OUP2BQ2rJQAAJaLzHXduDAIiyvjFpZz5fC2B1HNIRKENxD6u2TFGUNuO7ubajiPpyOeXH6cNcrJdDLuhSVQXHYXtNqMuX0XBnKC7wPSmQdegjd8HUIRIij8XMAjkE=
-  distributions: "sdist bdist_wheel"
-  on:
-    tags: true
-    python: 3.6
+  # Disabling pypi deployment. There is an issue with authentication at the moment
+  - provider: pypi
+    user: uber
+    password:
+      secure: OEyw3NVW1kuSWSJAW+OBSZUk4uSSnkZnQ4njM1EFooTDZ2axAe69y+Z/PRjuLup7bbdxgq8DUXzK+jUWs07vcPYUKp0ek9Gni9gmv08B62P2plupfw35KCjxBTd3RY1cWpkX425ePucuAH1PojY5J0LU4BCPOmyzdpAniLdmcXwJTM1EsQXCub3v/TBK1dxyFMHUyW9WqRStQI1xF8mxhVupnZ/spN+ixvqTMakBczqEttd8AsoSXQtvEUo5ot082/U8LryvrHEsHH52hdbWlSR8TxbC1fK8LgEeXoeqfhOiYNtdOTB1+cGmdJSvjbHCq4OUfl1sbTbBSxrkLNeFAQztAQqIybp1F5PjjVKAr3mHB7HpnMoUcDQiVZ8srfwBpCGZlsj6BsNxYGidiSXvKyKHO1TnTHxNhXIjPzAxjPHXFm7HH9kCXavGEMwXMn06TNq9uP/e6ekd0qE2l+x7xc9i7bdSpIXC9s1uCNqbObiV+/BNXvtDjAVxmp4d+foIPwLx6Qz42IFzPb96lY2Ifow8I8406F/Y5t003xFwnkkgbfI6Ya8gJaJIP6pYGuWJY/lj6/5nElroeiZg1G3rCRBfxwG0RJ2RVhNpuqAcXrQ7SUQ/bbDKUc5psrE920kpF/V3j5tA83pSyJW49IjNQxRABGviPh7aSVWFBeyh0BE=
+    distributions: sdist bdist_wheel
+    on:
+      tags: true
+      condition: $DEPLOYABLE = 1
+
+
+#  # Push all python wheels created to Github release
+#  - provider: releases
+#    skip_cleanup: true
+#    api_key:
+#      secure: I96u6KqgSj0Cqx2NvLLLgw6rx7+gN4/6wdptfBrP1zxppMERu/iaLYLgDwDKRXzgTIrx5LopFIllf9/kPcUJgDFj/AxESo6aukzcYK3tB2OhEYIAxYcZf8Kt3aV+AHp/TIDdZ9sGbVLxypuxSXqiAc5dJw8S0Njja/9Qgxe4jqNXNLjLxEb3qlCrYJFEA9MxxPgH/QsWZ6M43hR5gNrGWrhSaIHSjMXXkzRjQG+bGApFf+XRx7le2M5vIeaw1K/osJ930QEjDTnp0v5hFvkB9F1buC17rZO8Xy0KAAhB1+SaEWtS4N0lFIVYE1b3Ke1ek82kW1d7UDEAcEL6ccICboKtvhFfgb1MXVQkdRq4HlhwHl8n4FJIztbwXaQW1aISR5x+m6RIFwMuI+U/MjcVVt+CEgo8X4HATb2pdgWnFcS649t7lhrx7HCBNZpUNmfoZ/YyNgPdQf+vreCNxWOpqi4UacH890GhLFUFXtijeL7xGXWIg7ugQmlK27CfM1mMN1Vp9NTRAXA0x7HuqckWKY85lCJMT+3IJMgVjz+BdGZDQ5RJI22FmRDNuWrH/Mio77EK+sOsKm/X3Q8/Sb8uwU+Ft1Vb7aikQ2NIl89uQQdVxH4TlQw6/VQSZODacTUwMz5CkB0RJNrlbZpUpPrHiTVa4dRo7/34qe7iGA7XtfY=
+#    file_glob: true
+#    file: dist/*.whl
+#    on:
+#      tags: true
+#      python: 3.7
+#      condition: $DEPLOYABLE = 1

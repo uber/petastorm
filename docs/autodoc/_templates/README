@@ -1,0 +1,3 @@
+This directory would contain override template files for sphinx autodoc.
+
+The directory name is configured in ``../conf.py`` by option ``templates_path``.

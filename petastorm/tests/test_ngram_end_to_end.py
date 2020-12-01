@@ -19,20 +19,22 @@ from decimal import Decimal
 
 import numpy as np
 import pytest
-import tensorflow as tf
-from tensorflow.python.framework.errors_impl import OutOfRangeError
+import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 
+from unittest import mock
+
+from petastorm import make_reader
 from petastorm.ngram import NGram
-from petastorm.reader import Reader, ShuffleOptions
 from petastorm.tests.conftest import SyntheticDataset, maybe_cached_dataset
 from petastorm.tests.test_common import create_test_dataset, TestSchema
+from petastorm.tests.test_tf_utils import create_tf_graph
 from petastorm.tf_utils import tf_tensors
-from petastorm.workers_pool.dummy_pool import DummyPool
 
 # Tests in this module will run once for each entry in the READER_FACTORIES
 # pylint: disable=unnecessary-lambda
 READER_FACTORIES = [
-    lambda url, **kwargs: Reader(url, reader_pool=DummyPool(), **kwargs),
+    lambda url, **kwargs: make_reader(url, reader_pool_type='dummy', **kwargs),
+    lambda url, **kwargs: make_reader(url, reader_pool_type='process', workers_count=1, **kwargs),
 ]
 
 
@@ -109,6 +111,7 @@ def _get_named_tuple_from_ngram(ngram, dataset_dicts, starting_index):
     return expected_ngram
 
 
+@create_tf_graph
 def _test_continuous_ngram_tf(ngram_fields, dataset_num_files_1, reader_factory):
     """Tests continuous ngram in tf of a certain length. Continuous here refers to
     that this reader will always return consecutive ngrams due to shuffle being false
@@ -118,7 +121,7 @@ def _test_continuous_ngram_tf(ngram_fields, dataset_num_files_1, reader_factory)
     ngram = NGram(fields=ngram_fields, delta_threshold=10, timestamp_field=TestSchema.id)
     with reader_factory(dataset_num_files_1.url,
                         schema_fields=ngram,
-                        shuffle_options=ShuffleOptions(False)) as reader:
+                        shuffle_row_groups=False) as reader:
 
         readout_examples = tf_tensors(reader)
 
@@ -143,7 +146,7 @@ def _test_continuous_ngram(ngram_fields, dataset_num_files_1, reader_factory):
     and partition being 1."""
 
     ngram = NGram(fields=ngram_fields, delta_threshold=10, timestamp_field=TestSchema.id)
-    with reader_factory(dataset_num_files_1.url, schema_fields=ngram, shuffle_options=ShuffleOptions(False)) as reader:
+    with reader_factory(dataset_num_files_1.url, schema_fields=ngram, shuffle_row_groups=False) as reader:
         expected_id = 0
 
         for _ in range(ngram.length):
@@ -153,6 +156,7 @@ def _test_continuous_ngram(ngram_fields, dataset_num_files_1, reader_factory):
             expected_id = expected_id + 1
 
 
+@create_tf_graph
 def _test_noncontinuous_ngram_tf(ngram_fields, synthetic_dataset, reader_factory):
     """Test non continuous ngram in tf of a certain length. Non continuous here refers
     to that the reader will not necessarily return consecutive ngrams because partition is more
@@ -189,13 +193,15 @@ def _test_noncontinuous_ngram(ngram_fields, synthetic_dataset, reader_factory):
     ngram = NGram(fields=ngram_fields, delta_threshold=10, timestamp_field=TestSchema.id)
     with reader_factory(synthetic_dataset.url,
                         schema_fields=ngram,
-                        shuffle_options=ShuffleOptions(True, 5)) as reader:
+                        shuffle_row_groups=True,
+                        shuffle_row_drop_partitions=5) as reader:
         for _ in range(10):
             actual = next(reader)
             expected_ngram = _get_named_tuple_from_ngram(ngram, dataset_dicts, actual[min(actual.keys())].id)
             np.testing.assert_equal(actual, expected_ngram)
 
 
+@pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
 def test_ngram_basic_tf(dataset_num_files_1, reader_factory):
     """Tests basic ngram with no delta threshold with no shuffle and in the same partition."""
@@ -207,6 +213,7 @@ def test_ngram_basic_tf(dataset_num_files_1, reader_factory):
 
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_ngram_basic(dataset_num_files_1, reader_factory):
     """Tests basic ngram with no delta threshold with no shuffle and in the same partition."""
     fields = {
@@ -216,6 +223,7 @@ def test_ngram_basic(dataset_num_files_1, reader_factory):
     _test_continuous_ngram(fields, dataset_num_files_1, reader_factory)
 
 
+@pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
 def test_ngram_basic_longer_tf(dataset_num_files_1, reader_factory):
     """Tests basic ngram with no delta threshold with no shuffle and in the same partition."""
@@ -230,6 +238,7 @@ def test_ngram_basic_longer_tf(dataset_num_files_1, reader_factory):
 
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_ngram_basic_longer(dataset_num_files_1, reader_factory):
     """Tests basic ngram with no delta threshold with no shuffle and in the same partition."""
     fields = {
@@ -242,6 +251,7 @@ def test_ngram_basic_longer(dataset_num_files_1, reader_factory):
     _test_continuous_ngram(fields, dataset_num_files_1, reader_factory)
 
 
+@pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
 def test_ngram_basic_shuffle_multi_partition_tf(synthetic_dataset, reader_factory):
     """Tests basic ngram with no delta threshold with shuffle and in many partitions."""
@@ -253,6 +263,7 @@ def test_ngram_basic_shuffle_multi_partition_tf(synthetic_dataset, reader_factor
 
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_ngram_basic_shuffle_multi_partition(synthetic_dataset, reader_factory):
     """Tests basic ngram with no delta threshold with shuffle and in many partitions."""
     fields = {
@@ -262,6 +273,7 @@ def test_ngram_basic_shuffle_multi_partition(synthetic_dataset, reader_factory):
     _test_noncontinuous_ngram(fields, synthetic_dataset, reader_factory)
 
 
+@pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
 def test_ngram_basic_longer_shuffle_multi_partition_tf(synthetic_dataset, reader_factory):
     """Tests basic ngram with no delta threshold with shuffle and in many partitions."""
@@ -276,6 +288,7 @@ def test_ngram_basic_longer_shuffle_multi_partition_tf(synthetic_dataset, reader
 
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_ngram_basic_longer_shuffle_multi_partition(synthetic_dataset, reader_factory):
     """Tests basic ngram with no delta threshold with shuffle and in many partitions."""
     fields = {
@@ -287,7 +300,9 @@ def test_ngram_basic_longer_shuffle_multi_partition(synthetic_dataset, reader_fa
     }
     _test_noncontinuous_ngram(fields, synthetic_dataset, reader_factory)
 
+
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_ngram_basic_longer_no_overlap(synthetic_dataset, reader_factory):
     """Tests basic ngram with no delta threshold with no overlaps of timestamps."""
     fields = {
@@ -300,7 +315,7 @@ def test_ngram_basic_longer_no_overlap(synthetic_dataset, reader_factory):
 
     dataset_dicts = synthetic_dataset.data
     ngram = NGram(fields=fields, delta_threshold=10, timestamp_field=TestSchema.id, timestamp_overlap=False)
-    with reader_factory(synthetic_dataset.url, schema_fields=ngram, shuffle_options=ShuffleOptions(False)) as reader:
+    with reader_factory(synthetic_dataset.url, schema_fields=ngram, shuffle_row_groups=False) as reader:
         timestamps_seen = set()
         for actual in reader:
             expected_ngram = _get_named_tuple_from_ngram(ngram, dataset_dicts, actual[min(actual.keys())].id)
@@ -311,7 +326,9 @@ def test_ngram_basic_longer_no_overlap(synthetic_dataset, reader_factory):
                 timestamps_seen.add(timestamp)
 
 
+@pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+@create_tf_graph
 def test_ngram_delta_threshold_tf(dataset_0_3_8_10_11_20_23, reader_factory):
     """Test to verify that delta threshold work as expected in one partition in the same ngram
     and between consecutive ngrams. delta threshold here refers that each ngram must not be
@@ -325,7 +342,7 @@ def test_ngram_delta_threshold_tf(dataset_0_3_8_10_11_20_23, reader_factory):
     with reader_factory(
             dataset_0_3_8_10_11_20_23.url,
             schema_fields=ngram,
-            shuffle_options=ShuffleOptions(False)) as reader:
+            shuffle_row_groups=False) as reader:
 
         # Ngrams expected: (0, 3), (8, 10), (10, 11)
 
@@ -354,11 +371,12 @@ def test_ngram_delta_threshold_tf(dataset_0_3_8_10_11_20_23, reader_factory):
             expected_item = _get_named_tuple_from_ngram(ngram, dataset_0_3_8_10_11_20_23.data, 5)
             _assert_equal_ngram(third_item, expected_item)
 
-            with pytest.raises(OutOfRangeError):
+            with pytest.raises(tf.errors.OutOfRangeError):
                 sess.run(tf_tensors(reader))
 
 
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
 def test_ngram_delta_threshold(dataset_0_3_8_10_11_20_23, reader_factory):
     """Test to verify that delta threshold work as expected in one partition in the same ngram
     and between consecutive ngrams. delta threshold here refers that each ngram must not be
@@ -370,7 +388,7 @@ def test_ngram_delta_threshold(dataset_0_3_8_10_11_20_23, reader_factory):
     }
     ngram = NGram(fields=fields, delta_threshold=4, timestamp_field=TestSchema.id)
     with reader_factory(dataset_0_3_8_10_11_20_23.url, schema_fields=ngram,
-                        shuffle_options=ShuffleOptions(False)) as reader:
+                        shuffle_row_groups=False) as reader:
         # NGrams expected: (0, 3), (8, 10), (10, 11)
 
         first_item = next(reader)
@@ -389,7 +407,9 @@ def test_ngram_delta_threshold(dataset_0_3_8_10_11_20_23, reader_factory):
             next(reader)
 
 
+@pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+@create_tf_graph
 def test_ngram_delta_small_threshold_tf(reader_factory, dataset_range_0_99_5):
     """Test to verify that a small threshold work in ngrams."""
 
@@ -400,7 +420,7 @@ def test_ngram_delta_small_threshold_tf(reader_factory, dataset_range_0_99_5):
     ngram = NGram(fields=fields, delta_threshold=1, timestamp_field=TestSchema.id)
     with reader_factory(dataset_range_0_99_5.url, schema_fields=ngram) as reader:
         with tf.Session() as sess:
-            with pytest.raises(OutOfRangeError):
+            with pytest.raises(tf.errors.OutOfRangeError):
                 sess.run(tf_tensors(reader))
 
 
@@ -451,13 +471,16 @@ def test_ngram_validation():
     NGram(fields=fields, delta_threshold=Decimal('0.5'), timestamp_field=TestSchema.id)
 
 
+@pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+@create_tf_graph
 def test_ngram_length_1_tf(synthetic_dataset, reader_factory):
     """Test to verify that ngram generalize to support length 1"""
     dataset_dicts = synthetic_dataset.data
     fields = {0: [TestSchema.id, TestSchema.id2]}
     ngram = NGram(fields=fields, delta_threshold=0.012, timestamp_field=TestSchema.id)
-    reader = reader_factory(synthetic_dataset.url, schema_fields=ngram, shuffle_options=ShuffleOptions(True, 5))
+    reader = reader_factory(synthetic_dataset.url, schema_fields=ngram,
+                            shuffle_row_groups=True, shuffle_row_drop_partitions=5)
     with tf.Session() as sess:
         for _ in range(10):
             actual = sess.run(tf_tensors(reader))
@@ -474,13 +497,15 @@ def test_ngram_length_1(synthetic_dataset, reader_factory):
     dataset_dicts = synthetic_dataset.data
     fields = {0: [TestSchema.id, TestSchema.id2]}
     ngram = NGram(fields=fields, delta_threshold=0.012, timestamp_field=TestSchema.id)
-    with reader_factory(synthetic_dataset.url, schema_fields=ngram, shuffle_options=ShuffleOptions(True, 3)) as reader:
+    with reader_factory(synthetic_dataset.url, schema_fields=ngram,
+                        shuffle_row_groups=True, shuffle_row_drop_partitions=3) as reader:
         for _ in range(10):
             actual = next(reader)
             expected_ngram = _get_named_tuple_from_ngram(ngram, dataset_dicts, actual[min(actual.keys())].id)
             _assert_equal_ngram(actual, expected_ngram)
 
 
+@pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
 def test_non_consecutive_ngram(dataset_num_files_1, reader_factory):
     """Test to verify that non consecutive keys for fields argument in ngrams work."""
@@ -491,6 +516,7 @@ def test_non_consecutive_ngram(dataset_num_files_1, reader_factory):
     _test_continuous_ngram_tf(fields, dataset_num_files_1, reader_factory)
 
 
+@pytest.mark.forked
 @pytest.mark.parametrize('reader_factory', READER_FACTORIES)
 def test_shuffled_fields(dataset_num_files_1, reader_factory):
     """Test to verify not sorted keys for fields argument in ngrams work."""
@@ -514,11 +540,98 @@ def test_ngram_shuffle_drop_ratio(synthetic_dataset, reader_factory):
     ngram = NGram(fields=fields, delta_threshold=10, timestamp_field=TestSchema.id)
     with reader_factory(synthetic_dataset.url,
                         schema_fields=ngram,
-                        shuffle_options=ShuffleOptions(False)) as reader:
+                        shuffle_row_groups=False) as reader:
         unshuffled = [row[0].id for row in reader]
     with reader_factory(synthetic_dataset.url,
                         schema_fields=ngram,
-                        shuffle_options=ShuffleOptions(True, 6)) as reader:
+                        shuffle_row_groups=True,
+                        shuffle_row_drop_partitions=6) as reader:
         shuffled = [row[0].id for row in reader]
     assert len(unshuffled) == len(shuffled)
     assert unshuffled != shuffled
+
+
+def _test_continuous_ngram_returns(ngram_fields, ts_field, dataset_num_files_1, reader_factory):
+    """Test continuous ngram of a certain length. Continuous here refers to
+    that this reader will always return consecutive ngrams due to shuffle being false
+    and partition being 1. Returns the ngram object"""
+
+    ngram = NGram(fields=ngram_fields, delta_threshold=10, timestamp_field=ts_field)
+    with reader_factory(dataset_num_files_1.url, schema_fields=ngram, shuffle_row_groups=False) as reader:
+        expected_id = 0
+
+        for _ in range(ngram.length):
+            actual = next(reader)
+            expected_ngram = _get_named_tuple_from_ngram(ngram, dataset_num_files_1.data, expected_id)
+            np.testing.assert_equal(actual, expected_ngram)
+            expected_id = expected_id + 1
+
+    return ngram
+
+
+@pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+@mock.patch('petastorm.unischema._UNISCHEMA_FIELD_ORDER', 'alphabetical')
+def test_ngram_with_regex_fields(dataset_num_files_1, reader_factory):
+    """Tests to verify fields and timestamp field can be regular expressions and work with a reader
+    """
+    fields = {
+        -1: ["^id.*$", "sensor_name", TestSchema.partition_key],
+        0: ["^id.*$", "sensor_name", TestSchema.partition_key],
+        1: ["^id.*$", "sensor_name", TestSchema.partition_key]
+    }
+
+    ts_field = '^id$'
+
+    expected_fields = [TestSchema.id, TestSchema.id2, TestSchema.id_float, TestSchema.id_odd,
+                       TestSchema.sensor_name, TestSchema.partition_key]
+
+    ngram = _test_continuous_ngram_returns(fields, ts_field, dataset_num_files_1, reader_factory)
+
+    # fields should get resolved after call to a reader
+    ngram_fields = ngram.fields
+
+    # Can't do direct set equality between expected fields and ngram.fields b/c of issue
+    # with `Collections.UnischemaField` (see unischema.py for more information). __hash__
+    # and __eq__ is implemented correctly for UnischemaField. However, a collections.UnischemaField
+    # object will not use the __hash__ definied in `petastorm.unischema.py`
+    for k in ngram_fields.keys():
+        assert len(expected_fields) == len(ngram_fields[k])
+
+        for curr_field in expected_fields:
+            assert curr_field in ngram_fields[k]
+
+    assert TestSchema.id == ngram._timestamp_field
+
+
+@pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+def test_ngram_regex_field_resolve(dataset_num_files_1, reader_factory):
+    """Tests ngram.resolve_regex_field_names function
+    """
+    fields = {
+        -1: ["^id.*", "sensor_name", TestSchema.partition_key],
+        0: ["^id.*", "sensor_name", TestSchema.partition_key],
+        1: ["^id.*", "sensor_name", TestSchema.partition_key]
+    }
+
+    ts_field = '^id$'
+
+    ngram = NGram(fields=fields, delta_threshold=10, timestamp_field=ts_field)
+
+    expected_fields = {TestSchema.id, TestSchema.id2, TestSchema.id_float, TestSchema.id_odd,
+                       TestSchema.sensor_name, TestSchema.partition_key}
+
+    ngram.resolve_regex_field_names(TestSchema)
+
+    ngram_fields = ngram.fields
+
+    # Can't do direct set equality between expected fields and ngram.fields b/c of issue
+    # with `Collections.UnischemaField` (see unischema.py for more information). __hash__
+    # and __eq__ is implemented correctly for UnischemaField. However, a collections.UnischemaField
+    # object will not use the __hash__ definied in `petastorm.unischema.py`
+    for k in ngram_fields.keys():
+        assert len(expected_fields) == len(ngram_fields[k])
+
+        for curr_field in expected_fields:
+            assert curr_field in ngram_fields[k]
+
+    assert TestSchema.id == ngram._timestamp_field

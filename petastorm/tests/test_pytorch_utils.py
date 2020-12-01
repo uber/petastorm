@@ -13,34 +13,57 @@
 # limitations under the License.
 from __future__ import division
 
+import numpy as np
+
+from petastorm import make_reader, TransformSpec
 from petastorm.pytorch import DataLoader
-from petastorm.reader import Reader
-from petastorm.workers_pool.dummy_pool import DummyPool
+from petastorm.tests.test_common import TestSchema
+
+ALL_FIELDS = set(TestSchema.fields.values())
+NULLABLE_FIELDS = {f for f in TestSchema.fields.values() if f.nullable}
+STRING_TENSOR_FIELDS = {f for f in TestSchema.fields.values()
+                        if len(f.shape) > 0 and f.numpy_dtype in (np.string_, np.unicode_)}
+
+PYTORCH_COMPATIBLE_FIELDS = ALL_FIELDS - STRING_TENSOR_FIELDS - NULLABLE_FIELDS
 
 
 def _noop_collate(alist):
     return alist
 
 
+def _str_to_int(sample):
+    for k, v in sample.items():
+        if v is not None and isinstance(v, np.ndarray) and v.dtype.type in (np.string_, np.unicode_):
+            sample[k] = np.zeros_like(v, dtype=np.int8)
+    return sample
+
+
 def test_basic_pytorch_dataloader(synthetic_dataset):
-    loader = DataLoader(Reader(synthetic_dataset.url, reader_pool=DummyPool()), collate_fn=_noop_collate)
-    assert len(loader) == len(synthetic_dataset.data)
-    for item in loader:
-        assert len(item) == 1
+    with DataLoader(make_reader(synthetic_dataset.url, schema_fields=PYTORCH_COMPATIBLE_FIELDS,
+                                reader_pool_type='dummy'), collate_fn=_noop_collate) as loader:
+        for item in loader:
+            assert len(item) == 1
+
+
+def test_pytorch_dataloader_with_transform_function(synthetic_dataset):
+    with DataLoader(make_reader(synthetic_dataset.url, schema_fields=ALL_FIELDS - NULLABLE_FIELDS,
+                                reader_pool_type='dummy',
+                                transform_spec=TransformSpec(_str_to_int)), collate_fn=_noop_collate) as loader:
+        for item in loader:
+            assert len(item) == 1
 
 
 def test_pytorch_dataloader_batched(synthetic_dataset):
     batch_size = 10
-    loader = DataLoader(Reader(synthetic_dataset.url, reader_pool=DummyPool()),
-                        batch_size=batch_size, collate_fn=_noop_collate)
-    assert len(loader) == len(synthetic_dataset.data) / batch_size
+    loader = DataLoader(
+        make_reader(synthetic_dataset.url, schema_fields=PYTORCH_COMPATIBLE_FIELDS, reader_pool_type='dummy'),
+        batch_size=batch_size, collate_fn=_noop_collate)
     for item in loader:
         assert len(item) == batch_size
 
 
 def test_pytorch_dataloader_context(synthetic_dataset):
-    with DataLoader(Reader(synthetic_dataset.url, reader_pool=DummyPool()),
-                    collate_fn=_noop_collate) as loader:
-        assert len(loader) == len(synthetic_dataset.data)
+    reader = make_reader(synthetic_dataset.url, schema_fields=PYTORCH_COMPATIBLE_FIELDS, reader_pool_type='dummy')
+    with DataLoader(reader, collate_fn=_noop_collate) as loader:
         for item in loader:
             assert len(item) == 1

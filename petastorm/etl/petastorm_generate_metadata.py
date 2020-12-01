@@ -24,44 +24,55 @@ from pyspark.sql import SparkSession
 from petastorm.etl.dataset_metadata import materialize_dataset, get_schema, ROW_GROUPS_PER_FILE_KEY
 from petastorm.etl.rowgroup_indexing import ROWGROUPS_INDEX_KEY
 from petastorm.fs_utils import FilesystemResolver
+from petastorm.unischema import Unischema
 from petastorm.utils import add_to_dataset_metadata
 
 example_text = '''Example (some replacement required):
 
-Locally:     
+Locally:
 petastorm-generate-metadata.py \\
     --dataset_url hdfs:///path/to/my/hello_world_dataset \\
-    --unischema_class examples.hello_world.hello_world_dataset.HelloWorldSchema \\
+    --unischema_class examples.hello_world.generate_hello_world_dataset.HelloWorldSchema \\
     --master local[*]
 
-On Spark:    
+On Spark:
 spark-submit \\
     --master spark://ip:port \\
     $(which petastorm-generate-metadata.py) \\
     --dataset_url hdfs:///path/to/my/hello_world_dataset \\
-    --unischema_class examples.hello_world.hello_world_dataset.HelloWorldSchema
+    --unischema_class examples.hello_world.generate_hello_world_dataset.HelloWorldSchema
 '''
 
 
-def generate_petastorm_metadata(spark, dataset_url, unischema_class=None):
+def generate_petastorm_metadata(spark, dataset_url, unischema_class=None, use_summary_metadata=False,
+                                hdfs_driver='libhdfs3'):
     """
-    Generate metadata necessary to read a petastorm dataset to an existing dataset.
+    Generates metadata necessary to read a petastorm dataset to an existing dataset.
+
     :param spark: spark session
     :param dataset_url: url of existing dataset
     :param unischema_class: (optional) fully qualified dataset unischema class. If not specified will attempt
-        to find one already in the dataset. (e.g. examples.hello_world.hello_world_dataset.HelloWorldSchema)
-    :return:
+        to find one already in the dataset. (e.g.
+        :class:`examples.hello_world.generate_hello_world_dataset.HelloWorldSchema`)
+    :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
+        libhdfs (java through JNI) or libhdfs3 (C++)
+    :param user: String denoting username when connecting to HDFS
     """
     sc = spark.sparkContext
 
-    resolver = FilesystemResolver(dataset_url, sc._jsc.hadoopConfiguration())
+    resolver = FilesystemResolver(dataset_url, sc._jsc.hadoopConfiguration(), hdfs_driver=hdfs_driver,
+                                  user=spark.sparkContext.sparkUser())
+    fs = resolver.filesystem()
     dataset = pq.ParquetDataset(
-        resolver.parsed_dataset_url().path,
-        filesystem=resolver.filesystem(),
+        resolver.get_dataset_path(),
+        filesystem=fs,
         validate_schema=False)
 
     if unischema_class:
         schema = locate(unischema_class)
+        if not isinstance(schema, Unischema):
+            raise ValueError('The specified class %s is not an instance of a petastorm.Unischema object.',
+                             unischema_class)
     else:
 
         try:
@@ -74,18 +85,24 @@ def generate_petastorm_metadata(spark, dataset_url, unischema_class=None):
     # overwriting the metadata to keep row group indexes and the old row group per file index
     arrow_metadata = dataset.common_metadata or None
 
-    with materialize_dataset(spark, dataset_url, schema):
-        # Inside the materialize dataset context we just need to write the metadata file as the schema will
-        # be written by the context manager.
-        # We use the java ParquetOutputCommitter to write the metadata file for the existing dataset
-        # which will read all the footers of the dataset in parallel and merge them.
-        hadoop_config = sc._jsc.hadoopConfiguration()
-        Path = sc._gateway.jvm.org.apache.hadoop.fs.Path
-        parquet_output_committer = sc._gateway.jvm.org.apache.parquet.hadoop.ParquetOutputCommitter
-        parquet_output_committer.writeMetaDataFile(hadoop_config, Path(dataset_url))
+    with materialize_dataset(spark, dataset_url, schema, use_summary_metadata=use_summary_metadata,
+                             filesystem_factory=resolver.filesystem_factory()):
+        if use_summary_metadata:
+            # Inside the materialize dataset context we just need to write the metadata file as the schema will
+            # be written by the context manager.
+            # We use the java ParquetOutputCommitter to write the metadata file for the existing dataset
+            # which will read all the footers of the dataset in parallel and merge them.
+            hadoop_config = sc._jsc.hadoopConfiguration()
+            Path = sc._gateway.jvm.org.apache.hadoop.fs.Path
+            parquet_output_committer = sc._gateway.jvm.org.apache.parquet.hadoop.ParquetOutputCommitter
+            parquet_output_committer.writeMetaDataFile(hadoop_config, Path(dataset_url))
 
-    if arrow_metadata:
-        # If there was the old row groups per file key or the row groups index key, add them to the new dataset metadata
+    spark.stop()
+
+    if use_summary_metadata and arrow_metadata:
+        # When calling writeMetaDataFile it will overwrite the _common_metadata file which could have schema information
+        # or row group indexers. Therefore we want to retain this information and will add it to the new
+        # _common_metadata file. If we were using the old legacy metadata method this file wont be deleted
         base_schema = arrow_metadata.schema.to_arrow_schema()
         metadata_dict = base_schema.metadata
         if ROW_GROUPS_PER_FILE_KEY in metadata_dict:
@@ -104,12 +121,19 @@ def _main(args):
     parser.add_argument('--unischema_class',
                         help='the fully qualified class of the dataset unischema. If not specified will attempt'
                              ' to reuse schema already in dataset. '
-                             '(e.g. examples.hello_world.hello_world_dataset.HelloWorldSchema)', required=False)
+                             '(e.g. examples.hello_world.generate_hello_world_dataset.HelloWorldSchema)',
+                        required=False)
     parser.add_argument('--master', type=str,
                         help='Spark master. Default if not specified. To run on a local machine, specify '
                              '"local[W]" (where W is the number of local spark workers, e.g. local[10])')
     parser.add_argument('--spark-driver-memory', type=str, help='The amount of memory the driver process will have',
                         default='4g')
+    parser.add_argument('--use-summary-metadata', action='store_true',
+                        help='Whether to use the parquet summary metadata format.'
+                             ' Not scalable for large amounts of columns and/or row groups.')
+    parser.add_argument('--hdfs-driver', type=str, default='libhdfs3',
+                        help='A string denoting the hdfs driver to use (if using a dataset on hdfs). '
+                             'Current choices are libhdfs (java through JNI) or libhdfs3 (C++)')
     args = parser.parse_args(args)
 
     # Open Spark Session
@@ -122,10 +146,11 @@ def _main(args):
 
     spark = spark_session.getOrCreate()
 
-    generate_petastorm_metadata(spark, args.dataset_url, args.unischema_class)
+    generate_petastorm_metadata(spark, args.dataset_url, args.unischema_class, args.use_summary_metadata,
+                                hdfs_driver=args.hdfs_driver)
 
     # Shut down the spark sessions and context
-    spark.sparkContext.stop()
+    spark.stop()
 
 
 def main():
