@@ -33,6 +33,7 @@ class DummyPool(object):
         self._results_queue = []
         self._worker = None
         self._ventilator = None
+        self.workers_count = 1
 
     def start(self, worker_class, worker_args=None, ventilator=None):
         # Instantiate a single worker with all the args
@@ -46,7 +47,7 @@ class DummyPool(object):
         """Send a work item to a worker process."""
         self._ventilator_queue.append((args, kargs))
 
-    def get_results(self, timeout=None):
+    def get_results(self):
         """Returns results
 
         The processing is done on the get_results caller thread if the results queue is empty
@@ -84,3 +85,7 @@ class DummyPool(object):
 
     def join(self):
         pass
+
+    @property
+    def diagnostics(self):
+        return dict()

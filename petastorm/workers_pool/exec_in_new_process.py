@@ -12,11 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 import os
-import pickle
 import subprocess
 import sys
 from tempfile import mkstemp
+
+import dill
+
+logger = logging.getLogger(__name__)
 
 
 def exec_in_new_process(func, *args, **kargs):
@@ -32,7 +36,7 @@ def exec_in_new_process(func, *args, **kargs):
     # Store function handle and arguments into a pickle
     new_process_runnable_handle, new_process_runnable_file = mkstemp(suffix='runnable')
     with os.fdopen(new_process_runnable_handle, 'wb') as f:
-        pickle.dump((func, args, kargs), f)
+        dill.dump((func, args, kargs), f)
 
     bootstrap_package_name = '{}.{}'.format(__package__, os.path.splitext(os.path.basename(__file__))[0])
     # Popen this script (__main__) below will be an entry point
@@ -47,14 +51,19 @@ def exec_in_new_process(func, *args, **kargs):
 if __name__ == '__main__':
     # An entry point to the newely executed process.
     # Will unpickle function handle and arguments and call the function.
-    if len(sys.argv) != 2:
-        raise RuntimeError('Expected a single command line argument')
-    new_process_runnable_file = sys.argv[1]
+    try:
+        logging.basicConfig()
+        if len(sys.argv) != 2:
+            raise RuntimeError('Expected a single command line argument')
+        new_process_runnable_file = sys.argv[1]
 
-    with open(new_process_runnable_file, 'rb') as f:
-        func, args, kargs = pickle.load(f)
+        with open(new_process_runnable_file, 'rb') as f:
+            func, args, kargs = dill.load(f)
 
-    # Don't need the pickle file with the runable. Cleanup.
-    os.remove(new_process_runnable_file)
+        # Don't need the pickle file with the runable. Cleanup.
+        os.remove(new_process_runnable_file)
 
-    func(*args, **kargs)
+        func(*args, **kargs)
+    except Exception as e:
+        logger.error('Unhandled exception in the function launched by exec_in_new_process: %s', str(e))
+        raise

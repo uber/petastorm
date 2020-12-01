@@ -1,0 +1,4 @@
+This directory would contain any custom static files for sphinx autodoc,
+including logos, CSS, etc.
+
+The directory name is configured in ``../conf.py`` by option ``html_static_path``.

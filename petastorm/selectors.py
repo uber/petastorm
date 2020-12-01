@@ -23,12 +23,10 @@ class RowGroupSelectorBase(object):
     @abc.abstractmethod
     def get_index_names(self):
         """ Return list of indexes required for given selector."""
-        pass
 
     @abc.abstractmethod
     def select_row_groups(self, index_dict):
         """ Return set of row groups which are selected."""
-        pass
 
 
 class SingleIndexSelector(RowGroupSelectorBase):
@@ -49,4 +47,54 @@ class SingleIndexSelector(RowGroupSelectorBase):
         row_groups = set()
         for value in self._values_to_select:
             row_groups |= indexer.get_row_group_indexes(value)
+        return row_groups
+
+
+class IntersectIndexSelector(RowGroupSelectorBase):
+    """
+    Multiple single-field indexers selector.
+    Select row groups containing any of the values in all given selectors.
+    """
+
+    def __init__(self, single_index_selectors):
+        """
+        :param single_index_selectors: List of SingleIndexSelector
+        """
+        self._single_index_selectors = single_index_selectors
+
+    def get_index_names(self):
+        index_names = []
+        for single_index_selector in self._single_index_selectors:
+            index_names.append(single_index_selector.get_index_names()[0])
+        return index_names
+
+    def select_row_groups(self, index_dict):
+        row_groups = self._single_index_selectors[0].select_row_groups(index_dict)
+        for single_index_selector in self._single_index_selectors:
+            row_groups &= single_index_selector.select_row_groups(index_dict)
+        return row_groups
+
+
+class UnionIndexSelector(RowGroupSelectorBase):
+    """
+    Multiple single-field indexers selector.
+    Select row groups containing any of the values in at least one selector.
+    """
+
+    def __init__(self, single_index_selectors):
+        """
+        :param single_index_selectors: List of SingleIndexSelector
+        """
+        self._single_index_selectors = single_index_selectors
+
+    def get_index_names(self):
+        index_names = []
+        for single_index_selector in self._single_index_selectors:
+            index_names.append(single_index_selector.get_index_names()[0])
+        return index_names
+
+    def select_row_groups(self, index_dict):
+        row_groups = set()
+        for single_index_selector in self._single_index_selectors:
+            row_groups |= single_index_selector.select_row_groups(index_dict)
         return row_groups

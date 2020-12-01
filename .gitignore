@@ -1,7 +1,14 @@
 *.pyc
 .idea
 .pytest_cache
+*.DS_Store
 
+# Repository build artifacts
 petastorm.egg-info
 build
 dist
+
+# Sphinx autodoc build directory
+_build
+
+coverage.xml

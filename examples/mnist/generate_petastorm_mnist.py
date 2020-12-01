@@ -32,6 +32,7 @@ import tempfile
 
 from pyspark.sql import SparkSession
 
+from examples.mnist import DEFAULT_MNIST_DATA_PATH
 from examples.mnist.schema import MnistSchema
 from petastorm.etl.dataset_metadata import materialize_dataset
 from petastorm.unischema import dict_to_spark_row
@@ -43,7 +44,8 @@ def _arg_parser():
     parser.add_argument('-d', '--download-dir', type=str, required=False, default=None,
                         help='Directory to where the MNIST data will be downloaded; '
                              'default to a tempdir that gets wiped after generation.')
-    parser.add_argument('-o', '--output-url', type=str, required=True,
+    parser.add_argument('-o', '--output-url', type=str, required=False,
+                        default='file://{}'.format(DEFAULT_MNIST_DATA_PATH),
                         help='hdfs://... or file:/// url where the parquet dataset will be written to.')
     parser.add_argument('-m', '--master', type=str, required=False, default='local[*]',
                         help='Spark master; default is local[*] to run locally.')
@@ -59,6 +61,9 @@ def download_mnist_data(download_dir, train=True):
     Each label is a long integer representing the digit 0..9.
     """
     # This is the only function requiring torch in this module.
+
+    # Must import pyarrow before torch. See: https://github.com/uber/petastorm/blob/master/docs/troubleshoot.rst
+    import pyarrow  # noqa: F401 pylint: disable=W0611,W0612
     from torchvision import datasets
 
     return datasets.MNIST('{}/{}'.format(download_dir, 'data'), train=train, download=True)
@@ -104,14 +109,16 @@ def mnist_data_to_petastorm_dataset(download_dir, output_url, spark_master=None,
     # The MNIST data is small enough to do everything here in Python
     for dset, data in mnist_data.items():
         dset_output_url = '{}/{}'.format(output_url, dset)
-        with materialize_dataset(spark, dset_output_url, MnistSchema):
+        # Using row_group_size_mb=1 to avoid having just a single rowgroup in this example. In a real store, the value
+        # should be similar to an HDFS block size.
+        with materialize_dataset(spark, dset_output_url, MnistSchema, row_group_size_mb=1):
             # List of [(idx, image, digit), ...]
             # where image is shaped as a 28x28 numpy matrix
             idx_image_digit_list = map(lambda idx_image_digit: {
                 MnistSchema.idx.name: idx_image_digit[0],
                 MnistSchema.digit.name: idx_image_digit[1][1],
                 MnistSchema.image.name: np.array(list(idx_image_digit[1][0].getdata()), dtype=np.uint8).reshape(28, 28)
-                }, enumerate(data))
+            }, enumerate(data))
 
             # Convert to pyspark.sql.Row
             sql_rows = map(lambda r: dict_to_spark_row(MnistSchema, r), idx_image_digit_list)

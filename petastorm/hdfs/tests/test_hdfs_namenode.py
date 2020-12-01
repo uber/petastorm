@@ -16,10 +16,12 @@ import os
 import pickle
 import textwrap
 import unittest
-from shutil import rmtree
-from tempfile import mkdtemp
+from typing import Dict
 
+import pytest
 from pyarrow.lib import ArrowIOError
+
+from unittest import mock
 
 from petastorm.hdfs.namenode import HdfsNamenodeResolver, HdfsConnector, \
     HdfsConnectError, MaxFailoversExceeded, HAHdfsClient, namenode_failover
@@ -120,119 +122,120 @@ class HdfsNamenodeResolverTest(unittest.TestCase):
             self.suj.resolve_hdfs_name_service(HC.WARP_TURTLE)
 
 
-class EnvBasedHadoopConfigurationTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        """Create hadoop site files once"""
-        cls._tmp_dir = mkdtemp('test_hadoop_home')
-        os.makedirs('{}{}'.format(cls._tmp_dir, HC.HADOOP_CONFIG_PATH))
-        with open('{}{}/core-site.xml'.format(cls._tmp_dir, HC.HADOOP_CONFIG_PATH), 'wt') as f:
-            f.write(textwrap.dedent("""\
-                <?xml version="1.0"?>
-                <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
-                <configuration>
-                  <property>
-                    <name>fs.defaultFS</name>
-                    <value>hdfs://{0}</value>
-                  </property>
-                </configuration>
-                """.format(HC.WARP_TURTLE)))
-        with open('{}{}/hdfs-site.xml'.format(cls._tmp_dir, HC.HADOOP_CONFIG_PATH), 'wt') as f:
-            f.write(textwrap.dedent("""\
-                <?xml version="1.0"?>
-                <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
-                <configuration>
-                  <property>
-                    <name>dfs.ha.namenodes.{0}</name>
-                    <value>nn2,nn1</value>
-                  </property>
-                  <property>
-                    <name>dfs.namenode.rpc-address.{0}.nn1</name>
-                    <value>{1}</value>
-                  </property>
-                  <property>
-                    <name>dfs.namenode.rpc-address.{0}.nn2</name>
-                    <value>{2}</value>
-                  </property>
-                  <property>
-                    <name>dfs.ha.namenodes.foobar</name>
-                    <value>nn</value>
-                  </property>
-                </configuration>
-                """.format(HC.WARP_TURTLE, HC.WARP_TURTLE_NN1, HC.WARP_TURTLE_NN2)))
+@pytest.fixture()
+def mock_hadoop_home_directory(tmpdir):
+    """Create hadoop site files once"""
+    tmpdir_path = tmpdir.strpath
+    os.makedirs('{}{}'.format(tmpdir_path, HC.HADOOP_CONFIG_PATH))
+    with open('{}{}/core-site.xml'.format(tmpdir_path, HC.HADOOP_CONFIG_PATH), 'wt') as f:
+        f.write(textwrap.dedent("""\
+            <?xml version="1.0"?>
+            <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+            <configuration>
+              <property>
+                <name>fs.defaultFS</name>
+                <value>hdfs://{0}</value>
+              </property>
+            </configuration>
+            """.format(HC.WARP_TURTLE)))
+    with open('{}{}/hdfs-site.xml'.format(tmpdir_path, HC.HADOOP_CONFIG_PATH), 'wt') as f:
+        f.write(textwrap.dedent("""\
+            <?xml version="1.0"?>
+            <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+            <configuration>
+              <property>
+                <name>dfs.ha.namenodes.{0}</name>
+                <value>nn2,nn1</value>
+              </property>
+              <property>
+                <name>dfs.namenode.rpc-address.{0}.nn1</name>
+                <value>{1}</value>
+              </property>
+              <property>
+                <name>dfs.namenode.rpc-address.{0}.nn2</name>
+                <value>{2}</value>
+              </property>
+              <property>
+                <name>dfs.ha.namenodes.foobar</name>
+                <value>nn</value>
+              </property>
+            </configuration>
+            """.format(HC.WARP_TURTLE, HC.WARP_TURTLE_NN1, HC.WARP_TURTLE_NN2)))
+    return tmpdir_path
 
-    @classmethod
-    def tearDownClass(cls):
-        rmtree(cls._tmp_dir)
 
-    def tearDown(self):
-        for k in ['HADOOP_HOME', "HADOOP_PREFIX", 'HADOOP_INSTALL']:
-            if k in os.environ:
-                del os.environ[k]
+def _test_default_hdfs_service(mock_hadoop_home_directory, env_var):
+    # Trigger env var evaluation
+    suj = HdfsNamenodeResolver()
+    assert env_var == suj._hadoop_env
+    assert mock_hadoop_home_directory == suj._hadoop_path
+    # List of namenodes returned nominally
+    nameservice, namenodes = suj.resolve_default_hdfs_service()
+    assert HC.WARP_TURTLE == nameservice
+    assert HC.WARP_TURTLE_NN2 == namenodes[0]
+    assert HC.WARP_TURTLE_NN1 == namenodes[1]
+    # Exception raised for badly defined nameservice (XML issue)
+    with pytest.raises(RuntimeError):
+        suj.resolve_hdfs_name_service('foobar')
+    # None for nonexistent nameservice (intentional design)
+    assert suj.resolve_hdfs_name_service('nonexistent') is None
 
-    def _test_default_hdfs_service(self, env_var):
-        os.environ[env_var] = self._tmp_dir
-        # Trigger env var evaluation
-        suj = HdfsNamenodeResolver()
-        self.assertEqual(env_var, suj._hadoop_env)
-        self.assertEqual(self._tmp_dir, suj._hadoop_path)
-        # List of namenodes returned nominally
-        nameservice, namenodes = suj.resolve_default_hdfs_service()
-        self.assertEqual(HC.WARP_TURTLE, nameservice)
-        self.assertEqual(HC.WARP_TURTLE_NN2, namenodes[0])
-        self.assertEqual(HC.WARP_TURTLE_NN1, namenodes[1])
-        # Exception raised for badly defined nameservice (XML issue)
-        with self.assertRaises(RuntimeError):
-            suj.resolve_hdfs_name_service('foobar')
-        # None for nonexistent nameservice (intentional design)
-        self.assertIsNone(suj.resolve_hdfs_name_service('nonexistent'))
 
-    def test_env_hadoop_home_prefix_install(self):
-        # The second+third env vars won't cause an error
-        os.environ['HADOOP_PREFIX'] = '{}/no/where/here'.format(self._tmp_dir)
-        os.environ['HADOOP_INSTALL'] = '{}/no/where/here'.format(self._tmp_dir)
-        self._test_default_hdfs_service('HADOOP_HOME')
+def test_env_hadoop_home_prefix_install(mock_hadoop_home_directory):
+    # The second+third env vars won't cause an error
+    with mock.patch.dict(os.environ, {'HADOOP_PREFIX': '{}/no/where/here'.format(mock_hadoop_home_directory),
+                                      'HADOOP_INSTALL': '{}/no/where/here'.format(mock_hadoop_home_directory),
+                                      'HADOOP_HOME': mock_hadoop_home_directory}, clear=True):
+        _test_default_hdfs_service(mock_hadoop_home_directory, 'HADOOP_HOME')
 
-    def test_env_hadoop_prefix_only(self):
-        self._test_default_hdfs_service('HADOOP_PREFIX')
 
-    def test_env_hadoop_install_only(self):
-        self._test_default_hdfs_service('HADOOP_INSTALL')
+def test_env_hadoop_prefix_only(mock_hadoop_home_directory):
+    with mock.patch.dict(os.environ, {'HADOOP_PREFIX': mock_hadoop_home_directory}, clear=True):
+        _test_default_hdfs_service(mock_hadoop_home_directory, 'HADOOP_PREFIX')
 
-    def test_env_bad_hadoop_home_with_hadoop_install(self):
-        os.environ['HADOOP_HOME'] = '{}/no/where/here'.format(self._tmp_dir)
-        os.environ['HADOOP_INSTALL'] = self._tmp_dir
-        with self.assertRaises(IOError):
+
+def test_env_hadoop_install_only(mock_hadoop_home_directory):
+    with mock.patch.dict(os.environ, {'HADOOP_INSTALL': mock_hadoop_home_directory}, clear=True):
+        _test_default_hdfs_service(mock_hadoop_home_directory, 'HADOOP_INSTALL')
+
+
+def test_env_bad_hadoop_home_with_hadoop_install(mock_hadoop_home_directory):
+    with mock.patch.dict(os.environ, {'HADOOP_HOME': '{}/no/where/here'.format(mock_hadoop_home_directory),
+                                      'HADOOP_INSTALL': mock_hadoop_home_directory}, clear=True):
+        with pytest.raises(IOError):
             # Trigger env var evaluation
             HdfsNamenodeResolver()
 
-    def test_unmatched_env_var(self):
-        os.environ['HADOOP_HOME_X'] = self._tmp_dir
+
+def test_unmatched_env_var(mock_hadoop_home_directory):
+    with mock.patch.dict(os.environ, {'HADOOP_HOME_X': mock_hadoop_home_directory}, clear=True):
         suj = HdfsNamenodeResolver()
         # No successful connection
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             suj.resolve_default_hdfs_service()
-        del os.environ['HADOOP_HOME_X']
 
-    def test_bad_hadoop_path(self):
-        os.environ['HADOOP_HOME'] = '{}/no/where/here'.format(self._tmp_dir)
-        with self.assertRaises(IOError):
+
+def test_bad_hadoop_path(mock_hadoop_home_directory):
+    with mock.patch.dict(os.environ, {'HADOOP_HOME': '{}/no/where/here'.format(mock_hadoop_home_directory)},
+                         clear=True):
+        with pytest.raises(IOError):
             HdfsNamenodeResolver()
 
-    def test_missing_or_empty_core_site(self):
-        os.environ['HADOOP_HOME'] = self._tmp_dir
+
+def test_missing_or_empty_core_site(mock_hadoop_home_directory):
+    with mock.patch.dict(os.environ, {'HADOOP_HOME': mock_hadoop_home_directory}):
         # Make core-site "disappear" and make sure we raise an error
-        cur_path = '{}{}/core-site.xml'.format(self._tmp_dir, HC.HADOOP_CONFIG_PATH)
-        new_path = '{}{}/core-site.xml.bak'.format(self._tmp_dir, HC.HADOOP_CONFIG_PATH)
+        cur_path = '{}{}/core-site.xml'.format(mock_hadoop_home_directory, HC.HADOOP_CONFIG_PATH)
+        new_path = '{}{}/core-site.xml.bak'.format(mock_hadoop_home_directory, HC.HADOOP_CONFIG_PATH)
         os.rename(cur_path, new_path)
-        with self.assertRaises(IOError):
+        with pytest.raises(IOError):
             HdfsNamenodeResolver()
         # Make an empty file
         with open(cur_path, 'wt') as f:
             f.write('')
         # Re-trigger env var evaluation
         suj = HdfsNamenodeResolver()
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             suj.resolve_default_hdfs_service()
         # restore file for other tests to work
         os.rename(new_path, cur_path)
@@ -248,13 +251,15 @@ class MockHdfs(object):
     True after those N calls.
     """
 
-    def __init__(self, n_failovers=0):
+    def __init__(self, n_failovers=0, user=None):
         self._n_failovers = n_failovers
+        self._user = user
 
     def __getattribute__(self, attr):
         """
         The Mock HDFS simply calls check_failover, regardless of the filesystem operator invoked.
         """
+
         def op(*args, **kwargs):
             """ Mock operator """
             return self._check_failovers()
@@ -278,12 +283,17 @@ class MockHdfs(object):
                                '{} namenode failover(s) remaining!'.format(self._n_failovers))
         return True
 
+    def __reduce__(self):
+        raise AssertionError('A connection object can not be pickled. If we try to pickle it, it means '
+                             'it leaks somehow with a closure that holds it and we need to make sure it '
+                             'does not happen.')
+
 
 class MockHdfsConnector(HdfsConnector):
     # static member for static hdfs_connect_namenode to access
     _n_failovers = 0
     _fail_n_next_connect = 0
-    _connect_attempted = {}
+    _connect_attempted: Dict[str, int] = {}
 
     @classmethod
     def reset(cls):
@@ -307,7 +317,7 @@ class MockHdfsConnector(HdfsConnector):
             return 0
 
     @classmethod
-    def hdfs_connect_namenode(cls, url, driver='libhdfs3'):
+    def hdfs_connect_namenode(cls, url, driver='libhdfs3', user=None):
         netloc = '{}:{}'.format(url.hostname or 'default', url.port or 8020)
         if netloc not in cls._connect_attempted:
             cls._connect_attempted[netloc] = 0
@@ -322,7 +332,7 @@ class MockHdfsConnector(HdfsConnector):
                                .format(netloc, driver, cls._fail_n_next_connect))
         # Return a mock HDFS object with optional failovers, so that this connector mock can
         # be shared for the HAHdfsClient failover tests below.
-        hdfs = MockHdfs(cls._n_failovers)
+        hdfs = MockHdfs(cls._n_failovers, user=user)
         if cls._n_failovers > 0:
             cls._n_failovers -= 1
         return hdfs
@@ -330,6 +340,7 @@ class MockHdfsConnector(HdfsConnector):
 
 class HdfsConnectorTest(unittest.TestCase):
     """Check correctness of connecting to a list of namenodes. """
+
     @classmethod
     def setUpClass(cls):
         """Initializes a mock HDFS namenode connector to track connection attempts."""
@@ -345,6 +356,11 @@ class HdfsConnectorTest(unittest.TestCase):
         self.assertEqual(0, self.suj.connect_attempted(HC.DEFAULT_NN))
         self.assertEqual(1, self.suj.connect_attempted(HC.WARP_TURTLE_NN1))
         self.assertEqual(0, self.suj.connect_attempted(HC.WARP_TURTLE_NN2))
+
+    def test_connect_to_either_with_user(self):
+        mock_name = "mock-manager"
+        mocked_hdfs = self.suj.connect_to_either_namenode(self.NAMENODES, user=mock_name)
+        self.assertEqual(mocked_hdfs._user, mock_name)
 
     def test_connect_to_either_namenode_ok_one_failed(self):
         """ With one failver, test that both namenode URLS are attempted, with 2nd connected. """
@@ -380,6 +396,7 @@ class HAHdfsClientTest(unittest.TestCase):
     The HDFS testing functions are enumerated explicitly below for simplicity and clarity, but it
     should impose but a minute maintenance overhead, since MockHdfs class requires no enumeration.
     """
+
     @classmethod
     def setUpClass(cls):
         """Initializes namenodes list and mock HDFS namenode connector."""
@@ -413,11 +430,13 @@ class HAHdfsClientTest(unittest.TestCase):
         Check that all attributes are equal, with the exception of the HDFS object, which is fine
         as long as the types are the same.
         """
-        client = HAHdfsClient(MockHdfsConnector, self.NAMENODES)
+        mock_name = "mock-manager"
+        client = HAHdfsClient(MockHdfsConnector, self.NAMENODES, user=mock_name)
         client_unpickled = pickle.loads(pickle.dumps(client))
         self.assertEqual(client._connector_cls, client_unpickled._connector_cls)
         self.assertEqual(client._list_of_namenodes, client_unpickled._list_of_namenodes)
         self.assertEqual(client._index_of_nn, client_unpickled._index_of_nn)
+        self.assertEqual(client._user, client_unpickled._user)
         self.assertEqual(type(client._hdfs), type(client_unpickled._hdfs))
 
     def _try_failover_combos(self, func, *args, **kwargs):

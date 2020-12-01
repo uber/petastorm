@@ -22,6 +22,7 @@ import numpy as np
 import six
 import sys
 
+
 @six.add_metaclass(abc.ABCMeta)
 class PredicateBase(object):
     """ Base class for row predicates """
@@ -156,7 +157,7 @@ class in_pseudorandom_split(PredicateBase):
 
     def __init__(self, fraction_list, subset_index, predicate_field):
         """ split_list: a list of log fractions (real numbers in range [0:1])
-            subset_index: define which subset will be used by bbox2d_reader
+            subset_index: define which subset will be used by the Reader
         """
         if subset_index >= len(fraction_list):
             raise ValueError('subset_index is out of range')
@@ -177,5 +178,5 @@ class in_pseudorandom_split(PredicateBase):
     def do_include(self, values):
         if self._predicate_field not in values.keys():
             raise ValueError('Tested values does not have split key: %s' % self._predicate_field)
-        bucket_idx = _string_to_bucket(values[self._predicate_field], sys.maxsize)
+        bucket_idx = _string_to_bucket(str(values[self._predicate_field]), sys.maxsize)
         return self._bucket_low <= bucket_idx < self._bucket_high

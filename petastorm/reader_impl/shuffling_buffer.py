@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import abc
+from collections import deque
 
 import numpy as np
 import six
@@ -23,6 +24,7 @@ class ShufflingBufferBase(object):
     """Shuffling implements a shuffling algorithm. Items can be added to the shuffling buffer and removed in a
     different order as defined by the concrete shuffling algorithm. A shuffling buffer is intended to be used from
     a single thread, hence, not thread safe."""
+
     @abc.abstractmethod
     def add_many(self, items):
         """Adds multiple items to the buffer.
@@ -30,7 +32,6 @@ class ShufflingBufferBase(object):
         :param items: items to be added to the shuffling buffer.
         :return: None
         """
-        pass
 
     @abc.abstractmethod
     def retrieve(self):
@@ -38,7 +39,6 @@ class ShufflingBufferBase(object):
 
         :return: The selected item.
         """
-        pass
 
     @abc.abstractmethod
     def can_add(self):
@@ -46,7 +46,6 @@ class ShufflingBufferBase(object):
 
         :return: A boolean indicating whether an item can be added to the buffer at the time.
         """
-        pass
 
     @abc.abstractmethod
     def can_retrieve(self):
@@ -54,7 +53,6 @@ class ShufflingBufferBase(object):
 
         :return: A boolean indicating whether an item can be returned from the buffer at the time.
         """
-        pass
 
     @abc.abstractproperty
     def size(self):
@@ -62,31 +60,31 @@ class ShufflingBufferBase(object):
 
         :return: number of elements currently present in the buffer
         """
-        pass
 
     @abc.abstractmethod
     def finish(self):
-        """Call this method when no more `add_many` calls will be made.
+        """Call this method when no more :func:`add_many` calls will be made.
 
         This allows a user to deplete the buffer. Typically during last epoch. Otherwise, we would always have leftovers
         in the buffer at the end of the lifecycle.
 
         :return: number of elements currently present in the buffer
         """
-        pass
+
 
 class NoopShufflingBuffer(ShufflingBufferBase):
     """A 'no-operation' (noop) implementation of a shuffling buffer. Useful in cases where no shuffling is desired, such
     as test scenarios or iterating over a dataset in a predeterministic order.
     """
+
     def __init__(self):
-        self.store = []
+        self.store = deque()
 
     def add_many(self, items):
         self.store.extend(items)
 
     def retrieve(self):
-        return self.store.pop(0)
+        return self.store.popleft()
 
     def can_retrieve(self):
         return len(self.store) > 0
@@ -101,33 +99,35 @@ class NoopShufflingBuffer(ShufflingBufferBase):
     def finish(self):
         pass
 
+
 class RandomShufflingBuffer(ShufflingBufferBase):
     """
     A random shuffling buffer implementation. Items can be added to the buffer and retrieved in a random order.
     """
+
     def __init__(self, shuffling_buffer_capacity, min_after_retrieve, extra_capacity=1000):
         """Initializes a new ShufflingBuffer instance.
 
-        Items may be retrieved from the buffer once `min_after_retrieve` items were added to the queue
-        (indicated by `can_retrieve`).
+        Items may be retrieved from the buffer once ``min_after_retrieve`` items were added to the queue
+        (indicated by ``can_retrieve``).
 
         Items may be added to the buffer as long as the number of items in the buffer (not including the items
-        passed to `add_many`) does not exceed `shuffling_queue_capacity`.
+        passed to :func:`add_many`) does not exceed ``shuffling_queue_capacity``.
 
-        The amount of items in the buffer may actually become more than `shuffling_buffer_capacity` since `add_many`
-        is passed a list of items. The 'hard limit' on the number of items in the buffer is
-        `shuffling_buffer_capacity` + `extra_queue_capacity`.
+        The amount of items in the buffer may actually become more than ``shuffling_buffer_capacity`` since
+        :func:`add_many` is passed a list of items. The *hard limit* on the number of items in the buffer is
+        ``shuffling_buffer_capacity + extra_capacity``.
 
         :param shuffling_buffer_capacity: Items may be added to the buffer as long as the amount of items in the
-        buffer does not exceed the value of `shuffling_queue_capacity` (not including the items
-        passed to `add_many`).
+          buffer does not exceed the value of ``shuffling_queue_capacity`` (not including the items
+          passed to :func:`add_many`).
         :param min_after_retrieve: Minimal amount of items in the buffer that allows retrieval. This is needed to
-        guarantee good random shuffling of elements. Once `finish()` is called, items can be retrieved even if the
-        condition does not hold.
-        :param extra_capacity: The amount of items in the buffer may grow above `shuffling_buffer_capacity`
-        (due to a call to `add_many` with a list of items), but must remain under `extra_queue_capacity`. Should be
-        set to the upper bound of the number of items that can be added in a single call to `add_many` (can be a
-        loose bound).
+          guarantee good random shuffling of elements. Once :func:`finish` is called, items can be retrieved even if
+          the condition does not hold.
+        :param extra_capacity: The amount of items in the buffer may grow above ``shuffling_buffer_capacity``
+          (due to a call to :func:`add_many` with a list of items), but must remain under ``extra_capacity``. Should be
+          set to the upper bound of the number of items that can be added in a single call to :func:`add_many` (can be a
+          loose bound).
         """
         self._extra_capacity = extra_capacity
         # Preallocate the shuffling buffer.
@@ -149,7 +149,7 @@ class RandomShufflingBuffer(ShufflingBufferBase):
         expected_size = self._size + len(items)
         maximal_capacity = self._shuffling_queue_capacity + self._extra_capacity
         if expected_size > maximal_capacity:
-            raise RuntimeError('Attempt to enqueue more elements that the capacity allows. '
+            raise RuntimeError('Attempt to enqueue more elements than the capacity allows. '
                                'Current size: {}, new size {}, maximum allowed: {}'.format(self._size, expected_size,
                                                                                            maximal_capacity))
         self._items[self._size:self._size + len(items)] = items

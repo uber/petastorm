@@ -48,4 +48,3 @@ class RowGroupIndexerBase(object):
     @abc.abstractmethod
     def build_index(self, decoded_rows, piece_index):
         """ index values in given rows."""
-        pass

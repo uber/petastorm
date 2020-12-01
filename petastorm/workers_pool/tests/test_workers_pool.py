@@ -13,18 +13,20 @@
 # limitations under the License.
 
 
-
 import time
 import unittest
 
 import numpy as np
+from multiprocessing import Process, Manager
+from psutil import process_iter
 
-from petastorm.workers_pool import EmptyResultError, TimeoutWaitingForResultError
+
+from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.dummy_pool import DummyPool
 from petastorm.workers_pool.process_pool import ProcessPool
 from petastorm.workers_pool.tests.stub_workers import CoeffMultiplierWorker, \
     WorkerIdGeneratingWorker, WorkerMultiIdGeneratingWorker, SleepyWorkerIdGeneratingWorker, \
-    ExceptionGeneratingWorker_5, SleepyDoingNothingWorker, PreprogrammedReturnValueWorker
+    ExceptionGeneratingWorker_5, PreprogrammedReturnValueWorker
 from petastorm.workers_pool.thread_pool import ThreadPool
 
 
@@ -47,7 +49,8 @@ class TestWorkersPool(unittest.TestCase):
         pool.join()
 
     def test_passing_args_processes(self):
-        self._passing_args_impl(lambda: ProcessPool(10))
+        for zmq_copy_buffers in [False, True]:
+            self._passing_args_impl(lambda do_copy=zmq_copy_buffers: ProcessPool(10, zmq_copy_buffers=do_copy))
 
     def test_passing_args_threads(self):
         self._passing_args_impl(lambda: ThreadPool(10))
@@ -93,22 +96,6 @@ class TestWorkersPool(unittest.TestCase):
         pool.stop()
         pool.join()
 
-    def timeout_while_waiting_on_results_impl(self, pool_class):
-        """Check that timeout error would occur worker don't write results to the results queue in time"""
-
-        # COULD BECOME A FLAKY TEST SINCE RELIES ON TIME
-        WORKERS_COUNT = 5
-        pool = pool_class(WORKERS_COUNT)
-
-        pool.start(SleepyDoingNothingWorker, 3)
-
-        pool.ventilate()
-        with self.assertRaises(TimeoutWaitingForResultError):
-            pool.get_results(timeout=0.1)
-
-        pool.stop()
-        pool.join()
-
     def raise_empty_result_error_on_get_results_impl(self, pool_class):
         """Check that the get_results returns None when there is no work left to do"""
 
@@ -148,12 +135,6 @@ class TestWorkersPool(unittest.TestCase):
 
     def test_return_none_on_get_results_dummy(self):
         self.raise_empty_result_error_on_get_results_impl(DummyPool)
-
-    def test_timeout_while_waiting_on_results_thread(self):
-        self.timeout_while_waiting_on_results_impl(ThreadPool)
-
-    def test_timeout_while_waiting_on_results_process(self):
-        self.timeout_while_waiting_on_results_impl(ProcessPool)
 
     def test_stop_when_result_queue_is_full(self):
         """Makes sure we don't block indefinitely on ventilator queue"""
@@ -215,7 +196,10 @@ class TestWorkersPool(unittest.TestCase):
     def test_exception_in_worker_thread(self):
         """ Test exception handler in thread pool """
         QUEUE_SIZE = 100
-        self._test_exception_in_worker_impl(ThreadPool(10, results_queue_size=QUEUE_SIZE), QUEUE_SIZE)
+        pool = ThreadPool(10, results_queue_size=QUEUE_SIZE)
+        self._test_exception_in_worker_impl(pool, QUEUE_SIZE)
+        pool.stop()
+        pool.join()
 
     def test_exception_in_worker_process(self):
         """ Test exception handler in process pool """
@@ -224,7 +208,10 @@ class TestWorkersPool(unittest.TestCase):
         # zmq sockets will be closed and there is some race condition that can cause the ventilate
         # to raise an exception. Only ventilating a single time guarantees that it will be properly
         # sent to a worker before it has exited due to an exception
-        self._test_exception_in_worker_impl(ProcessPool(10), 1)
+        pool = ProcessPool(2)
+        self._test_exception_in_worker_impl(pool, 1)
+        pool.stop()
+        pool.join()
 
     def test_exception_in_all_worker_process(self):
         """ Tests that when all worker processes have exited, zmq will properly throw an exception
@@ -235,6 +222,31 @@ class TestWorkersPool(unittest.TestCase):
             for _ in range(10000):
                 pool.ventilate("Datanum")
                 time.sleep(.1)
+
+    def test_workers_die_when_main_process_dies(self):
+        """ Tests that when the main processes dies, the process workers will kill themselves """
+        manager = Manager()
+        return_list = manager.list()
+
+        def run_process_pool(return_list):
+            pool = ProcessPool(1)
+            pool.start(WorkerIdGeneratingWorker)
+            return_list.append(pool._workers[0].pid)
+            # We dont call pool.stop() and hence leave workers alive
+
+        process = Process(target=run_process_pool, args=(return_list,))
+        process.start()
+        process.join()
+        # The worker has now started
+
+        worker_pid = return_list[0]
+
+        for _ in range(20):
+            worker_is_alive = any([p.pid for p in process_iter() if p.pid == worker_pid])
+            if not worker_is_alive:
+                break
+            time.sleep(0.1)
+        self.assertFalse(worker_is_alive)
 
     def test_exception_reusing_thread_pool(self):
         WORKERS_COUNT = 10
@@ -257,7 +269,7 @@ class TestWorkersPool(unittest.TestCase):
         """Check edge case, when workers consistently does not produce results"""
         # 10000 is an interesting case as in the original implementation it caused stack overflow
         for ventilate_count in [10, 10000]:
-            for pool in [DummyPool(), ThreadPool(2), ProcessPool(2)]:
+            for pool in [DummyPool(), ThreadPool(2)]:
                 pool.start(PreprogrammedReturnValueWorker, ventilate_count * [[]])
                 for _ in range(ventilate_count):
                     pool.ventilate('not_important')
@@ -272,7 +284,7 @@ class TestWorkersPool(unittest.TestCase):
         """Check edge case, when workers consistently does not produce results"""
         # 10000 is an interesting case as in the original implementation it caused stack overflow
         VENTILATE_COUNT = 4
-        for pool in [DummyPool(), ThreadPool(1), ProcessPool(1)]:
+        for pool in [DummyPool(), ThreadPool(1)]:
             pool.start(PreprogrammedReturnValueWorker, [[], [], [42], []])
             for _ in range(VENTILATE_COUNT):
                 pool.ventilate('not_important')
