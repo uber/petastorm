@@ -102,9 +102,15 @@ class WeightedSamplingReader(object):
     def __enter__(self):
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def stop(self):
         for reader in self._readers:
             reader.stop()
 
+    def join(self):
         for reader in self._readers:
             reader.join()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()
+        self.join()
+
