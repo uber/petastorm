@@ -22,6 +22,7 @@ import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 from petastorm import make_reader
 from petastorm.ngram import NGram
 from petastorm.predicates import in_lambda
+from petastorm.pytorch import DataLoader
 from petastorm.test_util.reader_mock import ReaderMock
 from petastorm.tf_utils import tf_tensors, make_petastorm_dataset
 from petastorm.unischema import Unischema, UnischemaField
@@ -197,3 +198,17 @@ def test_with_tf_data_api(synthetic_dataset):
         # second reaader we read approximately 1 sample from the first.
         expected_rows_approx = len(synthetic_dataset.data)
         np.testing.assert_allclose(rows_count, expected_rows_approx, atol=20)
+
+
+def test_with_torch_api(synthetic_dataset):
+    """Verify that WeightedSamplingReader is compatible with petastorm.pytorch.DataLoader"""
+    readers = [reader0, reader1]
+
+    with WeightedSamplingReader(readers, [0.5, 0.5]) as mixer:
+        assert not mixer.batched_output
+        sample = next(mixer)
+        assert sample is not None
+        with DataLoader(mixer, batch_size=2) as loader:
+            for batch in loader:
+                assert batch['f1'].shape[0] == 2
+                break
