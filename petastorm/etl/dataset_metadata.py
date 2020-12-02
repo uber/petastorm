@@ -392,7 +392,7 @@ def get_schema_from_dataset_url(dataset_url_or_urls, hdfs_driver='libhdfs3', s3_
     :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
         libhdfs (java through JNI) or libhdfs3 (C++)
     :param s3_config_kwargs: dict of parameters passed to ``botocore.client.Config``
-    :param fileystem: the filesystem to use.
+    :param fileystem: the ``pyarrow.FileSystem`` to use.
     :return: A :class:`petastorm.unischema.Unischema` object
     """
     fs, path_or_paths = get_filesystem_and_path_or_paths(dataset_url_or_urls, hdfs_driver,
