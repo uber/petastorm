@@ -124,7 +124,7 @@ def make_reader(dataset_url,
         here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
     :param s3_config_kwargs: dict of parameters passed to ``botocore.client.Config``
     :param zmq_copy_buffers: A bool indicating whether to use 0mq copy buffers with ProcessPool.
-    :param filesystem: A filesystem to use. Will ignore s3_config_kwargs and other filesystem configs if it's provided.
+    :param filesystem: An instance of ``pyarrow.FileSystem`` to use. Will ignore s3_config_kwargs and other filesystem configs if it's provided.
     :return: A :class:`Reader` object
     """
     dataset_url = normalize_dir_url(dataset_url)
@@ -265,7 +265,7 @@ def make_batch_reader(dataset_url_or_urls,
         here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
     :param s3_config_kwargs: dict of parameters passed to ``botocore.client.Config``
     :param zmq_copy_buffers: A bool indicating whether to use 0mq copy buffers with ProcessPool.
-    :param filesystem: A filesystem to use. Will ignore s3_config_kwargs and other filesystem configs if it's provided.
+    :param filesystem: An instance of ``pyarrow.FileSystem`` to use. Will ignore s3_config_kwargs and other filesystem configs if it's provided.
     :return: A :class:`Reader` object
     """
     dataset_url_or_urls = normalize_dataset_url_or_urls(dataset_url_or_urls)
