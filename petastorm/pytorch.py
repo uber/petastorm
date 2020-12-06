@@ -199,7 +199,7 @@ class DataLoader(LoaderBase):
             _sanitize_pytorch_types(row_as_dict)
 
             # Add rows to shuffling buffer
-            if not self.reader.is_batched_reader:
+            if not self.reader.batched_output:
                 self._shuffling_buffer.add_many([row_as_dict])
             else:
                 # Transposition:
@@ -330,7 +330,7 @@ class BatchedDataLoader(LoaderBase):
 
             # Add rows to shuffling buffer
             for k, v in row_as_dict.items():
-                if not self.reader.is_batched_reader:
+                if not self.reader.batched_output:
                     row_as_dict[k] = self.transform_fn([v])
                 else:
                     row_as_dict[k] = self.transform_fn(v)
