@@ -125,8 +125,6 @@ def make_torch_reader_and_loader(dataset_url_or_urls,
     # we choose is make_batch_reader unless there are data transformations.
     if transform_spec:
         reader_factory = make_reader
-        if 'pyarrow_serialize' not in kwargs:
-            kwargs['pyarrow_serialize'] = True
     else:
         reader_factory = make_batch_reader
 
