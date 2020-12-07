@@ -90,19 +90,6 @@ def test_many_columns_non_petastorm_dataset(many_columns_non_petastorm_dataset, 
 # TODO(yevgeni): missing tests: https://github.com/uber/petastorm/issues/257
 
 @pytest.mark.parametrize('reader_factory', _D)
-@pytest.mark.parametrize('partition_by', [['string'], ['id'], ['string', 'id']])
-def test_string_partition(reader_factory, tmpdir, partition_by):
-    """Try datasets partitioned by a string, integer and string+integer fields"""
-    url = 'file://' + tmpdir.strpath
-
-    data = create_test_scalar_dataset(url, 10, partition_by=partition_by)
-    with reader_factory(url) as reader:
-        row_ids_batched = [row.id for row in reader]
-    actual_row_ids = list(itertools.chain(*row_ids_batched))
-    assert len(data) == len(actual_row_ids)
-
-
-@pytest.mark.parametrize('reader_factory', _D)
 def test_partitioned_field_is_not_queried(reader_factory, tmpdir):
     """Try datasets partitioned by a string, integer and string+integer fields"""
     url = 'file://' + tmpdir.strpath
@@ -202,3 +189,16 @@ def test_transform_spec_support_return_tensor(scalar_dataset, reader_factory):
         assert len(sample) == 2
         assert (2, 3) == sample['tensor_col_1'].shape[1:] and \
             (3, 4, 5) == sample['tensor_col_2'].shape[1:]
+
+
+@pytest.mark.parametrize('reader_factory', _D)
+@pytest.mark.parametrize('partition_by', [['string'], ['id'], ['string', 'id']])
+def test_string_partition(reader_factory, tmpdir, partition_by):
+    """Try datasets partitioned by a string, integer and string+integer fields"""
+    url = 'file://' + tmpdir.strpath
+
+    data = create_test_scalar_dataset(url, 10, partition_by=partition_by)
+    with reader_factory(url) as reader:
+        row_ids_batched = [row.id for row in reader]
+    actual_row_ids = list(itertools.chain(*row_ids_batched))
+    assert len(data) == len(actual_row_ids)
