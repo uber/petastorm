@@ -40,7 +40,7 @@ class NGram(object):
     >>>       TestSchema.sensor_name],
     >>> }
     >>> delta_threshold = 5
-    >>> timestamp_field = 'id'
+    >>> timestamp_field = TestSchema.id
 
       - The data being:
 
@@ -60,7 +60,7 @@ class NGram(object):
     >>>          TestSchema.sensor_name],
     >>> }
     >>> delta_threshold = 4
-    >>> timestamp_field = 'id'
+    >>> timestamp_field = TestSchema.id
 
       - The data being:
 
