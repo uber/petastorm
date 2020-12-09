@@ -286,7 +286,7 @@ class BatchedRandomShufflingBufferWithMemCache(BatchedShufflingBufferBase):
     and high performance.
     """
 
-    def __init__(self, cache_size, batch_size=1, num_epochs_to_load=1):
+    def __init__(self, batch_size=1, num_epochs_to_load=1):
         """Initializes a new BatchedRandomShufflingBufferWithMemCache instance.
 
         The buffer caches all the data in memory from reader and then start loading it.
@@ -304,8 +304,6 @@ class BatchedRandomShufflingBufferWithMemCache(BatchedShufflingBufferBase):
         Data will be shuffled once after reading is complete. There will be no automatic shuffling
         but user can trigger data shuffle by calling ``shuffle`` method.
 
-        :param cache_size: The maximum number of items that can be stored in memory cache. We will
-            throw an error if the number of elements grows beyond the cache_size.
         :param batch_size: The number of items to be retrieved for each self.retrieve() call.
             This also affects the can_add and can can_retrieve accordingly.
         :param num_epochs_to_load: Tells the buffer how many times every instance of the data
@@ -315,7 +313,6 @@ class BatchedRandomShufflingBufferWithMemCache(BatchedShufflingBufferBase):
         """
         super(BatchedRandomShufflingBufferWithMemCache, self).__init__(batch_size=batch_size)
         self._num_epochs_to_load = num_epochs_to_load
-        self._cache_size = cache_size
 
         # Preallocate the shuffling buffer.
         self._items = None
@@ -341,13 +338,6 @@ class BatchedRandomShufflingBufferWithMemCache(BatchedShufflingBufferBase):
                 'items can be added.')
 
         expected_size = self._size + len(items[0])
-        maximal_capacity = self._cache_size
-        if expected_size > maximal_capacity:
-            raise RuntimeError(
-                'Attempt to cache more elements than the memory cache capacity allows. Please '
-                'increase your cache size. Current size: {}, new size {}, '
-                'maximum number of samples allowed: {}'.format(self._size, expected_size,
-                                                               self._cache_size))
 
         # 2 is an arbitrary number to start to grow from there.
         new_capacity = 2
@@ -390,7 +380,7 @@ class BatchedRandomShufflingBufferWithMemCache(BatchedShufflingBufferBase):
         return sample
 
     def can_add(self):
-        return self._size < self._cache_size
+        return True
 
     def can_retrieve(self):
         if not self._done_adding:

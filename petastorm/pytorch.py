@@ -103,46 +103,6 @@ beginning.If you do need to terminate early and restart from beginning, please r
 loader."
 
 
-@contextmanager
-def make_torch_reader_and_loader(dataset_url_or_urls,
-                                 num_epochs=1,
-                                 batch_size=1,
-                                 transform_fn=None,
-                                 shuffling_queue_capacity=0,
-                                 in_memory_cache_size=0,
-                                 transform_spec=None,
-                                 **kwargs):
-    num_epochs_to_load = None
-    if in_memory_cache_size:
-        # When caching in memory, reader reads the data from source only once. Rest of the epochs
-        # are served from in-memory cached buffer in the loader.
-        num_epochs_to_load = num_epochs
-        num_epochs = 1
-
-    # In general, make_batch_reader is faster than make_reader for reading the dataset.
-    # However, we found out that make_reader performs data transformations much faster than
-    # make_batch_reader with parallel worker processes. Therefore, the default reader
-    # we choose is make_batch_reader unless there are data transformations.
-    if transform_spec:
-        reader_factory = make_reader
-    else:
-        reader_factory = make_batch_reader
-
-    reader = reader_factory(dataset_url_or_urls, num_epochs=num_epochs, **kwargs)
-    try:
-        loader = BatchedDataLoader(reader,
-                                   batch_size=batch_size,
-                                   transform_fn=transform_fn,
-                                   shuffling_queue_capacity=shuffling_queue_capacity,
-                                   in_memory_cache_size=in_memory_cache_size,
-                                   num_epochs_to_load=num_epochs_to_load)
-
-        yield loader
-    finally:
-        reader.stop()
-        reader.join()
-
-
 class LoaderBase(object):
 
     def __init__(self):
@@ -307,7 +267,7 @@ class BatchedDataLoader(LoaderBase):
     def __init__(self, reader, batch_size=1,
                  transform_fn=None,
                  shuffling_queue_capacity=0,
-                 in_memory_cache_size=0,
+                 inmemory_cache_all=False,
                  num_epochs_to_load=None):
         """
         Initializes a data loader object.
@@ -331,11 +291,8 @@ class BatchedDataLoader(LoaderBase):
         :param transform_fn: an optional callable to convert batches from the reader to PyTorch tensors
         :param shuffling_queue_capacity: Queue capacity is passed to the underlying :class:`tf.RandomShuffleQueue`
           instance. If set to 0, no shuffling will be done.
-        :param in_memory_cache_size: This is an integer that indicates the size of in-memory cache.
-            Note that the data will be cached in the Shuffling buffer and not in the
-            reader itself because we do not want to cache it twice. Currently, only
-            BatchedDataLoader supports in-memory caching. If set to 0, in memory-caching will be
-            disabled.
+        :param inmemory_cache_all: This is an boolean that indicates whether the data should be
+            cached in memory or not.
         :param num_epochs_to_load: Number of epochs to load when in memory cache is enabled. If
             set to None, loader will loads batches indefinitely.
         """
@@ -349,23 +306,20 @@ class BatchedDataLoader(LoaderBase):
         self.shuffling_queue_capacity = shuffling_queue_capacity
         self._in_iter = None
 
-        self.in_memory_cache_size = in_memory_cache_size
+        self.inmemory_cache_all = inmemory_cache_all
 
-        if self.in_memory_cache_size > 0 and self.reader.num_epochs_to_read != 1:
+        if self.inmemory_cache_all and self.reader.num_epochs_to_read != 1:
             raise ValueError("When cache in loader memory is activated, reader.num_epochs_to_read "
                              "must be set to 1. When caching the data in memory, we need to read "
-                             "the data only once. The rest of the time, we serve it from memory.")
+                             "the data only once and for the rest, we will serve it from memory.")
 
         # This is only relevant if in memory caching is activated.
         self.num_epochs_to_load = num_epochs_to_load
-        if self.in_memory_cache_size == 0 and self.num_epochs_to_load:
+        if self.inmemory_cache_all and self.num_epochs_to_load:
             raise ValueError("num_epochs_to_load needs to be specified when "
                              "cache_in_loader_memory is enabled.")
 
-        if self.in_memory_cache_size < 0:
-            raise ValueError("Cannot create a in-memory cache. cache_size_limit larger than zero.")
-
-        if self.shuffling_queue_capacity > 0 and self.in_memory_cache_size:
+        if self.shuffling_queue_capacity > 0 and self.inmemory_cache_all:
             raise ValueError("When using in-memory cache, shuffling_queue_capacity has no effect.")
 
     def _iter_impl(self):
@@ -377,9 +331,8 @@ class BatchedDataLoader(LoaderBase):
 
         keys = None
 
-        if self.in_memory_cache_size:
+        if self.inmemory_cache_all:
             self._shuffling_buffer = BatchedRandomShufflingBufferWithMemCache(
-                cache_size=self.in_memory_cache_size,
                 num_epochs_to_load=self.num_epochs_to_load,
                 batch_size=self.batch_size
             )
