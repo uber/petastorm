@@ -305,19 +305,12 @@ class BatchedDataLoader(LoaderBase):
         self._in_iter = None
 
         self.inmemory_cache_all = inmemory_cache_all
+        self.num_epochs = num_epochs
 
         if self.inmemory_cache_all and self.reader.num_epochs_to_read != 1:
             raise ValueError("When cache in loader memory is activated, reader.num_epochs_to_read "
                              "must be set to 1. When caching the data in memory, we need to read "
                              "the data only once and for the rest, we will serve it from memory.")
-
-        # This is only relevant if in memory caching is activated.
-        self.num_epochs = num_epochs
-        if self.inmemory_cache_all and self.num_epochs is None:
-            raise ValueError("num_epochs needs to be specified when cache_in_loader_memory is enabled.")
-
-        if self.shuffling_queue_capacity > 0 and self.inmemory_cache_all:
-            raise ValueError("When using in-memory cache, shuffling_queue_capacity has no effect.")
 
     def _iter_impl(self):
         """
@@ -394,9 +387,20 @@ class BatchedDataLoader(LoaderBase):
             yield batch
 
         if self.inmemory_cache_all:
-            for epoch in range(self.num_epochs-1):
+            def epoch_itr():
+                if self.num_epochs is None:
+                    # Infinite loop if num_epochs is set to None
+                    epoch = 0
+                    while True:
+                        yield epoch
+                        epoch += 1
+                else:
+                    # One epoch has already passed. We iterate num_epochs-1 times.
+                    for epoch in range(self.num_epochs - 1):
+                        yield epoch
+
+            for _ in epoch_itr():
                 self._other_shuffling_buffer.finish()
-                print("swapped the buffers")
                 self._shuffling_buffer = self._other_shuffling_buffer
                 self._other_shuffling_buffer = instantiate_buffer_fn()
                 for batch in self._yield_batches(keys):

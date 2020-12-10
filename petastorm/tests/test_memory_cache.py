@@ -53,21 +53,6 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
             with pytest.raises(ValueError, match=error_string):
                 BatchedDataLoader(reader, inmemory_cache_all=True)
 
-    def test_mem_cache_reader_cache_enabled_error(self):
-        error_string = "num_epochs needs to be specified when cache_in_loader_memory is " \
-                       "enabled."
-        with make_batch_reader(self._dataset_url,
-                               num_epochs=1) as reader:
-            with pytest.raises(ValueError, match=error_string):
-                BatchedDataLoader(reader, inmemory_cache_all=True)
-
-    def test_shuffling_q_size_error(self):
-        error_string = "When using in-memory cache, shuffling_queue_capacity has no effect."
-        with make_batch_reader(self._dataset_url,
-                               num_epochs=1) as reader:
-            with pytest.raises(ValueError, match=error_string):
-                BatchedDataLoader(reader, num_epochs=1, inmemory_cache_all=True, shuffling_queue_capacity=100)
-
     def test_in_memory_cache_two_epoch(self):
         batch_size = 10
         for reader_factory in [make_reader, make_batch_reader]:
@@ -125,7 +110,6 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
 
                         if cache_type == MEMORY_CACHE:
                             assert len(set(retrieved_so_far.tolist())) == self._num_rows
-                        print("starting second epoch")
                         for idx in range(5):
                             batch = next(it)
                             if cache_type == MEMORY_CACHE:
