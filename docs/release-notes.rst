@@ -8,6 +8,7 @@ Release notes
 Release 0.9.8 (unreleased)
 ==========================
 - `PR 617 <https://github.com/uber/petastorm/pull/617>`_: Deprecating `pyarrow_serialize` argument of `petastorm.make_reader`.
+- `PR 625 <https://github.com/uber/petastorm/pull/625>`_: Support on-premise s3-compatible storage. User can now pass an instance of pyarrow filesystem to `make_reader` and `make_batch_reader` functions.
 
 
 Release 0.9.7
