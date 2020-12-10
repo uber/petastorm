@@ -63,6 +63,7 @@ class FilesystemResolver(object):
         :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
         libhdfs (java through JNI) or libhdfs3 (C++)
         :param user: String denoting username when connecting to HDFS. None implies login user.
+        :param s3_config_kwargs: The config passed to S3FileSystem.
         """
         # Cache both the original URL and the resolved, urlparsed dataset_url
         self._dataset_url = dataset_url
@@ -198,7 +199,7 @@ class FilesystemResolver(object):
                            'anti-pickling protection')
 
 
-def get_filesystem_and_path_or_paths(url_or_urls, hdfs_driver='libhdfs3', s3_config_kwargs=None):
+def get_filesystem_and_path_or_paths(url_or_urls, hdfs_driver='libhdfs3', s3_config_kwargs=None, filesystem=None):
     """
     Given a url or url list, return a tuple ``(filesystem, path_or_paths)``
     ``filesystem`` is created from the given url(s), and ``path_or_paths`` is a path or path list
@@ -219,7 +220,8 @@ def get_filesystem_and_path_or_paths(url_or_urls, hdfs_driver='libhdfs3', s3_con
         if parsed_url.scheme != first_scheme or parsed_url.netloc != first_netloc:
             raise ValueError('The dataset url list must contain url with the same scheme and netloc.')
 
-    fs = FilesystemResolver(url_list[0], hdfs_driver=hdfs_driver, s3_config_kwargs=s3_config_kwargs).filesystem()
+    fs = filesystem or FilesystemResolver(
+        url_list[0], hdfs_driver=hdfs_driver, s3_config_kwargs=s3_config_kwargs).filesystem()
     path_list = [get_dataset_path(parsed_url) for parsed_url in parsed_url_list]
 
     if isinstance(url_or_urls, list):

@@ -385,15 +385,19 @@ def get_schema(dataset):
     return schema
 
 
-def get_schema_from_dataset_url(dataset_url_or_urls, hdfs_driver='libhdfs3'):
+def get_schema_from_dataset_url(dataset_url_or_urls, hdfs_driver='libhdfs3', s3_config_kwargs=None, filesystem=None):
     """Returns a :class:`petastorm.unischema.Unischema` object loaded from a dataset specified by a url.
 
     :param dataset_url_or_urls: a url to a parquet directory or a url list (with the same scheme) to parquet files.
     :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
         libhdfs (java through JNI) or libhdfs3 (C++)
+    :param s3_config_kwargs: dict of parameters passed to ``botocore.client.Config``
+    :param fileystem: the ``pyarrow.FileSystem`` to use.
     :return: A :class:`petastorm.unischema.Unischema` object
     """
-    fs, path_or_paths = get_filesystem_and_path_or_paths(dataset_url_or_urls, hdfs_driver)
+    fs, path_or_paths = get_filesystem_and_path_or_paths(dataset_url_or_urls, hdfs_driver,
+                                                         s3_config_kwargs=s3_config_kwargs,
+                                                         filesystem=filesystem)
 
     dataset = pq.ParquetDataset(path_or_paths, filesystem=fs, validate_schema=False, metadata_nthreads=10)
 
