@@ -22,8 +22,8 @@ from tempfile import mkdtemp
 import pytest
 import torch
 
-from petastorm.pytorch import BatchedDataLoader, make_batch_reader
-from petastorm.reader import make_batch_reader, make_reader
+from petastorm.pytorch import BatchedDataLoader
+from petastorm.reader import make_batch_reader, make_reader, make_batch_reader
 from petastorm.tests.test_common import create_many_columns_non_petastorm_dataset
 
 MEMORY_CACHE = 'mem_cache'
@@ -47,19 +47,17 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
         rmtree(cls._dataset_dir)
 
     def test_mem_cache_reader_num_epochs_error(self):
-        error_string = "When cache in loader memory is activated, reader.num_epochs_to_read " \
-                       "must be set to 1. When caching the data in memory, we need to read " \
-                       "the data only once. The rest of the time, we serve it from memory."
+        error_string = "When cache in loader memory is activated"
         with make_batch_reader(self._dataset_url,
                                num_epochs=2) as reader:
             with pytest.raises(ValueError, match=error_string):
                 BatchedDataLoader(reader, inmemory_cache_all=True)
 
     def test_mem_cache_reader_cache_enabled_error(self):
-        error_string = "num_epochs_to_load needs to be specified when cache_in_loader_memory is " \
+        error_string = "num_epochs needs to be specified when cache_in_loader_memory is " \
                        "enabled."
         with make_batch_reader(self._dataset_url,
-                               num_epochs=2) as reader:
+                               num_epochs=1) as reader:
             with pytest.raises(ValueError, match=error_string):
                 BatchedDataLoader(reader, inmemory_cache_all=True)
 
@@ -68,7 +66,7 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
         with make_batch_reader(self._dataset_url,
                                num_epochs=1) as reader:
             with pytest.raises(ValueError, match=error_string):
-                BatchedDataLoader(reader, inmemory_cache_all=True, shuffling_queue_capacity=100)
+                BatchedDataLoader(reader, num_epochs=1, inmemory_cache_all=True, shuffling_queue_capacity=100)
 
     def test_in_memory_cache_two_epoch(self):
         batch_size = 10
@@ -82,7 +80,7 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
 
                     if cache_type == MEMORY_CACHE:
                         extra_loader_params = dict(inmemory_cache_all=True,
-                                                   num_epochs_to_load=2)
+                                                   num_epochs=2)
                         extra_reader_params = dict(num_epochs=1)
                         print("extra_reader_params", extra_reader_params)
                     else:
@@ -106,9 +104,13 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
 
                         it = iter(loader)
                         retrieved_so_far = None
-
-                        for _ in range(5):
+                        for idx in range(5):
                             batch = next(it)
+                            if cache_type == MEMORY_CACHE:
+                                if idx == 0:
+                                    first_buffer = loader._shuffling_buffer
+                                    second_buffer = loader._other_shuffling_buffer
+
                             this_batch = batch['col_0'].clone()
                             assert list(this_batch.shape)[0] == batch_size
 
@@ -123,86 +125,24 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
 
                         if cache_type == MEMORY_CACHE:
                             assert len(set(retrieved_so_far.tolist())) == self._num_rows
-
-                        for _ in range(5):
+                        print("starting second epoch")
+                        for idx in range(5):
                             batch = next(it)
                             if cache_type == MEMORY_CACHE:
-                                assert loader._shuffling_buffer._done_adding
+                                if idx == 0:
+                                    self.assertNotEqual(loader._other_shuffling_buffer,
+                                                        first_buffer)
+                                    # Assert that shuffling buffers are swapped.
+                                    self.assertEqual(loader._shuffling_buffer, second_buffer)
+                                    # Assert the a new buffer is created.
+                                    self.assertNotEqual(loader._other_shuffling_buffer,
+                                                        second_buffer)
                             this_batch = batch['col_0'].clone()
                             assert list(this_batch.shape)[0] == batch_size
                             retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
 
                         with pytest.raises(StopIteration):
                             next(it)
-
-    def test_in_memory_cache_two_epoch_with_make_fn(self):
-        batch_size = 10
-        for cache_type in [MEMORY_CACHE, None]:
-
-            for shuffling_queue_capacity in [0, 20]:
-                print("testing args: cache_type: {}, shuffling_queue_capacity: {}"
-                      .format(cache_type, shuffling_queue_capacity))
-
-                if cache_type == MEMORY_CACHE:
-                    make_fn_params = dict(inmemory_cache_all=True)
-                else:
-                    make_fn_params = \
-                        dict(shuffling_queue_capacity=shuffling_queue_capacity)
-                print("make_fn_params", make_fn_params)
-                if cache_type == MEMORY_CACHE:
-                    num_epochs_to_load = 2
-                    num_epochs = 1
-                    inmemory_cache_all = True
-                else:
-                    num_epochs_to_load = None
-                    num_epochs = 2
-                    inmemory_cache_all = False
-
-                with make_batch_reader(dataset_url_or_urls=self._dataset_url,
-                                       num_epochs=num_epochs,
-                                       cur_shard=0,
-                                       shard_count=1,
-                                       reader_pool_type='thread',
-                                       workers_count=2,
-                                       hdfs_driver='libhdfs',
-                                       schema_fields=['col_0']) as reader:
-
-                    loader = BatchedDataLoader(reader,
-                                               batch_size=batch_size,
-                                               transform_fn=partial(torch.as_tensor, device='cpu'),
-                                               shuffling_queue_capacity=shuffling_queue_capacity,
-                                               inmemory_cache_all=inmemory_cache_all,
-                                               num_epochs_to_load=num_epochs_to_load)
-
-                    retrieved_so_far = None
-                    it = iter(loader)
-                    for _ in range(5):
-                        batch = next(it)
-                        this_batch = batch['col_0'].clone()
-                        assert list(this_batch.shape)[0] == batch_size
-
-                        if retrieved_so_far is None:
-                            retrieved_so_far = this_batch
-                        else:
-                            if cache_type == MEMORY_CACHE:
-                                intersect = set(retrieved_so_far.tolist()). \
-                                    intersection(set(this_batch.tolist()))
-                                assert not intersect
-                            retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
-
-                    if cache_type == MEMORY_CACHE:
-                        assert len(set(retrieved_so_far.tolist())) == self._num_rows
-
-                    for _ in range(5):
-                        batch = next(it)
-                        if cache_type == MEMORY_CACHE:
-                            assert loader._shuffling_buffer._done_adding
-                        this_batch = batch['col_0'].clone()
-                        assert list(this_batch.shape)[0] == batch_size
-                        retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
-
-                    with pytest.raises(StopIteration):
-                        next(it)
 
     def test_in_memory_cache_one_epoch(self):
         batch_size = 10
@@ -216,7 +156,7 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
 
                     if cache_type == 'mem_cache':
                         extra_loader_params = dict(inmemory_cache_all=True,
-                                                   num_epochs_to_load=1)
+                                                   num_epochs=1)
                         extra_reader_params = dict(num_epochs=1)
                         print("extra_reader_params", extra_reader_params)
                     else:
