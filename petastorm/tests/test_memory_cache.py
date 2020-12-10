@@ -53,6 +53,13 @@ class ReaderLoaderWithMemoryCacheTest(unittest.TestCase):
             with pytest.raises(ValueError, match=error_string):
                 BatchedDataLoader(reader, inmemory_cache_all=True)
 
+    def test_mem_cache_num_epochs_without_mem_cache_error(self):
+        error_string = "num_epochs should not be specified when inmemory_cache_all is not enabled."
+        with make_batch_reader(self._dataset_url,
+                               num_epochs=1) as reader:
+            with pytest.raises(ValueError, match=error_string):
+                BatchedDataLoader(reader, num_epochs=2)
+
     def test_in_memory_cache_two_epoch(self):
         batch_size = 10
         for reader_factory in [make_reader, make_batch_reader]:

@@ -393,7 +393,6 @@ class Reader(object):
             raise ValueError('Fields must be either None, an iterable collection of Unischema fields '
                              'or an NGram object.')
 
-        self.num_epochs_to_read = num_epochs
         self.is_batched_reader = is_batched_reader
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
         self.dataset = pq.ParquetDataset(dataset_path, filesystem=pyarrow_filesystem,
@@ -452,7 +451,7 @@ class Reader(object):
             self._normalize_shuffle_options(shuffle_row_drop_partitions, self.dataset)
         self.ventilator = self._create_ventilator(filtered_row_group_indexes, shuffle_row_groups,
                                                   normalized_shuffle_row_drop_partitions,
-                                                  self.num_epochs_to_read, worker_predicate,
+                                                  self.num_epochs, worker_predicate,
                                                   self._workers_pool.workers_count + _VENTILATE_EXTRA_ROWGROUPS)
 
         # 5. Start workers pool

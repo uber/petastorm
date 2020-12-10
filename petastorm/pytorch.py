@@ -14,19 +14,17 @@
 
 import collections
 import decimal
-import logging
 # Must import pyarrow before torch. See: https://github.com/uber/petastorm/blob/master/docs/troubleshoot.rst
 import re
-
+import logging
 import numpy as np
-import torch
-from packaging import version
 from six import PY2
 from torch.utils.data.dataloader import default_collate
+import torch
+from packaging import version
 
-from petastorm.reader_impl.pytorch_shuffling_buffer import BatchedRandomShufflingBuffer, \
-    BatchedNoopShufflingBuffer
 from petastorm.reader_impl.shuffling_buffer import RandomShufflingBuffer, NoopShufflingBuffer
+from petastorm.reader_impl.pytorch_shuffling_buffer import BatchedRandomShufflingBuffer, BatchedNoopShufflingBuffer
 
 _TORCH_BEFORE_1_1 = version.parse(torch.__version__) < version.parse('1.1.0')  # type: ignore
 
@@ -311,6 +309,10 @@ class BatchedDataLoader(LoaderBase):
             raise ValueError("When cache in loader memory is activated, reader.num_epochs_to_read "
                              "must be set to 1. When caching the data in memory, we need to read "
                              "the data only once and for the rest, we will serve it from memory.")
+
+        if not self.inmemory_cache_all and self.num_epochs:
+            raise ValueError("num_epochs should not be specified when inmemory_cache_all is "
+                             "not enabled.")
 
     def _iter_impl(self):
         """

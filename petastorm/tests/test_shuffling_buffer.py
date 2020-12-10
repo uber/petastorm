@@ -17,7 +17,7 @@ import pytest
 import six
 
 from petastorm.reader_impl.pytorch_shuffling_buffer import BatchedNoopShufflingBuffer, \
-    BatchedRandomShufflingBuffer, BatchedRandomShufflingBufferWithMemCache
+    BatchedRandomShufflingBuffer
 from petastorm.reader_impl.shuffling_buffer import NoopShufflingBuffer, RandomShufflingBuffer
 
 NOOP_SHUFFLING_BUFFERS = [NoopShufflingBuffer, BatchedNoopShufflingBuffer]
@@ -63,8 +63,6 @@ def _add_many(q, lst):
 def _retrieve(q):
     if isinstance(q, (NoopShufflingBuffer, RandomShufflingBuffer)):
         return q.retrieve()
-    elif isinstance(q, BatchedRandomShufflingBufferWithMemCache):
-        return q.retrieve()[0]
     else:
         return q.retrieve()[0][0].item()
 
