@@ -16,9 +16,8 @@ import numpy as np
 import pytest
 import six
 
-from petastorm.reader_impl.pytorch_shuffling_buffer import BatchedNoopShufflingBuffer, \
-    BatchedRandomShufflingBuffer
 from petastorm.reader_impl.shuffling_buffer import NoopShufflingBuffer, RandomShufflingBuffer
+from petastorm.reader_impl.pytorch_shuffling_buffer import BatchedNoopShufflingBuffer, BatchedRandomShufflingBuffer
 
 NOOP_SHUFFLING_BUFFERS = [NoopShufflingBuffer, BatchedNoopShufflingBuffer]
 RANDOM_SHUFFLING_BUFFERS = [RandomShufflingBuffer, BatchedRandomShufflingBuffer]
