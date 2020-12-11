@@ -231,8 +231,9 @@ def test_mem_cache_num_epochs_without_mem_cache_error(two_columns_non_petastorm_
 @pytest.mark.parametrize('shuffling_queue_capacity', [20, 0])
 @pytest.mark.parametrize('reader_factory', [make_batch_reader, make_reader])
 @pytest.mark.parametrize('num_epochs', [1, 2, None])
-def test_in_memory_cache_two_epochs(two_columns_non_petastorm_dataset, cache_type,
-                                    shuffling_queue_capacity, reader_factory, num_epochs):
+def test_batched_data_loader_with_in_memory_cache(two_columns_non_petastorm_dataset, cache_type,
+                                                  shuffling_queue_capacity, reader_factory,
+                                                  num_epochs):
     batch_size = 10
     if cache_type == 'mem_cache':
         extra_loader_params = dict(inmemory_cache_all=True, num_epochs=num_epochs)
