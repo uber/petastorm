@@ -227,20 +227,16 @@ def test_mem_cache_num_epochs_without_mem_cache_error(two_columns_non_petastorm_
             BatchedDataLoader(reader, num_epochs=2)
 
 
-@pytest.mark.parametrize('cache_type', ['mem_cache', None])
 @pytest.mark.parametrize('shuffling_queue_capacity', [20, 0])
 @pytest.mark.parametrize('reader_factory', [make_batch_reader, make_reader])
 @pytest.mark.parametrize('num_epochs', [1, 2, None])
-def test_batched_data_loader_with_in_memory_cache(two_columns_non_petastorm_dataset, cache_type,
-                                                  shuffling_queue_capacity, reader_factory,
+def test_batched_data_loader_with_in_memory_cache(two_columns_non_petastorm_dataset,
+                                                  shuffling_queue_capacity,
+                                                  reader_factory,
                                                   num_epochs):
     batch_size = 10
-    if cache_type == 'mem_cache':
-        extra_loader_params = dict(inmemory_cache_all=True, num_epochs=num_epochs)
-        extra_reader_params = dict(num_epochs=1)
-    else:
-        extra_loader_params = dict(shuffling_queue_capacity=shuffling_queue_capacity)
-        extra_reader_params = dict(num_epochs=num_epochs)
+    extra_loader_params = dict(inmemory_cache_all=True, num_epochs=num_epochs)
+    extra_reader_params = dict(num_epochs=1)
 
     with reader_factory(two_columns_non_petastorm_dataset.url,
                         cur_shard=0,
@@ -259,9 +255,8 @@ def test_batched_data_loader_with_in_memory_cache(two_columns_non_petastorm_data
         retrieved_so_far = None
         for idx in range(5):
             batch = next(it)
-            if cache_type == 'mem_cache':
-                if idx == 0:
-                    first_buffer = loader._shuffling_buffer
+            if idx == 0:
+                first_buffer = loader._shuffling_buffer
 
             this_batch = batch['col_0'].clone()
             assert list(this_batch.shape)[0] == batch_size
@@ -269,14 +264,13 @@ def test_batched_data_loader_with_in_memory_cache(two_columns_non_petastorm_data
             if retrieved_so_far is None:
                 retrieved_so_far = this_batch
             else:
-                if cache_type == 'mem_cache':
-                    intersect = set(retrieved_so_far.tolist()).intersection(set(this_batch.tolist()))
-                    assert not intersect
+                intersect = set(retrieved_so_far.tolist()).intersection(set(this_batch.tolist()))
+                assert not intersect
                 retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
 
         retrieved_in_first_epoch = retrieved_so_far.clone()
-        if cache_type == 'mem_cache':
-            assert len(set(retrieved_so_far.tolist())) == 50
+
+        assert len(set(retrieved_so_far.tolist())) == 50
 
         if num_epochs == 1:
             with pytest.raises(StopIteration):
@@ -285,14 +279,12 @@ def test_batched_data_loader_with_in_memory_cache(two_columns_non_petastorm_data
         if num_epochs == 2 or num_epochs is None:
             for idx in range(5):
                 batch = next(it)
-                if cache_type == 'mem_cache' and idx == 0:
-                    # Assert that a new buffer is created inside the loader
-                    assert loader._shuffling_buffer != first_buffer
+                # Assert that a new buffer is created inside the loader
+                assert loader._shuffling_buffer != first_buffer
                 this_batch = batch['col_0'].clone()
                 assert list(this_batch.shape)[0] == batch_size
-                if cache_type == 'mem_cache':
-                    intersection = set(this_batch.tolist()).intersection(set(retrieved_in_first_epoch.tolist()))
-                    assert len(intersection) == batch_size
+                intersection = set(this_batch.tolist()).intersection(set(retrieved_in_first_epoch.tolist()))
+                assert len(intersection) == batch_size
                 retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
 
         if num_epochs == 2:
