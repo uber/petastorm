@@ -230,82 +230,16 @@ def test_mem_cache_num_epochs_without_mem_cache_error(two_columns_non_petastorm_
 @pytest.mark.parametrize('cache_type', ['mem_cache', None])
 @pytest.mark.parametrize('shuffling_queue_capacity', [20, 0])
 @pytest.mark.parametrize('reader_factory', [make_batch_reader, make_reader])
-def test_in_memory_cache_one_epoch(two_columns_non_petastorm_dataset, cache_type,
-                                   shuffling_queue_capacity, reader_factory):
-    batch_size = 10
-    print("testing reader_factor: {}, cache_type: {}, shuffling_queue_capacity: {}"
-          .format(reader_factory.__name__,
-                  cache_type,
-                  shuffling_queue_capacity))
-
-    if cache_type == 'mem_cache':
-        extra_loader_params = dict(inmemory_cache_all=True,
-                                   num_epochs=1)
-        extra_reader_params = dict(num_epochs=1)
-        print("extra_reader_params", extra_reader_params)
-    else:
-        extra_loader_params = \
-            dict(shuffling_queue_capacity=shuffling_queue_capacity)
-        extra_reader_params = dict(num_epochs=1)
-
-    with reader_factory(two_columns_non_petastorm_dataset.url,
-                        cur_shard=0,
-                        shard_count=1,
-                        reader_pool_type='thread',
-                        workers_count=2,
-                        hdfs_driver='libhdfs',
-                        schema_fields=['col_0'],
-                        **extra_reader_params) as reader:
-
-        loader = BatchedDataLoader(reader,
-                                   batch_size=batch_size,
-                                   transform_fn=partial(torch.as_tensor,
-                                                        device='cpu'),
-                                   **extra_loader_params)
-
-        it = iter(loader)
-        retrieved_so_far = None
-
-        for _ in range(5):
-            batch = next(it)
-            this_batch = batch['col_0'].clone()
-
-            assert list(this_batch.shape)[0] == batch_size
-
-            if retrieved_so_far is None:
-                retrieved_so_far = this_batch
-            else:
-                intersect = set(retrieved_so_far.tolist()). \
-                    intersection(set(this_batch.tolist()))
-                assert not intersect
-                retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
-
-        assert len(set(retrieved_so_far.tolist())) == 50
-
-        with pytest.raises(StopIteration):
-            next(it)
-
-
-@pytest.mark.parametrize('cache_type', ['mem_cache', None])
-@pytest.mark.parametrize('shuffling_queue_capacity', [20, 0])
-@pytest.mark.parametrize('reader_factory', [make_batch_reader, make_reader])
+@pytest.mark.parametrize('num_epochs', [1, 2, None])
 def test_in_memory_cache_two_epochs(two_columns_non_petastorm_dataset, cache_type,
-                                    shuffling_queue_capacity, reader_factory):
+                                    shuffling_queue_capacity, reader_factory, num_epochs):
     batch_size = 10
-    print("testing reader_factor: {}, cache_type: {}, shuffling_queue_capacity: {}"
-          .format(reader_factory.__name__,
-                  cache_type,
-                  shuffling_queue_capacity))
-
     if cache_type == 'mem_cache':
-        extra_loader_params = dict(inmemory_cache_all=True,
-                                   num_epochs=2)
+        extra_loader_params = dict(inmemory_cache_all=True, num_epochs=num_epochs)
         extra_reader_params = dict(num_epochs=1)
-        print("extra_reader_params", extra_reader_params)
     else:
-        extra_loader_params = \
-            dict(shuffling_queue_capacity=shuffling_queue_capacity)
-        extra_reader_params = dict(num_epochs=2)
+        extra_loader_params = dict(shuffling_queue_capacity=shuffling_queue_capacity)
+        extra_reader_params = dict(num_epochs=num_epochs)
 
     with reader_factory(two_columns_non_petastorm_dataset.url,
                         cur_shard=0,
@@ -317,8 +251,7 @@ def test_in_memory_cache_two_epochs(two_columns_non_petastorm_dataset, cache_typ
 
         loader = BatchedDataLoader(reader,
                                    batch_size=batch_size,
-                                   transform_fn=partial(torch.as_tensor,
-                                                        device='cpu'),
+                                   transform_fn=partial(torch.as_tensor, device='cpu'),
                                    **extra_loader_params)
 
         it = iter(loader)
@@ -328,7 +261,6 @@ def test_in_memory_cache_two_epochs(two_columns_non_petastorm_dataset, cache_typ
             if cache_type == 'mem_cache':
                 if idx == 0:
                     first_buffer = loader._shuffling_buffer
-                    second_buffer = loader._other_shuffling_buffer
 
             this_batch = batch['col_0'].clone()
             assert list(this_batch.shape)[0] == batch_size
@@ -337,25 +269,38 @@ def test_in_memory_cache_two_epochs(two_columns_non_petastorm_dataset, cache_typ
                 retrieved_so_far = this_batch
             else:
                 if cache_type == 'mem_cache':
-                    intersect = set(retrieved_so_far.tolist()). \
-                        intersection(set(this_batch.tolist()))
+                    intersect = set(retrieved_so_far.tolist()).intersection(set(this_batch.tolist()))
                     assert not intersect
                 retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
 
+        retrieved_in_first_epoch = retrieved_so_far.clone()
         if cache_type == 'mem_cache':
             assert len(set(retrieved_so_far.tolist())) == 50
-        for idx in range(5):
-            batch = next(it)
-            if cache_type == 'mem_cache':
-                if idx == 0:
-                    assert loader._other_shuffling_buffer != first_buffer
-                    # Assert that shuffling buffers are swapped.
-                    assert loader._shuffling_buffer == second_buffer
-                    # Assert the a new buffer is created.
-                    assert loader._other_shuffling_buffer != second_buffer
-            this_batch = batch['col_0'].clone()
-            assert list(this_batch.shape)[0] == batch_size
-            retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
 
-        with pytest.raises(StopIteration):
-            next(it)
+        if num_epochs == 1:
+            with pytest.raises(StopIteration):
+                next(it)
+
+        if num_epochs == 2 or num_epochs is None:
+            for idx in range(5):
+                batch = next(it)
+                if cache_type == 'mem_cache' and idx == 0:
+                    # Assert that a new buffer is created inside the loader
+                    assert loader._shuffling_buffer != first_buffer
+                this_batch = batch['col_0'].clone()
+                assert list(this_batch.shape)[0] == batch_size
+                if cache_type == 'mem_cache':
+                    intersection = set(this_batch.tolist()).intersection(set(retrieved_in_first_epoch.tolist()))
+                    assert len(intersection) == batch_size
+                retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
+
+        if num_epochs == 2:
+            with pytest.raises(StopIteration):
+                next(it)
+
+        if num_epochs is None:
+            for idx in range(5):
+                batch = next(it)
+                this_batch = batch['col_0'].clone()
+                assert list(this_batch.shape)[0] == batch_size
+                retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
