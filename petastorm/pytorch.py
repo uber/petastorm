@@ -289,8 +289,8 @@ class BatchedDataLoader(LoaderBase):
         :param shuffling_queue_capacity: Queue capacity is passed to the underlying :class:`tf.RandomShuffleQueue`
           instance. If set to 0, no shuffling will be done.
         :param inmemory_cache_all: This is an boolean that indicates whether the data should be
-            cached in memory or not. When this cache is enabled, expect to get smaller than
-            requested batch size on the epoch boundary.
+            cached in memory or not. When this cache is enabled, expect smaller than requested
+            batch size on the epoch boundaries.
         :param num_epochs: Number of epochs to load when in memory cache is enabled. If
             set to None, loader will loads batches indefinitely.
         """
