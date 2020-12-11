@@ -338,10 +338,10 @@ class BatchedDataLoader(LoaderBase):
                                                     extra_capacity=100000000,
                                                     batch_size=self.batch_size)
 
-            instantiate_buffer_fn = _instantiate_bateched_shuffling_buffer
-            self._shuffling_buffer = _instantiate_bateched_shuffling_buffer()
+            instantiate_buffer_fn = _instantiate_batched_shuffling_buffer
+            self._shuffling_buffer = _instantiate_batched_shuffling_buffer()
             if self.inmemory_cache_all:
-                self._other_shuffling_buffer = _instantiate_bateched_shuffling_buffer()
+                self._other_shuffling_buffer = _instantiate_batched_shuffling_buffer()
         else:
             def _instantiate_noop_buffer():
                 return BatchedNoopShufflingBuffer(batch_size=self.batch_size)
