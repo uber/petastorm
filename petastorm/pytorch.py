@@ -16,9 +16,10 @@ import collections
 import decimal
 # Must import pyarrow before torch. See: https://github.com/uber/petastorm/blob/master/docs/troubleshoot.rst
 import re
+import sys
 import logging
 import numpy as np
-from six import PY2
+from six import PY2, moves
 from torch.utils.data.dataloader import default_collate
 import torch
 from packaging import version
@@ -389,19 +390,7 @@ class BatchedDataLoader(LoaderBase):
             yield batch
 
         if self.inmemory_cache_all:
-            def epoch_itr():
-                if self.num_epochs is None:
-                    # Infinite loop if num_epochs is set to None
-                    epoch = 0
-                    while True:
-                        yield epoch
-                        epoch += 1
-                else:
-                    # One epoch has already passed. We iterate num_epochs-1 times.
-                    for epoch in range(self.num_epochs - 1):
-                        yield epoch
-
-            for _ in epoch_itr():
+            for _ in moves.range(self.num_epochs - 1 if self.num_epochs else sys.maxsize):
                 self._other_shuffling_buffer.finish()
                 self._shuffling_buffer = self._other_shuffling_buffer
                 self._other_shuffling_buffer = instantiate_buffer_fn()
