@@ -305,7 +305,7 @@ class BatchedDataLoader(LoaderBase):
         self.inmemory_cache_all = inmemory_cache_all
         self.num_epochs = num_epochs
 
-        if self.inmemory_cache_all and self.reader.num_epochs_to_read != 1:
+        if self.inmemory_cache_all and self.reader.num_epochs != 1:
             raise ValueError("When cache in loader memory is activated, reader.num_epochs_to_read "
                              "must be set to 1. When caching the data in memory, we need to read "
                              "the data only once and for the rest, we will serve it from memory.")

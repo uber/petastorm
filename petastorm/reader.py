@@ -379,6 +379,7 @@ class Reader(object):
             These will be applied when loading the parquet file with PyArrow. More information
             here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
         """
+        self.num_epochs = num_epochs
 
         # 1. Open the parquet storage (dataset)
         # 2. Get a list of all groups
