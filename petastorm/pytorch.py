@@ -332,7 +332,7 @@ class BatchedDataLoader(LoaderBase):
             min_after_dequeue = self.shuffling_queue_capacity - 1
             shuffling_queue_capacity = min_after_dequeue + self.batch_size
 
-            def _instantiate_bateched_shuffling_buffer():
+            def _instantiate_batched_shuffling_buffer():
                 return BatchedRandomShufflingBuffer(shuffling_queue_capacity,
                                                     min_after_retrieve=min_after_dequeue,
                                                     extra_capacity=100000000,
