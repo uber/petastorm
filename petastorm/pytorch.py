@@ -19,7 +19,7 @@ import re
 import sys
 import logging
 import numpy as np
-from six import PY2, moves
+from six import PY2
 from torch.utils.data.dataloader import default_collate
 import torch
 from packaging import version
@@ -390,7 +390,7 @@ class BatchedDataLoader(LoaderBase):
             yield batch
 
         if self.inmemory_cache_all:
-            for _ in moves.range(self.num_epochs - 1 if self.num_epochs else sys.maxsize):
+            for _ in range(self.num_epochs - 1 if self.num_epochs else sys.maxsize):
                 self._other_shuffling_buffer.finish()
                 self._shuffling_buffer = self._other_shuffling_buffer
                 self._other_shuffling_buffer = instantiate_buffer_fn()
