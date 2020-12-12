@@ -276,7 +276,7 @@ def test_batched_data_loader_with_in_memory_cache(two_columns_non_petastorm_data
             with pytest.raises(StopIteration):
                 next(it)
 
-        if num_epochs == 2 or num_epochs is None:
+        if num_epochs in [2, 3, None]:
             for idx in range(5):
                 batch = next(it)
                 # Assert that a new buffer is created inside the loader
@@ -291,9 +291,21 @@ def test_batched_data_loader_with_in_memory_cache(two_columns_non_petastorm_data
             with pytest.raises(StopIteration):
                 next(it)
 
+        if num_epochs in [3, None]:
+            for idx in range(5):
+                batch = next(it)
+                this_batch = batch['col_0'].clone()
+                assert list(this_batch.shape)[0] == batch_size
+                retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
+
+        if num_epochs == 3:
+            with pytest.raises(StopIteration):
+                next(it)
+                
         if num_epochs is None:
             for idx in range(5):
                 batch = next(it)
                 this_batch = batch['col_0'].clone()
                 assert list(this_batch.shape)[0] == batch_size
                 retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
+
