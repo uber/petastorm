@@ -800,11 +800,6 @@ def test_dataset_path_is_a_unicode(synthetic_dataset, reader_factory):
         next(reader)
 
 
-def test_make_reader_fails_loading_non_petastrom_dataset(scalar_dataset):
-    with pytest.raises(RuntimeError, match='use make_batch_reader'):
-        make_reader(scalar_dataset.url)
-
-
 def test_multithreaded_reads(synthetic_dataset):
     with make_reader(synthetic_dataset.url, workers_count=5, num_epochs=1) as reader:
         with ThreadPoolExecutor(max_workers=10) as executor:

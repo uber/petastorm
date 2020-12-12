@@ -40,10 +40,6 @@ def test_regenerate_metadata(synthetic_dataset, tmpdir):
     dataset = pq.ParquetDataset(a_moved_path)
     os.remove(dataset.common_metadata_path)
 
-    # make_reader should not be able to read a dataset without Petastorm metadat.
-    with pytest.raises(RuntimeError, match='make_reader supports reading only Petastorm datasets'):
-        _check_reader(a_moved_path)
-
     # Regenerate all metadata including unischema information
     petastorm_generate_metadata._main([
         '--dataset_url', 'file://{}'.format(a_moved_path),

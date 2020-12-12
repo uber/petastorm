@@ -124,6 +124,20 @@ def many_columns_non_petastorm_dataset(request, tmpdir_factory):
     return maybe_cached_dataset(request.config, 'many_column_non_petastorm', _dataset_no_cache)
 
 
+@pytest.fixture(scope="session")
+def two_columns_non_petastorm_dataset(request, tmpdir_factory):
+    """This dataset has 2 columns. All of the same int32 type."""
+    def _ds_no_cache():
+        path = tmpdir_factory.mktemp("data").strpath
+        url = 'file://{}'.format(path)
+        data = create_many_columns_non_petastorm_dataset(output_url=path, num_rows=50,
+                                                         num_columns=2, num_files=4)
+        dataset = SyntheticDataset(url=url, path=path, data=data)
+        return dataset
+
+    return maybe_cached_dataset(request.config, 'two_columns_non_petastorm', _ds_no_cache)
+
+
 class SparkTestContext(object):
     def __init__(self):
         self.spark = SparkSession.builder \
