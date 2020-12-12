@@ -69,7 +69,7 @@ def _retrieve(q):
 @pytest.mark.parametrize('buffer_type', RANDOM_SHUFFLING_BUFFERS)
 def test_random_shuffling_buffer_can_add_retrieve_flags(buffer_type):
     """Check can_add/can_retrieve flags at all possible states"""
-    q = buffer_type(5, 3)
+    q = buffer_type(shuffling_buffer_capacity=5, min_after_retrieve=3)
 
     # Empty buffer. Can start adding, nothing to retrieve yet
     assert q.size == 0
@@ -169,7 +169,6 @@ def _feed_a_sequence_through_the_queue(shuffling_buffer, input_sequence):
             if to >= len(input_sequence):
                 shuffling_buffer.finish()
                 break
-
         for _ in range(2):
             if shuffling_buffer.can_retrieve():
                 retrieve_sequence.extend(_retrieve_many(shuffling_buffer))
@@ -203,8 +202,10 @@ def test_noop_shuffling_buffer_stream_through(buffer_type):
 def test_batched_random_shuffling_buffer_stream_through(batch_size):
     """Feed a 0:99 sequence through a BatchedRandomShufflingBuffer. Check that the order has changed."""
     input_sequence = range(100)
-    a = _feed_a_sequence_through_the_queue(BatchedRandomShufflingBuffer(10, 3, batch_size), input_sequence)
-    b = _feed_a_sequence_through_the_queue(BatchedRandomShufflingBuffer(10, 3, batch_size), input_sequence)
+    a = _feed_a_sequence_through_the_queue(
+        BatchedRandomShufflingBuffer(20, 3, batch_size=batch_size), input_sequence)
+    b = _feed_a_sequence_through_the_queue(
+        BatchedRandomShufflingBuffer(20, 3, batch_size=batch_size), input_sequence)
     assert len(a) == len(input_sequence)
     assert set(a) == set(b)
     assert a != b

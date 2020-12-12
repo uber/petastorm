@@ -16,7 +16,6 @@ import unittest
 from shutil import move, rmtree
 from tempfile import mkdtemp
 
-from petastorm import make_reader
 from petastorm.tests.test_common import create_test_dataset
 
 # Tiny count of rows in a fake dataset
@@ -50,13 +49,6 @@ class MetadataUnischemaReadTest(unittest.TestCase):
         current pyarrow implementation, so we delete the .crc to make sure there is no mismatch with the content of
         _common_metadata file"""
         self.assertFalse(os.path.exists(os.path.join(MetadataUnischemaReadTest._dataset_dir, '._common_metadata.crc')))
-
-    def test_no_metadata(self):
-        self.vanish_metadata()
-        with self.assertRaises(RuntimeError) as e:
-            make_reader(self._dataset_url, reader_pool_type='dummy')
-        self.assertTrue('make_reader supports reading only Petastorm datasets' in str(e.exception))
-        self.restore_metadata()
 
 
 if __name__ == '__main__':
