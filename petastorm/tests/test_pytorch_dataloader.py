@@ -301,7 +301,7 @@ def test_batched_data_loader_with_in_memory_cache(two_columns_non_petastorm_data
         if num_epochs == 3:
             with pytest.raises(StopIteration):
                 next(it)
-                
+
         if num_epochs is None:
             for idx in range(5):
                 batch = next(it)
