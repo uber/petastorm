@@ -308,4 +308,3 @@ def test_batched_data_loader_with_in_memory_cache(two_columns_non_petastorm_data
                 this_batch = batch['col_0'].clone()
                 assert list(this_batch.shape)[0] == batch_size
                 retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
-
