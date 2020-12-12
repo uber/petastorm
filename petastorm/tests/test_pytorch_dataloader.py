@@ -212,7 +212,7 @@ def test_call_iter_on_dataloader_multiple_times(synthetic_dataset, reader_factor
 
 
 def test_mem_cache_reader_num_epochs_error(two_columns_non_petastorm_dataset):
-    error_string = "When cache in loader memory is activated"
+    error_string = "reader.num_epochs is currently 2. When cache in memory is "
     with make_batch_reader(two_columns_non_petastorm_dataset.url,
                            num_epochs=2) as reader:
         with pytest.raises(ValueError, match=error_string):
@@ -229,7 +229,7 @@ def test_mem_cache_num_epochs_without_mem_cache_error(two_columns_non_petastorm_
 
 @pytest.mark.parametrize('shuffling_queue_capacity', [20, 0])
 @pytest.mark.parametrize('reader_factory', [make_batch_reader, make_reader])
-@pytest.mark.parametrize('num_epochs', [1, 2, None])
+@pytest.mark.parametrize('num_epochs', [1, 2, 3, None])
 def test_batched_data_loader_with_in_memory_cache(two_columns_non_petastorm_dataset,
                                                   shuffling_queue_capacity,
                                                   reader_factory,
