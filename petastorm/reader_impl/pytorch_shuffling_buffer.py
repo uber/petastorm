@@ -260,7 +260,7 @@ class BatchedRandomShufflingBuffer(BatchedShufflingBufferBase):
             # Before we can append a new batch, we compress the remaining samples
             for k, v in enumerate(self._items):
                 # We need to clone the right-side to avoid racing conditions
-                self._items[k][:self.size] = self._items[k][self._random_indices[self.next_sample_head:]].clone()
+                self._items[k][:self._size] = self._items[k][self._random_indices[self.next_sample_head:]].clone()
         self._random_indices = None
         self.next_sample_head = 0
 
