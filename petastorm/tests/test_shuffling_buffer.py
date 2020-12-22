@@ -234,3 +234,41 @@ def test_longer_random_sequence_of_queue_ops(buffer_type):
             # Make sure never get to less than `min_after_retrieve` elements
             assert 80 <= q.size
             _retrieve(q)
+
+
+@pytest.mark.parametrize('buffer_type', RANDOM_SHUFFLING_BUFFERS)
+def test_random_shuffling_buffer_compress(buffer_type):
+    """Check buffer compress works correctly with two inputs."""
+    input1 = list(range(10))
+    input2 = list(range(10, 20))
+    q = buffer_type(shuffling_buffer_capacity=15, min_after_retrieve=5)
+
+    _add_many(q, input1)
+    a = []
+    for _ in range(5):
+        a.append(_retrieve(q))
+
+    # Insert input2 to compress with remaining items in q
+    _add_many(q, input2)
+    q.finish()
+    b = []
+    while q.can_retrieve():
+        b.append(_retrieve(q))
+
+    # Check length
+    assert len(set(a)) == 5
+    assert len(set(b)) == 15
+    # Make sure there is no intersection
+    assert not set(a) & set(b)
+
+    # Make sure values in a and b are all valid
+    target = set(range(20))
+    for v in a:
+        # Values in a should be in [0, 10)
+        assert 0 <= v < 10
+        assert v in target
+        target.remove(v)
+
+    for v in b:
+        assert v in target
+        target.remove(v)
