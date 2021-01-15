@@ -153,7 +153,6 @@ def test_invalid_and_valid_column_names(scalar_dataset, reader_factory):
 
 @pytest.mark.parametrize('reader_factory', _D)
 def test_transform_spec_support_return_tensor(scalar_dataset, reader_factory):
-
     field1 = UnischemaField(name='abc', shape=(2, 3), numpy_dtype=np.float32)
 
     with pytest.raises(ValueError, match='field abc must be numpy array type'):
@@ -167,11 +166,17 @@ def test_transform_spec_support_return_tensor(scalar_dataset, reader_factory):
 
     assert (6,) == ArrowReaderWorker._check_shape_and_ravel(np.zeros((2, 3)), field1).shape
 
+    for partial_shape in [(2, None), (None,), (None, None)]:
+        field_with_unknown_dim = UnischemaField(name='abc', shape=partial_shape, numpy_dtype=np.float32)
+        with pytest.raises(ValueError, match='All dimensions of a shape.*must be constant'):
+            ArrowReaderWorker._check_shape_and_ravel(np.zeros((2, 3), order='F'), field_with_unknown_dim)
+
     def preproc_fn1(x):
         return pd.DataFrame({
             'tensor_col_1': x['id'].map(lambda _: np.random.rand(2, 3)),
             'tensor_col_2': x['id'].map(lambda _: np.random.rand(3, 4, 5)),
         })
+
     edit_fields = [
         ('tensor_col_1', np.float32, (2, 3), False),
         ('tensor_col_2', np.float32, (3, 4, 5), False),
@@ -188,7 +193,7 @@ def test_transform_spec_support_return_tensor(scalar_dataset, reader_factory):
         sample = next(reader)._asdict()
         assert len(sample) == 2
         assert (2, 3) == sample['tensor_col_1'].shape[1:] and \
-            (3, 4, 5) == sample['tensor_col_2'].shape[1:]
+               (3, 4, 5) == sample['tensor_col_2'].shape[1:]
 
 
 @pytest.mark.parametrize('reader_factory', _D)
