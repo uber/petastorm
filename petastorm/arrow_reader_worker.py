@@ -173,7 +173,11 @@ class ArrowReaderWorker(WorkerBase):
     def _check_shape_and_ravel(x, field):
         if not isinstance(x, np.ndarray):
             raise ValueError('field {name} must be numpy array type.'.format(name=field.name))
-        if x.shape != field.shape:
+        if None in field.shape:
+            raise ValueError(f'All dimensions of a shape: {field.shape} in: {field.name} field must be constant. '
+                             f'If a dimension is variable, we won\'t be able to coalesce rows when preparing a batch.')
+
+        if x.shape != tuple(field.shape):
             raise ValueError('field {name} must be the shape {shape}'
                              .format(name=field.name, shape=field.shape))
         if not x.flags.c_contiguous:
