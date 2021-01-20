@@ -373,10 +373,11 @@ See the Troubleshooting_ page and please submit a ticket_ if you can't find an
 answer.
 
 
-Publications
-------------
+See also
+--------
 
 1. Gruener, R., Cheng, O., and Litvin, Y. (2018) *Introducing Petastorm: Uber ATG's Data Access Library for Deep Learning*. URL: https://eng.uber.com/petastorm/
+2. QCon.ai 2019: `"Petastorm: A Light-Weight Approach to Building ML Pipelines" <https://www.infoq.com/presentations/petastorm-ml-pipelines/>`_.
 
 
 .. _Troubleshooting: docs/troubleshoot.rst
