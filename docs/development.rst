@@ -23,7 +23,16 @@ and open a BASH shell into it (you must have GNU Make and Docker installed befor
     make build run shell
 
 Within the Dockerized workspace, you can find the Python virtual environments at `/petastorm_venv2.7` and `/petastorm_venv3.6`,
-and the local `petastorm/` mounted at `/petastorm`.
+and the local `petastorm/` mounted at `/petastorm`. Remember to set python for pyspark correctly after load virtual env, for example:
+
+.. code-block:: bash
+
+    export PYSPARK_PYTHON=`which python3`
+
+
+Also, if you are seeing "ImportError: libGL.so.1"from "import cv2", update with running
+"apt-get update; apt-get install ffmpeg libsm6 libxext6  -y"
+(reference: https://stackoverflow.com/questions/55313610/importerror-libgl-so-1-cannot-open-share).
 
 Unit tests
 ----------
