@@ -19,6 +19,8 @@ import re
 import sys
 import logging
 import numpy as np
+from queue import Queue, Empty
+from threading import Thread, Event
 from six import PY2
 from torch.utils.data.dataloader import default_collate
 import torch
@@ -423,3 +425,160 @@ class BatchedDataLoader(LoaderBase):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.reader.stop()
         self.reader.join()
+
+
+class AsyncBatchedDataLoader(BatchedDataLoader):
+    """
+    Same as BatchedDataLoader except it uses asynchronous thread to shuffle data.
+    """
+    def __init__(self, reader, batch_size=1,
+                 transform_fn=None,
+                 shuffling_queue_capacity=0,
+                 inmemory_cache_all=False,
+                 num_epochs=None,
+                 async_batch_queue_capacity=64):
+        """
+        Initializes an async batched data loader object.
+
+        Number of epochs is defined by the configuration of the reader argument.
+
+        An optional shuffling queue is created if shuffling_queue_capacity is greater than 0. No samples will be
+        returned to a user by the ``BatchedDataLoader`` until the queue is full. After that, batches of `batch_size`
+        will be created by uniformly sampling the shuffling queue. Once no more samples are available from the data
+        reader, the shuffling queue is allowed to be consumed till no further samples are available.
+
+        Note that the last returned batch could have less then ``batch_size`` samples.
+
+        NOTE: if you are using ``make_batch_reader``, this shuffling queue will be randomizing the order of the
+        entire batches and not changing the order of elements within a batch. This is likely not what you intend to do.
+
+        This class does not support special types that are not supported in PyTorch (decimal/string).
+
+        :param reader: petastorm Reader instance
+        :param batch_size: the number of items to return per batch; factored into the len() of this reader
+        :param transform_fn: an optional callable to convert batches from the reader to PyTorch tensors
+        :param shuffling_queue_capacity: Queue capacity is passed to the underlying :class:`tf.RandomShuffleQueue`
+          instance. If set to 0, no shuffling will be done.
+        :param async_batch_queue_capacity: Number of batches to be produced in advance. If async_batch_queue_capacity
+            == 0, shuffle buffer will generate batches based on request. If async_batch_queue_capacity > 0, shuffle
+            work is done by an asynchronous thread to generate batches in advance. It is suggested to set this value
+            to be non-zero if shuffling is bottleneck for dataloader.
+        :param inmemory_cache_all: This is an boolean that indicates whether the data should be
+            cached in memory or not. When this cache is enabled, expect smaller than requested
+            batch size on the epoch boundaries. Enabling this cache also requres that shuffling_queue_capacity to be
+            large enough to hold all data.
+        :param num_epochs: Number of epochs to load when in memory cache is enabled. If
+            set to None, loader will loads batches indefinitely.
+        :param async_batch_queue_capacity: Capacity of queue to store shuffled batches. Shuffle work is done by an
+            asynchronous thread to produce batches into a queue.
+        """
+        super(AsyncBatchedDataLoader, self).__init__(reader, batch_size=batch_size, transform_fn=transform_fn,
+                                                     shuffling_queue_capacity=shuffling_queue_capacity,
+                                                     inmemory_cache_all=inmemory_cache_all,
+                                                     num_epochs=num_epochs)
+        self._async_batch_queue = Queue(async_batch_queue_capacity)
+        self._finished_event = Event()
+        self._shuffle_thread = None
+        self._started = False
+
+    def _worker(self):
+        for batch in self._iter_impl_worker():
+            if self._finished_event.is_set():
+                break
+            self._async_batch_queue.put(batch)
+        else:
+            self._async_batch_queue.put(None)
+
+    def _iter_impl(self):
+        # Start async shuffle thread
+        self._shuffle_thread = Thread(target=self._worker)
+        self._started = True
+        self._shuffle_thread.start()
+        while True:
+            batch = self._async_batch_queue.get()
+            if batch is None:
+                # None is last data in async batch queue, which means that async shuffle thread
+                # has reached the end of data.
+                self._started = False
+                break
+            yield batch
+
+        self._shuffle_thread.join()
+
+    def _iter_impl_worker(self):
+        """
+        Same as _iter_impl in BatchedDataLoader.
+        """
+        keys = None
+        self._shuffling_buffer, other_shuffling_buffer, instantiate_buffer_fn = \
+            self._instantiate_buffers()
+
+        for row in self.reader:
+            # Default collate does not work nicely on namedtuples and treat them as lists
+            # Using dict will result in the yielded structures being dicts as well
+            row_as_dict = row._asdict()
+
+            keys = row_as_dict.keys()
+
+            # Promote some types that are incompatible with pytorch to be pytorch friendly.
+            _sanitize_pytorch_types(row_as_dict)
+
+            # Add rows to shuffling buffer
+            for k, v in row_as_dict.items():
+                if not self.reader.batched_output:
+                    row_as_dict[k] = self.transform_fn([v])
+                else:
+                    row_as_dict[k] = self.transform_fn(v)
+            self._shuffling_buffer.add_many(row_as_dict.values())
+
+            # _yield_batches will emit as much batches as are allowed by the shuffling_buffer (RandomShufflingBuffer
+            # will avoid underflowing below a certain number of samples to guarantee some samples decorrelation)
+            for batch in self._yield_batches(keys):
+                other_shuffling_buffer.add_many(batch.values())
+                yield batch
+
+        # When caching memory, at this point we are done with reading all the data. Rest of the
+        # batches will be created directly from memory.
+        # Otherwise if there is not in memory cache, Once reader can not read new rows, we might
+        # still have a bunch of rows waiting in the shuffling buffer. Telling shuffling buffer
+        # that we are finished allows to deplete the buffer completely, regardless its
+        # min_after_dequeue setting.
+        self._shuffling_buffer.finish()
+
+        for batch in self._yield_batches(keys):
+            other_shuffling_buffer.add_many(batch.values())
+            yield batch
+
+        if self.inmemory_cache_all:
+            for epoch in range(self.num_epochs - 1 if self.num_epochs else sys.maxsize):
+                other_shuffling_buffer.finish()
+                self._shuffling_buffer = other_shuffling_buffer
+                other_shuffling_buffer = instantiate_buffer_fn()
+                for batch in self._yield_batches(keys):
+                    if self.num_epochs is None or self.num_epochs and epoch != self.num_epochs-2:
+                        # We skip populating the other buffer in the last epoch.
+                        other_shuffling_buffer.add_many(batch.values())
+                    yield batch
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # Close async shuffle thread
+        if self._shuffle_thread:
+            self._close_async_thread()
+        super(AsyncBatchedDataLoader, self).__exit__(exc_type, exc_val, exc_tb)
+
+    def __del__(self):
+        # Close async shuffle thread
+        if self._shuffle_thread:
+            self._close_async_thread()
+
+    def _close_async_thread(self):
+        self._finished_event.set()
+        try:
+            # Free some space in the queue to allow async shuffle thread not to
+            # be blocked in queue.put().
+            self._async_batch_queue.get_nowait()
+        except Empty:
+            pass
+        self._shuffle_thread.join()
+        self._started = False
+        self._shuffle_thread = None

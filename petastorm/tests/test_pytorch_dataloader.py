@@ -9,10 +9,13 @@ import pytest
 import torch
 
 from petastorm import make_reader, TransformSpec, make_batch_reader
-from petastorm.pytorch import _sanitize_pytorch_types, DataLoader, BatchedDataLoader, decimal_friendly_collate
+from petastorm.pytorch import (
+    _sanitize_pytorch_types, decimal_friendly_collate,
+    DataLoader, BatchedDataLoader, AsyncBatchedDataLoader
+)
 from petastorm.tests.test_common import TestSchema
 
-ALL_DATA_LOADERS = [DataLoader, BatchedDataLoader]
+ALL_DATA_LOADERS = [DataLoader, BatchedDataLoader, AsyncBatchedDataLoader]
 
 BATCHABLE_FIELDS = set(TestSchema.fields.values()) - \
     {TestSchema.matrix_nullable, TestSchema.string_array_nullable,
@@ -230,10 +233,12 @@ def test_mem_cache_num_epochs_without_mem_cache_error(two_columns_non_petastorm_
 # shuffling_queue_capacity should be 0 or equal/greater to number of rows in file (50 in this test)
 @pytest.mark.parametrize('shuffling_queue_capacity', [50, 0])
 @pytest.mark.parametrize('reader_factory', [make_batch_reader, make_reader])
+@pytest.mark.parametrize('loader_factory', [BatchedDataLoader, AsyncBatchedDataLoader])
 @pytest.mark.parametrize('num_epochs', [1, 2, 3, None])
 def test_batched_data_loader_with_in_memory_cache(two_columns_non_petastorm_dataset,
                                                   shuffling_queue_capacity,
                                                   reader_factory,
+                                                  loader_factory,
                                                   num_epochs):
     batch_size = 10
     extra_loader_params = dict(inmemory_cache_all=True, num_epochs=num_epochs,
@@ -248,65 +253,93 @@ def test_batched_data_loader_with_in_memory_cache(two_columns_non_petastorm_data
                         hdfs_driver='libhdfs',
                         schema_fields=['col_0'], **extra_reader_params) as reader:
 
-        loader = BatchedDataLoader(reader,
-                                   batch_size=batch_size,
-                                   transform_fn=partial(torch.as_tensor, device='cpu'),
-                                   **extra_loader_params)
+        # For AsyncBatchedDataLoader, context manager will close async thread in __exit__().
+        with loader_factory(reader,
+                            batch_size=batch_size,
+                            transform_fn=partial(torch.as_tensor, device='cpu'),
+                            **extra_loader_params) as loader:
 
-        it = iter(loader)
-        retrieved_so_far = None
-        for idx in range(5):
-            batch = next(it)
-            if idx == 0:
-                first_buffer = loader._shuffling_buffer
-
-            this_batch = batch['col_0'].clone()
-            assert list(this_batch.shape)[0] == batch_size
-
-            if retrieved_so_far is None:
-                retrieved_so_far = this_batch
-            else:
-                intersect = set(retrieved_so_far.tolist()).intersection(set(this_batch.tolist()))
-                assert not intersect
-                retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
-
-        retrieved_in_first_epoch = retrieved_so_far.clone()
-
-        assert len(set(retrieved_so_far.tolist())) == 50
-
-        if num_epochs == 1:
-            with pytest.raises(StopIteration):
-                next(it)
-
-        if num_epochs in [2, 3, None]:
+            it = iter(loader)
+            retrieved_so_far = None
             for idx in range(5):
                 batch = next(it)
-                # Assert that a new buffer is created inside the loader
-                assert loader._shuffling_buffer != first_buffer
+                if idx == 0:
+                    first_buffer = loader._shuffling_buffer
+
                 this_batch = batch['col_0'].clone()
                 assert list(this_batch.shape)[0] == batch_size
-                intersection = set(this_batch.tolist()).intersection(set(retrieved_in_first_epoch.tolist()))
-                assert len(intersection) == batch_size
-                retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
 
-        if num_epochs == 2:
-            with pytest.raises(StopIteration):
+                if retrieved_so_far is None:
+                    retrieved_so_far = this_batch
+                else:
+                    intersect = set(retrieved_so_far.tolist()).intersection(set(this_batch.tolist()))
+                    assert not intersect
+                    retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
+
+            retrieved_in_first_epoch = retrieved_so_far.clone()
+
+            assert len(set(retrieved_so_far.tolist())) == 50
+
+            if num_epochs == 1:
+                with pytest.raises(StopIteration):
+                    next(it)
+
+            if num_epochs in [2, 3, None]:
+                for idx in range(5):
+                    batch = next(it)
+                    # Assert that a new buffer is created inside the loader
+                    assert loader._shuffling_buffer != first_buffer
+                    this_batch = batch['col_0'].clone()
+                    assert list(this_batch.shape)[0] == batch_size
+                    intersection = set(this_batch.tolist()).intersection(set(retrieved_in_first_epoch.tolist()))
+                    assert len(intersection) == batch_size
+                    retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
+
+            if num_epochs == 2:
+                with pytest.raises(StopIteration):
+                    next(it)
+
+            if num_epochs in [3, None]:
+                for idx in range(5):
+                    batch = next(it)
+                    this_batch = batch['col_0'].clone()
+                    assert list(this_batch.shape)[0] == batch_size
+                    retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
+
+            if num_epochs == 3:
+                with pytest.raises(StopIteration):
+                    next(it)
+
+            if num_epochs is None:
+                for idx in range(5):
+                    batch = next(it)
+                    this_batch = batch['col_0'].clone()
+                    assert list(this_batch.shape)[0] == batch_size
+                    retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
+
+
+def test_async_batched_data_loader(two_columns_non_petastorm_dataset):
+    # test size is 50, 10 batches in total
+    batch_size = 5
+    with make_batch_reader(two_columns_non_petastorm_dataset.url) as reader:
+        with AsyncBatchedDataLoader(reader,
+                                    batch_size=batch_size,
+                                    transform_fn=partial(torch.as_tensor, device='cpu'),
+                                    shuffling_queue_capacity=10,
+                                    async_batch_queue_capacity=5) as loader:
+            it = iter(loader)
+            # Before iteration starts, thread should be not started
+            assert not loader._started
+            # Before iteration starts, async queue should be empty
+            assert loader._async_batch_queue.empty()
+
+            for _ in range(10):
                 next(it)
 
-        if num_epochs in [3, None]:
-            for idx in range(5):
-                batch = next(it)
-                this_batch = batch['col_0'].clone()
-                assert list(this_batch.shape)[0] == batch_size
-                retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
-
-        if num_epochs == 3:
             with pytest.raises(StopIteration):
                 next(it)
+            assert not loader._started
+            assert loader._async_batch_queue.empty()
 
-        if num_epochs is None:
-            for idx in range(5):
-                batch = next(it)
-                this_batch = batch['col_0'].clone()
-                assert list(this_batch.shape)[0] == batch_size
-                retrieved_so_far = torch.cat([retrieved_so_far, this_batch], 0)
+        # Thread finishing event should be set in exit.
+        assert loader._finished_event.is_set()

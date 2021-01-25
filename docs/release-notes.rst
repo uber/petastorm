@@ -7,7 +7,8 @@ Release notes
 Release 0.9.9 (unreleased)
 ==========================
 - `PR 643 <https://github.com/uber/petastorm/pull/643>`_: Tests: fix the unit test of batched dataloader with in-memory cache.
-- `PR 662 <https://github.com/uber/petastorm/pull/662>`_: Reader: shuffle row groups before sharding (user may specify a seed). 
+- `PR 662 <https://github.com/uber/petastorm/pull/662>`_: Reader: shuffle row groups before sharding (user may specify a seed).
+- `PR 641 <https://github.com/uber/petastorm/pull/641>`_: Pytorch: add AsyncBatchedDataloader.
 
 
 Release 0.9.8
