@@ -6,6 +6,7 @@ Release notes
 
 Release 0.9.9 (unreleased)
 ==========================
+- `PR 643 <https://github.com/uber/petastorm/pull/643>`_: Tests: fix the unit test of batched dataloader with in-memory cache.
 
 
 Release 0.9.8

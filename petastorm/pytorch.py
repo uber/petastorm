@@ -291,7 +291,8 @@ class BatchedDataLoader(LoaderBase):
           instance. If set to 0, no shuffling will be done.
         :param inmemory_cache_all: This is an boolean that indicates whether the data should be
             cached in memory or not. When this cache is enabled, expect smaller than requested
-            batch size on the epoch boundaries.
+            batch size on the epoch boundaries. Enabling this cache also requres that shuffling_queue_capacity to be
+            large enough to hold all data.
         :param num_epochs: Number of epochs to load when in memory cache is enabled. If
             set to None, loader will loads batches indefinitely.
         """
