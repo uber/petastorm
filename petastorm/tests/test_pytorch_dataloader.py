@@ -227,7 +227,8 @@ def test_mem_cache_num_epochs_without_mem_cache_error(two_columns_non_petastorm_
             BatchedDataLoader(reader, num_epochs=2)
 
 
-@pytest.mark.parametrize('shuffling_queue_capacity', [20, 0])
+# shuffling_queue_capacity should be 0 or equal/greater to number of rows in file (50 in this test)
+@pytest.mark.parametrize('shuffling_queue_capacity', [50, 0])
 @pytest.mark.parametrize('reader_factory', [make_batch_reader, make_reader])
 @pytest.mark.parametrize('num_epochs', [1, 2, 3, None])
 def test_batched_data_loader_with_in_memory_cache(two_columns_non_petastorm_dataset,
@@ -235,7 +236,8 @@ def test_batched_data_loader_with_in_memory_cache(two_columns_non_petastorm_data
                                                   reader_factory,
                                                   num_epochs):
     batch_size = 10
-    extra_loader_params = dict(inmemory_cache_all=True, num_epochs=num_epochs)
+    extra_loader_params = dict(inmemory_cache_all=True, num_epochs=num_epochs,
+                               shuffling_queue_capacity=shuffling_queue_capacity)
     extra_reader_params = dict(num_epochs=1)
 
     with reader_factory(two_columns_non_petastorm_dataset.url,
