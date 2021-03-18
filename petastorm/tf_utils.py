@@ -25,7 +25,6 @@ import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 
 # Mapping of identical datatypes in numpy-ish and tensorflow-ish
 _NUMPY_TO_TF_DTYPES_MAPPING = {
-    np.bool: tf.bool,
     np.int8: tf.int8,
     np.int16: tf.int16,
     np.int32: tf.int32,
