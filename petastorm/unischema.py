@@ -352,9 +352,6 @@ class Unischema(object):
             unischema_fields.append(UnischemaField(column_name, np_type, field_shape, None, arrow_field.nullable))
         return Unischema('inferred_schema', unischema_fields)
 
-    def __getattr__(self, item) -> Any:
-        return super().__getattribute__(item)
-
 
 def dict_to_spark_row(unischema, row_dict):
     """Converts a single row into a spark Row object.
