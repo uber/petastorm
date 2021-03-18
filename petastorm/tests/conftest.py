@@ -26,7 +26,7 @@ from petastorm.tests.test_common import create_test_dataset, create_test_scalar_
     create_many_columns_non_petastorm_dataset
 from pyspark.sql import SparkSession
 
-SyntheticDataset = namedtuple('synthetic_dataset', ['url', 'data', 'path'])
+SyntheticDataset = namedtuple('SyntheticDataset', ['url', 'data', 'path'])
 
 # Number of rows in a fake dataset
 _ROWS_COUNT = 100
