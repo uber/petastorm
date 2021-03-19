@@ -14,6 +14,7 @@
 
 import logging
 import os
+import unittest
 
 import pyarrow  # noqa: F401 pylint: disable=W0611
 import torch
@@ -64,6 +65,7 @@ def test_full_pytorch_example(large_mock_mnist_data, tmpdir):
         pytorch_example.test(model, device, test_loader)
 
 
+@unittest.skip("Skipping this test since the server where the files are downloaded from is not stable")
 def test_mnist_download(tmpdir):
     """ Demonstrates that MNIST download works, using only the 'test' data. Assumes data does not change often. """
     o = download_mnist_data(tmpdir, train=False)
