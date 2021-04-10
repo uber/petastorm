@@ -16,6 +16,7 @@ import logging
 import pyarrow
 import six
 from six.moves.urllib.parse import urlparse
+import platform
 
 from petastorm.gcsfs_helpers.gcsfs_wrapper import GCSFSWrapper
 from petastorm.hdfs.namenode import HdfsNamenodeResolver, HdfsConnector
@@ -32,6 +33,9 @@ def get_dataset_path(parsed_url):
     if parsed_url.scheme.lower() in ['s3', 's3a', 's3n', 'gs', 'gcs']:
         # s3/gs/gcs filesystem expects paths of the form `bucket/path`
         return parsed_url.netloc + parsed_url.path
+
+    if parsed_url.scheme.lower() in ['file'] and "Windows" in platform.system():
+        return parsed_url.path[1:]
 
     return parsed_url.path
 
