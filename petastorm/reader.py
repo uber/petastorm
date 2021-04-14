@@ -65,7 +65,7 @@ def make_reader(dataset_url,
                 predicate=None,
                 rowgroup_selector=None,
                 num_epochs=1,
-                cur_shard=None, shard_count=None,
+                cur_shard=None, shard_count=None, shard_seed=None,
                 cache_type=NULL_CACHE, cache_location=None, cache_size_limit=None,
                 cache_row_size_estimate=None, cache_extra_settings=None,
                 hdfs_driver='libhdfs3',
@@ -109,6 +109,7 @@ def make_reader(dataset_url,
         pass in a unique shard number in the range [0, shard_count). shard_count must be supplied as well.
         Defaults to None
     :param shard_count: An int denoting the number of shards to break this dataset into. Defaults to None
+    :param shard_seed: Random seed to shuffle row groups for data sharding. Defaults to None
     :param cache_type: A string denoting the cache type, if desired. Options are [None, 'null', 'local-disk'] to
         either have a null/noop cache or a cache implemented using diskcache. Caching is useful when communication
         to the main data store is either slow or expensive and the local machine has large enough storage
@@ -177,6 +178,7 @@ def make_reader(dataset_url,
         'num_epochs': num_epochs,
         'cur_shard': cur_shard,
         'shard_count': shard_count,
+        'shard_seed': shard_seed,
         'cache': cache,
         'transform_spec': transform_spec,
         'filters': filters
@@ -202,7 +204,7 @@ def make_batch_reader(dataset_url_or_urls,
                       predicate=None,
                       rowgroup_selector=None,
                       num_epochs=1,
-                      cur_shard=None, shard_count=None,
+                      cur_shard=None, shard_count=None, shard_seed=None,
                       cache_type='null', cache_location=None, cache_size_limit=None,
                       cache_row_size_estimate=None, cache_extra_settings=None,
                       hdfs_driver='libhdfs3',
@@ -251,6 +253,7 @@ def make_batch_reader(dataset_url_or_urls,
         pass in a unique shard number in the range [0, shard_count). shard_count must be supplied as well.
         Defaults to None
     :param shard_count: An int denoting the number of shards to break this dataset into. Defaults to None
+    :param shard_seed: Random seed to shuffle row groups for data sharding. Defaults to None
     :param cache_type: A string denoting the cache type, if desired. Options are [None, 'null', 'local-disk'] to
         either have a null/noop cache or a cache implemented using diskcache. Caching is useful when communication
         to the main data store is either slow or expensive and the local machine has large enough storage
@@ -321,6 +324,7 @@ def make_batch_reader(dataset_url_or_urls,
                   num_epochs=num_epochs,
                   cur_shard=cur_shard,
                   shard_count=shard_count,
+                  shard_seed=shard_seed,
                   cache=cache,
                   transform_spec=transform_spec,
                   is_batched_reader=True,
@@ -337,7 +341,7 @@ class Reader(object):
                  shuffle_row_groups=True, shuffle_row_drop_partitions=1,
                  predicate=None, rowgroup_selector=None, reader_pool=None, num_epochs=1,
                  cur_shard=None, shard_count=None, cache=None, worker_class=None,
-                 transform_spec=None, is_batched_reader=False, filters=None):
+                 transform_spec=None, is_batched_reader=False, filters=None, shard_seed=None):
         """Initializes a reader object.
 
         :param pyarrow_filesystem: An instance of ``pyarrow.FileSystem`` that will be used. If not specified,
@@ -378,6 +382,7 @@ class Reader(object):
         :param filters: (List[Tuple] or List[List[Tuple]]): Standard PyArrow filters.
             These will be applied when loading the parquet file with PyArrow. More information
             here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
+        :param shard_seed: Random seed to shuffle row groups for data sharding. Defaults to None
         """
         self.num_epochs = num_epochs
 
@@ -446,7 +451,7 @@ class Reader(object):
         # 3. Filter rowgroups
         filtered_row_group_indexes, worker_predicate = self._filter_row_groups(self.dataset, row_groups, predicate,
                                                                                rowgroup_selector, cur_shard,
-                                                                               shard_count)
+                                                                               shard_count, shard_seed)
         # 4. Create a rowgroup ventilator object
         normalized_shuffle_row_drop_partitions = \
             self._normalize_shuffle_options(shuffle_row_drop_partitions, self.dataset)
@@ -496,7 +501,7 @@ class Reader(object):
         return self._results_queue_reader.batched_output
 
     def _filter_row_groups(self, dataset, row_groups, predicate, rowgroup_selector, cur_shard,
-                           shard_count):
+                           shard_count, shard_seed):
         """Calculates which rowgroups will be read during.
 
         The following filters are applied:
@@ -511,6 +516,7 @@ class Reader(object):
         :param cur_shard: An int denoting the current shard number used. Each node should
                        pass in a unique partition number in the range [0, shard_count).
         :param shard_count An int denoting the number of reader shards
+        :param shard_seed: If not None: random seed to shuffle row groups for data sharding.
         :return: (filtered_row_group_indexes, worker_predicate): filtered_row_group_indexes an integer index into
         row_groups array. worker_predicate contains only predicates that could not be resolved on the partitioned fields
         and need to be evaluated by workers.
@@ -526,7 +532,7 @@ class Reader(object):
         if cur_shard is not None or shard_count is not None:
             filtered_row_group_indexes = self._partition_row_groups(dataset, row_groups, shard_count,
                                                                     cur_shard,
-                                                                    filtered_row_group_indexes)
+                                                                    filtered_row_group_indexes, shard_seed)
 
         if not filtered_row_group_indexes:
             warnings.warn('No matching data is available for loading after rowgroup '
@@ -535,7 +541,7 @@ class Reader(object):
         return filtered_row_group_indexes, worker_predicate
 
     def _partition_row_groups(self, dataset, row_groups, shard_count, cur_shard,
-                              filtered_row_group_indexes):
+                              filtered_row_group_indexes, shard_seed):
         """Filters the list of row group indexes based on the requested training partitions. Returns
         a modified list of rowgroup indexes."""
 
@@ -550,6 +556,13 @@ class Reader(object):
 
         # We hash on the relative path of each parquet file to guarantee consistency between different reader
         # constructions even after moving the dataset
+        if shard_seed is not None:
+            import random
+            # Instantiate a new Random class with a seed and sample from it.
+            # Avoid affecting global/default random generator.
+            shard_random = random.Random(shard_seed)
+            shard_random.shuffle(filtered_row_group_indexes)
+
         filtered_row_group_indexes = [index for index in filtered_row_group_indexes if index % shard_count == cur_shard]
         return filtered_row_group_indexes
 
