@@ -71,7 +71,7 @@ def make_reader(dataset_url,
                 hdfs_driver='libhdfs3',
                 transform_spec=None,
                 filters=None,
-                s3_config_kwargs=None,
+                storage_options=None,
                 zmq_copy_buffers=True,
                 filesystem=None):
     """
@@ -126,9 +126,9 @@ def make_reader(dataset_url,
     :param filters: (List[Tuple] or List[List[Tuple]]): Standard PyArrow filters.
         These will be applied when loading the parquet file with PyArrow. More information
         here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
-    :param s3_config_kwargs: dict of parameters passed to ``botocore.client.Config``
+    :param storage_options: Dict of kwargs forwarded to ``fsspec`` to initialize the filesystem.
     :param zmq_copy_buffers: A bool indicating whether to use 0mq copy buffers with ProcessPool.
-    :param filesystem: An instance of ``pyarrow.FileSystem`` to use. Will ignore s3_config_kwargs and
+    :param filesystem: An instance of ``pyarrow.FileSystem`` to use. Will ignore storage_options and
         other filesystem configs if it's provided.
     :return: A :class:`Reader` object
     """
@@ -137,7 +137,7 @@ def make_reader(dataset_url,
     filesystem, dataset_path = get_filesystem_and_path_or_paths(
         dataset_url,
         hdfs_driver,
-        s3_config_kwargs=s3_config_kwargs,
+        storage_options=storage_options,
         filesystem=filesystem
     )
 
@@ -150,7 +150,7 @@ def make_reader(dataset_url,
 
     try:
         dataset_metadata.get_schema_from_dataset_url(dataset_url, hdfs_driver=hdfs_driver,
-                                                     s3_config_kwargs=s3_config_kwargs, filesystem=filesystem)
+                                                     storage_options=storage_options, filesystem=filesystem)
     except PetastormMetadataError:
         warnings.warn('Currently make_reader supports reading only Petastorm datasets. '
                       'To read from a non-Petastorm Parquet store use make_batch_reader')
@@ -210,7 +210,7 @@ def make_batch_reader(dataset_url_or_urls,
                       hdfs_driver='libhdfs3',
                       transform_spec=None,
                       filters=None,
-                      s3_config_kwargs=None,
+                      storage_options=None,
                       zmq_copy_buffers=True,
                       filesystem=None):
     """
@@ -270,9 +270,9 @@ def make_batch_reader(dataset_url_or_urls,
     :param filters: (List[Tuple] or List[List[Tuple]]): Standard PyArrow filters.
         These will be applied when loading the parquet file with PyArrow. More information
         here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
-    :param s3_config_kwargs: dict of parameters passed to ``botocore.client.Config``
+    :param storage_options: Dict of kwargs forwarded to ``fsspec`` to initialize the filesystem.
     :param zmq_copy_buffers: A bool indicating whether to use 0mq copy buffers with ProcessPool.
-    :param filesystem: An instance of ``pyarrow.FileSystem`` to use. Will ignore s3_config_kwargs and
+    :param filesystem: An instance of ``pyarrow.FileSystem`` to use. Will ignore storage_options and
         other filesystem configs if it's provided.
     :return: A :class:`Reader` object
     """
@@ -281,13 +281,13 @@ def make_batch_reader(dataset_url_or_urls,
     filesystem, dataset_path_or_paths = get_filesystem_and_path_or_paths(
         dataset_url_or_urls,
         hdfs_driver,
-        s3_config_kwargs=s3_config_kwargs,
+        storage_options=storage_options,
         filesystem=filesystem
     )
 
     try:
         dataset_metadata.get_schema_from_dataset_url(dataset_url_or_urls, hdfs_driver=hdfs_driver,
-                                                     s3_config_kwargs=s3_config_kwargs, filesystem=filesystem)
+                                                     storage_options=storage_options, filesystem=filesystem)
         warnings.warn('Please use make_reader (instead of \'make_batch_dataset\' function to read this dataset. '
                       'You may get unexpected results. '
                       'Currently make_batch_reader supports reading only Parquet stores that contain '

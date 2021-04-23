@@ -41,6 +41,7 @@ REQUIRED_PACKAGES = [
     'pyzmq>=14.0.0',
     'pyarrow>=0.17.1',
     'six>=1.5.0',
+    'fsspec',
 ]
 
 EXTRA_REQUIRE = {
