@@ -72,6 +72,7 @@ EXTRA_REQUIRE = {
         'pytest-timeout>=1.3.3',
         'requests>=2.22.0',
         's3fs>=0.0.1',
+        'gcsfs',
     ],
     'torch': ['torchvision>=0.2.1', 'torch>=1.5.0'],
 }

@@ -18,7 +18,6 @@ import pyarrow
 import six
 from six.moves.urllib.parse import urlparse
 
-from petastorm.gcsfs_helpers.gcsfs_wrapper import GCSFSWrapper
 from petastorm.hdfs.namenode import HdfsNamenodeResolver, HdfsConnector
 
 logger = logging.getLogger(__name__)

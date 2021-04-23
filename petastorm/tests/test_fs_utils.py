@@ -18,10 +18,10 @@ import mock
 from pyarrow.filesystem import LocalFileSystem
 from pyarrow.lib import ArrowIOError
 from six.moves.urllib.parse import urlparse
+import gcsfs
 import s3fs
 
 from petastorm.fs_utils import FilesystemResolver, get_filesystem_and_path_or_paths
-from petastorm.gcsfs_helpers.gcsfs_wrapper import GCSFSWrapper
 from petastorm.hdfs.tests.test_hdfs_namenode import HC, MockHadoopConfiguration, \
     MockHdfs, MockHdfsConnector
 
@@ -194,7 +194,7 @@ class FilesystemResolverTest(unittest.TestCase):
 
     def test_gcs_url(self):
         suj = FilesystemResolver('gcs://bucket{}'.format(ABS_PATH), self._hadoop_configuration, connector=self.mock)
-        self.assertTrue(isinstance(suj.filesystem(), GCSFSWrapper))
+        self.assertTrue(isinstance(suj.filesystem(), gcsfs.GCSFileSystem))
         self.assertEqual('bucket', suj.parsed_dataset_url().netloc)
         self.assertEqual('bucket' + ABS_PATH, suj.get_dataset_path())
 
