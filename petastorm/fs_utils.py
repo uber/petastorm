@@ -32,7 +32,7 @@ def get_dataset_path(parsed_url):
     if parsed_url.scheme.lower() in ['file', 'hdfs']:
         return parsed_url.path
 
-    # s3-style filesystems the form `bucket/path`
+    # s3-style filesystems requires the form `bucket/path`
     return parsed_url.netloc + parsed_url.path
 
 

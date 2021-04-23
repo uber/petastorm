@@ -167,12 +167,6 @@ class FilesystemResolverTest(unittest.TestCase):
         self.assertEqual(0, self.mock.connect_attempted(HC.WARP_TURTLE_NN1))
         self.assertEqual(0, self.mock.connect_attempted(HC.DEFAULT_NN))
 
-    def test_s3_without_s3fs(self):
-        with mock.patch.dict('sys.modules', s3fs=None):
-            # `import s3fs` will fail in this context
-            with self.assertRaises(ImportError):
-                FilesystemResolver(urlparse('s3://foo/bar'), {})
-
     def test_s3_url(self):
         suj = FilesystemResolver('s3://bucket{}'.format(ABS_PATH), self._hadoop_configuration, connector=self.mock)
         self.assertTrue(isinstance(suj.filesystem(), s3fs.S3FileSystem))
@@ -181,12 +175,6 @@ class FilesystemResolverTest(unittest.TestCase):
 
         # Make sure we did not capture FilesystemResolver in a closure by mistake
         dill.dumps(suj.filesystem_factory())
-
-    def test_gcs_without_gcsfs(self):
-        with mock.patch.dict('sys.modules', gcsfs=None):
-            # `import gcsfs` will fail in this context
-            with self.assertRaises(ImportError):
-                FilesystemResolver(urlparse('gcs://foo/bar'), {})
 
     def test_gcs_url(self):
         suj = FilesystemResolver('gcs://bucket{}'.format(ABS_PATH), self._hadoop_configuration, connector=self.mock)
