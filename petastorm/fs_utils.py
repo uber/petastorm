@@ -126,11 +126,16 @@ class FilesystemResolver(object):
                     lambda url=self._dataset_url, user=user: \
                     connector.hdfs_connect_namenode(urlparse(url), hdfs_driver, user=user)
         else:
-            # Case 7
             # Fallback to fsspec to handle any other schemes
+            if not self._parsed_dataset_url.netloc:
+                raise ValueError(
+                    'URLs must be of the form {}://bucket/path'.format(self._parsed_dataset_url.scheme)
+                )
+
             storage_options = storage_options or {}
-            self._filesystem = fsspec.filesystem(self._parsed_dataset_url.scheme, **storage_options)
-            self._filesystem_factory = lambda: fsspec.filesystem(self._parsed_dataset_url.scheme, **storage_options)
+            protocol = self._parsed_dataset_url.scheme
+            self._filesystem = fsspec.filesystem(protocol, **storage_options)
+            self._filesystem_factory = lambda: fsspec.filesystem(protocol, **storage_options)
 
     def parsed_dataset_url(self):
         """

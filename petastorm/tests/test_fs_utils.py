@@ -170,7 +170,7 @@ class FilesystemResolverTest(unittest.TestCase):
     def test_s3_without_s3fs(self):
         with mock.patch.dict('sys.modules', s3fs=None):
             # `import s3fs` will fail in this context
-            with self.assertRaises(ValueError):
+            with self.assertRaises(ImportError):
                 FilesystemResolver(urlparse('s3://foo/bar'), {})
 
     def test_s3_url(self):
@@ -185,7 +185,7 @@ class FilesystemResolverTest(unittest.TestCase):
     def test_gcs_without_gcsfs(self):
         with mock.patch.dict('sys.modules', gcsfs=None):
             # `import gcsfs` will fail in this context
-            with self.assertRaises(ValueError):
+            with self.assertRaises(ImportError):
                 FilesystemResolver(urlparse('gcs://foo/bar'), {})
 
     def test_gcs_url(self):
