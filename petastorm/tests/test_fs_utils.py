@@ -64,11 +64,7 @@ class FilesystemResolverTest(unittest.TestCase):
 
         # Case 5: other schemes result in ValueError; urlparse to cover an else branch!
         with self.assertRaises(ValueError):
-            FilesystemResolver(urlparse('http://foo/bar'), {})
-        with self.assertRaises(ValueError):
-            FilesystemResolver(urlparse('ftp://foo/bar'), {})
-        with self.assertRaises(ValueError):
-            FilesystemResolver(urlparse('ssh://foo/bar'), {})
+            FilesystemResolver(urlparse('unknown://foo/bar'), {})
 
         # s3 paths must have the bucket as the netloc
         with self.assertRaises(ValueError):
