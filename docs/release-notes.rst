@@ -7,7 +7,8 @@ Release notes
 Release 0.9.9 (unreleased)
 ==========================
 - `PR 643 <https://github.com/uber/petastorm/pull/643>`_: Tests: fix the unit test of batched dataloader with in-memory cache.
-- `PR 662 <https://github.com/uber/petastorm/pull/662>`_: Reader: shuffle row groups before sharding (user may specify a seed). 
+- `PR 662 <https://github.com/uber/petastorm/pull/662>`_: Reader: shuffle row groups before sharding (user may specify a seed).
+- `PR 665 <https://github.com/uber/petastorm/pull/665>`_: Reader: Support for additional cloud filesystems provided by `fsspec <https://filesystem-spec.readthedocs.io/en/latest/intro.html>`_. Replaced `s3_config_kwargs` with `storage_options`, which now applies to other filesystems like GCS and ADLS as well.
 
 
 Release 0.9.8
