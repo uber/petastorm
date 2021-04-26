@@ -14,14 +14,13 @@
 import unittest
 
 import dill
-import mock
 from pyarrow.filesystem import LocalFileSystem
 from pyarrow.lib import ArrowIOError
 from six.moves.urllib.parse import urlparse
+import gcsfs
 import s3fs
 
 from petastorm.fs_utils import FilesystemResolver, get_filesystem_and_path_or_paths
-from petastorm.gcsfs_helpers.gcsfs_wrapper import GCSFSWrapper
 from petastorm.hdfs.tests.test_hdfs_namenode import HC, MockHadoopConfiguration, \
     MockHdfs, MockHdfsConnector
 
@@ -64,11 +63,7 @@ class FilesystemResolverTest(unittest.TestCase):
 
         # Case 5: other schemes result in ValueError; urlparse to cover an else branch!
         with self.assertRaises(ValueError):
-            FilesystemResolver(urlparse('http://foo/bar'), {})
-        with self.assertRaises(ValueError):
-            FilesystemResolver(urlparse('ftp://foo/bar'), {})
-        with self.assertRaises(ValueError):
-            FilesystemResolver(urlparse('ssh://foo/bar'), {})
+            FilesystemResolver(urlparse('unknown://foo/bar'), {})
 
         # s3 paths must have the bucket as the netloc
         with self.assertRaises(ValueError):
@@ -171,12 +166,6 @@ class FilesystemResolverTest(unittest.TestCase):
         self.assertEqual(0, self.mock.connect_attempted(HC.WARP_TURTLE_NN1))
         self.assertEqual(0, self.mock.connect_attempted(HC.DEFAULT_NN))
 
-    def test_s3_without_s3fs(self):
-        with mock.patch.dict('sys.modules', s3fs=None):
-            # `import s3fs` will fail in this context
-            with self.assertRaises(ValueError):
-                FilesystemResolver(urlparse('s3://foo/bar'), {})
-
     def test_s3_url(self):
         suj = FilesystemResolver('s3://bucket{}'.format(ABS_PATH), self._hadoop_configuration, connector=self.mock)
         self.assertTrue(isinstance(suj.filesystem(), s3fs.S3FileSystem))
@@ -186,15 +175,9 @@ class FilesystemResolverTest(unittest.TestCase):
         # Make sure we did not capture FilesystemResolver in a closure by mistake
         dill.dumps(suj.filesystem_factory())
 
-    def test_gcs_without_gcsfs(self):
-        with mock.patch.dict('sys.modules', gcsfs=None):
-            # `import gcsfs` will fail in this context
-            with self.assertRaises(ValueError):
-                FilesystemResolver(urlparse('gcs://foo/bar'), {})
-
     def test_gcs_url(self):
         suj = FilesystemResolver('gcs://bucket{}'.format(ABS_PATH), self._hadoop_configuration, connector=self.mock)
-        self.assertTrue(isinstance(suj.filesystem(), GCSFSWrapper))
+        self.assertTrue(isinstance(suj.filesystem(), gcsfs.GCSFileSystem))
         self.assertEqual('bucket', suj.parsed_dataset_url().netloc)
         self.assertEqual('bucket' + ABS_PATH, suj.get_dataset_path())
 
