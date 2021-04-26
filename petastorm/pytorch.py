@@ -16,7 +16,6 @@ import collections
 import decimal
 # Must import pyarrow before torch. See: https://github.com/uber/petastorm/blob/master/docs/troubleshoot.rst
 import re
-import sys
 import logging
 import numpy as np
 from six import PY2
@@ -26,7 +25,7 @@ from packaging import version
 
 from petastorm.reader_impl.shuffling_buffer import RandomShufflingBuffer, NoopShufflingBuffer
 from petastorm.reader_impl.pytorch_shuffling_buffer import BatchedRandomShufflingBuffer, \
-    BatchedNoopShufflingBuffer, VoidBuffer
+    BatchedNoopShufflingBuffer
 
 _TORCH_BEFORE_1_1 = version.parse(torch.__version__) < version.parse('1.1.0')  # type: ignore
 
@@ -264,9 +263,7 @@ class BatchedDataLoader(LoaderBase):
 
     def __init__(self, reader, batch_size=1,
                  transform_fn=None,
-                 shuffling_queue_capacity=0,
-                 inmemory_cache_all=False,
-                 num_epochs=None):
+                 shuffling_queue_capacity=0):
         """
         Initializes a data loader object.
 
@@ -289,12 +286,6 @@ class BatchedDataLoader(LoaderBase):
         :param transform_fn: an optional callable to convert batches from the reader to PyTorch tensors
         :param shuffling_queue_capacity: Queue capacity is passed to the underlying :class:`tf.RandomShuffleQueue`
           instance. If set to 0, no shuffling will be done.
-        :param inmemory_cache_all: This is an boolean that indicates whether the data should be
-            cached in memory or not. When this cache is enabled, expect smaller than requested
-            batch size on the epoch boundaries. Enabling this cache also requres that shuffling_queue_capacity to be
-            large enough to hold all data.
-        :param num_epochs: Number of epochs to load when in memory cache is enabled. If
-            set to None, loader will loads batches indefinitely.
         """
         super(BatchedDataLoader, self).__init__()
         self.reader = reader
@@ -306,49 +297,6 @@ class BatchedDataLoader(LoaderBase):
         self.shuffling_queue_capacity = shuffling_queue_capacity
         self._in_iter = None
 
-        self.inmemory_cache_all = inmemory_cache_all
-        self.num_epochs = num_epochs
-
-        if self.inmemory_cache_all and self.reader.num_epochs != 1:
-            raise ValueError("reader.num_epochs is currently {}. When cache in memory is "
-                             "activated, reader.num_epochs must be set to 1. When caching "
-                             "data in memory, we read the data from disk (or HDFS) once and the "
-                             "rest of epochs will be served from "
-                             "memory.".format(self.reader.num_epochs))
-
-        if not self.inmemory_cache_all and self.num_epochs:
-            raise ValueError("num_epochs should not be specified when inmemory_cache_all is "
-                             "not enabled.")
-
-    def _instantiate_buffers(self):
-        if self.shuffling_queue_capacity > 0:
-            # We can not know what is the reasonable number to use for the extra capacity, so we set a huge number
-            # and give up on the unbound growth protection mechanism.
-            # To keep the same behavior as DataLoader, we need to increase the shuffling_queue_capacity
-            min_after_dequeue = self.shuffling_queue_capacity - 1
-            shuffling_queue_capacity = min_after_dequeue + self.batch_size
-
-            def _instantiate_batched_shuffling_buffer():
-                return BatchedRandomShufflingBuffer(shuffling_queue_capacity,
-                                                    min_after_retrieve=min_after_dequeue,
-                                                    extra_capacity=100000000,
-                                                    batch_size=self.batch_size)
-
-            instantiate_buffer_fn = _instantiate_batched_shuffling_buffer
-        else:
-            def _instantiate_noop_buffer():
-                return BatchedNoopShufflingBuffer(batch_size=self.batch_size)
-
-            instantiate_buffer_fn = _instantiate_noop_buffer
-
-        shuffling_buffer = instantiate_buffer_fn()
-        if self.inmemory_cache_all:
-            other_shuffling_buffer = instantiate_buffer_fn()
-        else:
-            other_shuffling_buffer = VoidBuffer()
-
-        return shuffling_buffer, other_shuffling_buffer, instantiate_buffer_fn
-
     def _iter_impl(self):
         """
         The Data Loader iterator stops the for-loop when reader runs out of samples.
@@ -357,8 +305,20 @@ class BatchedDataLoader(LoaderBase):
         # the requested batch_size ready.
 
         keys = None
-        self._shuffling_buffer, other_shuffling_buffer, instantiate_buffer_fn = \
-            self._instantiate_buffers()
+        if self.shuffling_queue_capacity > 0:
+            # We can not know what is the reasonable number to use for the extra capacity, so we set a huge number
+            # and give up on the unbound growth protection mechanism.
+            # To keep the same behavior as DataLoader, we need to increase the shuffling_queue_capacity
+            min_after_dequeue = self.shuffling_queue_capacity - 1
+            shuffling_queue_capacity = min_after_dequeue + self.batch_size
+            self._shuffling_buffer = BatchedRandomShufflingBuffer(
+                shuffling_queue_capacity,
+                min_after_retrieve=min_after_dequeue,
+                extra_capacity=100000000,
+                batch_size=self.batch_size
+            )
+        else:
+            self._shuffling_buffer = BatchedNoopShufflingBuffer(batch_size=self.batch_size)
 
         for row in self.reader:
             # Default collate does not work nicely on namedtuples and treat them as lists
@@ -381,31 +341,15 @@ class BatchedDataLoader(LoaderBase):
             # _yield_batches will emit as much batches as are allowed by the shuffling_buffer (RandomShufflingBuffer
             # will avoid underflowing below a certain number of samples to guarantee some samples decorrelation)
             for batch in self._yield_batches(keys):
-                other_shuffling_buffer.add_many(batch.values())
                 yield batch
 
-        # When caching memory, at this point we are done with reading all the data. Rest of the
-        # batches will be created directly from memory.
-        # Otherwise if there is not in memory cache, Once reader can not read new rows, we might
-        # still have a bunch of rows waiting in the shuffling buffer. Telling shuffling buffer
-        # that we are finished allows to deplete the buffer completely, regardless its
+        # Once reader can not read new rows, we might still have a bunch of rows waiting in the shuffling buffer.
+        # Telling shuffling buffer that we are finished allows to deplete the buffer completely, regardless its
         # min_after_dequeue setting.
         self._shuffling_buffer.finish()
 
         for batch in self._yield_batches(keys):
-            other_shuffling_buffer.add_many(batch.values())
             yield batch
-
-        if self.inmemory_cache_all:
-            for epoch in range(self.num_epochs - 1 if self.num_epochs else sys.maxsize):
-                other_shuffling_buffer.finish()
-                self._shuffling_buffer = other_shuffling_buffer
-                other_shuffling_buffer = instantiate_buffer_fn()
-                for batch in self._yield_batches(keys):
-                    if self.num_epochs is None or self.num_epochs and epoch != self.num_epochs-2:
-                        # We skip populating the other buffer in the last epoch.
-                        other_shuffling_buffer.add_many(batch.values())
-                    yield batch
 
     def _yield_batches(self, keys):
         while self._shuffling_buffer.can_retrieve():
