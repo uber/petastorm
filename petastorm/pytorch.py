@@ -367,3 +367,134 @@ class BatchedDataLoader(LoaderBase):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.reader.stop()
         self.reader.join()
+
+
+def _load_rows_into_mem(reader, transform_fn, rows_capacity):
+    """Load upto rows_capacity number of rows from reader into memory.
+
+    :param reader: petastorm Reader instance.
+    :param transform_fn: transform function which converts batches from the reader to PyTorch tensors
+    :param rows_capacity: max number of rows to be loaded into memory (truncated to real size if capacity
+        is larger than total number of rows in reader).
+    :return: (keys, buffer): keys is a dict_keys storing column names and buffer is a list storing loaded rows.
+    """
+    n_rows = 0
+    buffer_full = False
+    buffer = None
+    keys = None
+
+    for row in reader:
+        if buffer_full:
+            break
+        # Default collate does not work nicely on namedtuples and treat them as lists
+        # Using dict will result in the yielded structures being dicts as well
+        row_as_dict = row._asdict()
+
+        # Promote some types that are incompatible with pytorch to be pytorch friendly.
+        _sanitize_pytorch_types(row_as_dict)
+
+        for k, v in row_as_dict.items():
+            if not reader.batched_output:
+                row_as_dict[k] = transform_fn([v])
+            else:
+                row_as_dict[k] = transform_fn(v)
+
+        if not keys:
+            keys = row_as_dict.keys()
+
+        # Add rows to buffer
+        items = list(row_as_dict.values())
+        expected_rows = n_rows + len(items[0])
+        last_row = len(items[0])
+
+        if rows_capacity <= expected_rows:
+            buffer_full = True
+            last_row = rows_capacity-n_rows
+            expected_rows = rows_capacity
+        if buffer is None:
+            # Initialize buffer as a list of empty tensors
+            buffer = []
+            for v in items:
+                buffer.append(torch.empty((rows_capacity,) + v.shape[1:], dtype=v.dtype, device=v.device))
+        # Copy new items into buffer
+        for i, v in enumerate(items):
+            buffer[i][n_rows:expected_rows] = v[:last_row]
+        n_rows = expected_rows
+
+    # At this point, dataloader has enough rows storted in memory.
+    # Stop the reader rather than draining the remainder of reader.
+    # If reader has infinite epochs, draining will be deadlock.
+    reader.stop()
+    reader.join()
+    # Truncate empty tensors if capacity is larger than total rows.
+    if n_rows < rows_capacity:
+        for i, v in enumerate(buffer):
+            buffer[i] = buffer[i][:n_rows]
+    return (keys, buffer)
+
+
+class InMemBatchedDataLoader(object):
+    """
+    Same as BatchedDataLoader except it only loads upto capacity rows into memory.
+    This class doesn't allow to be used multiple-times, so it doesn't inherit LoaderBase.
+    """
+
+    def __init__(self, reader, batch_size=1,
+                 transform_fn=None,
+                 num_epochs=1,
+                 seed=0,
+                 rows_capacity=1024,
+                 shuffle=False):
+        """
+        Initializes a data loader object.
+        This class does not support special types that are not supported in PyTorch (decimal/string).
+        :param reader: petastorm Reader instance, which is stopped once all required data is loaded.
+        :param batch_size: the number of items to return per batch; factored into the len() of this reader
+        :param transform_fn: an optional callable to convert batches from the reader to PyTorch tensors
+        :param num_epochs: number of epochs.
+        :param seed: random seed used to shuffle.
+        :param rows_capacity: number of rows to be loaded into memory.
+        :param shuffle: If ``True``, indices will be shuffled in every epoch.
+        """
+        super(InMemBatchedDataLoader, self).__init__()
+        self._batch_size = batch_size
+        self._num_epochs = num_epochs
+        self._seed = seed
+        self._shuffle = shuffle
+        self._in_iter = False
+        # keys is a dict_keys storing column names and buffer is a list storing corresponding rows/tensors.
+        self._keys, self._buffer = _load_rows_into_mem(reader, transform_fn or torch.as_tensor, rows_capacity)
+
+    def __iter__(self):
+        """
+        The Data Loader iterator stops the for-loop when num_epochs is reached.
+        """
+        if self._in_iter:
+            raise RuntimeError("InMemBatchedDataLoader couldn't be used multiple times, please\
+                    specify total number of epochs using num_epochs in constructor.")
+        self._in_iter = True
+        for epoch in range(self._num_epochs):
+            size = len(self._buffer[0])
+            if self._shuffle:
+                # Deterministically shuffle based on seed and current epoch id.
+                g = torch.Generator()
+                g.manual_seed(self._seed + epoch)
+                indices = torch.randperm(size, generator=g).tolist()
+            else:
+                indices = list(range(size))
+
+            # Sample batches
+            for i in range(0, len(indices), self._batch_size):
+                idx = indices[i:i+self._batch_size]
+                batch = [v[idx] for v in self._buffer]
+                size -= len(batch[0])
+                batch = dict(zip(self._keys, batch))
+                yield batch
+            assert size == 0
+
+    # Functions needed to treat data loader as a context manager
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
