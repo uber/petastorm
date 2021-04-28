@@ -15,7 +15,7 @@
 dist: trusty
 language: python
 python:
-  - '2.7'
+  - '3.6'
 env:
   # ARROW_PRE_0_15_IPC_FORMAT is set for pyarrow compatibility
   # See https://spark.apache.org/docs/3.0.0-preview/sql-pyspark-pandas-with-arrow.html#compatibiliy-setting-for-pyarrow--0150-and-spark-23x-24x
