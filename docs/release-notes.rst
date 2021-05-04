@@ -6,6 +6,7 @@ Release notes
 
 Release 0.10.1 (unreleased)
 ===========================
+- `PR 669 <https://github.com/uber/petastorm/pull/669>`_: Pytorch: add inmemory batched dataloader (InMemBatchedDataLoader).
 
 
 Release 0.10.0

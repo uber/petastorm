@@ -239,6 +239,8 @@ The minimalist example below assumes the definition of a ``Net`` class and
 
 If you are working with very large batch sizes and do not need support for Decimal/strings we provide a ``petastorm.pytorch.BatchedDataLoader`` that can buffer using Torch tensors (``cpu`` or ``cuda``) with a signficantly higher throughput.
 
+If the size of your dataset can fit into system memory, you can use an in-memory version dataloader ``petastorm.pytorch.InMemBatchedDataLoader``. This dataloader only reades the dataset once, and caches data in memory to avoid additional I/O for multiple epochs.
+
 Spark Dataset Converter API
 ---------------------------
 
