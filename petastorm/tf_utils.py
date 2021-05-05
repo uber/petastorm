@@ -368,8 +368,9 @@ def make_petastorm_dataset(reader):
                 # (nor want to do that) since this is an expensive operation. num_epochs is a more efficient way
                 # to do this.
                 raise RuntimeError('Multiple iterations over make_petastorm_dataset are not supported. '
-                                   'Multiple iterations can be triggered by calling \'repeat\' method of Datset class.'
-                                   'Use Reader\'s num_epochs contructor arguments to set number of iterations.')
+                                   'Use Reader\'s num_epochs contructor arguments to set number of iterations,'
+                                   'or use tf.data.Dataset\'s cache() function to cache data of first iteration before'
+                                   'calling \'repeat\' method of Datset class.')
             for row in reader:
                 yield _sanitize_field_tf_types(row)
 
