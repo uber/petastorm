@@ -12,15 +12,9 @@ RUN apt-get -qq install -y \
   cmake \
   openjdk-8-jre-headless \
   git \
-  libglib2.0-0 \
-  libxrender1 \
-  libsm6 \
   python \
   python-pip \
   python3-pip \
-  python3.6 \
-  python3.6-dev \
-  python3.6-venv \
   python3.7 \
   python3.7-dev \
   python3.7-venv \
@@ -37,14 +31,6 @@ ADD setup.py /petastorm/
 ADD README.rst /petastorm/
 ADD petastorm /petastorm/petastorm
 
-# Set up Python3.6 environment
-RUN python3.6 -m pip install pip --upgrade
-RUN python3.6 -m pip install wheel
-RUN python3.6 -m venv /petastorm_venv3.6
-RUN /petastorm_venv3.6/bin/pip3.6 install --no-cache scikit-build
-RUN /petastorm_venv3.6/bin/pip3.6 install --no-cache -e /petastorm/[test,tf,torch,docs,opencv] --only-binary pyarrow --only-binary opencv-python
-RUN /petastorm_venv3.6/bin/pip3.6 uninstall -y petastorm
-
 # Set up Python3 environment
 RUN python3.7 -m pip install pip --upgrade
 RUN python3.7 -m pip install wheel
@@ -52,6 +38,11 @@ RUN python3.7 -m venv /petastorm_venv3.7
 RUN /petastorm_venv3.7/bin/pip3.7 install --no-cache scikit-build
 RUN /petastorm_venv3.7/bin/pip3.7 install --no-cache -e /petastorm/[test,tf,torch,docs,opencv] --only-binary pyarrow --only-binary opencv-python
 RUN /petastorm_venv3.7/bin/pip3.7 uninstall -y petastorm
+# To avoid some version incompatibilities, we pin these libraries to versions that known to work together
+RUN /petastorm_venv3.7/bin/pip3.7 install -U pyarrow==3.0.0 numpy==1.20.1 tensorflow==2.1.0 pyspark==3.0.0
+
+# Otherwise we might have trouble with loading of libGL.so.1
+RUN /petastorm_venv3.7/bin/pip3.7 install opencv-python-headless
 
 # Clean up
 RUN rm -r /petastorm
