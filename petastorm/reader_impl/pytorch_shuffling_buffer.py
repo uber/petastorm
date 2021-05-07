@@ -83,31 +83,6 @@ class BatchedShufflingBufferBase(object):
         """
 
 
-class VoidBuffer(BatchedShufflingBufferBase):
-    """ A 'no-operation' implementation of a shuffling buffer that does not store or
-    retrieve data.
-    """
-
-    def _add_many(self, items):
-        pass
-
-    def can_retrieve(self):
-        return False
-
-    def retrieve(self):
-        raise RuntimeError("This method cannot store any data.")
-
-    def can_add(self):
-        return True
-
-    @property
-    def size(self):
-        return 0
-
-    def finish(self):
-        pass
-
-
 class BatchedNoopShufflingBuffer(BatchedShufflingBufferBase):
     """A 'no-operation' (noop) implementation of a shuffling buffer. Useful in cases where no shuffling is desired, such
     as test scenarios or iterating over a dataset in a predeterministic order.
