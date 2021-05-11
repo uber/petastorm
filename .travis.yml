@@ -120,7 +120,7 @@ before_deploy:
 deploy:
   # Disabling pypi deployment. There is an issue with authentication at the moment
   - provider: pypi
-    user: uber
+    username: "__token__"
     password:
       secure: OEyw3NVW1kuSWSJAW+OBSZUk4uSSnkZnQ4njM1EFooTDZ2axAe69y+Z/PRjuLup7bbdxgq8DUXzK+jUWs07vcPYUKp0ek9Gni9gmv08B62P2plupfw35KCjxBTd3RY1cWpkX425ePucuAH1PojY5J0LU4BCPOmyzdpAniLdmcXwJTM1EsQXCub3v/TBK1dxyFMHUyW9WqRStQI1xF8mxhVupnZ/spN+ixvqTMakBczqEttd8AsoSXQtvEUo5ot082/U8LryvrHEsHH52hdbWlSR8TxbC1fK8LgEeXoeqfhOiYNtdOTB1+cGmdJSvjbHCq4OUfl1sbTbBSxrkLNeFAQztAQqIybp1F5PjjVKAr3mHB7HpnMoUcDQiVZ8srfwBpCGZlsj6BsNxYGidiSXvKyKHO1TnTHxNhXIjPzAxjPHXFm7HH9kCXavGEMwXMn06TNq9uP/e6ekd0qE2l+x7xc9i7bdSpIXC9s1uCNqbObiV+/BNXvtDjAVxmp4d+foIPwLx6Qz42IFzPb96lY2Ifow8I8406F/Y5t003xFwnkkgbfI6Ya8gJaJIP6pYGuWJY/lj6/5nElroeiZg1G3rCRBfxwG0RJ2RVhNpuqAcXrQ7SUQ/bbDKUc5psrE920kpF/V3j5tA83pSyJW49IjNQxRABGviPh7aSVWFBeyh0BE=
     distributions: sdist bdist_wheel
