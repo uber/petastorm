@@ -5,7 +5,7 @@ name: Deploy
 on:
   workflow_run:
     workflows: ["Unittest"]
-    branches: [ actions ]
+    branches: [ master ]
     types:
       - completed
 
