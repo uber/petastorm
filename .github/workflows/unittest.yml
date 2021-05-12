@@ -79,7 +79,7 @@ jobs:
           export PYARROW_VERSION=${{matrix.PYARROW_VERSION}}
           export NUMPY_VERSION=${{matrix.NUMPY_VERSION}}
           export TF_VERSION=${{matrix.TF_VERSION}}
-          export DEPLOYABLE=${{matrix.DEPLOYABLE}} 
+          export DEPLOYABLE=${{matrix.DEPLOYABLE}}
           export PY="3.7"
           export PYSPARK_VERSION=${{matrix.PYSPARK_VERSION}}
           export ARROW_PRE_0_15_IPC_FORMAT=${{matrix.ARROW_PRE_0_15_IPC_FORMAT}}
