@@ -7,11 +7,13 @@ on:
   # Triggers the workflow on push or pull request events but only for the master branch
   push:
     branches:
+      - master
       - actions_deploy
     tags:
       - "v*"
   pull_request:
     branches:
+      - master
       - actions_deploy
 
   # Allows you to run this workflow manually from the Actions tab
