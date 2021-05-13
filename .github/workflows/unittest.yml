@@ -4,7 +4,7 @@ name: CI
 
 # Controls when the action will run.
 on:
-  # Triggers the workflow on push or pull request events but only for the master branch
+  # Triggers the workflow on push or pull request events but only for the specified branches
   push:
     branches:
       - master
@@ -32,35 +32,30 @@ jobs:
           PYARROW_VERSION: "2.0.0"
           NUMPY_VERSION: "1.19.1"
           TF_VERSION: "1.15.0"
-          DEPLOYABLE: 1
           PYSPARK_VERSION: "2.4.4"
           ARROW_PRE_0_15_IPC_FORMAT: 1
         - config: test2
           PYARROW_VERSION: "2.0.0"
           NUMPY_VERSION: "1.19.1"
           TF_VERSION: "1.15.0"
-          DEPLOYABLE: 0
           PYSPARK_VERSION: "3.0.0"
           ARROW_PRE_0_15_IPC_FORMAT: 0
         - config: test3
           PYARROW_VERSION: "2.0.0"
           NUMPY_VERSION: "1.19.1"
           TF_VERSION: "2.1.0"
-          DEPLOYABLE: 0
           PYSPARK_VERSION: "3.0.0"
           ARROW_PRE_0_15_IPC_FORMAT: 0
         - config: test4
           PYARROW_VERSION: "3.0.0"
           NUMPY_VERSION: "1.20.1"
           TF_VERSION: "2.1.0"
-          DEPLOYABLE: "0"
           PYSPARK_VERSION: "3.0.0"
           ARROW_PRE_0_15_IPC_FORMAT: "0"
         - config: test5
           PYARROW_VERSION: "0.17.1"
           NUMPY_VERSION: "1.19.1"
           TF_VERSION: "2.1.0"
-          DEPLOYABLE: 0
           PYSPARK_VERSION: "3.0.0"
           ARROW_PRE_0_15_IPC_FORMAT: 0
 
@@ -85,7 +80,6 @@ jobs:
           export PYARROW_VERSION=${{matrix.PYARROW_VERSION}}
           export NUMPY_VERSION=${{matrix.NUMPY_VERSION}}
           export TF_VERSION=${{matrix.TF_VERSION}}
-          export DEPLOYABLE=${{matrix.DEPLOYABLE}}
           export PY="3.7"
           export PYSPARK_VERSION=${{matrix.PYSPARK_VERSION}}
           export ARROW_PRE_0_15_IPC_FORMAT=${{matrix.ARROW_PRE_0_15_IPC_FORMAT}}
