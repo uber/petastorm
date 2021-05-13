@@ -6,9 +6,13 @@ name: CI
 on:
   # Triggers the workflow on push or pull request events but only for the master branch
   push:
-    branches: [ actions_deploy ]
+    branches:
+      - actions_deploy
+    tags:
+      - "v*"
   pull_request:
-    branches: [ actions_deploy ]
+    branches:
+      - actions_deploy
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -136,15 +140,9 @@ jobs:
           pip install wheel
           python setup.py bdist_wheel
 
-      - name: Check Git tag at HEAD
-        run: echo "head_tag=$(git tag --points-at HEAD)" >> $GITHUB_ENV
-
-      - name: Show head_tag
-        run: echo "head_tag is ${{ env.head_tag }}"
-
       - name: Publish package
         # Only come with a tag
-        if: ${{ env.head_tag }} != ''
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           user: __token__
