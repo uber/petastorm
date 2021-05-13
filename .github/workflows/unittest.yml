@@ -135,12 +135,12 @@ jobs:
         run: |
           pip install wheel
           python setup.py bdist_wheel
-      - name: Check if Git tag exists
-        run: echo "::set-env name=HEAD_TAG::$(git tag --points-at HEAD)"
 
-      - name: Runs only if Git tag exists
-        if: env.HEAD_TAG != ''
-        run: echo"This runs because Git tag points at HEAD ..."
+      - name: Check Git tag at HEAD
+        run: echo "head_tag=$(git tag --points-at HEAD)" >> $GITHUB_ENV
+
+      - name: Show head_tag
+        run: echo "head_tag is ${{ env.head_tag }}"
 
       - name: Publish package
         # Only come with a tag
