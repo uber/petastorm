@@ -1,0 +1,145 @@
+# This is a basic workflow to help you get started with Actions
+
+name: CI
+
+# Controls when the action will run.
+on:
+  # Triggers the workflow on push or pull request events but only for the specified branches
+  push:
+    branches:
+      - master
+      - actions_deploy
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - master
+      - actions_deploy
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  unittest:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        config: [test1, test2, test3, test4, test5]
+        include:
+        - config: test1
+          PYARROW_VERSION: "2.0.0"
+          NUMPY_VERSION: "1.19.1"
+          TF_VERSION: "1.15.0"
+          PYSPARK_VERSION: "2.4.4"
+          ARROW_PRE_0_15_IPC_FORMAT: 1
+        - config: test2
+          PYARROW_VERSION: "2.0.0"
+          NUMPY_VERSION: "1.19.1"
+          TF_VERSION: "1.15.0"
+          PYSPARK_VERSION: "3.0.0"
+          ARROW_PRE_0_15_IPC_FORMAT: 0
+        - config: test3
+          PYARROW_VERSION: "2.0.0"
+          NUMPY_VERSION: "1.19.1"
+          TF_VERSION: "2.1.0"
+          PYSPARK_VERSION: "3.0.0"
+          ARROW_PRE_0_15_IPC_FORMAT: 0
+        - config: test4
+          PYARROW_VERSION: "3.0.0"
+          NUMPY_VERSION: "1.20.1"
+          TF_VERSION: "2.1.0"
+          PYSPARK_VERSION: "3.0.0"
+          ARROW_PRE_0_15_IPC_FORMAT: "0"
+        - config: test5
+          PYARROW_VERSION: "0.17.1"
+          NUMPY_VERSION: "1.19.1"
+          TF_VERSION: "2.1.0"
+          PYSPARK_VERSION: "3.0.0"
+          ARROW_PRE_0_15_IPC_FORMAT: 0
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      # Prepare
+      - name: prepare
+        run: |
+          export CI_IMAGE=selitvin/petastorm_ci_auto:ci-2020-07-01-00
+          docker pull $CI_IMAGE
+          docker images
+          pip install -U codecov
+          docker run -v `pwd`:/petastorm --name petastorm_ci $CI_IMAGE /bin/sh -c "sleep 3600" &
+
+      # Run unit tests
+      - name: build and run unit tests
+        run: |
+          sleep 30
+          export PYARROW_VERSION=${{matrix.PYARROW_VERSION}}
+          export NUMPY_VERSION=${{matrix.NUMPY_VERSION}}
+          export TF_VERSION=${{matrix.TF_VERSION}}
+          export PY="3.7"
+          export PYSPARK_VERSION=${{matrix.PYSPARK_VERSION}}
+          export ARROW_PRE_0_15_IPC_FORMAT=${{matrix.ARROW_PRE_0_15_IPC_FORMAT}}
+          export RUN="docker exec -e ARROW_PRE_0_15_IPC_FORMAT=$ARROW_PRE_0_15_IPC_FORMAT petastorm_ci bash /run_in_venv.sh ${PY}"
+          export PYTEST="pytest --timeout=360 -v --color=yes --cov=./ --cov-report xml:coverage.xml"
+          $RUN pip install -e /petastorm/[test,tf,torch,docs,opencv]
+          $RUN pip install --upgrade numpy==$NUMPY_VERSION
+          $RUN pip install -U pyarrow==${PYARROW_VERSION} tensorflow==${TF_VERSION} pyspark==${PYSPARK_VERSION}
+          $RUN pip list
+          $RUN mypy petastorm
+          $RUN flake8 . --count --show-source --statistics
+          $RUN flake8 . --count --exit-zero --max-complexity=10 --statistics
+          $RUN pylint --rcfile=.pylintrc petastorm examples -f parseable -r n
+          $RUN ulimit -c unlimited -S
+          $RUN bash -c "cd /petastorm/docs/autodoc && pwd && make html"
+          $RUN $PYTEST -m "forked" --forked -Y \
+          --ignore=examples/mnist/tests/test_pytorch_mnist.py \
+          --ignore=petastorm/tests/test_pytorch_utils.py \
+          --ignore=petastorm/tests/test_pytorch_dataloader.py \
+          --ignore=petastorm/tests/test_tf_autograph.py \
+          petastorm examples
+          $RUN $PYTEST -m "not forked" -Y  --cov-append \
+          --ignore=examples/mnist/tests/test_pytorch_mnist.py \
+          --ignore=petastorm/tests/test_pytorch_utils.py \
+          --ignore=petastorm/tests/test_pytorch_dataloader.py \
+          --ignore=petastorm/tests/test_tf_autograph.py \
+          petastorm examples
+          $RUN $PYTEST  --cov-append \
+          examples/mnist/tests/test_pytorch_mnist.py \
+          petastorm/tests/test_pytorch_dataloader.py \
+          petastorm/tests/test_pytorch_utils.py
+          $RUN $PYTEST -Y --cov-append petastorm/tests/test_tf_autograph.py
+
+      - name: codecov
+        run: codecov --required
+
+  deploy:
+    needs: unittest
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.7
+      - name: Display Python version
+        run: python -c "import sys; print(sys.version)"
+      - name: Before Deploy
+        run: |
+          pip install wheel
+          python setup.py bdist_wheel
+
+      - name: Publish package
+        # Only come with a tag
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
