@@ -6,6 +6,9 @@ Release notes
 
 Release 0.11.1 (unreleased)
 ===========================
+- `PR 687 <https://github.com/uber/petastorm/pull/687>`_ (resolves issue
+  `#684 <https://github.com/uber/petastorm/issues/684>`_ ):
+  Fix a failure when reading data from a parquet file (and not a parquet directory).
 - `PR 686 <https://github.com/uber/petastorm/pull/686>`_ (resolves issue
   `#685 <https://github.com/uber/petastorm/issues/685>`_ ):
   Silenty omit fields that have unsupported types. Previously were failing

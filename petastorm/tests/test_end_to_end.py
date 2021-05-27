@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import glob
 import tempfile
 import operator
 import os
@@ -109,6 +109,17 @@ def test_simple_read(synthetic_dataset, reader_factory):
     """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
     with reader_factory(synthetic_dataset.url) as reader:
         _check_simple_reader(reader, synthetic_dataset.data)
+
+
+@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
+def test_simple_read_from_parquet_file(synthetic_dataset, reader_factory):
+    """See if we can read data when a single parquet file is specified instead of a parquet directory"""
+    assert synthetic_dataset.url.startswith('file://')
+    path = synthetic_dataset.url[len('file://'):]
+    one_parquet_file = glob.glob(f'{path}/**/*.parquet')[0]
+    with reader_factory(f"file://{one_parquet_file}") as reader:
+        all_data = list(reader)
+        assert len(all_data) > 0
 
 
 @pytest.mark.parametrize('reader_factory', [
