@@ -72,7 +72,7 @@ def test_simple_read(scalar_dataset, reader_factory):
 
 
 @pytest.mark.parametrize('reader_factory', _D)
-def test_simple_read(scalar_dataset, reader_factory):
+def test_simple_read_from_a_single_file(scalar_dataset, reader_factory):
     """See if we can read data when a single parquet file is specified instead of a parquet directory"""
     assert scalar_dataset.url.startswith('file://')
     path = scalar_dataset.url[len('file://'):]
