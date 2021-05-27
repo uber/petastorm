@@ -199,7 +199,6 @@ def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None, pa
                   'float64': np.float64(i) * .66}
         if not is_list_of_scalar_broken:
             result['int_fixed_size_list'] = np.arange(1 + i, 10 + i).astype(np.int32)
-        result = OrderedDict(sorted(result.items(), key=lambda item: item[0]))
         return result
 
     expected_data = [expected_row(i) for i in range(num_rows)]
@@ -213,8 +212,9 @@ def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None, pa
         row['timestamp'] = row['timestamp'].replace(tzinfo=pytz.UTC)
         if not is_list_of_scalar_broken:
             row['int_fixed_size_list'] = row['int_fixed_size_list'].tolist()
+        row['nested_struct'] = {'nested_int': 0}
 
-    rows = [Row(**row) for row in expected_data_as_scalars]
+    rows = [Row(**OrderedDict(sorted(row.items(), key=lambda item: item[0]))) for row in expected_data_as_scalars]
 
     maybe_int_fixed_size_list_field = [StructField('int_fixed_size_list', ArrayType(IntegerType(), False), False)] \
         if not is_list_of_scalar_broken else []
@@ -229,6 +229,7 @@ def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None, pa
             StructField('id_div_700', IntegerType(), False),
         ] + maybe_int_fixed_size_list_field +
         [
+            StructField('nested_struct', StructType([StructField('nested_int', IntegerType(), True)])),
             StructField('string', StringType(), False),
             StructField('string2', StringType(), False),
             StructField('timestamp', TimestampType(), False),

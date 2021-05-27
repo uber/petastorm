@@ -398,7 +398,7 @@ def test_arrow_schema_convertion_fail():
     mock_dataset = _mock_parquet_dataset([], arrow_schema)
 
     with pytest.raises(ValueError, match='Cannot auto-create unischema due to unsupported column type'):
-        Unischema.from_arrow_schema(mock_dataset)
+        Unischema.from_arrow_schema(mock_dataset, omit_unsupported_fields=False)
 
 
 def test_arrow_schema_arrow_1644_list_of_struct():
