@@ -174,7 +174,10 @@ class PyDictReaderWorker(WorkerBase):
         # pyarrow would fail if we request a column names that the dataset is partitioned by, so we strip them from
         # the `columns` argument.
         partitions = self._dataset.partitions
-        column_names = set(field.name for field in self._schema.fields.values()) - partitions.partition_names
+        # self._dataset.partitions is None, if make_reader is created directly from a parquet file
+        # (and not a directory with *.parquet files)
+        partition_names = partitions.partition_names if partitions else set()
+        column_names = set(field.name for field in self._schema.fields.values()) - partition_names
 
         all_rows = self._read_with_shuffle_row_drop(piece, pq_file, column_names, shuffle_row_drop_range)
 
