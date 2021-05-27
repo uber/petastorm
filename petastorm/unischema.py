@@ -300,7 +300,7 @@ class Unischema(object):
         return self._get_namedtuple()(*args, **kargs)
 
     @classmethod
-    def from_arrow_schema(cls, parquet_dataset, omit_unsupported_fields=False):
+    def from_arrow_schema(cls, parquet_dataset, omit_unsupported_fields=True):
         """
         Convert an apache arrow schema into a unischema object. This is useful for datasets of only scalars
         which need no special encoding/decoding. If there is an unsupported type in the arrow schema, it will
