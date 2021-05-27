@@ -6,7 +6,10 @@ Release notes
 
 Release 0.11.1 (unreleased)
 ===========================
-
+- `PR 686 <https://github.com/uber/petastorm/pull/686>`_ (resolves issue
+  `#685 <https://github.com/uber/petastorm/issues/685>`_ ):
+  Silenty omit fields that have unsupported types. Previously were failing
+  loudly making parquet stores with such fields unusable with Petastorm.
 
 Release 0.11.0
 ===========================
