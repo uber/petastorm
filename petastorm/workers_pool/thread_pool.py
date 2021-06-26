@@ -184,7 +184,7 @@ class ThreadPool(object):
     def join(self):
         """Block until all workers are terminated."""
         for w in self._workers:
-            if w.isAlive():
+            if w.is_alive():
                 w.join()
 
         if self._profiling_enabled:
