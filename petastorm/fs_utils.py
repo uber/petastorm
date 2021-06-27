@@ -18,6 +18,7 @@ import pyarrow
 import six
 from six.moves.urllib.parse import urlparse
 from fsspec.core import strip_protocol
+from fsspec.utils import update_storage_options
 
 from petastorm.hdfs.namenode import HdfsNamenodeResolver, HdfsConnector
 
@@ -134,7 +135,6 @@ class FilesystemResolver(object):
             cls = fsspec.get_filesystem_class(protocol)
             options = cls._get_kwargs_from_urls(self._dataset_url)
             update_storage_options(options, storage_options)
-            fs = cls(**options)
             self._filesystem = cls(**options)
             self._filesystem_factory = lambda: cls(**options)   
 
@@ -212,15 +212,3 @@ def normalize_dir_url(dataset_url):
     dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
     logger.debug('directory url: %s', dataset_url)
     return dataset_url
-
-def update_storage_options(options, inherited=None):
-    if not inherited:
-        inherited = {}
-    collisions = set(options) & set(inherited)
-    if collisions:
-        collisions = "\n".join("- %r" % k for k in collisions)
-        raise KeyError(
-            "Collision between inferred and specified storage "
-            "options:\n%s" % collisions
-        )
-    options.update(inherited)
