@@ -6,7 +6,9 @@ Release notes
 
 Release 0.11.2 (unreleased)
 ===========================
-
+- `PR 694 <https://github.com/uber/petastorm/pull/694>`_ (resolves issue
+  `#691 <https://github.com/uber/petastorm/issues/691>`_ ):
+  Enable extraction of storage_options from input url.
 
 Release 0.11.1
 ===========================
