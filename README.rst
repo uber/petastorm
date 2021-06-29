@@ -3,8 +3,8 @@ Petastorm
 =========
 
 .. image:: https://travis-ci.com/uber/petastorm.svg?branch=master
-   :target: https://travis-ci.com/uber/petastorm
-   :alt: Build Status (Travis CI)
+   :target: https://github.com/uber/petastorm/actions/workflows/unittest.yml/badge.svg
+   :alt: Build Status
 
 .. image:: https://codecov.io/gh/uber/petastorm/branch/master/graph/badge.svg
    :target: https://codecov.io/gh/uber/petastorm/branch/master
