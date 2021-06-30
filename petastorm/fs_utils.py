@@ -212,3 +212,4 @@ def normalize_dir_url(dataset_url):
     dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
     logger.debug('directory url: %s', dataset_url)
     return dataset_url
+
