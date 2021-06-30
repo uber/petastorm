@@ -16,7 +16,7 @@ import logging
 import fsspec
 import pyarrow
 import six
-from six.moves.urllib.parse import urlparse
+from six.moves.urllib.parse import urlparse, urlunparse
 from fsspec.core import strip_protocol
 from fsspec.utils import update_storage_options
 
@@ -25,12 +25,16 @@ from petastorm.hdfs.namenode import HdfsNamenodeResolver, HdfsConnector
 logger = logging.getLogger(__name__)
 
 
-def get_dataset_path(dataset_url):
-    """Return only path part of full URL, according to appropriate backend"""
-    if urlparse(dataset_url).scheme.lower() in ['file', 'hdfs']:
-        return urlparse(dataset_url).path
+def get_dataset_path(parsed_url):
+    """
+    The dataset path is different than the one in `_parsed_dataset_url` for some filesystems.
+    For example s3fs expects the bucket name to be included in the path and doesn't support
+    paths that start with a `/`
+    """
+    if parsed_url.scheme.lower() in ['file', 'hdfs']:
+        return parsed_url.path
 
-    _url = strip_protocol(dataset_url)
+    _url = strip_protocol(urlunparse(parsed_url))
     return _url
 
 
@@ -195,7 +199,7 @@ def get_filesystem_and_path_or_paths(url_or_urls, hdfs_driver='libhdfs3', storag
 
     fs = filesystem or FilesystemResolver(
         url_list[0], hdfs_driver=hdfs_driver, storage_options=storage_options).filesystem()
-    path_list = [get_dataset_path(url) for url in url_list]
+    path_list = [get_dataset_path(parsed_url) for parsed_url in parsed_url_list]
 
     if isinstance(url_or_urls, list):
         path_or_paths = path_list
