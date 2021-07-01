@@ -140,7 +140,7 @@ class FilesystemResolver(object):
             options = cls._get_kwargs_from_urls(self._dataset_url)
             update_storage_options(options, storage_options)
             self._filesystem = cls(**options)
-            self._filesystem_factory = lambda: cls(**options)   
+            self._filesystem_factory = lambda: cls(**options)
 
     def parsed_dataset_url(self):
         """
@@ -216,4 +216,3 @@ def normalize_dir_url(dataset_url):
     dataset_url = dataset_url[:-1] if dataset_url[-1] == '/' else dataset_url
     logger.debug('directory url: %s', dataset_url)
     return dataset_url
-
