@@ -83,8 +83,8 @@ class FilesystemResolver(object):
 
         elif self._parsed_dataset_url.scheme == 'file':
             # Case 2: definitely local
-            self._filesystem = pyarrow.localfs
-            self._filesystem_factory = lambda: pyarrow.localfs
+            self._filesystem = pyarrow.fs.LocalFileSystem
+            self._filesystem_factory = lambda: pyarrow.fs.LocalFileSystem
 
         elif self._parsed_dataset_url.scheme == 'hdfs':
 
