@@ -91,7 +91,7 @@ jobs:
           $RUN pip list
           $RUN mypy petastorm
           $RUN flake8 . --count --show-source --statistics
-          $RUN flake8 . --count --exit-zero --max-complexity=10 --statistics
+          $RUN flake8 . --count --exit-zero --max-complexity=20 --statistics
           $RUN pylint --rcfile=.pylintrc petastorm examples -f parseable -r n
           $RUN ulimit -c unlimited -S
           $RUN bash -c "cd /petastorm/docs/autodoc && pwd && make html"
