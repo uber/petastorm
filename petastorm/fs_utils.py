@@ -140,7 +140,7 @@ class FilesystemResolver(object):
             options = cls._get_kwargs_from_urls(self._dataset_url)
             update_storage_options(options, storage_options)
             self._filesystem = cls(**options)
-            self._filesystem_factory = lambda: cls(**options)
+            self._filesystem_factory = lambda: cls(**options)  # pylint: disable=unnecessary-lambda
 
     def parsed_dataset_url(self):
         """
