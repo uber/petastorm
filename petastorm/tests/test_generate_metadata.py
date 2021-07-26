@@ -12,7 +12,7 @@ from petastorm.tests.test_common import create_test_dataset, TestSchema
 
 ROWS_COUNT = 1000
 
-SyntheticDataset = namedtuple('synthetic_dataset', ['url', 'data', 'path'])
+SyntheticDataset = namedtuple('SyntheticDataset', ['url', 'data', 'path'])
 
 
 @pytest.fixture(scope="session")
