@@ -1,4 +1,3 @@
-# pylint: disable=bad-continuation
 # Disabling lint bad-continuation due to lint issues between python 2.7 and python 3.6
 
 #  Copyright (c) 2017-2018 Uber Technologies, Inc.

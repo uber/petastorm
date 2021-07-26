@@ -58,7 +58,7 @@ if __name__ == '__main__':
         new_process_runnable_file = sys.argv[1]
 
         with open(new_process_runnable_file, 'rb') as f:
-            func, args, kargs = dill.load(f)
+            func, args, kargs = dill.load(f)  # pylint: disable=unpacking-non-sequence
 
         # Don't need the pickle file with the runable. Cleanup.
         os.remove(new_process_runnable_file)
