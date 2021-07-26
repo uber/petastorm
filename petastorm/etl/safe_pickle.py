@@ -23,6 +23,8 @@ safe_modules = {
     "pyspark",
     "decimal",
     "builtins",
+    "copy_reg",
+    "__builtin__",
 }
 
 
