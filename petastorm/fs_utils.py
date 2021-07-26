@@ -16,7 +16,9 @@ import logging
 import fsspec
 import pyarrow
 import six
-from six.moves.urllib.parse import urlparse
+from six.moves.urllib.parse import urlparse, urlunparse
+from fsspec.core import strip_protocol
+from fsspec.utils import update_storage_options
 
 from petastorm.hdfs.namenode import HdfsNamenodeResolver, HdfsConnector
 
@@ -32,8 +34,8 @@ def get_dataset_path(parsed_url):
     if parsed_url.scheme.lower() in ['file', 'hdfs']:
         return parsed_url.path
 
-    # s3-style filesystems requires the form `bucket/path`
-    return parsed_url.netloc + parsed_url.path
+    _url = strip_protocol(urlunparse(parsed_url))
+    return _url
 
 
 class FilesystemResolver(object):
@@ -134,8 +136,11 @@ class FilesystemResolver(object):
 
             storage_options = storage_options or {}
             protocol = self._parsed_dataset_url.scheme
-            self._filesystem = fsspec.filesystem(protocol, **storage_options)
-            self._filesystem_factory = lambda: fsspec.filesystem(protocol, **storage_options)
+            cls = fsspec.get_filesystem_class(protocol)
+            options = cls._get_kwargs_from_urls(self._dataset_url)
+            update_storage_options(options, storage_options)
+            self._filesystem = cls(**options)
+            self._filesystem_factory = lambda: cls(**options)  # pylint: disable=unnecessary-lambda
 
     def parsed_dataset_url(self):
         """
