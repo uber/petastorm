@@ -50,9 +50,9 @@ class ArrowReaderWorkerResultsQueueReader(object):
 
                 # `to_pandas` works slower when called on the entire `data` rather directly on a chunk.
                 if result_table.column(0).num_chunks == 1:
-                    column_as_pandas = column.data.chunks[0].to_pandas()
+                    column_as_pandas = column.chunks[0].to_pandas()
                 else:
-                    column_as_pandas = column.data.to_pandas()
+                    column_as_pandas = column.to_pandas()
 
                 # pyarrow < 0.15.0 would always return a numpy array. Starting 0.15 we get pandas series, hence we
                 # convert it into numpy array
