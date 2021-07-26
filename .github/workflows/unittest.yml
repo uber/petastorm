@@ -26,38 +26,50 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        config: [config1, config2, config3, config4, config5]
+        config: [pyspark-2.4, tf-1.15, pyarrow-2.0, latest,  pyarrow-0.17.1, py39]
         include:
-        - config: config1
+        - config: pyspark-2.4
           PYARROW_VERSION: "2.0.0"
           NUMPY_VERSION: "1.19.1"
-          TF_VERSION: "1.15.0"
+          TF_VERSION: "1.15.5"
           PYSPARK_VERSION: "2.4.4"
           ARROW_PRE_0_15_IPC_FORMAT: 1
-        - config: config2
+          PY: "3.7"
+        - config: tf-1.15
           PYARROW_VERSION: "2.0.0"
           NUMPY_VERSION: "1.19.1"
-          TF_VERSION: "1.15.0"
+          TF_VERSION: "1.15.5"
           PYSPARK_VERSION: "3.0.0"
           ARROW_PRE_0_15_IPC_FORMAT: 0
-        - config: config3
+          PY: "3.7"
+        - config: pyarrow-2.0
           PYARROW_VERSION: "2.0.0"
           NUMPY_VERSION: "1.19.1"
-          TF_VERSION: "2.1.0"
+          TF_VERSION: "2.5.0"
           PYSPARK_VERSION: "3.0.0"
           ARROW_PRE_0_15_IPC_FORMAT: 0
-        - config: config4
+          PY: "3.7"
+        - config: latest
           PYARROW_VERSION: "3.0.0"
           NUMPY_VERSION: "1.20.1"
-          TF_VERSION: "2.1.0"
+          TF_VERSION: "2.5.0"
           PYSPARK_VERSION: "3.0.0"
           ARROW_PRE_0_15_IPC_FORMAT: "0"
-        - config: config5
+          PY: "3.7"
+        - config: pyarrow-0.17.1
           PYARROW_VERSION: "0.17.1"
           NUMPY_VERSION: "1.19.1"
-          TF_VERSION: "2.1.0"
+          TF_VERSION: "2.5.0"
           PYSPARK_VERSION: "3.0.0"
           ARROW_PRE_0_15_IPC_FORMAT: 0
+          PY: "3.7"
+        - config: py39
+          PYARROW_VERSION: "3.0.0"
+          NUMPY_VERSION: "1.20.1"
+          TF_VERSION: "2.5.0"
+          PYSPARK_VERSION: "3.0.0"
+          ARROW_PRE_0_15_IPC_FORMAT: "0"
+          PY: "3.9"
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -67,7 +79,7 @@ jobs:
       # Prepare
       - name: prepare
         run: |
-          export CI_IMAGE=selitvin/petastorm_ci_auto:ci-2020-07-01-00
+          export CI_IMAGE=selitvin/petastorm_ci_auto:ci-image-06-29-2021
           docker pull $CI_IMAGE
           docker images
           pip install -U codecov
@@ -80,11 +92,12 @@ jobs:
           export PYARROW_VERSION=${{matrix.PYARROW_VERSION}}
           export NUMPY_VERSION=${{matrix.NUMPY_VERSION}}
           export TF_VERSION=${{matrix.TF_VERSION}}
-          export PY="3.7"
+          export PY=${{matrix.PY}}
           export PYSPARK_VERSION=${{matrix.PYSPARK_VERSION}}
           export ARROW_PRE_0_15_IPC_FORMAT=${{matrix.ARROW_PRE_0_15_IPC_FORMAT}}
           export RUN="docker exec -e ARROW_PRE_0_15_IPC_FORMAT=$ARROW_PRE_0_15_IPC_FORMAT petastorm_ci bash /run_in_venv.sh ${PY}"
           export PYTEST="pytest --timeout=360 -v --color=yes --cov=./ --cov-report xml:coverage.xml"
+          $RUN pip install -U pip setuptools
           $RUN pip install -e /petastorm/[test,tf,torch,docs,opencv]
           $RUN pip install --upgrade numpy==$NUMPY_VERSION
           $RUN pip install -U pyarrow==${PYARROW_VERSION} tensorflow==${TF_VERSION} pyspark==${PYSPARK_VERSION}
