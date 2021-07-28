@@ -132,7 +132,6 @@ class ArrowReaderWorker(WorkerBase):
                 filesystem=self._filesystem,
                 validate_schema=False, filters=self._arrow_filters)
 
-
         piece = self._split_pieces[piece_index]
 
         # Create pyarrow file system
