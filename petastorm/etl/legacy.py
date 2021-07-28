@@ -16,6 +16,38 @@ import logging
 
 from six.moves import cPickle as pickle
 
+import io
+
+# List of packages which symbols are allowed to be loaded
+safe_modules = {
+    "petastorm",
+    "collections",
+    "numpy",
+    "pyspark",
+    "decimal",
+    "builtins",
+    "copy_reg",
+    "__builtin__",
+}
+
+
+class RestrictedUnpickler(pickle.Unpickler):
+
+    def find_class(self, module, name):
+        """Only allow safe classes from builtins"""
+        package_name = module.split(".")[0]
+        if package_name in safe_modules:
+            return super().find_class(module, name)
+        else:
+            # Forbid everything else
+            raise pickle.UnpicklingError("global '%s.%s' is forbidden" % (module, name))
+
+
+def restricted_loads(s):
+    """Helper function analogous to pickle.loads()"""
+    return RestrictedUnpickler(io.BytesIO(s)).load()
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -44,4 +76,4 @@ def depickle_legacy_package_name_compatible(pickled_string):
 
             pickled_string = modified_pickled_string
 
-    return pickle.loads(pickled_string)
+    return restricted_loads(pickled_string)
