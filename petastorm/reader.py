@@ -405,11 +405,6 @@ class Reader(object):
                                          validate_schema=False, metadata_nthreads=10,
                                          filters=filters)
 
-        if self.dataset.partitions is None:
-            # When read from parquet file list, the `dataset.partitions` will be None.
-            # But other petastorm code require at least an empty `ParquetPartitions` object.
-            self.dataset.partitions = pq.ParquetPartitions()
-
         stored_schema = infer_or_load_unischema(self.dataset)
 
         if isinstance(schema_fields, NGram):
@@ -597,8 +592,9 @@ class Reader(object):
                 raise ValueError('predicate parameter is expected to be derived from PredicateBase')
             predicate_fields = predicate.get_fields()
 
-            if set(predicate_fields) == dataset.partitions.partition_names:
-                assert len(dataset.partitions.partition_names) == 1, \
+            partition_names = dataset.partitions.partition_names if dataset.partitions else set()
+            if set(predicate_fields) == partition_names:
+                assert len(partition_names) == 1, \
                     'Datasets with only a single partition level supported at the moment'
 
                 filtered_row_group_indexes = []
