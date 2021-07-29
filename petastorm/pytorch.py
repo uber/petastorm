@@ -152,8 +152,9 @@ class DataLoader(LoaderBase):
 
         Note that the last returned batch could have less then ``batch_size`` samples.
 
-        NOTE: if you are using ``make_batch_reader``, this shuffling queue will be randomizing the order of the
-        entire batches and not changing the order of elements within a batch. This is likely not what you intend to do.
+        NOTE: ``make_batch_reader`` has it's own ``shuffle_row_groups`` argument. It randomizes order in
+        which parquet row-groups are loaded and has no effect on the order of rows within each row-group. To achieve
+        row-level shuffling you should set shuffling_queue_capacity to a non zero value.
 
         :param reader: petastorm Reader instance
         :param batch_size: the number of items to return per batch; factored into the len() of this reader
