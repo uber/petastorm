@@ -318,7 +318,7 @@ class Unischema(object):
         arrow_schema = meta.schema.to_arrow_schema()
         unischema_fields = []
 
-        for partition in parquet_dataset.partitions:
+        for partition in (parquet_dataset.partitions or []):
             if (pa.types.is_binary(partition.dictionary.type) and six.PY2) or \
                     (pa.types.is_string(partition.dictionary.type) and six.PY3):
                 numpy_dtype = np.str_

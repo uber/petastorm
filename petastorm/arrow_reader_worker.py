@@ -132,11 +132,6 @@ class ArrowReaderWorker(WorkerBase):
                 filesystem=self._filesystem,
                 validate_schema=False, filters=self._arrow_filters)
 
-        if self._dataset.partitions is None:
-            # When read from parquet file list, the `dataset.partitions` will be None.
-            # But other petastorm code require at least an empty `ParquetPartitions` object.
-            self._dataset.partitions = pq.ParquetPartitions()
-
         piece = self._split_pieces[piece_index]
 
         # Create pyarrow file system
@@ -288,7 +283,7 @@ class ArrowReaderWorker(WorkerBase):
         return pa.Table.from_pandas(result, preserve_index=False)
 
     def _read_with_shuffle_row_drop(self, piece, pq_file, column_names, shuffle_row_drop_partition):
-        partition_names = self._dataset.partitions.partition_names
+        partition_names = self._dataset.partitions.partition_names if self._dataset.partitions else set()
 
         # pyarrow would fail if we request a column names that the dataset is partitioned by
         table = piece.read(columns=column_names - partition_names, partitions=self._dataset.partitions)
