@@ -210,7 +210,8 @@ class PyDictReaderWorker(WorkerBase):
                              'are not valid schema names: ({})'.format(', '.join(invalid_column_names),
                                                                        ', '.join(all_schema_names)))
 
-        other_column_names = all_schema_names - predicate_column_names - self._dataset.partitions.partition_names
+        partition_names = self._dataset.partitions.partition_names if self._dataset.partitions else set()
+        other_column_names = all_schema_names - predicate_column_names - partition_names
 
         # Read columns needed for the predicate
         predicate_rows = self._read_with_shuffle_row_drop(piece, pq_file, predicate_column_names,

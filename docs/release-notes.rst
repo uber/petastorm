@@ -13,6 +13,7 @@ Release 0.11.2 (unreleased)
   `#691 <https://github.com/uber/petastorm/issues/691>`_ ):
   Enable extraction of storage_options from input url.
 - `PR 640 <https://github.com/uber/petastorm/pull/640>`_: Security fix for arbitrary code execution (affects depickling of Unischema loaded from petastorm datasets).
+- `PR 707 <https://github.com/uber/petastorm/pull/707>`_: Fix pyarrow 5.0 compatibility issue: do not override dataset's `partitions` attribute.
 
 
 Release 0.11.1
