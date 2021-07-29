@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        config: [pyspark-2.4, tf-1.15, pyarrow-2.0, pyarrow-4.0, latest,  pyarrow-0.17.1, py39]
+        config: [pyspark-2.4, tf-1.15, pyarrow-3.0, pyarrow-4.0, latest,  pyarrow-0.17.1, py39]
         include:
         - config: pyspark-2.4
           PYARROW_VERSION: "2.0.0"
