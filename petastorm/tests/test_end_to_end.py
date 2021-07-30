@@ -743,13 +743,13 @@ def test_rowgroup_selector_wrong_index_name(synthetic_dataset, reader_factory):
         reader_factory(synthetic_dataset.url, rowgroup_selector=SingleIndexSelector('WrongIndexName', ['some_value']))
 
 
-def test_materialize_dataset_hadoop_config(tmpdir_factory):
+def test_materialize_dataset_hadoop_config(tmpdir_factory, spark_test_ctx):
     """Test that using materialize_dataset does not alter the hadoop_config"""
 
     path = tmpdir_factory.mktemp('data').strpath
     tmp_url = "file://" + path
     # This test does not properly check if parquet.enable.summary-metadata is restored properly with pyspark < 2.4
-    spark = SparkSession.builder.getOrCreate()
+    spark = spark_test_ctx.spark
     hadoop_config = spark.sparkContext._jsc.hadoopConfiguration()
 
     parquet_metadata_level = "COMMON_ONLY"
@@ -775,26 +775,26 @@ def test_materialize_dataset_hadoop_config(tmpdir_factory):
     spark.stop()
 
 
-def test_materialize_with_summary_metadata(tmpdir_factory):
+def test_materialize_with_summary_metadata(tmpdir_factory, spark_test_ctx):
     """Verify _summary_metadata appears, when requested"""
     path = tmpdir_factory.mktemp('data').strpath
     tmp_url = "file://" + path
 
-    spark = SparkSession.builder.getOrCreate()
+    spark = spark_test_ctx.spark
     create_test_dataset(tmp_url, range(10), spark=spark, use_summary_metadata=True)
 
     assert os.path.exists(os.path.join(path, "_metadata"))
     spark.stop()
 
 
-def test_pass_in_pyarrow_filesystem_to_materialize_dataset(synthetic_dataset, tmpdir):
+def test_pass_in_pyarrow_filesystem_to_materialize_dataset(synthetic_dataset, tmpdir, spark_test_ctx):
     a_moved_path = tmpdir.join('moved').strpath
     copytree(synthetic_dataset.path, a_moved_path)
 
     local_fs = pyarrow.LocalFileSystem
     os.remove(a_moved_path + '/_common_metadata')
 
-    spark = SparkSession.builder.getOrCreate()
+    spark = spark_test_ctx.spark
 
     with materialize_dataset(spark, a_moved_path, TestSchema, filesystem_factory=local_fs):
         pass
