@@ -4,9 +4,15 @@
 Release notes
 =============
 
-Release 0.11.2 (unreleased)
+Release 0.11.3 (unreleased)
 ===========================
-- `PR ??? <https://github.com/uber/petastorm/pull/???>`_ (resolves issue
+
+
+Release 0.11.2
+===========================
+Thanks to our new contributor - Manjur Ansari!
+
+- `PR 696 <https://github.com/uber/petastorm/pull/696_ (resolves issue
   `#692 <https://github.com/uber/petastorm/issues/692>`_ ):
   Python 3.9 compatibility - use `Thread`'s `is_alive()` instead of `isAlive()`.
 - `PR 694 <https://github.com/uber/petastorm/pull/694>`_ (resolves issue
