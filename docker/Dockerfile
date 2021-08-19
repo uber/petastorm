@@ -43,7 +43,7 @@ RUN /petastorm_venv3.7/bin/pip3.7 install --no-cache scikit-build
 RUN /petastorm_venv3.7/bin/pip3.7 install --no-cache -e /petastorm/[test,tf,torch,docs,opencv] --only-binary pyarrow --only-binary opencv-python
 RUN /petastorm_venv3.7/bin/pip3.7 uninstall -y petastorm
 # To avoid some version incompatibilities, we pin these libraries to versions that known to work together
-RUN /petastorm_venv3.7/bin/pip3.7 install -U pyarrow==3.0.0 numpy==1.20.1 tensorflow==2.1.0 pyspark==3.0.0
+RUN /petastorm_venv3.7/bin/pip3.7 install -U pyarrow==3.0.0 numpy==1.19.1 tensorflow==2.1.0 pyspark==3.0.0
 
 # Otherwise we might have trouble with loading of libGL.so.1
 RUN /petastorm_venv3.7/bin/pip3.7 install opencv-python-headless
@@ -58,7 +58,7 @@ RUN /petastorm_venv3.9/bin/pip3.9 install --no-cache scikit-build
 RUN /petastorm_venv3.9/bin/pip3.9 install --no-cache -e /petastorm/[test,tf,torch,docs,opencv] --only-binary pyarrow --only-binary opencv-python
 RUN /petastorm_venv3.9/bin/pip3.9 uninstall -y petastorm
 # To avoid some version incompatibilities, we pin these libraries to versions that known to work together
-RUN /petastorm_venv3.9/bin/pip3.9 install -U pyarrow==3.0.0 numpy==1.20.1 tensorflow==2.5.0 pyspark==3.0.0
+RUN /petastorm_venv3.9/bin/pip3.9 install -U pyarrow==3.0.0 numpy==1.19.3 tensorflow==2.5.0 pyspark==3.0.0
 
 # Otherwise we might have trouble with loading of libGL.so.1
 RUN /petastorm_venv3.9/bin/pip3.9 install opencv-python-headless
