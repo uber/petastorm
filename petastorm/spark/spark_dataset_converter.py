@@ -33,6 +33,7 @@ from six.moves.urllib.parse import urlparse
 from petastorm import make_batch_reader
 from petastorm.fs_utils import (FilesystemResolver,
                                 get_filesystem_and_path_or_paths, normalize_dir_url)
+from fsspec.core import strip_protocol
 
 if LooseVersion(pyspark.__version__) < LooseVersion('3.0'):
     def vector_to_array(_1, _2='float32'):
