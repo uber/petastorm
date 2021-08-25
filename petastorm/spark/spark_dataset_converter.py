@@ -33,6 +33,7 @@ from six.moves.urllib.parse import urlparse
 from petastorm import make_batch_reader
 from petastorm.fs_utils import (FilesystemResolver,
                                 get_filesystem_and_path_or_paths, normalize_dir_url)
+from fsspec.core import strip_protocol
 
 if LooseVersion(pyspark.__version__) < LooseVersion('3.0'):
     def vector_to_array(_1, _2='float32'):
@@ -81,17 +82,18 @@ def _get_parent_cache_dir_url():
 def _default_delete_dir_handler(dataset_url):
     resolver = FilesystemResolver(dataset_url)
     fs = resolver.filesystem()
-    parsed = urlparse(dataset_url)
+    _dataset_url = strip_protocol(dataset_url)
+
     if isinstance(fs, LocalFileSystem):
         # pyarrow has a bug: LocalFileSystem.delete() is not implemented.
         # https://issues.apache.org/jira/browse/ARROW-7953
         # We can remove this branch once ARROW-7953 is fixed.
-        local_path = parsed.path
+        local_path = _dataset_url
         if os.path.exists(local_path):
             shutil.rmtree(local_path, ignore_errors=False)
     else:
-        if fs.exists(parsed.path):
-            fs.delete(parsed.path, recursive=True)
+        if fs.exists(_dataset_url):
+            fs.delete(_dataset_url, recursive=True)
 
 
 _delete_dir_handler = _default_delete_dir_handler
