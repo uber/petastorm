@@ -4,15 +4,20 @@
 Release notes
 =============
 
-Release 0.11.3 (unreleased)
+Release 0.11.4 (unreleased)
 ===========================
 
+
+Release 0.11.3
+===========================
+- `PR 717 <https://github.com/uber/petastorm/pull/717>`_ (resolves issue `#696 <https://github.com/uber/petastorm/pull/696`_): use ``fsspec``'s
+  ``strip_protocol`` to properly parse urls in ``_default_delete_dir_handler``.
 
 Release 0.11.2
 ===========================
 Thanks to our new contributor - Manjur Ansari!
 
-- `PR 696 <https://github.com/uber/petastorm/pull/696_ (resolves issue
+- `PR 696 <https://github.com/uber/petastorm/pull/696`_ (resolves issue
   `#692 <https://github.com/uber/petastorm/issues/692>`_ ):
   Python 3.9 compatibility - use `Thread`'s `is_alive()` instead of `isAlive()`.
 - `PR 694 <https://github.com/uber/petastorm/pull/694>`_ (resolves issue
