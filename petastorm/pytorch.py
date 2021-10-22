@@ -160,7 +160,7 @@ class DataLoader(LoaderBase):
         :param batch_size: the number of items to return per batch; factored into the len() of this reader
         :param collate_fn: an optional callable to merge a list of samples to form a mini-batch.
         :param shuffling_queue_capacity: Queue capacity is passed to the underlying :class:`tf.RandomShuffleQueue`
-          instance. If set to 0, no suffling will be done.
+          instance. If set to 0, no shuffling will be done.
         """
         super(DataLoader, self).__init__()
         self.reader = reader
