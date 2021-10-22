@@ -269,7 +269,7 @@ class SparkDatasetConverter(object):
             Defaults value ``None``, which means using the default value from
             `petastorm.make_batch_reader()`. We can autotune it in the future.
         :param shuffling_queue_capacity: Queue capacity is passed to the underlying
-            :class:`tf.RandomShuffleQueue` instance. If set to 0, no suffling will be done.
+            :class:`tf.RandomShuffleQueue` instance. If set to 0, no shuffling will be done.
         :param data_loader_fn: A function (or class) that generates a
             `torch.utils.data.DataLoader` object. The default value of ``None`` uses
             `petastorm.pytorch.DataLoader`.
@@ -376,7 +376,7 @@ class TorchDatasetContextManager(object):
             ``None`` value will denotes auto tuned best value for batch size.
         :param petastorm_reader_kwargs: other arguments for petastorm reader
         :param shuffling_queue_capacity: Queue capacity is passed to the underlying
-            :class:`tf.RandomShuffleQueue` instance. If set to 0, no suffling will be done.
+            :class:`tf.RandomShuffleQueue` instance. If set to 0, no shuffling will be done.
         :param data_loader_fn: function to generate the PyTorch DataLoader.
 
         See `SparkDatasetConverter.make_torch_dataloader()`  for the definitions
