@@ -293,7 +293,7 @@ def tf_tensors(reader, shuffling_queue_capacity=0, min_after_dequeue=0):
 
     :param reader: An instance of petastorm.Reader object used as the data source
     :param shuffling_queue_capacity: Queue capacity is passed to the underlying :class:`tf.RandomShuffleQueue`
-        instance. If set to 0, no suffling will be done.
+        instance. If set to 0, no shuffling will be done.
     :param min_after_dequeue: If ``shuffling_queue_capacity > 0``, this value is passed to the underlying
         :class:`tf.RandomShuffleQueue`.
     :return: If no ngram reading is used, the function will return a named tuple with tensors that are populated
