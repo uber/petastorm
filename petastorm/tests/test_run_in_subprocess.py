@@ -31,10 +31,10 @@ class RunInSubprocessTest(unittest.TestCase):
 
     def test_run_in_subprocess(self):
         # Serialization of a built in function
-        self.assertEquals(run_in_subprocess(builtin_func), builtin_func())
+        self.assertEqual(run_in_subprocess(builtin_func), builtin_func())
 
         # Arg passing
-        self.assertEquals(run_in_subprocess(multiply, 2, 3), 6)
+        self.assertEqual(run_in_subprocess(multiply, 2, 3), 6)
 
     def test_partial_application(self):
         unischema = Unischema('foo', [])
