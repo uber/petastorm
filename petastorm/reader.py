@@ -58,7 +58,7 @@ def normalize_dataset_url_or_urls(dataset_url_or_urls):
         return normalize_dir_url(dataset_url_or_urls)
 
 
-def make_reader(dataset_url_or_urls,
+def make_reader(dataset_url,
                 schema_fields=None,
                 reader_pool_type='thread', workers_count=10, pyarrow_serialize=False, results_queue_size=50,
                 shuffle_row_groups=True, shuffle_row_drop_partitions=1,
@@ -82,7 +82,7 @@ def make_reader(dataset_url_or_urls,
     See :func:`~petastorm.make_batch_reader` to read from a Parquet store that was not generated using
     :func:`~petastorm.etl.dataset_metadata.materialize_dataset`.
 
-    :param dataset_url_or_urls: a url to a parquet directory or a url list (with the same scheme) to parquet files.
+    :param dataset_url: a url to a parquet directory or a url list (with the same scheme) to parquet files.
         e.g. ``'hdfs://some_hdfs_cluster/user/yevgeni/parquet8'``, or ``'file:///tmp/mydataset'``,
         or ``'s3://bucket/mydataset'``, or ``'gs://bucket/mydataset'``,
         or ``[file:///tmp/mydataset/00000.parquet, file:///tmp/mydataset/00001.parquet]``.
@@ -133,7 +133,7 @@ def make_reader(dataset_url_or_urls,
         other filesystem configs if it's provided.
     :return: A :class:`Reader` object
     """
-    dataset_url_or_urls = normalize_dataset_url_or_urls(dataset_url_or_urls)
+    dataset_url_or_urls = normalize_dataset_url_or_urls(dataset_url)
 
     filesystem, dataset_path = get_filesystem_and_path_or_paths(
         dataset_url_or_urls,
