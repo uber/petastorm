@@ -129,7 +129,8 @@ class HdfsNamenodeResolverTest(unittest.TestCase):
         # Test multiple undefined NNs, which will also throw HdfsConnectError
         nns = 'nn1,nn2,nn3,nn4,nn5,nn6,nn7,nn8'
         self._hadoop_configuration.set('dfs.ha.namenodes.{}'.format(HC.WARP_TURTLE), nns)
-        with self.assertRaisesRegex(RuntimeError, 'Failed to get property "dfs.namenode.rpc-address.WARP-TURTLE.nn1" from'):
+        with self.assertRaisesRegex(RuntimeError,
+                                    'Failed to get property "dfs.namenode.rpc-address.WARP-TURTLE.nn1" from'):
             self.suj.resolve_hdfs_name_service(HC.WARP_TURTLE)
 
 
