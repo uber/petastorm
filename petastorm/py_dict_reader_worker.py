@@ -15,6 +15,7 @@ from __future__ import division
 
 import hashlib
 import threading
+from collections.abc import Iterable
 
 import numpy as np
 from pyarrow import parquet as pq
@@ -157,7 +158,10 @@ class PyDictReaderWorker(WorkerBase):
             #  2. Dataset path is hashed, to make sure we don't create too long keys, which maybe incompatible with
             #     some cache implementations
             #  3. Still leave relative path and the piece_index in plain text to make it easier to debug
-            cache_key = '{}:{}:{}'.format(hashlib.md5(self._dataset_path.encode('utf-8')).hexdigest(),
+            # self._dataset_path could be a list of urls or a string.
+            _dataset_path_for_hash = "_".join(self._dataset_path) if isinstance(self._dataset_path,
+                                                                                Iterable) else self._dataset_path
+            cache_key = '{}:{}:{}'.format(hashlib.md5(_dataset_path_for_hash.encode('utf-8')).hexdigest(),
                                           piece.path, piece_index)
             all_cols = self._local_cache.get(cache_key,
                                              lambda: self._load_rows(parquet_file, piece, shuffle_row_drop_partition))

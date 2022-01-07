@@ -58,7 +58,7 @@ def normalize_dataset_url_or_urls(dataset_url_or_urls):
         return normalize_dir_url(dataset_url_or_urls)
 
 
-def make_reader(dataset_url,
+def make_reader(dataset_url_or_urls,
                 schema_fields=None,
                 reader_pool_type='thread', workers_count=10, pyarrow_serialize=False, results_queue_size=50,
                 shuffle_row_groups=True, shuffle_row_drop_partitions=1,
@@ -82,9 +82,10 @@ def make_reader(dataset_url,
     See :func:`~petastorm.make_batch_reader` to read from a Parquet store that was not generated using
     :func:`~petastorm.etl.dataset_metadata.materialize_dataset`.
 
-    :param dataset_url: an filepath or a url to a parquet directory,
+    :param dataset_url_or_urls: a url to a parquet directory or a url list (with the same scheme) to parquet files.
         e.g. ``'hdfs://some_hdfs_cluster/user/yevgeni/parquet8'``, or ``'file:///tmp/mydataset'``,
-        or ``'s3://bucket/mydataset'``, or ``'gs://bucket/mydataset'``.
+        or ``'s3://bucket/mydataset'``, or ``'gs://bucket/mydataset'``,
+        or ``[file:///tmp/mydataset/00000.parquet, file:///tmp/mydataset/00001.parquet]``.
     :param schema_fields: Can be: a list of unischema fields and/or regex pattern strings; ``None`` to read all fields;
             an NGram object, then it will return an NGram of the specified fields.
     :param reader_pool_type: A string denoting the reader pool type. Should be one of ['thread', 'process', 'dummy']
@@ -132,10 +133,10 @@ def make_reader(dataset_url,
         other filesystem configs if it's provided.
     :return: A :class:`Reader` object
     """
-    dataset_url = normalize_dir_url(dataset_url)
+    dataset_url_or_urls = normalize_dataset_url_or_urls(dataset_url_or_urls)
 
     filesystem, dataset_path = get_filesystem_and_path_or_paths(
-        dataset_url,
+        dataset_url_or_urls,
         hdfs_driver,
         storage_options=storage_options,
         filesystem=filesystem
@@ -149,7 +150,7 @@ def make_reader(dataset_url,
         raise ValueError('Unknown cache_type: {}'.format(cache_type))
 
     try:
-        dataset_metadata.get_schema_from_dataset_url(dataset_url, hdfs_driver=hdfs_driver,
+        dataset_metadata.get_schema_from_dataset_url(dataset_url_or_urls, hdfs_driver=hdfs_driver,
                                                      storage_options=storage_options, filesystem=filesystem)
     except PetastormMetadataError:
         warnings.warn('Currently make_reader supports reading only Petastorm datasets. '

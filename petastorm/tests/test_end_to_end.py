@@ -12,20 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import glob
-import tempfile
 import operator
 import os
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from shutil import rmtree, copytree
-from six.moves.urllib.parse import urlparse
+from unittest import mock
 
 import numpy as np
 import pyarrow.hdfs
 import pytest
 from pyspark.sql import SparkSession
 from pyspark.sql.types import LongType, ShortType, StringType
-
-from unittest import mock
+from six.moves.urllib.parse import urlparse
 
 from petastorm import make_reader, make_batch_reader, TransformSpec
 from petastorm.codecs import ScalarCodec, CompressedImageCodec
@@ -118,8 +117,12 @@ def test_simple_read_from_parquet_file(synthetic_dataset, reader_factory):
     path = synthetic_dataset.url[len('file://'):]
     one_parquet_file = glob.glob(f'{path}/**/*.parquet')[0]
     with reader_factory(f"file://{one_parquet_file}") as reader:
-        all_data = list(reader)
-        assert len(all_data) > 0
+        all_data_from_file = list(reader)
+    assert len(all_data_from_file) > 0
+
+    with reader_factory([f"file://{one_parquet_file}", f"file://{one_parquet_file}"]) as reader:
+        all_data_from_file_twice = list(reader)
+    assert len(all_data_from_file) < len(all_data_from_file_twice)
 
 
 @pytest.mark.parametrize('reader_factory', [

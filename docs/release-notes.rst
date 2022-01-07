@@ -6,6 +6,7 @@ Release notes
 
 Release 0.11.4 (unreleased)
 ===========================
+- `PR 731 <https://github.com/uber/petastorm/pull/731>`_ (resolves `PR 728 <https://github.com/uber/petastorm/issues/728>`_): Support passing multiple parquet dataset urls to make_reader.
 
 
 Release 0.11.3
