@@ -149,7 +149,7 @@ class namenode_failover(object):
     due to StandbyException, up to a maximum retry.
     """
     # Allow for 2 failovers to a different namenode (i.e., if 2 NNs, try back to the original)
-    MAX_FAILOVER_ATTEMPTS = 2
+    MAX_FAILOVER_ATTEMPTS = 3
 
     def __init__(self, func):
         # limit wrapper attributes updated to just name and doc string
@@ -240,8 +240,6 @@ class HAHdfsClient(HadoopFileSystem):
 
 class HdfsConnector(object):
     """ HDFS connector class where failover logic is implemented.  Facilitates testing. """
-    # Refactored constant
-    MAX_NAMENODES = 2
 
     @classmethod
     def hdfs_connect_namenode(cls, url, driver='libhdfs3', user=None):
@@ -283,9 +281,7 @@ class HdfsConnector(object):
         :param user: String denoting username when connecting to HDFS. None implies login user.
         :return: the wrapped HDFS connection object
         """
-        assert list_of_namenodes is not None and len(list_of_namenodes) <= cls.MAX_NAMENODES, \
-            "Must supply a list of namenodes, but HDFS only supports up to {} namenode URLs" \
-            .format(cls.MAX_NAMENODES)
+        assert list_of_namenodes is not None, "Must supply a list of namenodes"
         return HAHdfsClient(cls, list_of_namenodes, user=user)
 
     @classmethod
@@ -302,7 +298,7 @@ class HdfsConnector(object):
         """
         nn_len = len(list_of_namenodes)
         if nn_len > 0:
-            for i in range(1, cls.MAX_NAMENODES + 1):
+            for i in range(1, nn_len + 1):
                 # Use a modulo mechanism to hit the "next" name node, as opposed to always
                 # starting from the first entry in the list
                 idx = (index_of_nn + i) % nn_len
