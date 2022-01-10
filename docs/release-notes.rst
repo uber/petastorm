@@ -7,6 +7,7 @@ Release notes
 Release 0.11.4 (unreleased)
 ===========================
 - `PR 730 <https://github.com/uber/petastorm/pull/730>`_ (resolves `PR 724 <https://github.com/uber/petastorm/issues/724>`_): Hadoop 3 support: allow more than 2 nodenames in hadoop configuration file.
+- `PR 731 <https://github.com/uber/petastorm/pull/731>`_ (resolves `PR 728 <https://github.com/uber/petastorm/issues/728>`_): Support passing multiple parquet dataset urls to make_reader.
 - `PR 732 <https://github.com/uber/petastorm/pull/732>`_ (resolves `PR 585 <https://github.com/uber/petastorm/issues/585>`_): Restructure process_pool implementation code in a way that resolves ``RuntimeWarning: 'petastorm.workers_pool.exec_in_new_process' found in sys.modules after
   import of package 'petastorm.workers_pool', but prior to execution of 'petastorm.workers_pool.exec_in_new_process'; this may result in unpredictable behaviou when using process pool`` warning.
 
