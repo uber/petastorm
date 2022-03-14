@@ -4,7 +4,11 @@
 Release notes
 =============
 
-Release 0.11.4 (unreleased)
+Release 0.11.5 (unreleased)
+===========================
+
+
+Release 0.11.4
 ===========================
 - `PR 730 <https://github.com/uber/petastorm/pull/730>`_ (resolves `PR 724 <https://github.com/uber/petastorm/issues/724>`_): Hadoop 3 support: allow more than 2 nodenames in hadoop configuration file.
 - `PR 731 <https://github.com/uber/petastorm/pull/731>`_ (resolves `PR 728 <https://github.com/uber/petastorm/issues/728>`_): Support passing multiple parquet dataset urls to make_reader.
