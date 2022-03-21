@@ -131,10 +131,10 @@ def run(data_dir):
     converter_test = make_spark_converter(df_test)
 
     def train_and_evaluate(_=None):
-        with converter_train.make_torch_dataloader() as loader:
+        with converter_train.make_torch_dataloader(shard_seed=0) as loader:
             model = train(loader)
 
-        with converter_test.make_torch_dataloader(num_epochs=1) as loader:
+        with converter_test.make_torch_dataloader(num_epochs=1, shard_seed=0) as loader:
             accuracy = test(model, loader)
         return accuracy
 
