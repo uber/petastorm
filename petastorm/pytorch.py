@@ -16,7 +16,9 @@ import collections
 import decimal
 # Must import pyarrow before torch. See: https://github.com/uber/petastorm/blob/master/docs/troubleshoot.rst
 import re
+import threading
 import logging
+from queue import Queue
 import numpy as np
 from six import PY2
 from torch.utils.data.dataloader import default_collate
@@ -100,11 +102,36 @@ beginning.If you do need to terminate early and restart from beginning, please r
 loader."
 
 
+class BackgroundIterator(threading.Thread):
+    """Prefetch iterator results."""
+    def __init__(self, iterator, prefetch=1000):
+        threading.Thread.__init__(self)
+        self.queue = Queue(prefetch)
+        self.iterator = iterator
+        self.daemon = True
+        self.start()
+
+    def run(self):
+        for item in self.iterator:
+            self.queue.put(item)
+        self.queue.put(None)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        next_item = self.queue.get()
+        if next_item is None:
+            raise StopIteration
+        return next_item
+
+
 class LoaderBase(object):
 
     def __init__(self):
         self._in_iter = None
         self._error = None
+        self._max_prefetch = 1
 
     def __iter__(self):
         if self._error is not None:
@@ -118,7 +145,10 @@ class LoaderBase(object):
         self._in_iter = True
 
         try:
-            for batch in self._iter_impl():
+            iterator = self._iter_impl()
+            if self._max_prefetch > 1:
+                iterator = BackgroundIterator(iterator, prefetch=self.max_prefetch)
+            for batch in iterator:
                 yield batch
         except Exception as e:
             self._error = e
@@ -264,7 +294,8 @@ class BatchedDataLoader(LoaderBase):
 
     def __init__(self, reader, batch_size=1,
                  transform_fn=None,
-                 shuffling_queue_capacity=0):
+                 shuffling_queue_capacity=0,
+                 batch_max_prefetch=None):
         """
         Initializes a data loader object.
 
@@ -287,6 +318,9 @@ class BatchedDataLoader(LoaderBase):
         :param transform_fn: an optional callable to convert batches from the reader to PyTorch tensors
         :param shuffling_queue_capacity: Queue capacity is passed to the underlying :class:`tf.RandomShuffleQueue`
           instance. If set to 0, no shuffling will be done.
+        :param batch_max_prefetch: an optional int indicating maximum number of batches to fetch in
+          advance. This is specially useful when training models in order to improve model data
+          throughput.
         """
         super(BatchedDataLoader, self).__init__()
         self.reader = reader
@@ -297,6 +331,11 @@ class BatchedDataLoader(LoaderBase):
         self._batch_acc = []
         self.shuffling_queue_capacity = shuffling_queue_capacity
         self._in_iter = None
+
+        # fetch batches in advance?
+        if batch_max_prefetch is not None:
+            assert batch_max_prefetch > 0, "if set, batch_max_prefetch must be greater or equal to 1"
+            self._max_prefetch = batch_max_prefetch
 
     def _iter_impl(self):
         """
