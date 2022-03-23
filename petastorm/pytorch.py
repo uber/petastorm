@@ -103,7 +103,9 @@ loader."
 
 
 class BackgroundIterator(threading.Thread):
-    """Prefetch iterator results."""
+    """Prefetch iterator results. A thread iterates the original iterator and
+    populates a queue. Iterating over this background iterator just consumes the underlying
+    queue until no other result is available."""
     def __init__(self, iterator, prefetch=1000):
         threading.Thread.__init__(self)
         self.queue = Queue(prefetch)
