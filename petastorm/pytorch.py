@@ -106,17 +106,21 @@ class BackgroundIterator(threading.Thread):
     """Prefetch iterator results. A thread iterates the original iterator and
     populates a queue. Iterating over this background iterator just consumes the underlying
     queue until no other result is available."""
-    def __init__(self, iterator, prefetch=1000):
+    def __init__(self, iterator, queue_size=1000):
         threading.Thread.__init__(self)
-        self.queue = Queue(prefetch)
+        self.name = "background_iterator"
+        self.queue = Queue(queue_size)
         self.iterator = iterator
-        self.daemon = True
+        self.stop = threading.Event()
         self.start()
 
     def run(self):
-        for item in self.iterator:
-            self.queue.put(item)
-        self.queue.put(None)
+        while not self.stop.isSet():
+            for item in self.iterator:
+                self.queue.put(item)
+            self.queue.put(None)
+            self.stop.set()
+        return
 
     def __iter__(self):
         return self
@@ -133,7 +137,7 @@ class LoaderBase(object):
     def __init__(self):
         self._in_iter = None
         self._error = None
-        self._max_prefetch = 1
+        self._queue_size = 1
 
     def __iter__(self):
         if self._error is not None:
@@ -146,10 +150,10 @@ class LoaderBase(object):
             logger.warning('Start a new pass of Petastorm DataLoader, reset underlying Petastorm reader to position 0.')
         self._in_iter = True
 
+        iterator = self._iter_impl()
         try:
-            iterator = self._iter_impl()
-            if self._max_prefetch > 1:
-                iterator = BackgroundIterator(iterator, prefetch=self.max_prefetch)
+            if self._queue_size > 1:
+                iterator = BackgroundIterator(iterator, queue_size=self._queue_size)
             for batch in iterator:
                 yield batch
         except Exception as e:
@@ -158,6 +162,8 @@ class LoaderBase(object):
             raise
         finally:
             self._in_iter = False
+            if isinstance(iterator, BackgroundIterator):
+                iterator.stop.set()
 
 
 class DataLoader(LoaderBase):
@@ -297,7 +303,7 @@ class BatchedDataLoader(LoaderBase):
     def __init__(self, reader, batch_size=1,
                  transform_fn=None,
                  shuffling_queue_capacity=0,
-                 batch_max_prefetch=None):
+                 batch_queue_size=None):
         """
         Initializes a data loader object.
 
@@ -320,9 +326,8 @@ class BatchedDataLoader(LoaderBase):
         :param transform_fn: an optional callable to convert batches from the reader to PyTorch tensors
         :param shuffling_queue_capacity: Queue capacity is passed to the underlying :class:`tf.RandomShuffleQueue`
           instance. If set to 0, no shuffling will be done.
-        :param batch_max_prefetch: an optional int indicating maximum number of batches to fetch in
-          advance. This is specially useful when training models in order to improve model data
-          throughput.
+        :param batch_queue_size: an optional int indicating maximum number of batches to fetch in
+        parallel. This might be useful when training models in order to improve model data throughput.
         """
         super(BatchedDataLoader, self).__init__()
         self.reader = reader
@@ -334,10 +339,10 @@ class BatchedDataLoader(LoaderBase):
         self.shuffling_queue_capacity = shuffling_queue_capacity
         self._in_iter = None
 
-        # fetch batches in advance?
-        if batch_max_prefetch is not None:
-            assert batch_max_prefetch > 0, "if set, batch_max_prefetch must be greater or equal to 1"
-            self._max_prefetch = batch_max_prefetch
+        # fetch batches in parallel?
+        if batch_queue_size is not None:
+            assert batch_queue_size > 0, "if set, batch_queue_size must be greater or equal to 1"
+            self._queue_size = batch_queue_size
 
     def _iter_impl(self):
         """
