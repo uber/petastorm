@@ -14,6 +14,7 @@ Release 0.11.4
 - `PR 731 <https://github.com/uber/petastorm/pull/731>`_ (resolves `PR 728 <https://github.com/uber/petastorm/issues/728>`_): Support passing multiple parquet dataset urls to make_reader.
 - `PR 732 <https://github.com/uber/petastorm/pull/732>`_ (resolves `PR 585 <https://github.com/uber/petastorm/issues/585>`_): Restructure process_pool implementation code in a way that resolves ``RuntimeWarning: 'petastorm.workers_pool.exec_in_new_process' found in sys.modules after
   import of package 'petastorm.workers_pool', but prior to execution of 'petastorm.workers_pool.exec_in_new_process'; this may result in unpredictable behaviou when using process pool`` warning.
+- `PR 737 <https://github.com/uber/petastorm/pull/737>`_: Use highest available pickle protocol for internal serialization.
 
 
 Release 0.11.3
