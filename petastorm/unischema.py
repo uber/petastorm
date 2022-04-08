@@ -16,6 +16,7 @@
 in several different python libraries. Currently supported are pyspark, tensorflow, and numpy.
 """
 import copy
+import decimal
 import re
 import sys
 import warnings
@@ -280,6 +281,11 @@ class Unischema(object):
 
         return sql_types.StructType(schema_entries)
 
+    def as_pyarrow_schema(self) -> pa.Schema:
+        """Converts a Unischema into a pyarrow schema"""
+        fields = [(field.name, _arrow_from_numpy_type(field)) for field in self._fields.values()]
+        return pa.schema(fields)
+
     def make_namedtuple(self, **kargs):
         """Returns schema as a namedtuple type intialized with arguments passed to this method.
 
@@ -341,7 +347,7 @@ class Unischema(object):
                     continue
                 field_shape = (None,)
             try:
-                np_type = _numpy_and_codec_from_arrow_type(field_type)
+                np_type = _numpy_from_arrow_type(field_type)
             except ValueError:
                 if omit_unsupported_fields:
                     warnings.warn('Column %r has an unsupported field %r. Ignoring...'
@@ -464,39 +470,50 @@ def match_unischema_fields(schema, field_regex):
         return []
 
 
-def _numpy_and_codec_from_arrow_type(field_type):
-    from pyarrow import types
-
-    if types.is_int8(field_type):
+def _numpy_from_arrow_type(field_type):
+    if pa.types.is_int8(field_type):
         np_type = np.int8
-    elif types.is_uint8(field_type):
+    elif pa.types.is_uint8(field_type):
         np_type = np.uint8
-    elif types.is_int16(field_type):
+    elif pa.types.is_int16(field_type):
         np_type = np.int16
-    elif types.is_int32(field_type):
+    elif pa.types.is_int32(field_type):
         np_type = np.int32
-    elif types.is_int64(field_type):
+    elif pa.types.is_int64(field_type):
         np_type = np.int64
-    elif types.is_string(field_type):
+    elif pa.types.is_string(field_type):
         np_type = np.unicode_
-    elif types.is_boolean(field_type):
+    elif pa.types.is_boolean(field_type):
         np_type = np.bool_
-    elif types.is_float32(field_type):
+    elif pa.types.is_float32(field_type):
         np_type = np.float32
-    elif types.is_float64(field_type):
+    elif pa.types.is_float64(field_type):
         np_type = np.float64
-    elif types.is_decimal(field_type):
+    elif pa.types.is_decimal(field_type):
         np_type = Decimal
-    elif types.is_binary(field_type):
+    elif pa.types.is_binary(field_type):
         np_type = np.string_
-    elif types.is_fixed_size_binary(field_type):
+    elif pa.types.is_fixed_size_binary(field_type):
         np_type = np.string_
-    elif types.is_date(field_type):
+    elif pa.types.is_date(field_type):
         np_type = np.datetime64
-    elif types.is_timestamp(field_type):
+    elif pa.types.is_timestamp(field_type):
         np_type = np.datetime64
-    elif types.is_list(field_type):
-        np_type = _numpy_and_codec_from_arrow_type(field_type.value_type)
+    elif pa.types.is_list(field_type):
+        np_type = _numpy_from_arrow_type(field_type.value_type)
     else:
         raise ValueError('Cannot auto-create unischema due to unsupported column type {}'.format(field_type))
     return np_type
+
+
+def _arrow_from_numpy_type(field: UnischemaField) -> pa.DataType:
+    if field.numpy_dtype == decimal.Decimal:
+        raise NotImplementedError(
+            "Can not convert a decimal type to pyarrow's pa.decimal128 since "
+            "precision and scale are not stored in unischema.")
+    else:
+        if field.shape != ():
+            int_list_size = -1 if any(d is None for d in field.shape) else np.prod(field.shape)
+            return pa.list_(pa.from_numpy_dtype(field.numpy_dtype), int_list_size)
+        else:
+            return pa.from_numpy_dtype(field.numpy_dtype)

@@ -209,6 +209,33 @@ def test_transform_spec_support_return_tensor(scalar_dataset, reader_factory):
                (3, 4, 5) == sample['tensor_col_2'].shape[1:]
 
 
+@pytest.mark.parametrize('null_column_dtype', [np.float64, np.unicode_])
+@pytest.mark.parametrize('reader_factory', _D)
+def test_transform_spec_returns_all_none_values(scalar_dataset, null_column_dtype, reader_factory):
+    def fill_id_with_nones(x):
+        return pd.DataFrame({'id': [None] * len(x)})
+
+    edit_fields = [('id', null_column_dtype, (None,), True)]
+
+    with reader_factory(scalar_dataset.url, schema_fields=["id"],
+                        transform_spec=TransformSpec(fill_id_with_nones, edit_fields=edit_fields)) as reader:
+        sample = next(reader)
+        assert sample.id.dtype.type == null_column_dtype
+
+
+@pytest.mark.parametrize('reader_factory', _D)
+def test_transform_spec_returns_all_none_values_in_a_list_field(scalar_dataset, reader_factory):
+    def fill_id_with_nones(x):
+        return pd.DataFrame({'int_fixed_size_list': [[None for _ in range(3)]] * len(x)})
+
+    with reader_factory(scalar_dataset.url, schema_fields=["int_fixed_size_list"],
+                        transform_spec=TransformSpec(fill_id_with_nones)) as reader:
+        sample = next(reader)
+        # The type will be float as an numpy converts integer array that has null
+        # values into a float64 array with nan as nulls
+        assert sample.int_fixed_size_list.dtype.type == np.float64
+
+
 @pytest.mark.parametrize('reader_factory', _D)
 @pytest.mark.parametrize('partition_by', [['string'], ['id'], ['string', 'id']])
 def test_string_partition(reader_factory, tmpdir, partition_by):

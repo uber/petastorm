@@ -7,6 +7,7 @@ Release notes
 
 Release 0.12.1 (unreleased)
 ===========================
+- `PR 730 <https://github.com/uber/petastorm/pull/730>`_ (resolves `PR 744 <https://github.com/uber/petastorm/issues/744>`_): Fix column type returned by a ``make_batch_reader`` when TransformSpec function sets all column values to ``None``.
 
 
 Release 0.12.0
@@ -33,6 +34,7 @@ Deprecated features
 
 Release 0.11.5
 ===========================
+<<<<<<< HEAD
 - `PR 746 <https://github.com/uber/petastorm/pull/746>`_: Import ABC from collections.abc for Python 3.10 compatibility.
 - `PR 757 <https://github.com/uber/petastorm/pull/757>`_: Replace process_iter by pid_exists.
 - `PR 762 <https://github.com/uber/petastorm/pull/762>`_: PyTorch: improve memory-efficiency in batched non-shuffle buffer.

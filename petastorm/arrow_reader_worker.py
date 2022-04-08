@@ -219,7 +219,10 @@ class ArrowReaderWorker(WorkerBase):
                     transformed_result[field.name] = transformed_result[field.name] \
                         .map(lambda x, f=field: self._check_shape_and_ravel(x, f))
 
-            result = pa.Table.from_pandas(transformed_result, preserve_index=False)
+            # Explicitly specify schema since in a case when all column values are None, pyarrow
+            # would not be able to properly detect the type
+            result = pa.Table.from_pandas(transformed_result, preserve_index=False,
+                                          schema=self._transformed_schema.as_pyarrow_schema())
 
         return result
 

@@ -15,6 +15,7 @@
 from __future__ import division
 
 from decimal import Decimal
+from typing import Callable
 
 import numpy as np
 import pyarrow as pa
@@ -496,3 +497,40 @@ def test_fullmatch():
     assert not _fullmatch('abc', 'xyz')
     assert not _fullmatch('abc', 'abcx')
     assert not _fullmatch('abc', 'xabc')
+
+
+@pytest.mark.parametrize("np_type, pa_is_type_func", [[np.int32, pa.types.is_int32], [np.float32, pa.types.is_float32]])
+def test_as_parrow_schema(np_type, pa_is_type_func: Callable):
+    """Try using 'as_spark_schema' function"""
+    schema = Unischema('TestSchema', [
+        UnischemaField('scalar', np_type, ()),
+        UnischemaField('list_var', np_type, (None,)),
+        UnischemaField('list_fixed', np_type, (42,)),
+        UnischemaField('matrix_var', np_type, (None, 42,)),
+        UnischemaField('matrix_fixed', np_type, (42, 43,)),
+    ])
+
+    pa_schema = schema.as_pyarrow_schema()
+    assert not pa.types.is_list(pa_schema.field("scalar").type)
+    assert pa.types.is_list(pa_schema.field("list_var").type)
+    assert pa.types.is_list(pa_schema.field("matrix_var").type)
+    assert pa.types.is_fixed_size_list(pa_schema.field("list_fixed").type)
+    assert pa.types.is_fixed_size_list(pa_schema.field("matrix_fixed").type)
+
+    assert pa_schema.field("list_fixed").type.list_size == 42
+    assert pa_schema.field("matrix_fixed").type.list_size == 42 * 43
+
+    assert pa_is_type_func(pa_schema.field("scalar").type)
+    assert pa_is_type_func(pa_schema.field("list_var").type.value_type)
+    assert pa_is_type_func(pa_schema.field("list_fixed").type.value_type)
+    assert pa_is_type_func(pa_schema.field("matrix_var").type.value_type)
+    assert pa_is_type_func(pa_schema.field("matrix_fixed").type.value_type)
+
+
+def test_as_pyarrow_schema_decimal_not_supported():
+    schema = Unischema('TestSchema', [
+        UnischemaField('decimal_scalar', Decimal, (), ScalarCodec(IntegerType()), False),
+        UnischemaField('decimal_list', Decimal, (None,), ScalarCodec(IntegerType()), False),
+    ])
+    with pytest.raises(NotImplementedError, match="Can not convert a decimal type"):
+        schema.as_pyarrow_schema()
