@@ -16,6 +16,7 @@
 This is a minimal example of how to generate a petastorm dataset. Generates a
 sample dataset with some random data.
 """
+from pathlib import Path
 
 import numpy as np
 from pyspark.sql import SparkSession
@@ -27,17 +28,13 @@ from petastorm.unischema import dict_to_spark_row, Unischema, UnischemaField
 
 # The schema defines how the dataset schema looks like
 HelloWorldSchema = Unischema('HelloWorldSchema', [
-    UnischemaField('id', np.int32, (), ScalarCodec(IntegerType()), False),
-    UnischemaField('image1', np.uint8, (128, 256, 3), CompressedImageCodec('png'), False),
-    UnischemaField('array_4d', np.uint8, (None, 128, 30, None), NdarrayCodec(), False),
+    UnischemaField('image1', np.uint8, (300, 100, 3), CompressedImageCodec('png'), False),
 ])
 
 
 def row_generator(x):
     """Returns a single entry in the generated dataset. Return a bunch of random values as an example."""
-    return {'id': x,
-            'image1': np.random.randint(0, 255, dtype=np.uint8, size=(128, 256, 3)),
-            'array_4d': np.random.randint(0, 255, dtype=np.uint8, size=(4, 128, 30, 3))}
+    return {'image1': np.random.randint(0, 255, dtype=np.uint8, size=(300, 100, 3))}
 
 
 def generate_petastorm_dataset(output_url='file:///tmp/hello_world_dataset'):
@@ -48,7 +45,7 @@ def generate_petastorm_dataset(output_url='file:///tmp/hello_world_dataset'):
 
     # Wrap dataset materialization portion. Will take care of setting up spark environment variables as
     # well as save petastorm specific metadata
-    rows_count = 10
+    rows_count = 1000
     with materialize_dataset(spark, output_url, HelloWorldSchema, rowgroup_size_mb):
 
         rows_rdd = sc.parallelize(range(rows_count))\
@@ -63,4 +60,23 @@ def generate_petastorm_dataset(output_url='file:///tmp/hello_world_dataset'):
 
 
 if __name__ == '__main__':
-    generate_petastorm_dataset()
+    from PIL import Image
+    from io import BytesIO
+    from pathlib import Path
+
+
+    output_path = "/tmp/thousand_images_dataset"
+    generate_petastorm_dataset("file://" + output_path)
+
+    root_directory = Path(output_path)
+    parquet_size = sum(f.stat().st_size for f in root_directory.glob('**/*') if f.is_file())
+    print(f"Parquet size {parquet_size / 2**10} KB")
+
+    image = row_generator(0)["image1"]
+    buffer = BytesIO()
+    im = Image.fromarray(image)
+    im.save(buffer, format="png")
+    single_png_size = len(buffer.getbuffer())
+    print(f"png file size: {single_png_size/2**10} KB")
+    print(f"Size per parquet row: {parquet_size / 1000 / 2**10} KB")
+
