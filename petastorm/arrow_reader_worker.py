@@ -190,7 +190,7 @@ class ArrowReaderWorker(WorkerBase):
         result = self._read_with_shuffle_row_drop(piece, pq_file, column_names_in_schema, shuffle_row_drop_range)
 
         if self._transform_spec:
-            result_as_pandas = result.to_pandas()
+            result_as_pandas = result.to_pandas(date_as_object=False)
             # A user may omit `func` value if they intend just to delete some fields using the TransformSpec
             if self._transform_spec.func:
                 transformed_result = self._transform_spec.func(result_as_pandas)

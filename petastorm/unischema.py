@@ -516,4 +516,7 @@ def _arrow_from_numpy_type(field: UnischemaField) -> pa.DataType:
             int_list_size = -1 if any(d is None for d in field.shape) else np.prod(field.shape)
             return pa.list_(pa.from_numpy_dtype(field.numpy_dtype), int_list_size)
         else:
-            return pa.from_numpy_dtype(field.numpy_dtype)
+            if field.numpy_dtype == np.datetime64:
+                return pa.timestamp("ns")
+            else:
+                return pa.from_numpy_dtype(field.numpy_dtype)
