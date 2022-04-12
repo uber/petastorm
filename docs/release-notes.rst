@@ -4,9 +4,58 @@
 Release notes
 =============
 
-Release 0.9.9 (unreleased)
+Release 0.11.5 (unreleased)
+===========================
+
+
+Release 0.11.4
+===========================
+- `PR 730 <https://github.com/uber/petastorm/pull/730>`_ (resolves `PR 724 <https://github.com/uber/petastorm/issues/724>`_): Hadoop 3 support: allow more than 2 nodenames in hadoop configuration file.
+- `PR 731 <https://github.com/uber/petastorm/pull/731>`_ (resolves `PR 728 <https://github.com/uber/petastorm/issues/728>`_): Support passing multiple parquet dataset urls to make_reader.
+- `PR 732 <https://github.com/uber/petastorm/pull/732>`_ (resolves `PR 585 <https://github.com/uber/petastorm/issues/585>`_): Restructure process_pool implementation code in a way that resolves ``RuntimeWarning: 'petastorm.workers_pool.exec_in_new_process' found in sys.modules after
+  import of package 'petastorm.workers_pool', but prior to execution of 'petastorm.workers_pool.exec_in_new_process'; this may result in unpredictable behaviou when using process pool`` warning.
+- `PR 737 <https://github.com/uber/petastorm/pull/737>`_: Use highest available pickle protocol for internal serialization.
+
+
+Release 0.11.3
+===========================
+- `PR 717 <https://github.com/uber/petastorm/pull/717>`_ (resolves `PR 716 <https://github.com/uber/petastorm/issues/716>`_): use ``fsspec``'s
+  ``strip_protocol`` to properly parse urls in ``_default_delete_dir_handler``.
+
+Release 0.11.2
+===========================
+Thanks to our new contributor - Manjur Ansari!
+
+- `PR 696 <https://github.com/uber/petastorm/pull/696>`_ (resolves issue
+  `#692 <https://github.com/uber/petastorm/issues/692>`_ ):
+  Python 3.9 compatibility - use `Thread`'s `is_alive()` instead of `isAlive()`.
+- `PR 694 <https://github.com/uber/petastorm/pull/694>`_ (resolves issue
+  `#691 <https://github.com/uber/petastorm/issues/691>`_ ):
+  Enable extraction of storage_options from input url.
+- `PR 640 <https://github.com/uber/petastorm/pull/640>`_: Security fix for arbitrary code execution (affects depickling of Unischema loaded from petastorm datasets).
+- `PR 707 <https://github.com/uber/petastorm/pull/707>`_: Fix pyarrow 5.0 compatibility issue: do not override dataset's `partitions` attribute.
+
+
+Release 0.11.1
+===========================
+- `PR 687 <https://github.com/uber/petastorm/pull/687>`_ (resolves issue
+  `#684 <https://github.com/uber/petastorm/issues/684>`_ ):
+  Fix a failure when reading data from a parquet file (and not a parquet directory).
+- `PR 686 <https://github.com/uber/petastorm/pull/686>`_ (resolves issue
+  `#685 <https://github.com/uber/petastorm/issues/685>`_ ):
+  Silenty omit fields that have unsupported types. Previously were failing
+  loudly making parquet stores with such fields unusable with Petastorm.
+
+Release 0.11.0
+===========================
+- `PR 669 <https://github.com/uber/petastorm/pull/669>`_: Pytorch: add inmemory batched dataloader (InMemBatchedDataLoader).
+
+
+Release 0.10.0
 ==========================
 - `PR 643 <https://github.com/uber/petastorm/pull/643>`_: Tests: fix the unit test of batched dataloader with in-memory cache.
+- `PR 662 <https://github.com/uber/petastorm/pull/662>`_: Reader: shuffle row groups before sharding (user may specify a seed).
+- `PR 665 <https://github.com/uber/petastorm/pull/665>`_: Reader: Support for additional cloud filesystems provided by `fsspec <https://filesystem-spec.readthedocs.io/en/latest/intro.html>`_. Replaced `s3_config_kwargs` with `storage_options`, which now applies to other filesystems like GCS and ADLS as well.
 
 
 Release 0.9.8

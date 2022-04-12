@@ -41,6 +41,7 @@ REQUIRED_PACKAGES = [
     'pyzmq>=14.0.0',
     'pyarrow>=0.17.1',
     'six>=1.5.0',
+    'fsspec',
 ]
 
 EXTRA_REQUIRE = {
@@ -71,6 +72,9 @@ EXTRA_REQUIRE = {
         'pytest-timeout>=1.3.3',
         'requests>=2.22.0',
         's3fs>=0.0.1',
+        'gcsfs',
+        "types-pytz==2021.1.0",
+        "types-six==0.1.7",
     ],
     'torch': ['torchvision>=0.2.1', 'torch>=1.5.0'],
 }

@@ -100,9 +100,9 @@ def test_with_one_shot_iterator(synthetic_dataset, reader_factory):
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
 @create_tf_graph
 def test_with_dataset_repeat(synthetic_dataset, reader_factory):
-    """``tf.data.Dataset``'s ``repeat`` should not be used on ``make_petastorm_dataset`` due to high costs of
-    ``Reader initialization``. A user should use ``Reader`` built-in epochs support. Check that we raise an
-    error to alert of misuse."""
+    """``tf.data.Dataset``'s ``repeat`` is not recommended to used on ``make_petastorm_dataset`` due to high costs of
+    ``Reader initialization``. A user should use ``Reader`` built-in epochs support, or use
+    ``tf.data.Dataset``'s ``cache``. Check that we trigger a warning to alert of misuse."""
     with reader_factory(synthetic_dataset.url) as reader:
         dataset = make_petastorm_dataset(reader)
 
@@ -117,8 +117,39 @@ def test_with_dataset_repeat(synthetic_dataset, reader_factory):
             for _, _ in enumerate(synthetic_dataset.data):
                 sess.run(iterator)
 
-            with pytest.raises(tf.errors.UnknownError, match=r'.*Multiple iterations.*'):
+            match_str = 'Running multiple iterations over make_petastorm_dataset is not recommend for performance issue'
+            with pytest.warns(UserWarning, match=match_str):
                 sess.run(iterator)
+
+
+@pytest.mark.forked
+@pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
+@create_tf_graph
+def test_with_dataset_repeat_after_cache(synthetic_dataset, reader_factory):
+    """ Check if ``tf.data.Dataset``'s ``repeat`` works after ``tf.data.Dataset``'s ``cache``."""
+    epochs = 3
+    with reader_factory(synthetic_dataset.url, schema_fields=[TestSchema.id]) as reader:
+        dataset = make_petastorm_dataset(reader)
+        dataset = dataset.cache()
+        dataset = dataset.repeat(epochs)
+        iterator = dataset.make_one_shot_iterator()
+        it_op = iterator.get_next()
+        # Check if dataset generates same result in every epoch.
+        with tf.Session() as sess:
+            with pytest.warns(None):
+                # Expect no warnings since cache() is called before repeat()
+                for _ in range(epochs):
+                    actual_res = []
+                    for _, _ in enumerate(synthetic_dataset.data):
+                        actual = sess.run(it_op)._asdict()
+                        actual_res.append(actual["id"])
+                    expected_res = list(range(len(synthetic_dataset.data)))
+                    # sort dataset output since row_groups are shuffled from reader.
+                    np.testing.assert_equal(sorted(actual_res), expected_res)
+
+            # Exhausted all epochs. Fetching next value should trigger OutOfRangeError
+            with pytest.raises(tf.errors.OutOfRangeError):
+                sess.run(it_op)
 
 
 @pytest.mark.forked

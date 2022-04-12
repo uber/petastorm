@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import glob
 import itertools
 
 import numpy as np
@@ -68,6 +69,18 @@ def test_simple_read(scalar_dataset, reader_factory):
     """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
     with reader_factory(scalar_dataset.url) as reader:
         _check_simple_reader(reader, scalar_dataset.data)
+
+
+@pytest.mark.parametrize('reader_factory', _D)
+def test_simple_read_from_a_single_file(scalar_dataset, reader_factory):
+    """See if we can read data when a single parquet file is specified instead of a parquet directory"""
+    assert scalar_dataset.url.startswith('file://')
+    path = scalar_dataset.url[len('file://'):]
+    one_parquet_file = glob.glob(f'{path}/**.parquet')[0]
+
+    with reader_factory(f"file://{one_parquet_file}") as reader:
+        all_data = list(reader)
+        assert len(all_data) > 0
 
 
 @pytest.mark.parametrize('reader_factory', _D)

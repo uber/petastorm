@@ -65,13 +65,13 @@ def make_reader(dataset_url,
                 predicate=None,
                 rowgroup_selector=None,
                 num_epochs=1,
-                cur_shard=None, shard_count=None,
+                cur_shard=None, shard_count=None, shard_seed=None,
                 cache_type=NULL_CACHE, cache_location=None, cache_size_limit=None,
                 cache_row_size_estimate=None, cache_extra_settings=None,
                 hdfs_driver='libhdfs3',
                 transform_spec=None,
                 filters=None,
-                s3_config_kwargs=None,
+                storage_options=None,
                 zmq_copy_buffers=True,
                 filesystem=None):
     """
@@ -82,9 +82,10 @@ def make_reader(dataset_url,
     See :func:`~petastorm.make_batch_reader` to read from a Parquet store that was not generated using
     :func:`~petastorm.etl.dataset_metadata.materialize_dataset`.
 
-    :param dataset_url: an filepath or a url to a parquet directory,
+    :param dataset_url: a url to a parquet directory or a url list (with the same scheme) to parquet files.
         e.g. ``'hdfs://some_hdfs_cluster/user/yevgeni/parquet8'``, or ``'file:///tmp/mydataset'``,
-        or ``'s3://bucket/mydataset'``, or ``'gs://bucket/mydataset'``.
+        or ``'s3://bucket/mydataset'``, or ``'gs://bucket/mydataset'``,
+        or ``[file:///tmp/mydataset/00000.parquet, file:///tmp/mydataset/00001.parquet]``.
     :param schema_fields: Can be: a list of unischema fields and/or regex pattern strings; ``None`` to read all fields;
             an NGram object, then it will return an NGram of the specified fields.
     :param reader_pool_type: A string denoting the reader pool type. Should be one of ['thread', 'process', 'dummy']
@@ -109,6 +110,7 @@ def make_reader(dataset_url,
         pass in a unique shard number in the range [0, shard_count). shard_count must be supplied as well.
         Defaults to None
     :param shard_count: An int denoting the number of shards to break this dataset into. Defaults to None
+    :param shard_seed: Random seed to shuffle row groups for data sharding. Defaults to None
     :param cache_type: A string denoting the cache type, if desired. Options are [None, 'null', 'local-disk'] to
         either have a null/noop cache or a cache implemented using diskcache. Caching is useful when communication
         to the main data store is either slow or expensive and the local machine has large enough storage
@@ -125,18 +127,18 @@ def make_reader(dataset_url,
     :param filters: (List[Tuple] or List[List[Tuple]]): Standard PyArrow filters.
         These will be applied when loading the parquet file with PyArrow. More information
         here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
-    :param s3_config_kwargs: dict of parameters passed to ``botocore.client.Config``
+    :param storage_options: Dict of kwargs forwarded to ``fsspec`` to initialize the filesystem.
     :param zmq_copy_buffers: A bool indicating whether to use 0mq copy buffers with ProcessPool.
-    :param filesystem: An instance of ``pyarrow.FileSystem`` to use. Will ignore s3_config_kwargs and
+    :param filesystem: An instance of ``pyarrow.FileSystem`` to use. Will ignore storage_options and
         other filesystem configs if it's provided.
     :return: A :class:`Reader` object
     """
-    dataset_url = normalize_dir_url(dataset_url)
+    dataset_url_or_urls = normalize_dataset_url_or_urls(dataset_url)
 
     filesystem, dataset_path = get_filesystem_and_path_or_paths(
-        dataset_url,
+        dataset_url_or_urls,
         hdfs_driver,
-        s3_config_kwargs=s3_config_kwargs,
+        storage_options=storage_options,
         filesystem=filesystem
     )
 
@@ -148,8 +150,8 @@ def make_reader(dataset_url,
         raise ValueError('Unknown cache_type: {}'.format(cache_type))
 
     try:
-        dataset_metadata.get_schema_from_dataset_url(dataset_url, hdfs_driver=hdfs_driver,
-                                                     s3_config_kwargs=s3_config_kwargs, filesystem=filesystem)
+        dataset_metadata.get_schema_from_dataset_url(dataset_url_or_urls, hdfs_driver=hdfs_driver,
+                                                     storage_options=storage_options, filesystem=filesystem)
     except PetastormMetadataError:
         warnings.warn('Currently make_reader supports reading only Petastorm datasets. '
                       'To read from a non-Petastorm Parquet store use make_batch_reader')
@@ -177,6 +179,7 @@ def make_reader(dataset_url,
         'num_epochs': num_epochs,
         'cur_shard': cur_shard,
         'shard_count': shard_count,
+        'shard_seed': shard_seed,
         'cache': cache,
         'transform_spec': transform_spec,
         'filters': filters
@@ -202,13 +205,13 @@ def make_batch_reader(dataset_url_or_urls,
                       predicate=None,
                       rowgroup_selector=None,
                       num_epochs=1,
-                      cur_shard=None, shard_count=None,
+                      cur_shard=None, shard_count=None, shard_seed=None,
                       cache_type='null', cache_location=None, cache_size_limit=None,
                       cache_row_size_estimate=None, cache_extra_settings=None,
                       hdfs_driver='libhdfs3',
                       transform_spec=None,
                       filters=None,
-                      s3_config_kwargs=None,
+                      storage_options=None,
                       zmq_copy_buffers=True,
                       filesystem=None):
     """
@@ -251,6 +254,7 @@ def make_batch_reader(dataset_url_or_urls,
         pass in a unique shard number in the range [0, shard_count). shard_count must be supplied as well.
         Defaults to None
     :param shard_count: An int denoting the number of shards to break this dataset into. Defaults to None
+    :param shard_seed: Random seed to shuffle row groups for data sharding. Defaults to None
     :param cache_type: A string denoting the cache type, if desired. Options are [None, 'null', 'local-disk'] to
         either have a null/noop cache or a cache implemented using diskcache. Caching is useful when communication
         to the main data store is either slow or expensive and the local machine has large enough storage
@@ -267,9 +271,9 @@ def make_batch_reader(dataset_url_or_urls,
     :param filters: (List[Tuple] or List[List[Tuple]]): Standard PyArrow filters.
         These will be applied when loading the parquet file with PyArrow. More information
         here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
-    :param s3_config_kwargs: dict of parameters passed to ``botocore.client.Config``
+    :param storage_options: Dict of kwargs forwarded to ``fsspec`` to initialize the filesystem.
     :param zmq_copy_buffers: A bool indicating whether to use 0mq copy buffers with ProcessPool.
-    :param filesystem: An instance of ``pyarrow.FileSystem`` to use. Will ignore s3_config_kwargs and
+    :param filesystem: An instance of ``pyarrow.FileSystem`` to use. Will ignore storage_options and
         other filesystem configs if it's provided.
     :return: A :class:`Reader` object
     """
@@ -278,13 +282,13 @@ def make_batch_reader(dataset_url_or_urls,
     filesystem, dataset_path_or_paths = get_filesystem_and_path_or_paths(
         dataset_url_or_urls,
         hdfs_driver,
-        s3_config_kwargs=s3_config_kwargs,
+        storage_options=storage_options,
         filesystem=filesystem
     )
 
     try:
         dataset_metadata.get_schema_from_dataset_url(dataset_url_or_urls, hdfs_driver=hdfs_driver,
-                                                     s3_config_kwargs=s3_config_kwargs, filesystem=filesystem)
+                                                     storage_options=storage_options, filesystem=filesystem)
         warnings.warn('Please use make_reader (instead of \'make_batch_dataset\' function to read this dataset. '
                       'You may get unexpected results. '
                       'Currently make_batch_reader supports reading only Parquet stores that contain '
@@ -321,6 +325,7 @@ def make_batch_reader(dataset_url_or_urls,
                   num_epochs=num_epochs,
                   cur_shard=cur_shard,
                   shard_count=shard_count,
+                  shard_seed=shard_seed,
                   cache=cache,
                   transform_spec=transform_spec,
                   is_batched_reader=True,
@@ -337,7 +342,7 @@ class Reader(object):
                  shuffle_row_groups=True, shuffle_row_drop_partitions=1,
                  predicate=None, rowgroup_selector=None, reader_pool=None, num_epochs=1,
                  cur_shard=None, shard_count=None, cache=None, worker_class=None,
-                 transform_spec=None, is_batched_reader=False, filters=None):
+                 transform_spec=None, is_batched_reader=False, filters=None, shard_seed=None):
         """Initializes a reader object.
 
         :param pyarrow_filesystem: An instance of ``pyarrow.FileSystem`` that will be used. If not specified,
@@ -378,6 +383,7 @@ class Reader(object):
         :param filters: (List[Tuple] or List[List[Tuple]]): Standard PyArrow filters.
             These will be applied when loading the parquet file with PyArrow. More information
             here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
+        :param shard_seed: Random seed to shuffle row groups for data sharding. Defaults to None
         """
         self.num_epochs = num_epochs
 
@@ -399,11 +405,6 @@ class Reader(object):
         self.dataset = pq.ParquetDataset(dataset_path, filesystem=pyarrow_filesystem,
                                          validate_schema=False, metadata_nthreads=10,
                                          filters=filters)
-
-        if self.dataset.partitions is None:
-            # When read from parquet file list, the `dataset.partitions` will be None.
-            # But other petastorm code require at least an empty `ParquetPartitions` object.
-            self.dataset.partitions = pq.ParquetPartitions()
 
         stored_schema = infer_or_load_unischema(self.dataset)
 
@@ -446,7 +447,7 @@ class Reader(object):
         # 3. Filter rowgroups
         filtered_row_group_indexes, worker_predicate = self._filter_row_groups(self.dataset, row_groups, predicate,
                                                                                rowgroup_selector, cur_shard,
-                                                                               shard_count)
+                                                                               shard_count, shard_seed)
         # 4. Create a rowgroup ventilator object
         normalized_shuffle_row_drop_partitions = \
             self._normalize_shuffle_options(shuffle_row_drop_partitions, self.dataset)
@@ -496,7 +497,7 @@ class Reader(object):
         return self._results_queue_reader.batched_output
 
     def _filter_row_groups(self, dataset, row_groups, predicate, rowgroup_selector, cur_shard,
-                           shard_count):
+                           shard_count, shard_seed):
         """Calculates which rowgroups will be read during.
 
         The following filters are applied:
@@ -511,6 +512,7 @@ class Reader(object):
         :param cur_shard: An int denoting the current shard number used. Each node should
                        pass in a unique partition number in the range [0, shard_count).
         :param shard_count An int denoting the number of reader shards
+        :param shard_seed: If not None: random seed to shuffle row groups for data sharding.
         :return: (filtered_row_group_indexes, worker_predicate): filtered_row_group_indexes an integer index into
         row_groups array. worker_predicate contains only predicates that could not be resolved on the partitioned fields
         and need to be evaluated by workers.
@@ -526,7 +528,7 @@ class Reader(object):
         if cur_shard is not None or shard_count is not None:
             filtered_row_group_indexes = self._partition_row_groups(dataset, row_groups, shard_count,
                                                                     cur_shard,
-                                                                    filtered_row_group_indexes)
+                                                                    filtered_row_group_indexes, shard_seed)
 
         if not filtered_row_group_indexes:
             warnings.warn('No matching data is available for loading after rowgroup '
@@ -535,7 +537,7 @@ class Reader(object):
         return filtered_row_group_indexes, worker_predicate
 
     def _partition_row_groups(self, dataset, row_groups, shard_count, cur_shard,
-                              filtered_row_group_indexes):
+                              filtered_row_group_indexes, shard_seed):
         """Filters the list of row group indexes based on the requested training partitions. Returns
         a modified list of rowgroup indexes."""
 
@@ -550,6 +552,13 @@ class Reader(object):
 
         # We hash on the relative path of each parquet file to guarantee consistency between different reader
         # constructions even after moving the dataset
+        if shard_seed is not None:
+            import random
+            # Instantiate a new Random class with a seed and sample from it.
+            # Avoid affecting global/default random generator.
+            shard_random = random.Random(shard_seed)
+            shard_random.shuffle(filtered_row_group_indexes)
+
         filtered_row_group_indexes = [index for index in filtered_row_group_indexes if index % shard_count == cur_shard]
         return filtered_row_group_indexes
 
@@ -584,8 +593,9 @@ class Reader(object):
                 raise ValueError('predicate parameter is expected to be derived from PredicateBase')
             predicate_fields = predicate.get_fields()
 
-            if set(predicate_fields) == dataset.partitions.partition_names:
-                assert len(dataset.partitions.partition_names) == 1, \
+            partition_names = dataset.partitions.partition_names if dataset.partitions else set()
+            if set(predicate_fields) == partition_names:
+                assert len(partition_names) == 1, \
                     'Datasets with only a single partition level supported at the moment'
 
                 filtered_row_group_indexes = []

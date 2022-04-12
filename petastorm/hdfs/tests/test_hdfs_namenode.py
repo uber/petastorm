@@ -34,6 +34,7 @@ class HC:
     DEFAULT_NN = 'default:8020'
     WARP_TURTLE_NN1 = 'some.domain.name.net:8020'
     WARP_TURTLE_NN2 = 'some.other.domain.name.net:8020'
+    WARP_TURTLE_NN3 = 'other.other.domain.name.net:8020'
     WARP_TURTLE_PATH = '{}/x/y/z'.format(FS_WARP_TURTLE)
     HADOOP_CONFIG_PATH = '/etc/hadoop'
 
@@ -101,6 +102,16 @@ class HdfsNamenodeResolverTest(unittest.TestCase):
         self.assertEqual(HC.WARP_TURTLE_NN2, namenodes[0])
         self.assertEqual(HC.WARP_TURTLE_NN1, namenodes[1])
 
+        # Three valid and defined nns
+        self._hadoop_configuration.set('dfs.ha.namenodes.{}'.format(HC.WARP_TURTLE), 'nn3,nn2,nn1')
+        self._hadoop_configuration.set(
+            'dfs.namenode.rpc-address.{}.nn3'.format(HC.WARP_TURTLE), HC.WARP_TURTLE_NN3)
+        nameservice, namenodes = self.suj.resolve_default_hdfs_service()
+        self.assertEqual(HC.WARP_TURTLE, nameservice)
+        self.assertEqual(HC.WARP_TURTLE_NN3, namenodes[0])
+        self.assertEqual(HC.WARP_TURTLE_NN2, namenodes[1])
+        self.assertEqual(HC.WARP_TURTLE_NN1, namenodes[2])
+
     def test_resolve_hdfs_name_service(self):
         """Check edge cases with resolving a nameservice"""
         # Most cases already covered by test_default_hdfs_service_ok above...
@@ -118,12 +129,13 @@ class HdfsNamenodeResolverTest(unittest.TestCase):
         # Test multiple undefined NNs, which will also throw HdfsConnectError
         nns = 'nn1,nn2,nn3,nn4,nn5,nn6,nn7,nn8'
         self._hadoop_configuration.set('dfs.ha.namenodes.{}'.format(HC.WARP_TURTLE), nns)
-        with self.assertRaises(RuntimeError):
+        with self.assertRaisesRegex(RuntimeError,
+                                    'Failed to get property "dfs.namenode.rpc-address.WARP-TURTLE.nn1" from'):
             self.suj.resolve_hdfs_name_service(HC.WARP_TURTLE)
 
 
 @pytest.fixture()
-def mock_hadoop_home_directory(tmpdir):
+def mock_hadoop_home_directory(tmpdir, request):
     """Create hadoop site files once"""
     tmpdir_path = tmpdir.strpath
     os.makedirs('{}{}'.format(tmpdir_path, HC.HADOOP_CONFIG_PATH))
@@ -139,28 +151,32 @@ def mock_hadoop_home_directory(tmpdir):
             </configuration>
             """.format(HC.WARP_TURTLE)))
     with open('{}{}/hdfs-site.xml'.format(tmpdir_path, HC.HADOOP_CONFIG_PATH), 'wt') as f:
-        f.write(textwrap.dedent("""\
+        f.write(textwrap.dedent(f"""\
             <?xml version="1.0"?>
             <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
             <configuration>
               <property>
-                <name>dfs.ha.namenodes.{0}</name>
-                <value>nn2,nn1</value>
+                <name>dfs.ha.namenodes.{HC.WARP_TURTLE}</name>
+                <value>nn3,nn2,nn1</value>
               </property>
               <property>
-                <name>dfs.namenode.rpc-address.{0}.nn1</name>
-                <value>{1}</value>
+                <name>dfs.namenode.rpc-address.{HC.WARP_TURTLE}.nn1</name>
+                <value>{HC.WARP_TURTLE_NN1}</value>
               </property>
               <property>
-                <name>dfs.namenode.rpc-address.{0}.nn2</name>
-                <value>{2}</value>
+                <name>dfs.namenode.rpc-address.{HC.WARP_TURTLE}.nn2</name>
+                <value>{HC.WARP_TURTLE_NN2}</value>
+              </property>
+              <property>
+                <name>dfs.namenode.rpc-address.{HC.WARP_TURTLE}.nn3</name>
+                <value>{HC.WARP_TURTLE_NN3}</value>
               </property>
               <property>
                 <name>dfs.ha.namenodes.foobar</name>
                 <value>nn</value>
               </property>
             </configuration>
-            """.format(HC.WARP_TURTLE, HC.WARP_TURTLE_NN1, HC.WARP_TURTLE_NN2)))
+            """))
     return tmpdir_path
 
 
@@ -172,8 +188,9 @@ def _test_default_hdfs_service(mock_hadoop_home_directory, env_var):
     # List of namenodes returned nominally
     nameservice, namenodes = suj.resolve_default_hdfs_service()
     assert HC.WARP_TURTLE == nameservice
-    assert HC.WARP_TURTLE_NN2 == namenodes[0]
-    assert HC.WARP_TURTLE_NN1 == namenodes[1]
+    assert HC.WARP_TURTLE_NN3 == namenodes[0]
+    assert HC.WARP_TURTLE_NN2 == namenodes[1]
+    assert HC.WARP_TURTLE_NN1 == namenodes[2]
     # Exception raised for badly defined nameservice (XML issue)
     with pytest.raises(RuntimeError):
         suj.resolve_hdfs_name_service('foobar')
@@ -344,7 +361,7 @@ class HdfsConnectorTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Initializes a mock HDFS namenode connector to track connection attempts."""
-        cls.NAMENODES = [HC.WARP_TURTLE_NN1, HC.WARP_TURTLE_NN2]
+        cls.NAMENODES = [HC.WARP_TURTLE_NN1, HC.WARP_TURTLE_NN2, HC.WARP_TURTLE_NN3]
         cls.suj = MockHdfsConnector()
 
     def setUp(self):
@@ -356,23 +373,34 @@ class HdfsConnectorTest(unittest.TestCase):
         self.assertEqual(0, self.suj.connect_attempted(HC.DEFAULT_NN))
         self.assertEqual(1, self.suj.connect_attempted(HC.WARP_TURTLE_NN1))
         self.assertEqual(0, self.suj.connect_attempted(HC.WARP_TURTLE_NN2))
+        self.assertEqual(0, self.suj.connect_attempted(HC.WARP_TURTLE_NN3))
 
     def test_connect_to_either_with_user(self):
         mock_name = "mock-manager"
         mocked_hdfs = self.suj.connect_to_either_namenode(self.NAMENODES, user=mock_name)
         self.assertEqual(mocked_hdfs._user, mock_name)
 
-    def test_connect_to_either_namenode_ok_one_failed(self):
+    def test_connect_to_second_succeeds(self):
         """ With one failver, test that both namenode URLS are attempted, with 2nd connected. """
         self.suj.set_fail_n_next_connect(1)
         self.assertIsNotNone(self.suj.connect_to_either_namenode(self.NAMENODES))
         self.assertEqual(0, self.suj.connect_attempted(HC.DEFAULT_NN))
         self.assertEqual(1, self.suj.connect_attempted(HC.WARP_TURTLE_NN1))
         self.assertEqual(1, self.suj.connect_attempted(HC.WARP_TURTLE_NN2))
+        self.assertEqual(0, self.suj.connect_attempted(HC.WARP_TURTLE_NN3))
+
+    def test_connect_to_either_namenode_ok_one_failed(self):
+        """ With one failver, test that both namenode URLS are attempted, with 2nd connected. """
+        self.suj.set_fail_n_next_connect(2)
+        self.assertIsNotNone(self.suj.connect_to_either_namenode(self.NAMENODES))
+        self.assertEqual(0, self.suj.connect_attempted(HC.DEFAULT_NN))
+        self.assertEqual(1, self.suj.connect_attempted(HC.WARP_TURTLE_NN1))
+        self.assertEqual(1, self.suj.connect_attempted(HC.WARP_TURTLE_NN2))
+        self.assertEqual(1, self.suj.connect_attempted(HC.WARP_TURTLE_NN3))
 
     def test_connect_to_either_namenode_exception_two_failed(self):
         """ With 2 failvers, test no connection, and no exception is raised. """
-        self.suj.set_fail_n_next_connect(2)
+        self.suj.set_fail_n_next_connect(3)
         with self.assertRaises(HdfsConnectError):
             self.suj.connect_to_either_namenode(self.NAMENODES)
         self.assertEqual(0, self.suj.connect_attempted(HC.DEFAULT_NN))
@@ -381,7 +409,7 @@ class HdfsConnectorTest(unittest.TestCase):
 
     def test_connect_to_either_namenode_exception_four_failed(self):
         """ With 4 failvers, test that exception is raised. """
-        self.suj.set_fail_n_next_connect(4)
+        self.suj.set_fail_n_next_connect(6)
         with self.assertRaises(HdfsConnectError):
             self.suj.connect_to_either_namenode(self.NAMENODES)
         with self.assertRaises(HdfsConnectError):
@@ -400,7 +428,7 @@ class HAHdfsClientTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Initializes namenodes list and mock HDFS namenode connector."""
-        cls.NAMENODES = [HC.WARP_TURTLE_NN1, HC.WARP_TURTLE_NN2]
+        cls.NAMENODES = [HC.WARP_TURTLE_NN1, HC.WARP_TURTLE_NN2, HC.WARP_TURTLE_NN3]
 
     def setUp(self):
         """Reset mock HDFS failover count."""

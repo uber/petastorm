@@ -3,8 +3,8 @@ Petastorm
 =========
 
 .. image:: https://travis-ci.com/uber/petastorm.svg?branch=master
-   :target: https://travis-ci.com/uber/petastorm
-   :alt: Build Status (Travis CI)
+   :target: https://github.com/uber/petastorm/actions/workflows/unittest.yml/badge.svg
+   :alt: Build Status
 
 .. image:: https://codecov.io/gh/uber/petastorm/branch/master/graph/badge.svg
    :target: https://codecov.io/gh/uber/petastorm/branch/master
@@ -67,30 +67,30 @@ Here is a minimalistic example writing out a table with some random data.
 
 .. code-block:: python
 
-    import numpy as np
-    from petastorm.codecs import CompressedImageCodec, NdarrayCodec, ScalarCodec
-    from petastorm.etl.dataset_metadata import materialize_dataset
-    from petastorm.unischema import Unischema, UnischemaField, dict_to_spark_row
-    from pyspark.sql import SparkSession
-    from pyspark.sql.types import IntegerType
+   import numpy as np
+   from pyspark.sql import SparkSession
+   from pyspark.sql.types import IntegerType
 
+   from petastorm.codecs import ScalarCodec, CompressedImageCodec, NdarrayCodec
+   from petastorm.etl.dataset_metadata import materialize_dataset
+   from petastorm.unischema import dict_to_spark_row, Unischema, UnischemaField
 
-    HelloWorldSchema = Unischema('HelloWorldSchema', [
+   # The schema defines how the dataset schema looks like
+   HelloWorldSchema = Unischema('HelloWorldSchema', [
        UnischemaField('id', np.int32, (), ScalarCodec(IntegerType()), False),
        UnischemaField('image1', np.uint8, (128, 256, 3), CompressedImageCodec('png'), False),
-       UnischemaField('other_data', np.uint8, (None, 128, 30, None), NdarrayCodec(), False),
-    ])
+       UnischemaField('array_4d', np.uint8, (None, 128, 30, None), NdarrayCodec(), False),
+   ])
 
 
-    def row_generator(x):
+   def row_generator(x):
        """Returns a single entry in the generated dataset. Return a bunch of random values as an example."""
        return {'id': x,
                'image1': np.random.randint(0, 255, dtype=np.uint8, size=(128, 256, 3)),
-               'other_data': np.random.randint(0, 255, dtype=np.uint8, size=(4, 128, 30, 3))}
+               'array_4d': np.random.randint(0, 255, dtype=np.uint8, size=(4, 128, 30, 3))}
 
 
-    def generate_hello_world_dataset(output_url='file:///tmp/hello_world_dataset'):
-       rows_count = 10
+   def generate_petastorm_dataset(output_url='file:///tmp/hello_world_dataset'):
        rowgroup_size_mb = 256
 
        spark = SparkSession.builder.config('spark.driver.memory', '2g').master('local[2]').getOrCreate()
@@ -98,6 +98,7 @@ Here is a minimalistic example writing out a table with some random data.
 
        # Wrap dataset materialization portion. Will take care of setting up spark environment variables as
        # well as save petastorm specific metadata
+       rows_count = 10
        with materialize_dataset(spark, output_url, HelloWorldSchema, rowgroup_size_mb):
 
            rows_rdd = sc.parallelize(range(rows_count))\
@@ -109,6 +110,7 @@ Here is a minimalistic example writing out a table with some random data.
                .write \
                .mode('overwrite') \
                .parquet(output_url)
+
 
 - ``HelloWorldSchema`` is an instance of a ``Unischema`` object.
   ``Unischema`` is capable of rendering types of its fields into different
@@ -238,6 +240,8 @@ The minimalist example below assumes the definition of a ``Net`` class and
         test(model, device, test_loader)
 
 If you are working with very large batch sizes and do not need support for Decimal/strings we provide a ``petastorm.pytorch.BatchedDataLoader`` that can buffer using Torch tensors (``cpu`` or ``cuda``) with a signficantly higher throughput.
+
+If the size of your dataset can fit into system memory, you can use an in-memory version dataloader ``petastorm.pytorch.InMemBatchedDataLoader``. This dataloader only reades the dataset once, and caches data in memory to avoid additional I/O for multiple epochs.
 
 Spark Dataset Converter API
 ---------------------------

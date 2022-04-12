@@ -11,21 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-import tempfile
+import glob
 import operator
 import os
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from shutil import rmtree, copytree
-from six.moves.urllib.parse import urlparse
+from unittest import mock
 
 import numpy as np
 import pyarrow.hdfs
 import pytest
 from pyspark.sql import SparkSession
 from pyspark.sql.types import LongType, ShortType, StringType
-
-from unittest import mock
+from six.moves.urllib.parse import urlparse
 
 from petastorm import make_reader, make_batch_reader, TransformSpec
 from petastorm.codecs import ScalarCodec, CompressedImageCodec
@@ -109,6 +108,21 @@ def test_simple_read(synthetic_dataset, reader_factory):
     """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
     with reader_factory(synthetic_dataset.url) as reader:
         _check_simple_reader(reader, synthetic_dataset.data)
+
+
+@pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES)
+def test_simple_read_from_parquet_file(synthetic_dataset, reader_factory):
+    """See if we can read data when a single parquet file is specified instead of a parquet directory"""
+    assert synthetic_dataset.url.startswith('file://')
+    path = synthetic_dataset.url[len('file://'):]
+    one_parquet_file = glob.glob(f'{path}/**/*.parquet')[0]
+    with reader_factory(f"file://{one_parquet_file}") as reader:
+        all_data_from_file = list(reader)
+    assert len(all_data_from_file) > 0
+
+    with reader_factory([f"file://{one_parquet_file}", f"file://{one_parquet_file}"]) as reader:
+        all_data_from_file_twice = list(reader)
+    assert len(all_data_from_file) < len(all_data_from_file_twice)
 
 
 @pytest.mark.parametrize('reader_factory', [
@@ -443,10 +457,11 @@ def test_predicate_with_invalid_fields(synthetic_dataset, reader_factory):
 
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
-def test_partition_multi_node(synthetic_dataset, reader_factory):
+@pytest.mark.parametrize('shard_seed', [None, 0])
+def test_partition_multi_node(synthetic_dataset, reader_factory, shard_seed):
     """Tests that the reader only returns half of the expected data consistently"""
-    with reader_factory(synthetic_dataset.url, cur_shard=0, shard_count=5) as reader:
-        with reader_factory(synthetic_dataset.url, cur_shard=0, shard_count=5) as reader_2:
+    with reader_factory(synthetic_dataset.url, cur_shard=0, shard_count=5, shard_seed=shard_seed) as reader:
+        with reader_factory(synthetic_dataset.url, cur_shard=0, shard_count=5, shard_seed=shard_seed) as reader_2:
             results_1 = set(_readout_all_ids(reader))
             results_2 = set(_readout_all_ids(reader_2))
 
@@ -459,7 +474,7 @@ def test_partition_multi_node(synthetic_dataset, reader_factory):
             # Test that separate partitions also have no overlap by checking ids)
             for partition in range(1, 5):
                 with reader_factory(synthetic_dataset.url, cur_shard=partition,
-                                    shard_count=5) as reader_other:
+                                    shard_count=5, shard_seed=shard_seed) as reader_other:
                     ids_in_other_partition = set(_readout_all_ids(reader_other))
 
                     assert not ids_in_other_partition.intersection(results_1)

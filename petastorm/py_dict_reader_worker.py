@@ -15,6 +15,7 @@ from __future__ import division
 
 import hashlib
 import threading
+from collections.abc import Iterable
 
 import numpy as np
 from pyarrow import parquet as pq
@@ -157,7 +158,10 @@ class PyDictReaderWorker(WorkerBase):
             #  2. Dataset path is hashed, to make sure we don't create too long keys, which maybe incompatible with
             #     some cache implementations
             #  3. Still leave relative path and the piece_index in plain text to make it easier to debug
-            cache_key = '{}:{}:{}'.format(hashlib.md5(self._dataset_path.encode('utf-8')).hexdigest(),
+            # self._dataset_path could be a list of urls or a string.
+            _dataset_path_for_hash = "_".join(self._dataset_path) if isinstance(self._dataset_path,
+                                                                                Iterable) else self._dataset_path
+            cache_key = '{}:{}:{}'.format(hashlib.md5(_dataset_path_for_hash.encode('utf-8')).hexdigest(),
                                           piece.path, piece_index)
             all_cols = self._local_cache.get(cache_key,
                                              lambda: self._load_rows(parquet_file, piece, shuffle_row_drop_partition))
@@ -174,7 +178,10 @@ class PyDictReaderWorker(WorkerBase):
         # pyarrow would fail if we request a column names that the dataset is partitioned by, so we strip them from
         # the `columns` argument.
         partitions = self._dataset.partitions
-        column_names = set(field.name for field in self._schema.fields.values()) - partitions.partition_names
+        # self._dataset.partitions is None, if make_reader is created directly from a parquet file
+        # (and not a directory with *.parquet files)
+        partition_names = partitions.partition_names if partitions else set()
+        column_names = set(field.name for field in self._schema.fields.values()) - partition_names
 
         all_rows = self._read_with_shuffle_row_drop(piece, pq_file, column_names, shuffle_row_drop_range)
 
@@ -207,7 +214,8 @@ class PyDictReaderWorker(WorkerBase):
                              'are not valid schema names: ({})'.format(', '.join(invalid_column_names),
                                                                        ', '.join(all_schema_names)))
 
-        other_column_names = all_schema_names - predicate_column_names - self._dataset.partitions.partition_names
+        partition_names = self._dataset.partitions.partition_names if self._dataset.partitions else set()
+        other_column_names = all_schema_names - predicate_column_names - partition_names
 
         # Read columns needed for the predicate
         predicate_rows = self._read_with_shuffle_row_drop(piece, pq_file, predicate_column_names,

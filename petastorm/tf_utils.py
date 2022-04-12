@@ -25,7 +25,6 @@ import tensorflow.compat.v1 as tf  # pylint: disable=import-error
 
 # Mapping of identical datatypes in numpy-ish and tensorflow-ish
 _NUMPY_TO_TF_DTYPES_MAPPING = {
-    np.bool: tf.bool,
     np.int8: tf.int8,
     np.int16: tf.int16,
     np.int32: tf.int32,
@@ -294,7 +293,7 @@ def tf_tensors(reader, shuffling_queue_capacity=0, min_after_dequeue=0):
 
     :param reader: An instance of petastorm.Reader object used as the data source
     :param shuffling_queue_capacity: Queue capacity is passed to the underlying :class:`tf.RandomShuffleQueue`
-        instance. If set to 0, no suffling will be done.
+        instance. If set to 0, no shuffling will be done.
     :param min_after_dequeue: If ``shuffling_queue_capacity > 0``, this value is passed to the underlying
         :class:`tf.RandomShuffleQueue`.
     :return: If no ngram reading is used, the function will return a named tuple with tensors that are populated
@@ -324,6 +323,14 @@ def _set_shape_to_named_tuple(schema, fields, batched_output):
     fields_as_dict = fields._asdict()
     _set_shape(schema, fields_as_dict, batched_output)
     return schema.make_namedtuple_tf(**fields_as_dict)
+
+
+_RESET_READER_WARN = (
+    'Running multiple iterations over make_petastorm_dataset is not recommend for performance issue. '
+    'Use Reader\'s num_epochs contructor arguments to set number of iterations,'
+    'or use tf.data.Dataset\'s cache() function to cache data of first iteration before'
+    'calling \'repeat\' method of Datset class.'
+)
 
 
 def make_petastorm_dataset(reader):
@@ -365,12 +372,11 @@ def make_petastorm_dataset(reader):
 
         def dequeue_sample_impl():
             if reader.last_row_consumed:
-                # This means that Dataset is trying to create a new instance of the generator. Can not do that
-                # (nor want to do that) since this is an expensive operation. num_epochs is a more efficient way
+                # This means that Dataset is trying to create a new instance of the generator. Do not
+                # recommend to do that since this is an expensive operation. num_epochs is a more efficient way
                 # to do this.
-                raise RuntimeError('Multiple iterations over make_petastorm_dataset are not supported. '
-                                   'Multiple iterations can be triggered by calling \'repeat\' method of Datset class.'
-                                   'Use Reader\'s num_epochs contructor arguments to set number of iterations.')
+                warnings.warn(_RESET_READER_WARN, category=UserWarning)
+                reader.reset()
             for row in reader:
                 yield _sanitize_field_tf_types(row)
 
@@ -415,12 +421,11 @@ def _unflatten_and_set_shape(schema, ngram, fields_as_list):
 def _ngrams_generator(reader):
     """A generator producing flattened and sanitized ngrams"""
     if reader.last_row_consumed:
-        # This means that Dataset is trying to create a new instance of the generator. Can not do that
-        # (nor want to do that) since this is an expensive operation. num_epochs is a more efficient way
+        # This means that Dataset is trying to create a new instance of the generator. Do not
+        # recommend to do that since this is an expensive operation. num_epochs is a more efficient way
         # to do this.
-        raise RuntimeError('Multiple iterations over make_petastorm_dataset are not supported. '
-                           'Multiple iterations can be triggered by calling \'repeat\' method of Datset class.'
-                           'Use Reader\'s num_epochs contructor arguments to set number of iterations.')
+        warnings.warn(_RESET_READER_WARN, category=UserWarning)
+        reader.reset()
 
     for next_sample in reader:
         yield _sanitize_and_flatten(next_sample)

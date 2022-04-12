@@ -13,11 +13,13 @@
 # limitations under the License.
 import logging
 
+import fsspec
 import pyarrow
 import six
-from six.moves.urllib.parse import urlparse
+from six.moves.urllib.parse import urlparse, urlunparse
+from fsspec.core import strip_protocol
+from fsspec.utils import update_storage_options
 
-from petastorm.gcsfs_helpers.gcsfs_wrapper import GCSFSWrapper
 from petastorm.hdfs.namenode import HdfsNamenodeResolver, HdfsConnector
 
 logger = logging.getLogger(__name__)
@@ -29,18 +31,18 @@ def get_dataset_path(parsed_url):
     For example s3fs expects the bucket name to be included in the path and doesn't support
     paths that start with a `/`
     """
-    if parsed_url.scheme.lower() in ['s3', 's3a', 's3n', 'gs', 'gcs']:
-        # s3/gs/gcs filesystem expects paths of the form `bucket/path`
-        return parsed_url.netloc + parsed_url.path
+    if parsed_url.scheme.lower() in ['file', 'hdfs']:
+        return parsed_url.path
 
-    return parsed_url.path
+    _url = strip_protocol(urlunparse(parsed_url))
+    return _url
 
 
 class FilesystemResolver(object):
     """Resolves a dataset URL, makes a connection via pyarrow, and provides a filesystem object."""
 
     def __init__(self, dataset_url, hadoop_configuration=None, connector=HdfsConnector,
-                 hdfs_driver='libhdfs3', user=None, s3_config_kwargs=None):
+                 hdfs_driver='libhdfs3', user=None, storage_options=None):
         """
         Given a dataset URL and an optional hadoop configuration, parse and interpret the URL to
         instantiate a pyarrow filesystem.
@@ -63,7 +65,7 @@ class FilesystemResolver(object):
         :param hdfs_driver: A string denoting the hdfs driver to use (if using a dataset on hdfs). Current choices are
         libhdfs (java through JNI) or libhdfs3 (C++)
         :param user: String denoting username when connecting to HDFS. None implies login user.
-        :param s3_config_kwargs: The config passed to S3FileSystem.
+        :param storage_options: Dict of kwargs forwarded to ``fsspec`` to initialize the filesystem.
         """
         # Cache both the original URL and the resolved, urlparsed dataset_url
         self._dataset_url = dataset_url
@@ -125,45 +127,20 @@ class FilesystemResolver(object):
                 self._filesystem_factory = \
                     lambda url=self._dataset_url, user=user: \
                     connector.hdfs_connect_namenode(urlparse(url), hdfs_driver, user=user)
-
-        elif self._parsed_dataset_url.scheme in ('s3', 's3a', 's3n'):
-            # Case 5
-            # S3 support requires s3fs to be installed
-            try:
-                import s3fs
-            except ImportError:
-                raise ValueError('Must have s3fs installed in order to use datasets on s3. '
-                                 'Please install s3fs and try again.')
-
-            if not self._parsed_dataset_url.netloc:
-                raise ValueError('URLs must be of the form s3://bucket/path')
-
-            fs = s3fs.S3FileSystem(config_kwargs=s3_config_kwargs)
-            self._filesystem = fs
-            self._filesystem_factory = lambda: s3fs.S3FileSystem(
-                config_kwargs=s3_config_kwargs
-            )
-
-        elif self._parsed_dataset_url.scheme in ['gs', 'gcs']:
-            # Case 6
-            # GCS support requires gcsfs to be installed
-            try:
-                import gcsfs
-            except ImportError:
-                raise ValueError('Must have gcsfs installed in order to use datasets on GCS. '
-                                 'Please install gcsfs and try again.')
-
-            if not self._parsed_dataset_url.netloc:
-                raise ValueError('URLs must be of the form gs://bucket/path or gcs://bucket/path')
-
-            fs = gcsfs.GCSFileSystem()
-            self._filesystem = GCSFSWrapper(fs)
-            self._filesystem_factory = lambda: GCSFSWrapper(gcsfs.GCSFileSystem())
-
         else:
-            # Case 7
-            raise ValueError('Unsupported scheme in dataset url {}. '
-                             'Currently, only "file" and "hdfs" are supported.'.format(self._parsed_dataset_url.scheme))
+            # Fallback to fsspec to handle any other schemes
+            if not self._parsed_dataset_url.netloc:
+                raise ValueError(
+                    'URLs must be of the form {}://bucket/path'.format(self._parsed_dataset_url.scheme)
+                )
+
+            storage_options = storage_options or {}
+            protocol = self._parsed_dataset_url.scheme
+            cls = fsspec.get_filesystem_class(protocol)
+            options = cls._get_kwargs_from_urls(self._dataset_url)
+            update_storage_options(options, storage_options)
+            self._filesystem = cls(**options)
+            self._filesystem_factory = lambda: cls(**options)  # pylint: disable=unnecessary-lambda
 
     def parsed_dataset_url(self):
         """
@@ -199,7 +176,7 @@ class FilesystemResolver(object):
                            'anti-pickling protection')
 
 
-def get_filesystem_and_path_or_paths(url_or_urls, hdfs_driver='libhdfs3', s3_config_kwargs=None, filesystem=None):
+def get_filesystem_and_path_or_paths(url_or_urls, hdfs_driver='libhdfs3', storage_options=None, filesystem=None):
     """
     Given a url or url list, return a tuple ``(filesystem, path_or_paths)``
     ``filesystem`` is created from the given url(s), and ``path_or_paths`` is a path or path list
@@ -221,7 +198,7 @@ def get_filesystem_and_path_or_paths(url_or_urls, hdfs_driver='libhdfs3', s3_con
             raise ValueError('The dataset url list must contain url with the same scheme and netloc.')
 
     fs = filesystem or FilesystemResolver(
-        url_list[0], hdfs_driver=hdfs_driver, s3_config_kwargs=s3_config_kwargs).filesystem()
+        url_list[0], hdfs_driver=hdfs_driver, storage_options=storage_options).filesystem()
     path_list = [get_dataset_path(parsed_url) for parsed_url in parsed_url_list]
 
     if isinstance(url_or_urls, list):

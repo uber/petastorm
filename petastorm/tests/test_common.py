@@ -20,7 +20,6 @@ from decimal import Decimal
 from functools import partial
 
 import numpy as np
-import pyarrow as pa
 import pytz
 from pyspark import Row
 from pyspark.sql import SparkSession
@@ -174,8 +173,6 @@ def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None, pa
     :return: A list of records with a copy of the data written to the dataset.
     """
 
-    is_list_of_scalar_broken = pa.__version__ == '0.15.0'
-
     partition_by = partition_by or []
     shutdown = False
     if not spark:
@@ -190,16 +187,16 @@ def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None, pa
         hadoop_config.setInt('parquet.block.size', 100)
 
     def expected_row(i):
-        result = {'id': np.int32(i),
-                  'id_div_700': np.int32(i // 700),
-                  'datetime': np.datetime64('2019-01-02'),
-                  'timestamp': np.datetime64('2005-02-25T03:30'),
-                  'string': np.unicode_('hello_{}'.format(i)),
-                  'string2': np.unicode_('world_{}'.format(i)),
-                  'float64': np.float64(i) * .66}
-        if not is_list_of_scalar_broken:
-            result['int_fixed_size_list'] = np.arange(1 + i, 10 + i).astype(np.int32)
-        result = OrderedDict(sorted(result.items(), key=lambda item: item[0]))
+        result = {
+            'id': np.int32(i),
+            'id_div_700': np.int32(i // 700),
+            'datetime': np.datetime64('2019-01-02'),
+            'timestamp': np.datetime64('2005-02-25T03:30'),
+            'string': np.unicode_('hello_{}'.format(i)),
+            'string2': np.unicode_('world_{}'.format(i)),
+            'float64': np.float64(i) * .66,
+            'int_fixed_size_list': np.arange(1 + i, 10 + i).astype(np.int32)
+        }
         return result
 
     expected_data = [expected_row(i) for i in range(num_rows)]
@@ -211,13 +208,12 @@ def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None, pa
     # to think about local timezone in the tests
     for row in expected_data_as_scalars:
         row['timestamp'] = row['timestamp'].replace(tzinfo=pytz.UTC)
-        if not is_list_of_scalar_broken:
-            row['int_fixed_size_list'] = row['int_fixed_size_list'].tolist()
+        row['int_fixed_size_list'] = row['int_fixed_size_list'].tolist()
+        row['nested_struct'] = {'nested_int': 0}
 
-    rows = [Row(**row) for row in expected_data_as_scalars]
+    rows = [Row(**OrderedDict(sorted(row.items(), key=lambda item: item[0]))) for row in expected_data_as_scalars]
 
-    maybe_int_fixed_size_list_field = [StructField('int_fixed_size_list', ArrayType(IntegerType(), False), False)] \
-        if not is_list_of_scalar_broken else []
+    maybe_int_fixed_size_list_field = [StructField('int_fixed_size_list', ArrayType(IntegerType(), False), False)]
 
     # WARNING: surprisingly, schema fields and row fields are matched only by order and not name.
     # We must maintain alphabetical order of the struct fields for the code to work!!!
@@ -229,6 +225,7 @@ def create_test_scalar_dataset(output_url, num_rows, num_files=4, spark=None, pa
             StructField('id_div_700', IntegerType(), False),
         ] + maybe_int_fixed_size_list_field +
         [
+            StructField('nested_struct', StructType([StructField('nested_int', IntegerType(), True)])),
             StructField('string', StringType(), False),
             StructField('string2', StringType(), False),
             StructField('timestamp', TimestampType(), False),

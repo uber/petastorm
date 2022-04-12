@@ -300,7 +300,7 @@ class Unischema(object):
         return self._get_namedtuple()(*args, **kargs)
 
     @classmethod
-    def from_arrow_schema(cls, parquet_dataset, omit_unsupported_fields=False):
+    def from_arrow_schema(cls, parquet_dataset, omit_unsupported_fields=True):
         """
         Convert an apache arrow schema into a unischema object. This is useful for datasets of only scalars
         which need no special encoding/decoding. If there is an unsupported type in the arrow schema, it will
@@ -318,7 +318,7 @@ class Unischema(object):
         arrow_schema = meta.schema.to_arrow_schema()
         unischema_fields = []
 
-        for partition in parquet_dataset.partitions:
+        for partition in (parquet_dataset.partitions or []):
             if (pa.types.is_binary(partition.dictionary.type) and six.PY2) or \
                     (pa.types.is_string(partition.dictionary.type) and six.PY3):
                 numpy_dtype = np.str_
