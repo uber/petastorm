@@ -63,7 +63,7 @@ class ArrowReaderWorkerResultsQueueReader(object):
 
                 if pa.types.is_string(column.type):
                     result_dict[column_name] = column_as_numpy.astype(np.unicode_)
-                elif pa.types.is_list(column.type):
+                elif pa.types.is_list(column.type) or pa.types.is_fixed_size_list(column.type):
                     # Assuming all lists are of the same length, hence we can collate them into a matrix
                     list_of_lists = column_as_numpy
                     try:
