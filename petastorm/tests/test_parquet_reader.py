@@ -215,7 +215,7 @@ def test_transform_spec_returns_all_none_values(scalar_dataset, null_column_dtyp
     def fill_id_with_nones(x):
         return pd.DataFrame({'id': [None] * len(x)})
 
-    edit_fields = [('id', null_column_dtype, (None,), True)]
+    edit_fields = [('id', null_column_dtype, (), True)]
 
     with reader_factory(scalar_dataset.url, schema_fields=["id"],
                         transform_spec=TransformSpec(fill_id_with_nones, edit_fields=edit_fields)) as reader:
