@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import collections
+import collections.abc
 import decimal
 # Must import pyarrow before torch. See: https://github.com/uber/petastorm/blob/master/docs/troubleshoot.rst
 import re
@@ -84,11 +84,11 @@ def decimal_friendly_collate(batch):
 
     if isinstance(batch[0], decimal.Decimal):
         return batch
-    elif isinstance(batch[0], collections.Mapping):
+    elif isinstance(batch[0], collections.abc.Mapping):
         return {key: decimal_friendly_collate([d[key] for d in batch]) for key in batch[0]}
     elif isinstance(batch[0], _string_classes):
         return batch
-    elif isinstance(batch[0], collections.Sequence):
+    elif isinstance(batch[0], collections.abc.Sequence):
         transposed = zip(*batch)
         return [decimal_friendly_collate(samples) for samples in transposed]
     else:
