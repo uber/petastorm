@@ -18,11 +18,11 @@ import threading
 from collections.abc import Iterable
 
 import numpy as np
-from pyarrow import parquet as pq
 from pyarrow.parquet import ParquetFile
 
 from petastorm import utils
 from petastorm.cache import NullCache
+from petastorm.pyarrow_helpers.dataset_wrapper import PetastormPyArrowDataset
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.worker_base import WorkerBase
 
@@ -133,7 +133,7 @@ class PyDictReaderWorker(WorkerBase):
         """
 
         if not self._dataset:
-            self._dataset = pq.ParquetDataset(
+            self._dataset = PetastormPyArrowDataset(
                 self._dataset_path,
                 filesystem=self._filesystem,
                 validate_schema=False, filters=self._arrow_filters)
