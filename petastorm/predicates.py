@@ -16,7 +16,7 @@
 Predicates for petastorm
 """
 import abc
-import collections
+import collections.abc
 import hashlib
 import numpy as np
 import six
@@ -66,7 +66,7 @@ class in_intersection(PredicateBase):
         return {self._predicate_field}
 
     def do_include(self, values):
-        if not isinstance(values[self._predicate_field], collections.Iterable):
+        if not isinstance(values[self._predicate_field], collections.abc.Iterable):
             raise ValueError('Predicate field should have iterable type')
         return any(np.in1d(values[self._predicate_field], self._inclusion_values))
 
