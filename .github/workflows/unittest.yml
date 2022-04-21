@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        config: [pyspark-2.4, tf-1.15, pyarrow-3.0, pyarrow-4.0, latest,  pyarrow-0.17.1, py39]
+        config: [pyspark-2.4, tf-1.15, pyarrow-3.0, pyarrow-4.0, latest]
         include:
         - config: pyspark-2.4
           PYARROW_VERSION: "2.0.0"
@@ -55,23 +55,9 @@ jobs:
           ARROW_PRE_0_15_IPC_FORMAT: 0
           PY: "3.7"
         - config: latest
-          PYARROW_VERSION: "5.0.0"
-          NUMPY_VERSION: "1.20.1"
-          TF_VERSION: "2.5.0"
-          PYSPARK_VERSION: "3.0.0"
-          ARROW_PRE_0_15_IPC_FORMAT: "0"
-          PY: "3.7"
-        - config: pyarrow-0.17.1
-          PYARROW_VERSION: "0.17.1"
-          NUMPY_VERSION: "1.19.1"
-          TF_VERSION: "2.5.0"
-          PYSPARK_VERSION: "3.0.0"
-          ARROW_PRE_0_15_IPC_FORMAT: 0
-          PY: "3.7"
-        - config: py39
-          PYARROW_VERSION: "3.0.0"
-          NUMPY_VERSION: "1.20.1"
-          TF_VERSION: "2.5.0"
+          PYARROW_VERSION: "6.0.1"
+          NUMPY_VERSION: "1.21.5"
+          TF_VERSION: "2.8.0"
           PYSPARK_VERSION: "3.0.0"
           ARROW_PRE_0_15_IPC_FORMAT: "0"
           PY: "3.9"
