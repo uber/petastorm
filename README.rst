@@ -46,11 +46,17 @@ The extras are: ``tf``, ``tf_gpu``, ``torch``, ``opencv``, ``docs``, ``test``.
 
 For example to trigger installation of GPU version of tensorflow and opencv, use the following pip command:
 
+**bash**
+
 .. code-block:: bash
 
     pip install petastorm[opencv,tf_gpu]
 
+**zsh**
 
+.. code-block:: bash
+
+    pip install 'petastorm[opencv,tf_gpu]'
 
 Generating a dataset
 --------------------
