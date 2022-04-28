@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import collections
+import collections.abc
 import logging
 import warnings
 
@@ -395,7 +395,7 @@ class Reader(object):
         #    c. partition: used to get a subset of data for distributed training
         # 4. Create a rowgroup ventilator object
         # 5. Start workers pool
-        if not (isinstance(schema_fields, collections.Iterable) or isinstance(schema_fields, NGram)
+        if not (isinstance(schema_fields, collections.abc.Iterable) or isinstance(schema_fields, NGram)
                 or schema_fields is None):
             raise ValueError('Fields must be either None, an iterable collection of Unischema fields '
                              'or an NGram object.')
@@ -431,7 +431,7 @@ class Reader(object):
         if self.ngram:
             fields = self.ngram.get_field_names_at_all_timesteps()
         else:
-            fields = schema_fields if isinstance(schema_fields, collections.Iterable) else None
+            fields = schema_fields if isinstance(schema_fields, collections.abc.Iterable) else None
 
         storage_schema = stored_schema.create_schema_view(fields) if fields else stored_schema
         if len(storage_schema.fields) == 0:
