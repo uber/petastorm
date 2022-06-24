@@ -23,7 +23,7 @@ from time import sleep, time
 from traceback import format_exc
 
 from threading import Thread
-from psutil import process_iter
+from psutil import pid_exists
 
 import zmq
 from zmq import ZMQBaseError
@@ -320,7 +320,7 @@ def _serialize_result_and_send(socket, serializer, data):
 def _monitor_thread_function(main_process_pid):
     while True:
         logger.debug('Monitor thread monitoring pid: %d', main_process_pid)
-        main_process_alive = any([process.pid for process in process_iter() if process.pid == main_process_pid])
+        main_process_alive = pid_exists(main_process_pid)
         if not main_process_alive:
             logger.debug('Main process with pid %d is dead. Killing worker', main_process_pid)
             os._exit(0)
