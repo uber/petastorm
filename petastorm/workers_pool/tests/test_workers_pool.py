@@ -18,7 +18,7 @@ import unittest
 
 import numpy as np
 from multiprocessing import Process, Manager
-from psutil import process_iter
+from psutil import pid_exists
 
 
 from petastorm.workers_pool import EmptyResultError
@@ -242,7 +242,7 @@ class TestWorkersPool(unittest.TestCase):
         worker_pid = return_list[0]
 
         for _ in range(20):
-            worker_is_alive = any([p.pid for p in process_iter() if p.pid == worker_pid])
+            worker_is_alive = pid_exists(worker_pid)
             if not worker_is_alive:
                 break
             time.sleep(0.1)
