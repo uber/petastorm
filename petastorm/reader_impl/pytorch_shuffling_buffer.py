@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import abc
-from collections import deque
 
 import six
 import torch
@@ -90,37 +89,39 @@ class BatchedNoopShufflingBuffer(BatchedShufflingBufferBase):
 
     def __init__(self, batch_size=1):
         super(BatchedNoopShufflingBuffer, self).__init__(batch_size=batch_size)
-        self._batches = []
-        self._num_samples = 0
-        self.store = deque()
         self._size = 0
-
-    def _make_batch(self):
-        # TODO: Add test for the zip
-        batch = [torch.cat(b, 0) for b in zip(*self._batches)]
-        if self._num_samples > self.batch_size:
-            leftover = [b[self.batch_size:] for b in batch]
-            batch = [b[:self.batch_size] for b in batch]
-            self._batches = [leftover]
-        else:
-            self._batches = []
-        self._num_samples -= min(self._num_samples, self.batch_size)
-        self.store.append(batch)
+        self._buffer = []
+        self._done_adding = False
+        self._batch_start_idx = 0
 
     def _add_many(self, items):
-        self._num_samples += len(items[0])
         self._size += len(items[0])
-        self._batches.append(items)
-        while self._num_samples >= self.batch_size:
-            self._make_batch()
+        if len(self._buffer) == 0:
+            self._buffer = items
+        else:
+            # Merge with previous rowgroup leftover
+            for i, v in enumerate(items):
+                self._buffer[i] = torch.cat([self._buffer[i][self._batch_start_idx:], v], 0)
+        # Batch start idx starts from 0 for a fresh rowgroup.
+        self._batch_start_idx = 0
 
     def retrieve(self):
-        batch = self.store.popleft()
-        self._size -= len(batch[0])
+        batch = []
+        cur_batch_size = min(self._size, self.batch_size)
+        for v in self._buffer:
+            v_batch = v[self._batch_start_idx:self._batch_start_idx+cur_batch_size]
+            batch.append(v_batch)
+        # Increase batch start idx with current batch size
+        self._batch_start_idx += cur_batch_size
+        # Decrease size with current batch size
+        self._size -= cur_batch_size
         return batch
 
     def can_retrieve(self):
-        return len(self.store) > 0
+        if not self._done_adding:
+            return self._size >= self.batch_size
+        else:
+            return self._size > 0
 
     def can_add(self):
         return True
@@ -130,8 +131,7 @@ class BatchedNoopShufflingBuffer(BatchedShufflingBufferBase):
         return self._size
 
     def finish(self):
-        if self._batches:
-            self._make_batch()
+        self._done_adding = True
 
 
 class BatchedRandomShufflingBuffer(BatchedShufflingBufferBase):
