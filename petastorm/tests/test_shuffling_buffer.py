@@ -47,9 +47,12 @@ def test_noop_shuffling_buffer(buffer_type):
     assert 2 == _retrieve(q)
     assert 3 == _retrieve(q)
     assert not q.can_retrieve()
+    assert q.size == 0
 
-    # No effect is expected in noop implementation
     q.finish()
+    if isinstance(q, BatchedNoopShufflingBuffer):
+        assert q._done_adding
+        assert len(q._buffer) == 0
 
 
 def _add_many(q, lst):
