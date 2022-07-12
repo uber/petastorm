@@ -40,6 +40,9 @@ def test_noop_shuffling_buffer(buffer_type):
 
     _add_many(q, [2, 3])
     assert q.size == 3
+    if isinstance(q, BatchedNoopShufflingBuffer):
+        # Batch_size ==1 => no leftovers
+        assert len(q._batches) == 0
 
     assert 1 == _retrieve(q)
     assert q.can_retrieve()
@@ -47,9 +50,45 @@ def test_noop_shuffling_buffer(buffer_type):
     assert 2 == _retrieve(q)
     assert 3 == _retrieve(q)
     assert not q.can_retrieve()
+    assert q.size == 0
 
-    # No effect is expected in noop implementation
     q.finish()
+    if isinstance(q, BatchedNoopShufflingBuffer):
+        assert q._done_adding
+        assert len(q._batches) == 0
+
+
+def test_batched_noop_shuffling_buffer():
+    """Check intermediate status of batched non-shuffling buffer"""
+    import torch
+
+    q = BatchedNoopShufflingBuffer(batch_size=3)
+    _add_many(q, [1, 2, 3, 4, 5])
+    assert q.can_retrieve()
+    assert torch.equal(torch.as_tensor([1, 2, 3]), q.retrieve()[0])
+    # Two rows are left
+    assert q._num_samples == 2
+    # One batch in _bachets
+    assert len(q._batches) == 1
+    # Leftover batch size is 2
+    assert q._batches[0][0].size() == torch.Size([2])
+    q.finish()
+    assert q._num_samples == 0
+    assert len(q._batches) == 0
+    assert torch.equal(torch.as_tensor([4, 5]), q.retrieve()[0])
+    assert q.size == 0
+
+    # Test the case that size of row_group < batch_size
+    q = BatchedNoopShufflingBuffer(batch_size=5)
+    _add_many(q, [1, 2, 3])
+    assert not q.can_retrieve()
+    assert q._num_samples == 3
+    assert len(q._batches) == 1
+    _add_many(q, [4, 5])
+    assert q._num_samples == 0
+    assert len(q._batches) == 0
+    assert torch.equal(torch.as_tensor([1, 2, 3, 4, 5]), q.retrieve()[0])
+    assert q.size == 0
 
 
 def _add_many(q, lst):

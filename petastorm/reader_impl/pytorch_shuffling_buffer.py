@@ -90,28 +90,51 @@ class BatchedNoopShufflingBuffer(BatchedShufflingBufferBase):
 
     def __init__(self, batch_size=1):
         super(BatchedNoopShufflingBuffer, self).__init__(batch_size=batch_size)
+        # Leftover rows which are not converted into batches yet.
         self._batches = []
+        # Number of leftover rows
         self._num_samples = 0
         self.store = deque()
         self._size = 0
+        self._done_adding = False
 
     def _make_batch(self):
         # TODO: Add test for the zip
-        batch = [torch.cat(b, 0) for b in zip(*self._batches)]
-        if self._num_samples > self.batch_size:
-            leftover = [b[self.batch_size:] for b in batch]
-            batch = [b[:self.batch_size] for b in batch]
-            self._batches = [leftover]
-        else:
+        rows = [torch.cat(b, 0) for b in zip(*self._batches)]
+        indices = list(range(self._num_samples))
+        i = 0
+        while self._num_samples >= self.batch_size:
+            # Add available batches
+            idx = indices[i:i+self.batch_size]
+            batch = [v[idx] for v in rows]
+            self.store.append(batch)
+            self._num_samples -= self.batch_size
+            i += self.batch_size
+
+        if self._done_adding:
+            if self._num_samples > 0:
+                # Add leftover as last batch
+                idx = indices[i:]
+                batch = [v[idx] for v in rows]
+                self.store.append(batch)
+                i += self._num_samples
+                self._num_samples = 0
             self._batches = []
-        self._num_samples -= min(self._num_samples, self.batch_size)
-        self.store.append(batch)
+        else:
+            if self._num_samples > 0:
+                # Deal with leftover in current rowgroup from reader.
+                leftover = [v[i:] for v in rows]
+                self._batches = [leftover]
+            else:
+                self._batches = []
+
+        del rows
 
     def _add_many(self, items):
         self._num_samples += len(items[0])
         self._size += len(items[0])
         self._batches.append(items)
-        while self._num_samples >= self.batch_size:
+        if self._num_samples >= self.batch_size:
             self._make_batch()
 
     def retrieve(self):
@@ -130,7 +153,9 @@ class BatchedNoopShufflingBuffer(BatchedShufflingBufferBase):
         return self._size
 
     def finish(self):
-        if self._batches:
+        self._done_adding = True
+        if self._num_samples > 0:
+            # Deal with leftover rows.
             self._make_batch()
 
 
