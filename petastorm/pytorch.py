@@ -359,6 +359,7 @@ class BatchedDataLoader(LoaderBase):
                 # This is for the case of batched reads. Here we restore back the
                 # dictionary format of records
                 batch = dict(zip(keys, batch))
+            print("pt yield batches")
             yield batch
 
     # Functions needed to treat data loader as a context manager
