@@ -4,8 +4,16 @@
 Release notes
 =============
 
-Release 0.11.5 (unreleased)
+
+Release 0.11.6 (unreleased)
 ===========================
+
+
+Release 0.11.5
+===========================
+- `PR 746 <https://github.com/uber/petastorm/pull/746>`_: Import ABC from collections.abc for Python 3.10 compatibility.
+- `PR 757 <https://github.com/uber/petastorm/pull/757>`_: Replace process_iter by pid_exists.
+- `PR 762 <https://github.com/uber/petastorm/pull/762>`_: PyTorch: improve memory-efficiency in batched non-shuffle buffer.
 
 
 Release 0.11.4
