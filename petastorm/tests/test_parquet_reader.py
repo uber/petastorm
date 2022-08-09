@@ -19,7 +19,7 @@ import pandas as pd
 import pytest
 from pyarrow import parquet as pq
 
-from petastorm import make_batch_reader
+from petastorm import make_batch_reader, make_reader
 from petastorm.arrow_reader_worker import ArrowReaderWorker
 # pylint: disable=unnecessary-lambda
 from petastorm.tests.test_common import create_test_scalar_dataset
@@ -220,3 +220,41 @@ def test_string_partition(reader_factory, tmpdir, partition_by):
         row_ids_batched = [row.id for row in reader]
     actual_row_ids = list(itertools.chain(*row_ids_batched))
     assert len(data) == len(actual_row_ids)
+
+
+def test_shuffle_per_row_group(scalar_dataset):
+    """Check if every row group is shuffled."""
+    for reader_factory in [make_batch_reader, make_reader]:
+        with reader_factory(scalar_dataset.url, reader_pool_type='dummy',
+                            shuffle_rows=True, shuffle_row_groups=False) as reader:
+            row_ids_batched = [row.id for row in reader]
+        if reader_factory == make_batch_reader:
+            actual_row_ids = list(itertools.chain(*row_ids_batched))
+        else:
+            # No need to unbatch
+            actual_row_ids = row_ids_batched
+
+        assert len(scalar_dataset.data) == len(actual_row_ids)
+        # Row ids are shuffled in output
+        assert not np.array_equal(list(np.arange(len(scalar_dataset.data))), actual_row_ids)
+
+
+def test_random_seed(scalar_dataset):
+    """Result should be reproducible with the same random seed."""
+    for reader_factory in [make_batch_reader, make_reader]:
+        results = []
+        for _ in range(2):
+            # seed has effects on shuffle_rows, shuffle_row_groups and sharding.
+            with reader_factory(scalar_dataset.url, reader_pool_type='dummy',
+                                shuffle_rows=True, seed=123, shuffle_row_groups=True,
+                                cur_shard=0, shard_count=2) as reader:
+                row_ids_batched = [row.id for row in reader]
+            if reader_factory == make_batch_reader:
+                actual_row_ids = list(itertools.chain(*row_ids_batched))
+            else:
+                # No need to unbatch
+                actual_row_ids = row_ids_batched
+
+            results.append(actual_row_ids)
+        # Shuffled results are expected to be same
+        np.testing.assert_equal(results[0], results[1])

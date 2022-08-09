@@ -100,6 +100,8 @@ class ArrowReaderWorker(WorkerBase):
         self._transform_spec = args[6]
         self._transformed_schema = args[7]
         self._arrow_filters = args[8]
+        self._shuffle_rows = args[9]
+        self._random_state = np.random.RandomState(seed=args[10])
 
         if self._ngram:
             raise NotImplementedError('ngrams are not supported by ArrowReaderWorker')
@@ -287,6 +289,9 @@ class ArrowReaderWorker(WorkerBase):
 
         # pyarrow would fail if we request a column names that the dataset is partitioned by
         table = piece.read(columns=column_names - partition_names, partitions=self._dataset.partitions)
+        if self._shuffle_rows:
+            indices = self._random_state.permutation(table.num_rows)
+            table = table.take(indices)
 
         # Drop columns we did not explicitly request. This may happen when a table is partitioned. Besides columns
         # requested, pyarrow will also return partition values. Having these unexpected fields will break some
