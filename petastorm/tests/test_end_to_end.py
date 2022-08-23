@@ -457,11 +457,11 @@ def test_predicate_with_invalid_fields(synthetic_dataset, reader_factory):
 
 
 @pytest.mark.parametrize('reader_factory', MINIMAL_READER_FLAVOR_FACTORIES + SCALAR_ONLY_READER_FACTORIES)
-@pytest.mark.parametrize('shard_seed', [None, 0])
-def test_partition_multi_node(synthetic_dataset, reader_factory, shard_seed):
+@pytest.mark.parametrize('seed', [None, 0])
+def test_partition_multi_node(synthetic_dataset, reader_factory, seed):
     """Tests that the reader only returns half of the expected data consistently"""
-    with reader_factory(synthetic_dataset.url, cur_shard=0, shard_count=5, shard_seed=shard_seed) as reader:
-        with reader_factory(synthetic_dataset.url, cur_shard=0, shard_count=5, shard_seed=shard_seed) as reader_2:
+    with reader_factory(synthetic_dataset.url, cur_shard=0, shard_count=5, seed=seed) as reader:
+        with reader_factory(synthetic_dataset.url, cur_shard=0, shard_count=5, seed=seed) as reader_2:
             results_1 = set(_readout_all_ids(reader))
             results_2 = set(_readout_all_ids(reader_2))
 
@@ -474,7 +474,7 @@ def test_partition_multi_node(synthetic_dataset, reader_factory, shard_seed):
             # Test that separate partitions also have no overlap by checking ids)
             for partition in range(1, 5):
                 with reader_factory(synthetic_dataset.url, cur_shard=partition,
-                                    shard_count=5, shard_seed=shard_seed) as reader_other:
+                                    shard_count=5, seed=seed) as reader_other:
                     ids_in_other_partition = set(_readout_all_ids(reader_other))
 
                     assert not ids_in_other_partition.intersection(results_1)

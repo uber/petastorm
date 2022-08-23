@@ -109,6 +109,8 @@ class PyDictReaderWorker(WorkerBase):
         self._local_cache = args[5]
         self._transform_spec = args[6]
         self._arrow_filters = args[8]
+        self._shuffle_rows = args[9]
+        self._shuffle_seed = args[10]
 
         # We create datasets lazily in the first invocation of 'def process'. This speeds up startup time since
         # all Worker constructors are serialized
@@ -264,6 +266,8 @@ class PyDictReaderWorker(WorkerBase):
         # with nulls translated to nans
         data_frame = piece.read(columns=column_names, partitions=self._dataset.partitions).to_pandas(
             integer_object_nulls=True)
+        if self._shuffle_rows:
+            data_frame = data_frame.sample(frac=1, random_state=self._shuffle_seed)
 
         num_rows = len(data_frame)
         num_partitions = shuffle_row_drop_partition[1]

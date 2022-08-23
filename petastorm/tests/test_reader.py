@@ -87,3 +87,10 @@ def test_invalid_cache_type(synthetic_dataset, reader_factory):
 def test_invalid_reader_pool_type(synthetic_dataset, reader_factory):
     with pytest.raises(ValueError, match='Unknown reader_pool_type'):
         reader_factory(synthetic_dataset.url, reader_pool_type='bogus_pool_type')
+
+
+@pytest.mark.parametrize('reader_factory', READER_FACTORIES)
+def test_deprecated_shard_seed(synthetic_dataset, reader_factory):
+    match_str = 'shard_seed was deprecated and will be removed in future versions.'
+    with pytest.warns(UserWarning, match=match_str):
+        reader_factory(synthetic_dataset.url, shard_seed=123)

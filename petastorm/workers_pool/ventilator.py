@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import random
+import numpy as np
 import threading
 from abc import ABCMeta, abstractmethod
 from time import sleep
@@ -66,6 +66,7 @@ class ConcurrentVentilator(Ventilator):
                  items_to_ventilate,
                  iterations=1,
                  randomize_item_order=False,
+                 random_seed=None,
                  max_ventilation_queue_size=None,
                  ventilation_interval=_VENTILATION_INTERVAL):
         """
@@ -79,6 +80,7 @@ class ConcurrentVentilator(Ventilator):
                 ``None`` is passed, the ventilator will continue ventilating forever.
         :param randomize_item_order: (``bool``) Whether to randomize the item order in items_to_ventilate. This will be
                 done on every individual iteration.
+        :param random_seed: (``int``) If not None: the random seed used for randomize_item_order. Default: None.
         :param max_ventilation_queue_size: (``int``) The maximum number of items to be stored in the ventilation queue.
                 The higher this number, the higher potential memory requirements. By default it will use the size
                 of items_to_ventilate since that can definitely be held in memory.
@@ -96,7 +98,7 @@ class ConcurrentVentilator(Ventilator):
         self._items_to_ventilate = items_to_ventilate
         self._iterations_remaining = iterations
         self._randomize_item_order = randomize_item_order
-
+        self._random_state = np.random.RandomState(seed=random_seed)
         self._iterations = iterations
 
         # For the default max ventilation queue size we will use the size of the items to ventilate
@@ -141,7 +143,7 @@ class ConcurrentVentilator(Ventilator):
 
             # If we are ventilating the first item, we check if we would like to randomize the item order
             if self._current_item_to_ventilate == 0 and self._randomize_item_order:
-                random.shuffle(self._items_to_ventilate)
+                self._random_state.shuffle(self._items_to_ventilate)
 
             # Block until queue has room, but use continue to allow for checking if stop has been called
             if self._ventilated_items_count - self._processed_items_count >= self._max_ventilation_queue_size:
