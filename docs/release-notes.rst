@@ -7,6 +7,23 @@ Release notes
 
 Release 0.11.6 (unreleased)
 ===========================
+- `PR 767 <https://github.com/uber/petastorm/pull/767>`_: Reader: enable shuffling inside every row group.
+
+New features
+--------------------------
+- Parallel shuffling is implemented in reader level to increase throughput.
+
+  - Introduce ``shuffle_rows`` boolean field in ``Reader``, ``make_reader()`` and ``make_batch_reader()``
+    to enable shuffling inside a single row group.
+
+  - Break the bottleneck of shuffling samples in upper level PyTorch or Tensorflow dataloaders.
+
+- Support reproducible randomized shuffling outputs with ``seed`` field in ``Reader``, ``make_reader()`` and ``make_batch_reader()``.
+
+Deprecated features
+--------------------------
+- ``shard_seed`` field is deprecated in ``Reader``, ``make_reader()`` and ``make_batch_reader()``,
+  use ``seed`` field to apply randomization effects on sharding row groups.
 
 
 Release 0.11.5
