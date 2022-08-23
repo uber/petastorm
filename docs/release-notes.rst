@@ -5,7 +5,11 @@ Release notes
 =============
 
 
-Release 0.11.6 (unreleased)
+Release 0.12.1 (unreleased)
+===========================
+
+
+Release 0.12.0
 ===========================
 - `PR 767 <https://github.com/uber/petastorm/pull/767>`_: Reader: enable shuffling inside every row group.
 
