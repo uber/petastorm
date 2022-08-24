@@ -233,7 +233,7 @@ The minimalist example below assumes the definition of a ``Net`` class and
     transform = TransformSpec(_transform_row, removed_fields=['idx'])
 
     with DataLoader(make_reader('file:///localpath/mnist/train', num_epochs=10,
-                                transform_spec=transform), batch_size=64) as train_loader:
+                                transform_spec=transform, seed=1, shuffle_rows=True), batch_size=64) as train_loader:
         train(model, device, train_loader, 10, optimizer, 1)
     with DataLoader(make_reader('file:///localpath/mnist/test', num_epochs=10,
                                 transform_spec=transform), batch_size=1000) as test_loader:

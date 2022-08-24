@@ -12,6 +12,7 @@ Release 0.12.1 (unreleased)
 Release 0.12.0
 ===========================
 - `PR 767 <https://github.com/uber/petastorm/pull/767>`_: Reader: enable shuffling inside every row group.
+- `PR 771 <https://github.com/uber/petastorm/pull/771>`_: Update pytorch mnist example with up-to-date make_reader() interface.
 
 New features
 --------------------------
