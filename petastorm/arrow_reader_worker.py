@@ -23,13 +23,30 @@ from pyarrow import parquet as pq
 from pyarrow.parquet import ParquetFile
 
 from petastorm.cache import NullCache
+from petastorm.unischema import Unischema
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.worker_base import WorkerBase
+from typing import Callable, List
+
+
+def default_list_collate_fn(column_name: str, schema: Unischema, list_of_lists: List[List[np.ndarray]]):
+    try:
+        col_data = np.vstack(list_of_lists.tolist())
+        shape = schema.fields[column_name].shape
+        if len(shape) > 1:
+            col_data = col_data.reshape((len(list_of_lists),) + shape)
+        return col_data
+
+    except ValueError:
+        raise RuntimeError('Length of all values in column \'{}\' are expected to be the same length. '
+                           'Got the following set of lengths: \'{}\''
+                           .format(column_name,
+                                   ', '.join(str(value.shape[0]) for value in list_of_lists)))
 
 
 class ArrowReaderWorkerResultsQueueReader(object):
-    def __init__(self):
-        pass
+    def __init__(self, collate_lists_fn: Callable):
+        self._collate_fn = collate_lists_fn or default_list_collate_fn
 
     @property
     def batched_output(self):
@@ -66,18 +83,7 @@ class ArrowReaderWorkerResultsQueueReader(object):
                 elif pa.types.is_list(column.type):
                     # Assuming all lists are of the same length, hence we can collate them into a matrix
                     list_of_lists = column_as_numpy
-                    try:
-                        col_data = np.vstack(list_of_lists.tolist())
-                        shape = schema.fields[column_name].shape
-                        if len(shape) > 1:
-                            col_data = col_data.reshape((len(list_of_lists),) + shape)
-                        result_dict[column_name] = col_data
-
-                    except ValueError:
-                        raise RuntimeError('Length of all values in column \'{}\' are expected to be the same length. '
-                                           'Got the following set of lengths: \'{}\''
-                                           .format(column_name,
-                                                   ', '.join(str(value.shape[0]) for value in list_of_lists)))
+                    result_dict[column_name] = self._collate_fn(column_name, schema, list_of_lists)
                 else:
                     result_dict[column_name] = column_as_numpy
 
@@ -111,8 +117,8 @@ class ArrowReaderWorker(WorkerBase):
         self._dataset = None
 
     @staticmethod
-    def new_results_queue_reader():
-        return ArrowReaderWorkerResultsQueueReader()
+    def new_results_queue_reader(collate_fn: Callable):
+        return ArrowReaderWorkerResultsQueueReader(collate_fn)
 
     # pylint: disable=arguments-differ
     def process(self, piece_index, worker_predicate, shuffle_row_drop_partition):

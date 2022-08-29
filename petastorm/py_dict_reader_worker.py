@@ -16,6 +16,7 @@ from __future__ import division
 import hashlib
 import threading
 from collections.abc import Iterable
+from typing import Callable
 
 import numpy as np
 from pyarrow import parquet as pq
@@ -117,7 +118,9 @@ class PyDictReaderWorker(WorkerBase):
         self._dataset = None
 
     @staticmethod
-    def new_results_queue_reader():
+    def new_results_queue_reader(collate_lists_fn: Callable):
+        if collate_lists_fn is not None:
+            raise "PyDictReaderWorker can not collate records"
         return PyDictReaderWorkerResultsQueueReader()
 
     # pylint: disable=arguments-differ
