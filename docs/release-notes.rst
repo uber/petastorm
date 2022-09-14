@@ -7,7 +7,7 @@ Release notes
 
 Release 0.12.1 (unreleased)
 ===========================
-
+- `PR 777 <https://github.com/uber/petastorm/pull/777>`_: Remove ``LocalDiskArrowTableCache`` class as it was using deprecated pyarrow serialization API. Speed up ``LocalDiskCache`` by using the highest pickle protocol in cache serialization.
 
 Release 0.12.0
 ===========================
