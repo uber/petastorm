@@ -225,7 +225,7 @@ def test_transform_spec_returns_all_none_values(scalar_dataset, null_column_dtyp
 
 
 @pytest.mark.parametrize('np_dtype, pa_dtype, null_value',
-                         ((np.float32, pa.float32(), np.nan), (np.object, pa.string(), None)))
+                         ((np.float32, pa.float32(), np.nan), (np.object_, pa.string(), None)))
 @pytest.mark.parametrize('reader_factory', _D)
 def test_entire_column_of_typed_nulls(reader_factory, np_dtype, pa_dtype, null_value, tmp_path):
     path = tmp_path / "dataset"
@@ -237,7 +237,7 @@ def test_entire_column_of_typed_nulls(reader_factory, np_dtype, pa_dtype, null_v
         assert sample.all_nulls.dtype == np_dtype
         if np_dtype == np.float32:
             assert np.all(np.isnan(sample.all_nulls))
-        elif np_dtype == np.object:
+        elif np_dtype == np.object_:
             assert all(v is None for v in sample.all_nulls)
         else:
             assert False, "Unexpected np_dtype"
