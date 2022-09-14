@@ -513,7 +513,8 @@ def _arrow_from_numpy_type(field: UnischemaField) -> pa.DataType:
             "precision and scale are not stored in unischema.")
     else:
         if field.shape != ():
-            int_list_size = -1 if any(d is None for d in field.shape) else np.prod(field.shape)
+            int_list_size = -1 if any(d is None for d in field.shape) else np.prod(field.shape)  # type: ignore
+
             return pa.list_(pa.from_numpy_dtype(field.numpy_dtype), int_list_size)
         else:
             if field.numpy_dtype == np.datetime64:
