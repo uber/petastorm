@@ -13,6 +13,7 @@
 # limitations under the License.
 from __future__ import division
 
+import pickle
 import shutil
 from diskcache import FanoutCache
 
@@ -43,6 +44,7 @@ class LocalDiskCache(CacheBase):
         default_settings = {
             'size_limit': size_limit_bytes,
             'eviction_policy': 'least-recently-stored',
+            'disk_pickle_protocol': pickle.HIGHEST_PROTOCOL,
         }
         default_settings.update(settings)
 

@@ -25,7 +25,6 @@ from petastorm.errors import NoDataAvailableError
 from petastorm.etl import dataset_metadata, rowgroup_indexing
 from petastorm.etl.dataset_metadata import PetastormMetadataError, infer_or_load_unischema
 from petastorm.fs_utils import get_filesystem_and_path_or_paths, normalize_dir_url
-from petastorm.local_disk_arrow_table_cache import LocalDiskArrowTableCache
 from petastorm.local_disk_cache import LocalDiskCache
 from petastorm.ngram import NGram
 from petastorm.predicates import PredicateBase
@@ -307,8 +306,8 @@ def make_batch_reader(dataset_url_or_urls,
     if cache_type is None or cache_type == NULL_CACHE:
         cache = NullCache()
     elif cache_type == LOCAL_DISK_CACHE:
-        cache = LocalDiskArrowTableCache(cache_location, cache_size_limit, cache_row_size_estimate,
-                                         **cache_extra_settings or {})
+        cache = LocalDiskCache(cache_location, cache_size_limit, cache_row_size_estimate,
+                               **cache_extra_settings or {})
     else:
         raise ValueError('Unknown cache_type: {}'.format(cache_type))
 
