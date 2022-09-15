@@ -24,7 +24,7 @@ from petastorm.arrow_reader_worker import ArrowReaderWorker
 # pylint: disable=unnecessary-lambda
 from petastorm.tests.test_common import create_test_scalar_dataset
 from petastorm.transform import TransformSpec
-from petastorm.unischema import UnischemaField
+from petastorm.unischema import UnischemaField, Unischema
 
 _D = [lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', **kwargs)]
 
@@ -258,3 +258,23 @@ def test_random_seed(scalar_dataset):
             results.append(actual_row_ids)
         # Shuffled results are expected to be same
         np.testing.assert_equal(results[0], results[1])
+
+@pytest.mark.parametrize('reader_factory', _D + _TP)
+def test_read_with_collate(reader_factory, tmp_path):
+    data = pd.DataFrame({"str": ["a", "bc"], "varlen_nums": [[1], [3, 4]]})
+    path = tmp_path / 'data'
+    url = f"file:///{path}"
+    data.to_parquet(path)
+
+    def collate_lists_fn(column_name: str, schema: Unischema, values):
+        max_len = max(map(len, values))
+        result = np.asarray([np.pad(v, (0, max_len - len(v)), 'constant', constant_values=0) for v in values])
+        return result
+
+    with reader_factory(url, collate_lists_fn=collate_lists_fn) as reader:
+        actual = list(reader)
+
+    assert len(actual) == 1
+    np.testing.assert_equal(actual[0].varlen_nums, [[1, 0], [1, 2]])
+    np.testing.assert_equal(actual[0].str, ["a", "bc"])
+

@@ -193,6 +193,7 @@ def make_reader(dataset_url,
         return Reader(filesystem, dataset_path,
                       worker_class=PyDictReaderWorker,
                       is_batched_reader=False,
+                      collate_lists_fn=None,
                       **kwargs)
     except PetastormMetadataError as e:
         logger.error('Unexpected exception: %s', str(e))
@@ -218,7 +219,8 @@ def make_batch_reader(dataset_url_or_urls,
                       filters=None,
                       storage_options=None,
                       zmq_copy_buffers=True,
-                      filesystem=None):
+                      filesystem=None,
+                      collate_lists_fn=None):
     """
     Creates an instance of Reader for reading batches out of a non-Petastorm Parquet store.
 
@@ -338,7 +340,8 @@ def make_batch_reader(dataset_url_or_urls,
                   cache=cache,
                   transform_spec=transform_spec,
                   is_batched_reader=True,
-                  filters=filters)
+                  filters=filters,
+                  collate_lists_fn=collate_lists_fn)
 
 
 class Reader(object):
@@ -352,7 +355,8 @@ class Reader(object):
                  shuffle_row_drop_partitions=1,
                  predicate=None, rowgroup_selector=None, reader_pool=None, num_epochs=1,
                  cur_shard=None, shard_count=None, cache=None, worker_class=None,
-                 transform_spec=None, is_batched_reader=False, filters=None, shard_seed=None):
+                 transform_spec=None, is_batched_reader=False, filters=None, shard_seed=None,
+                 collate_lists_fn=None):
         """Initializes a reader object.
 
         :param pyarrow_filesystem: An instance of ``pyarrow.FileSystem`` that will be used. If not specified,
@@ -428,7 +432,7 @@ class Reader(object):
 
         # By default, use original method of working with list of dictionaries and not arrow tables
         worker_class = worker_class or PyDictReaderWorker
-        self._results_queue_reader = worker_class.new_results_queue_reader()
+        self._results_queue_reader = worker_class.new_results_queue_reader(collate_lists_fn)
 
         if self.ngram and not self.ngram.timestamp_overlap and shuffle_row_drop_partitions > 1:
             raise NotImplementedError('Using timestamp_overlap=False is not implemented with'
