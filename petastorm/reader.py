@@ -205,6 +205,7 @@ def make_reader(dataset_url,
 def make_batch_reader(dataset_url_or_urls,
                       schema_fields=None,
                       reader_pool_type='thread', workers_count=10,
+                      results_queue_size=50,
                       seed=None, shuffle_rows=False,
                       shuffle_row_groups=True, shuffle_row_drop_partitions=1,
                       predicate=None,
@@ -243,6 +244,8 @@ def make_batch_reader(dataset_url_or_urls,
         denoting a thread pool, process pool, or running everything in the master thread. Defaults to 'thread'
     :param workers_count: An int for the number of workers to use in the reader pool. This only is used for the
         thread or process pool. Defaults to 10
+    :param results_queue_size: Size of the results queue to store prefetched row-groups. Currently only applicable to
+        thread reader pool type.
     :param seed: Random seed specified for shuffle and sharding with reproducible outputs. Defaults to None
     :param shuffle_rows: Whether to shuffle inside a single row group. Defaults to False.
     :param shuffle_row_groups: Whether to shuffle row groups (the order in which full row groups are read)
@@ -312,7 +315,7 @@ def make_batch_reader(dataset_url_or_urls,
         raise ValueError('Unknown cache_type: {}'.format(cache_type))
 
     if reader_pool_type == 'thread':
-        reader_pool = ThreadPool(workers_count)
+        reader_pool = ThreadPool(workers_count, results_queue_size)
     elif reader_pool_type == 'process':
         serializer = ArrowTableSerializer()
         reader_pool = ProcessPool(workers_count, serializer, zmq_copy_buffers=zmq_copy_buffers)
