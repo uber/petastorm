@@ -258,3 +258,11 @@ def test_random_seed(scalar_dataset):
             results.append(actual_row_ids)
         # Shuffled results are expected to be same
         np.testing.assert_equal(results[0], results[1])
+
+
+def test_results_queue_size_propagation_in_make_batch_reader(scalar_dataset):
+    expected_results_queue_size = 42
+    with make_batch_reader(scalar_dataset.url, reader_pool_type='thread',
+                           results_queue_size=expected_results_queue_size) as batch_reader:
+        actual_results_queue_size = batch_reader._workers_pool._results_queue_size
+    assert actual_results_queue_size == expected_results_queue_size
