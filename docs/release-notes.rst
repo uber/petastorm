@@ -4,8 +4,11 @@
 Release notes
 =============
 
+Release 0.12.2 (unreleased)
+===========================
 
-Release 0.12.1 (unreleased)
+
+Release 0.12.1
 ===========================
 - `PR 777 <https://github.com/uber/petastorm/pull/777>`_: Remove ``LocalDiskArrowTableCache`` class as it was using deprecated pyarrow serialization API. Speed up ``LocalDiskCache`` by using the highest pickle protocol in cache serialization.
 - `PR 783 <https://github.com/uber/petastorm/pull/783>`_: Support results_queue_size parameter in make_batch_reader API
