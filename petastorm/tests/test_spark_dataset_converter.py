@@ -649,3 +649,21 @@ def test_get_spark_session_safe_check(spark_test_ctx):
 
     with pytest.raises(py4j.protocol.Py4JJavaError):
         spark_test_ctx.spark.sparkContext.parallelize(range(1), 1).map(map_fn).collect()
+
+
+def test_make_spark_convert_from_saved_df_path(spark_test_ctx):
+    df1 = spark_test_ctx.spark.range(100, 101)
+    output_path = \
+        os.path.join(spark_test_ctx.tempdir, "test_make_spark_convert_from_saved_df_path")
+    df1.write.parquet("file:" + output_path)
+    converter1 = make_spark_converter(output_path)
+
+    def map_fn(_):
+        with converter1.make_torch_dataloader(num_epochs=1) as dataloader:
+            for batch in dataloader:
+                ret = batch["id"][0]
+        return ret
+
+    result = spark_test_ctx.spark.sparkContext.parallelize(range(1), 1) \
+        .map(map_fn).collect()[0]
+    assert result == 100
