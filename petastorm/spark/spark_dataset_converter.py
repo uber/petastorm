@@ -457,7 +457,17 @@ def _check_url(dir_url):
 def _check_parent_cache_dir_url(dir_url):
     """Check dir url whether is suitable to be used as parent cache directory."""
     _check_url(dir_url)
-    fs, dir_path = get_filesystem_and_path_or_paths(dir_url)
+    try:
+        fs, dir_path = get_filesystem_and_path_or_paths(dir_url)
+    except Exception:
+        if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
+            raise ValueError(
+                "On databricks runtime, you should specify "
+                f"'{SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF}' config to a dbfs fuse path "
+                "like 'file:/dbfs/...'."
+            )
+        raise
+
     if 'DATABRICKS_RUNTIME_VERSION' in os.environ and not _is_spark_local_mode():
         if isinstance(fs, LocalFileSystem):
             # User need to use dbfs fuse URL.
