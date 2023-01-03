@@ -724,4 +724,4 @@ def make_spark_converter(
     parquet_file_url_list = list(spark_df._jdf.inputFiles())
     _check_dataset_file_median_size(parquet_file_url_list)
 
-    return SparkDatasetConverter(dataset_cache_dir_url, parquet_file_url_list, dataset_size)
+    return SparkDatasetConverter(dataset_dir_url, parquet_file_url_list, dataset_size)
