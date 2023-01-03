@@ -692,14 +692,17 @@ def make_spark_converter(
             if not (
                 dataset_dir_url.startswith("file:/dbfs/") or
                 dataset_dir_url.startswith("file:///dbfs/") or
-                dataset_dir_url.startswith("dbfs:/")
+                dataset_dir_url.startswith("dbfs:///") or
+                (dataset_dir_url.startswith("dbfs:/") and not dataset_dir_url.startswith("dbfs://"))
             ):
                 raise ValueError(
                     "On databricks runtime, if `df` argument is a string, it must be a path "
                     "starting with 'file:/dbfs/' or 'file:///dbfs/' or 'dbfs:/'"
                 )
-            if dataset_dir_url.startswith("dbfs:/"):
+            if dataset_dir_url.startswith("dbfs:///"):
                 # convert it to a dbfs fuse path
+                dataset_dir_url = "file:/dbfs/" + dataset_dir_url[len("dbfs:///"):]
+            elif dataset_dir_url.startswith("dbfs:/"):
                 dataset_dir_url = "file:/dbfs/" + dataset_dir_url[len("dbfs:/"):]
     else:
         # TODO: Improve default behavior to be automatically choosing the best way.
