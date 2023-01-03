@@ -454,20 +454,26 @@ def _check_url(dir_url):
             'Please prepend "file://" for local filesystem.'.format(dir_url))
 
 
+def _normalize_databricks_dbfs_url(url, err_msg):
+    if not (
+        url.startswith("file:/dbfs/") or
+        url.startswith("file:///dbfs/") or
+        url.startswith("dbfs:///") or
+        (url.startswith("dbfs:/") and not url.startswith("dbfs://"))
+    ):
+        raise ValueError(err_msg)
+    if url.startswith("dbfs:///"):
+        # convert it to a dbfs fuse path
+        url = "file:/dbfs/" + url[len("dbfs:///"):]
+    elif url.startswith("dbfs:/"):
+        url = "file:/dbfs/" + url[len("dbfs:/"):]
+    return url
+
+
 def _check_parent_cache_dir_url(dir_url):
     """Check dir url whether is suitable to be used as parent cache directory."""
     _check_url(dir_url)
-    try:
-        fs, dir_path = get_filesystem_and_path_or_paths(dir_url)
-    except Exception:
-        if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
-            raise ValueError(
-                "On databricks runtime, you should specify "
-                f"'{SparkDatasetConverter.PARENT_CACHE_DIR_URL_CONF}' config to a dbfs fuse path "
-                "like 'file:/dbfs/...'."
-            )
-        raise
-
+    fs, dir_path = get_filesystem_and_path_or_paths(dir_url)
     if 'DATABRICKS_RUNTIME_VERSION' in os.environ and not _is_spark_local_mode():
         if isinstance(fs, LocalFileSystem):
             # User need to use dbfs fuse URL.
@@ -699,21 +705,11 @@ def make_spark_converter(
     if isinstance(df, str):
         dataset_dir_url = df
         if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
-            if not (
-                dataset_dir_url.startswith("file:/dbfs/") or
-                dataset_dir_url.startswith("file:///dbfs/") or
-                dataset_dir_url.startswith("dbfs:///") or
-                (dataset_dir_url.startswith("dbfs:/") and not dataset_dir_url.startswith("dbfs://"))
-            ):
-                raise ValueError(
-                    "On databricks runtime, if `df` argument is a string, it must be a dbfs "
-                    "fuse path like 'file:/dbfs/xxx' or a dbfs path like 'dbfs:/xxx'."
-                )
-            if dataset_dir_url.startswith("dbfs:///"):
-                # convert it to a dbfs fuse path
-                dataset_dir_url = "file:/dbfs/" + dataset_dir_url[len("dbfs:///"):]
-            elif dataset_dir_url.startswith("dbfs:/"):
-                dataset_dir_url = "file:/dbfs/" + dataset_dir_url[len("dbfs:/"):]
+            dataset_dir_url = _normalize_databricks_dbfs_url(
+                dataset_dir_url,
+                "On databricks runtime, if `df` argument is a string, it must be a dbfs "
+                "fuse path like 'file:/dbfs/xxx' or a dbfs path like 'dbfs:/xxx'."
+            )
     else:
         # TODO: Improve default behavior to be automatically choosing the best way.
         compression_codec = compression_codec or "uncompressed"
