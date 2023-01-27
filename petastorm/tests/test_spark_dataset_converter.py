@@ -39,7 +39,9 @@ from petastorm.spark.spark_dataset_converter import (
     _check_dataset_file_median_size, _check_parent_cache_dir_url,
     _check_rank_and_size_consistent_with_horovod, _check_url,
     _get_horovod_rank_and_size, _get_spark_session, _make_sub_dir_url,
-    register_delete_dir_handler, _wait_file_available)
+    register_delete_dir_handler, _wait_file_available,
+    _normalize_databricks_dbfs_url,
+)
 
 from unittest import mock
 
@@ -667,3 +669,12 @@ def test_make_spark_convert_from_saved_df_path(spark_test_ctx):
     result = spark_test_ctx.spark.sparkContext.parallelize(range(1), 1) \
         .map(map_fn).collect()[0]
     assert result == 100
+
+
+def test_normalize_databricks_dbfs_url():
+    assert _normalize_databricks_dbfs_url("dbfs:/xx/yy", "") == "file:/dbfs/xx/yy"
+    assert _normalize_databricks_dbfs_url("dbfs:///xx/yy", "") == "file:/dbfs/xx/yy"
+    assert _normalize_databricks_dbfs_url("file:/dbfs/xx/yy", "") == "file:/dbfs/xx/yy"
+    assert _normalize_databricks_dbfs_url("file:///dbfs/xx/yy", "") == "file:///dbfs/xx/yy"
+    with pytest.raises(ValueError):
+        _normalize_databricks_dbfs_url("dbfs://xx/yy", "")
