@@ -684,7 +684,7 @@ def make_spark_converter(
 
     :param df: The :class:`pyspark.sql.DataFrame` object to be converted,
                or a string of path pointing to the directory that stores the dataframe data
-               as parquet or delta format, on databricks runtime, the path must be a dbfs
+               as parquet format, on databricks runtime, the path must be a dbfs
                fuse path like 'file:/dbfs/xxx' or a dbfs path like 'dbfs:/xxx'.
     :param parquet_row_group_size_bytes: An int denoting the number of bytes
         in a parquet row group when materializing the dataframe.
