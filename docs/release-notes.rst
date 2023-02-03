@@ -4,7 +4,12 @@
 Release notes
 =============
 
-Release 0.12.2 (unreleased)
+
+Release 0.12.3 (unreleased)
+===========================
+
+
+Release 0.12.2
 ===========================
 - `PR 787 <https://github.com/uber/petastorm/pull/787>`_: ``make_spark_converter`` supports creating converter from a saved Spark DataFrame path.
 
