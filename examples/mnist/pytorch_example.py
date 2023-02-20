@@ -158,7 +158,7 @@ def main():
     # Instantiate each petastorm Reader with a single thread, shuffle enabled, and appropriate epoch setting
     for epoch in range(1, loop_epochs + 1):
         with DataLoader(make_reader('{}/train'.format(args.dataset_url), num_epochs=reader_epochs,
-                                    transform_spec=transform),
+                                    transform_spec=transform, seed=args.seed, shuffle_rows=True),
                         batch_size=args.batch_size) as train_loader:
             train(model, device, train_loader, args.log_interval, optimizer, epoch)
         with DataLoader(make_reader('{}/test'.format(args.dataset_url), num_epochs=reader_epochs,

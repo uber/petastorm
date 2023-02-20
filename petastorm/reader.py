@@ -25,7 +25,6 @@ from petastorm.errors import NoDataAvailableError
 from petastorm.etl import dataset_metadata, rowgroup_indexing
 from petastorm.etl.dataset_metadata import PetastormMetadataError, infer_or_load_unischema
 from petastorm.fs_utils import get_filesystem_and_path_or_paths, normalize_dir_url
-from petastorm.local_disk_arrow_table_cache import LocalDiskArrowTableCache
 from petastorm.local_disk_cache import LocalDiskCache
 from petastorm.ngram import NGram
 from petastorm.predicates import PredicateBase
@@ -61,6 +60,7 @@ def normalize_dataset_url_or_urls(dataset_url_or_urls):
 def make_reader(dataset_url,
                 schema_fields=None,
                 reader_pool_type='thread', workers_count=10, pyarrow_serialize=False, results_queue_size=50,
+                seed=None, shuffle_rows=False,
                 shuffle_row_groups=True, shuffle_row_drop_partitions=1,
                 predicate=None,
                 rowgroup_selector=None,
@@ -95,6 +95,8 @@ def make_reader(dataset_url,
     :param pyarrow_serialize: THE ARGUMENT IS DEPRECATED AND WILL BE REMOVED IN FUTURE VERSIONS.
     :param results_queue_size: Size of the results queue to store prefetched row-groups. Currently only applicable to
         thread reader pool type.
+    :param seed: Random seed specified for shuffle and sharding with reproducible outputs. Defaults to None
+    :param shuffle_rows: Whether to shuffle inside a single row group. Defaults to False.
     :param shuffle_row_groups: Whether to shuffle row groups (the order in which full row groups are read)
     :param shuffle_row_drop_partitions: This is is a positive integer which determines how many partitions to
         break up a row group into for increased shuffling in exchange for worse performance (extra reads).
@@ -110,7 +112,7 @@ def make_reader(dataset_url,
         pass in a unique shard number in the range [0, shard_count). shard_count must be supplied as well.
         Defaults to None
     :param shard_count: An int denoting the number of shards to break this dataset into. Defaults to None
-    :param shard_seed: Random seed to shuffle row groups for data sharding. Defaults to None
+    :param shard_seed: (Deprecated) Random seed used for sharding row groups. Defaults to None
     :param cache_type: A string denoting the cache type, if desired. Options are [None, 'null', 'local-disk'] to
         either have a null/noop cache or a cache implemented using diskcache. Caching is useful when communication
         to the main data store is either slow or expensive and the local machine has large enough storage
@@ -172,6 +174,8 @@ def make_reader(dataset_url,
     kwargs = {
         'schema_fields': schema_fields,
         'reader_pool': reader_pool,
+        'shuffle_rows': shuffle_rows,
+        'seed': seed,
         'shuffle_row_groups': shuffle_row_groups,
         'shuffle_row_drop_partitions': shuffle_row_drop_partitions,
         'predicate': predicate,
@@ -201,6 +205,8 @@ def make_reader(dataset_url,
 def make_batch_reader(dataset_url_or_urls,
                       schema_fields=None,
                       reader_pool_type='thread', workers_count=10,
+                      results_queue_size=50,
+                      seed=None, shuffle_rows=False,
                       shuffle_row_groups=True, shuffle_row_drop_partitions=1,
                       predicate=None,
                       rowgroup_selector=None,
@@ -238,6 +244,10 @@ def make_batch_reader(dataset_url_or_urls,
         denoting a thread pool, process pool, or running everything in the master thread. Defaults to 'thread'
     :param workers_count: An int for the number of workers to use in the reader pool. This only is used for the
         thread or process pool. Defaults to 10
+    :param results_queue_size: Size of the results queue to store prefetched row-groups. Currently only applicable to
+        thread reader pool type.
+    :param seed: Random seed specified for shuffle and sharding with reproducible outputs. Defaults to None
+    :param shuffle_rows: Whether to shuffle inside a single row group. Defaults to False.
     :param shuffle_row_groups: Whether to shuffle row groups (the order in which full row groups are read)
     :param shuffle_row_drop_partitions: This is is a positive integer which determines how many partitions to
         break up a row group into for increased shuffling in exchange for worse performance (extra reads).
@@ -254,7 +264,7 @@ def make_batch_reader(dataset_url_or_urls,
         pass in a unique shard number in the range [0, shard_count). shard_count must be supplied as well.
         Defaults to None
     :param shard_count: An int denoting the number of shards to break this dataset into. Defaults to None
-    :param shard_seed: Random seed to shuffle row groups for data sharding. Defaults to None
+    :param shard_seed: (Deprecated) Random seed used for sharding row groups. Defaults to None
     :param cache_type: A string denoting the cache type, if desired. Options are [None, 'null', 'local-disk'] to
         either have a null/noop cache or a cache implemented using diskcache. Caching is useful when communication
         to the main data store is either slow or expensive and the local machine has large enough storage
@@ -299,13 +309,13 @@ def make_batch_reader(dataset_url_or_urls,
     if cache_type is None or cache_type == NULL_CACHE:
         cache = NullCache()
     elif cache_type == LOCAL_DISK_CACHE:
-        cache = LocalDiskArrowTableCache(cache_location, cache_size_limit, cache_row_size_estimate,
-                                         **cache_extra_settings or {})
+        cache = LocalDiskCache(cache_location, cache_size_limit, cache_row_size_estimate,
+                               **cache_extra_settings or {})
     else:
         raise ValueError('Unknown cache_type: {}'.format(cache_type))
 
     if reader_pool_type == 'thread':
-        reader_pool = ThreadPool(workers_count)
+        reader_pool = ThreadPool(workers_count, results_queue_size)
     elif reader_pool_type == 'process':
         serializer = ArrowTableSerializer()
         reader_pool = ProcessPool(workers_count, serializer, zmq_copy_buffers=zmq_copy_buffers)
@@ -318,6 +328,8 @@ def make_batch_reader(dataset_url_or_urls,
                   schema_fields=schema_fields,
                   worker_class=ArrowReaderWorker,
                   reader_pool=reader_pool,
+                  seed=seed,
+                  shuffle_rows=shuffle_rows,
                   shuffle_row_groups=shuffle_row_groups,
                   shuffle_row_drop_partitions=shuffle_row_drop_partitions,
                   predicate=predicate,
@@ -339,7 +351,8 @@ class Reader(object):
     """
 
     def __init__(self, pyarrow_filesystem, dataset_path, schema_fields=None,
-                 shuffle_row_groups=True, shuffle_row_drop_partitions=1,
+                 seed=None, shuffle_rows=False, shuffle_row_groups=True,
+                 shuffle_row_drop_partitions=1,
                  predicate=None, rowgroup_selector=None, reader_pool=None, num_epochs=1,
                  cur_shard=None, shard_count=None, cache=None, worker_class=None,
                  transform_spec=None, is_batched_reader=False, filters=None, shard_seed=None):
@@ -355,6 +368,8 @@ class Reader(object):
             or ``[/tmp/mydataset/00000.parquet, /tmp/mydataset/00001.parquet]``
         :param schema_fields: Either list of unischema fields to subset, or ``None`` to read all fields.
             OR an NGram object, then it will return an NGram of the specified properties.
+        :param seed: Random seed specified for shuffle and sharding with reproducible outputs. Defaults to None
+        :param shuffle_rows: Whether to shuffle inside a single row group. Defaults to False.
         :param shuffle_row_groups: Whether to shuffle row groups (the order in which full row groups are read)
         :param shuffle_row_drop_partitions: This is is a positive integer which determines how many partitions to
             break up a row group into for increased shuffling in exchange for worse performance (extra reads).
@@ -373,6 +388,7 @@ class Reader(object):
             pass in a unique shard number in the range ``[0, shard_count)``.
             ``shard_count`` must be supplied as well. Defaults to None
         :param shard_count: An int denoting the number of shard partitions there are. Defaults to None
+        :param shard_seed: (Deprecated) Random seed used for sharding row groups. Defaults to None
         :param cache: An object conforming to :class:`.CacheBase` interface. Before loading row groups from a parquet
             file the Reader will attempt to load these values from cache. Caching is useful when communication
             to the main data store is either slow or expensive and the local machine has large enough storage
@@ -383,7 +399,6 @@ class Reader(object):
         :param filters: (List[Tuple] or List[List[Tuple]]): Standard PyArrow filters.
             These will be applied when loading the parquet file with PyArrow. More information
             here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
-        :param shard_seed: Random seed to shuffle row groups for data sharding. Defaults to None
         """
         self.num_epochs = num_epochs
 
@@ -445,21 +460,28 @@ class Reader(object):
         row_groups = dataset_metadata.load_row_groups(self.dataset)
 
         # 3. Filter rowgroups
+        _shard_seed = seed
+        if shard_seed:
+            warnings.warn("shard_seed was deprecated and will be removed in future versions. "
+                          "Use seed to apply randomization effects on sharding row groups.")
+            # Use shard_seed to overwrite, to be removed in future.
+            _shard_seed = shard_seed
         filtered_row_group_indexes, worker_predicate = self._filter_row_groups(self.dataset, row_groups, predicate,
                                                                                rowgroup_selector, cur_shard,
-                                                                               shard_count, shard_seed)
+                                                                               shard_count, _shard_seed)
         # 4. Create a rowgroup ventilator object
         normalized_shuffle_row_drop_partitions = \
             self._normalize_shuffle_options(shuffle_row_drop_partitions, self.dataset)
         self.ventilator = self._create_ventilator(filtered_row_group_indexes, shuffle_row_groups,
                                                   normalized_shuffle_row_drop_partitions,
                                                   self.num_epochs, worker_predicate,
-                                                  self._workers_pool.workers_count + _VENTILATE_EXTRA_ROWGROUPS)
+                                                  self._workers_pool.workers_count + _VENTILATE_EXTRA_ROWGROUPS,
+                                                  seed)
 
         # 5. Start workers pool
         self._workers_pool.start(worker_class, (pyarrow_filesystem, dataset_path, storage_schema,
                                                 self.ngram, row_groups, cache, transform_spec,
-                                                self.schema, filters),
+                                                self.schema, filters, shuffle_rows, seed),
                                  ventilator=self.ventilator)
         logger.debug('Workers pool started')
 
@@ -497,7 +519,7 @@ class Reader(object):
         return self._results_queue_reader.batched_output
 
     def _filter_row_groups(self, dataset, row_groups, predicate, rowgroup_selector, cur_shard,
-                           shard_count, shard_seed):
+                           shard_count, seed):
         """Calculates which rowgroups will be read during.
 
         The following filters are applied:
@@ -511,8 +533,8 @@ class Reader(object):
         :param rowgroup_selector: instance of row group selector object to select row groups to be read
         :param cur_shard: An int denoting the current shard number used. Each node should
                        pass in a unique partition number in the range [0, shard_count).
-        :param shard_count An int denoting the number of reader shards
-        :param shard_seed: If not None: random seed to shuffle row groups for data sharding.
+        :param shard_count: An int denoting the number of reader shards
+        :param seed: If not None: random seed to shuffle row groups for data sharding.
         :return: (filtered_row_group_indexes, worker_predicate): filtered_row_group_indexes an integer index into
         row_groups array. worker_predicate contains only predicates that could not be resolved on the partitioned fields
         and need to be evaluated by workers.
@@ -528,7 +550,7 @@ class Reader(object):
         if cur_shard is not None or shard_count is not None:
             filtered_row_group_indexes = self._partition_row_groups(dataset, row_groups, shard_count,
                                                                     cur_shard,
-                                                                    filtered_row_group_indexes, shard_seed)
+                                                                    filtered_row_group_indexes, seed)
 
         if not filtered_row_group_indexes:
             warnings.warn('No matching data is available for loading after rowgroup '
@@ -537,7 +559,7 @@ class Reader(object):
         return filtered_row_group_indexes, worker_predicate
 
     def _partition_row_groups(self, dataset, row_groups, shard_count, cur_shard,
-                              filtered_row_group_indexes, shard_seed):
+                              filtered_row_group_indexes, seed):
         """Filters the list of row group indexes based on the requested training partitions. Returns
         a modified list of rowgroup indexes."""
 
@@ -552,11 +574,11 @@ class Reader(object):
 
         # We hash on the relative path of each parquet file to guarantee consistency between different reader
         # constructions even after moving the dataset
-        if shard_seed is not None:
+        if seed is not None:
             import random
             # Instantiate a new Random class with a seed and sample from it.
             # Avoid affecting global/default random generator.
-            shard_random = random.Random(shard_seed)
+            shard_random = random.Random(seed)
             shard_random.shuffle(filtered_row_group_indexes)
 
         filtered_row_group_indexes = [index for index in filtered_row_group_indexes if index % shard_count == cur_shard]
@@ -630,7 +652,7 @@ class Reader(object):
         return shuffle_row_drop_partitions
 
     def _create_ventilator(self, row_group_indexes, shuffle_row_groups, shuffle_row_drop_partitions,
-                           num_epochs, worker_predicate, max_ventilation_queue_size):
+                           num_epochs, worker_predicate, max_ventilation_queue_size, seed):
         items_to_ventilate = []
         for piece_index in row_group_indexes:
             for shuffle_row_drop_partition in range(shuffle_row_drop_partitions):
@@ -644,7 +666,8 @@ class Reader(object):
                                     items_to_ventilate,
                                     iterations=num_epochs,
                                     max_ventilation_queue_size=max_ventilation_queue_size,
-                                    randomize_item_order=shuffle_row_groups)
+                                    randomize_item_order=shuffle_row_groups,
+                                    random_seed=seed)
 
     def stop(self):
         """Stops all worker threads/processes."""

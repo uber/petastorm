@@ -454,6 +454,22 @@ def _check_url(dir_url):
             'Please prepend "file://" for local filesystem.'.format(dir_url))
 
 
+def _normalize_databricks_dbfs_url(url, err_msg):
+    if not (
+        url.startswith("file:/dbfs/") or
+        url.startswith("file:///dbfs/") or
+        url.startswith("dbfs:///") or
+        (url.startswith("dbfs:/") and not url.startswith("dbfs://"))
+    ):
+        raise ValueError(err_msg)
+    if url.startswith("dbfs:///"):
+        # convert it to a dbfs fuse path
+        url = "file:/dbfs/" + url[len("dbfs:///"):]
+    elif url.startswith("dbfs:/"):
+        url = "file:/dbfs/" + url[len("dbfs:/"):]
+    return url
+
+
 def _check_parent_cache_dir_url(dir_url):
     """Check dir url whether is suitable to be used as parent cache directory."""
     _check_url(dir_url)
@@ -485,7 +501,7 @@ def _cache_df_or_retrieve_cache_data_url(df, parent_cache_dir_url,
     If not, cache the df into the cache_dir in parquet format and return the
     cache file path.
     Use atexit to delete the cache before the python interpreter exits.
-    :param df: A :class:`DataFrame` object.
+    :param df: A :class:`pyspark.sql.DataFrame` object.
     :param parquet_row_group_size_bytes: An int denoting the number of bytes
         in a parquet row group.
     :param compression_codec: Specify compression codec.
@@ -666,7 +682,10 @@ def make_spark_converter(
     `SparkDatasetConverter.delete`, and when the spark application exit,
     it will try best effort to delete the materialized dataframe data.
 
-    :param df: The :class:`DataFrame` object to be converted.
+    :param df: The :class:`pyspark.sql.DataFrame` object to be converted,
+               or a string of path pointing to the directory that stores the dataframe data
+               as parquet format, on databricks runtime, the path must be a dbfs
+               fuse path like 'file:/dbfs/xxx' or a dbfs path like 'dbfs:/xxx'.
     :param parquet_row_group_size_bytes: An int denoting the number of bytes
         in a parquet row group when materializing the dataframe.
     :param compression_codec: Specify compression codec.
@@ -683,26 +702,35 @@ def make_spark_converter(
 
     parent_cache_dir_url = _get_parent_cache_dir_url()
 
-    # TODO: Improve default behavior to be automatically choosing the best way.
-    compression_codec = compression_codec or "uncompressed"
+    if isinstance(df, str):
+        dataset_dir_url = df
+        if 'DATABRICKS_RUNTIME_VERSION' in os.environ:
+            dataset_dir_url = _normalize_databricks_dbfs_url(
+                dataset_dir_url,
+                "On databricks runtime, if `df` argument is a string, it must be a dbfs "
+                "fuse path like 'file:/dbfs/xxx' or a dbfs path like 'dbfs:/xxx'."
+            )
+    else:
+        # TODO: Improve default behavior to be automatically choosing the best way.
+        compression_codec = compression_codec or "uncompressed"
 
-    if compression_codec.lower() not in \
-            ['uncompressed', 'bzip2', 'gzip', 'lz4', 'snappy', 'deflate']:
-        raise RuntimeError(
-            "compression_codec should be None or one of the following values: "
-            "'uncompressed', 'bzip2', 'gzip', 'lz4', 'snappy', 'deflate'")
+        if compression_codec.lower() not in \
+                ['uncompressed', 'bzip2', 'gzip', 'lz4', 'snappy', 'deflate']:
+            raise RuntimeError(
+                "compression_codec should be None or one of the following values: "
+                "'uncompressed', 'bzip2', 'gzip', 'lz4', 'snappy', 'deflate'")
 
-    dataset_cache_dir_url = _cache_df_or_retrieve_cache_data_url(
-        df, parent_cache_dir_url, parquet_row_group_size_bytes, compression_codec, dtype)
+        dataset_dir_url = _cache_df_or_retrieve_cache_data_url(
+            df, parent_cache_dir_url, parquet_row_group_size_bytes, compression_codec, dtype)
 
     # TODO: improve this by read parquet file metadata to get count
     #  Currently spark can make sure to only read the minimal column
     #  so count will usually be fast.
     spark = _get_spark_session()
-    spark_df = spark.read.parquet(dataset_cache_dir_url)
+    spark_df = spark.read.parquet(dataset_dir_url)
 
     dataset_size = spark_df.count()
     parquet_file_url_list = list(spark_df._jdf.inputFiles())
     _check_dataset_file_median_size(parquet_file_url_list)
 
-    return SparkDatasetConverter(dataset_cache_dir_url, parquet_file_url_list, dataset_size)
+    return SparkDatasetConverter(dataset_dir_url, parquet_file_url_list, dataset_size)

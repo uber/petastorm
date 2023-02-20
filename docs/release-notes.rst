@@ -4,8 +4,48 @@
 Release notes
 =============
 
-Release 0.11.5 (unreleased)
+
+Release 0.12.3 (unreleased)
 ===========================
+
+
+Release 0.12.2
+===========================
+- `PR 787 <https://github.com/uber/petastorm/pull/787>`_: ``make_spark_converter`` supports creating converter from a saved Spark DataFrame path.
+
+
+Release 0.12.1
+===========================
+- `PR 777 <https://github.com/uber/petastorm/pull/777>`_: Remove ``LocalDiskArrowTableCache`` class as it was using deprecated pyarrow serialization API. Speed up ``LocalDiskCache`` by using the highest pickle protocol in cache serialization.
+- `PR 783 <https://github.com/uber/petastorm/pull/783>`_: Support results_queue_size parameter in make_batch_reader API
+
+Release 0.12.0
+===========================
+- `PR 767 <https://github.com/uber/petastorm/pull/767>`_: Reader: enable shuffling inside every row group.
+- `PR 771 <https://github.com/uber/petastorm/pull/771>`_: Update pytorch mnist example with up-to-date make_reader() interface.
+
+New features
+--------------------------
+- Parallel shuffling is implemented in reader level to increase throughput.
+
+  - Introduce ``shuffle_rows`` boolean field in ``Reader``, ``make_reader()`` and ``make_batch_reader()``
+    to enable shuffling inside a single row group.
+
+  - Break the bottleneck of shuffling samples in upper level PyTorch or Tensorflow dataloaders.
+
+- Support reproducible randomized shuffling outputs with ``seed`` field in ``Reader``, ``make_reader()`` and ``make_batch_reader()``.
+
+Deprecated features
+--------------------------
+- ``shard_seed`` field is deprecated in ``Reader``, ``make_reader()`` and ``make_batch_reader()``,
+  use ``seed`` field to apply randomization effects on sharding row groups.
+
+
+Release 0.11.5
+===========================
+- `PR 746 <https://github.com/uber/petastorm/pull/746>`_: Import ABC from collections.abc for Python 3.10 compatibility.
+- `PR 757 <https://github.com/uber/petastorm/pull/757>`_: Replace process_iter by pid_exists.
+- `PR 762 <https://github.com/uber/petastorm/pull/762>`_: PyTorch: improve memory-efficiency in batched non-shuffle buffer.
 
 
 Release 0.11.4

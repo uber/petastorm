@@ -15,10 +15,7 @@
 import os
 
 import numpy as np
-import pandas as pd
-import pyarrow as pa
 
-from petastorm.local_disk_arrow_table_cache import LocalDiskArrowTableCache
 from petastorm.local_disk_cache import LocalDiskCache
 
 MB = 2 ** 20
@@ -59,15 +56,3 @@ def test_size_limit_constraint(tmpdir):
 
 def _should_never_be_called():
     assert False, 'Should not be called'
-
-
-def test_arrow_table_caching(tmpdir):
-    cache = LocalDiskArrowTableCache(tmpdir.strpath, 10 * MB, 4)
-
-    df = pd.DataFrame(np.random.randn(50, 4), columns=list('ABCD'))
-    dummy_table = pa.Table.from_pandas(df)
-
-    table_from_cache = cache.get('my_key', lambda: dummy_table)
-    assert table_from_cache == dummy_table
-
-    cache.get('my_key', _should_never_be_called)
