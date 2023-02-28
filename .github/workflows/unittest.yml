@@ -85,7 +85,7 @@ jobs:
           $RUN pip install -e /petastorm/[test,tf,torch,docs,opencv]
           $RUN pip install --upgrade numpy==$NUMPY_VERSION
           $RUN pip install -U pyarrow==${PYARROW_VERSION} tensorflow==${TF_VERSION}
-          $RUN pip install -U https://dist.apache.org/repos/dist/dev/spark/v3.4.0-rc1-bin/pyspark-3.4.0.tar.gz
+          $RUN pip install https://dist.apache.org/repos/dist/dev/spark/v3.4.0-rc1-bin/pyspark-3.4.0.tar.gz
           $RUN pip list
           $RUN mypy petastorm
           $RUN flake8 . --count --show-source --statistics
