@@ -32,21 +32,21 @@ jobs:
           TF_VERSION: "1.15.5"
           PYSPARK_VERSION: "3.4.0"
           ARROW_PRE_0_15_IPC_FORMAT: 0
-          PY: "3.7"
+          PY: "3.9"
         - config: pyarrow-3.0
           PYARROW_VERSION: "3.0.0"
           NUMPY_VERSION: "1.19.1"
           TF_VERSION: "2.5.0"
           PYSPARK_VERSION: "3.4.0"
           ARROW_PRE_0_15_IPC_FORMAT: 0
-          PY: "3.7"
+          PY: "3.9"
         - config: pyarrow-4.0
           PYARROW_VERSION: "4.0.0"
           NUMPY_VERSION: "1.19.1"
           TF_VERSION: "2.5.0"
           PYSPARK_VERSION: "3.4.0"
           ARROW_PRE_0_15_IPC_FORMAT: 0
-          PY: "3.7"
+          PY: "3.9"
         - config: latest
           PYARROW_VERSION: "6.0.1"
           NUMPY_VERSION: "1.21.5"
