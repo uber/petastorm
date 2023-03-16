@@ -387,7 +387,7 @@ def dict_to_spark_row(unischema, row_dict):
         schema_field = unischema.fields[field_name]
         if value is None:
             if not schema_field.nullable:
-                raise ValueError('Field {} is not "nullable", but got passes a None value')
+                raise ValueError(f'Field {field_name} is not "nullable", but got passes a None value')
         if schema_field.codec:
             encoded_dict[field_name] = schema_field.codec.encode(schema_field, value) if value is not None else None
         else:
