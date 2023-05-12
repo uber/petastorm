@@ -259,8 +259,11 @@ class OrderedThreadPool(ThreadPool):
         """
         # Verify stop_event and raise exception if it's already set!
         if self._stop_event.is_set():
-            raise RuntimeError('ThreadPool({}) cannot be reused! stop_event set? {}'
-                               .format(len(self._workers), self._stop_event.is_set()))
+            raise RuntimeError(
+                "ThreadPool({}) cannot be reused! stop_event set? {}".format(
+                    len(self._workers), self._stop_event.is_set()
+                )
+            )
 
         # Set up a channel to send work
         self._ventilator_queue = queue.Queue()
@@ -268,8 +271,13 @@ class OrderedThreadPool(ThreadPool):
         self._workers = []
         for worker_id in range(self.workers_count):
             worker_impl = worker_class(worker_id, self._stop_aware_put, worker_args)
-            new_thread = OrderedWorkerThread(worker_impl, self._stop_event, self._ventilator_queue,
-                                      self._results_queue, self._profiling_enabled)
+            new_thread = OrderedWorkerThread(
+                worker_impl,
+                self._stop_event,
+                self._ventilator_queue,
+                self._results_queue,
+                self._profiling_enabled,
+            )
             # Make the thread daemonic. Since it only reads it's ok to abort while running - no resource corruption
             # will occur.
             new_thread.daemon = True
@@ -285,7 +293,7 @@ class OrderedThreadPool(ThreadPool):
 
         self._unordered_results_buffer = []
         self._unordered_idx_buffer = []
-        self._next_result = 0
+        self._result_order = [el['piece_index'] for el in ventilator._items_to_ventilate]
 
     def get_results(self):
         """Returns results from worker pool or re-raise worker's exception if any happen in worker thread.
@@ -299,21 +307,27 @@ class OrderedThreadPool(ThreadPool):
 
         while True:
             # If there is no more work to do, raise an EmptyResultError
-            if self._results_queue.empty() and self._ventilated_items == self._ventilated_items_processed:
+            if (
+                self._results_queue.empty()
+                and self._ventilated_items == self._ventilated_items_processed
+            ):
                 # We also need to check if we are using a ventilator and if it is completed, and
                 # whether we have emptied the unordered results buffer
-                if (not self._ventilator or self._ventilator.completed()) and not len(self._unordered_idx_buffer):
+                if (not self._ventilator or self._ventilator.completed()) and not len(
+                    self._unordered_idx_buffer
+                ):
                     raise EmptyResultError()
 
             # If the next rowgroup is in the unordered buffer, return it
-            if self._next_result in self._unordered_idx_buffer:
-                idx = self._unordered_idx_buffer.index(self._next_result)
-                self._next_result += 1
+            if self._result_order[0] in self._unordered_idx_buffer:
+                idx = self._unordered_idx_buffer.index(self._result_order.pop(0))
                 _ = self._unordered_idx_buffer.pop(idx)
                 return self._unordered_results_buffer.pop(idx)
 
             try:
-                result = self._results_queue.get(timeout=_VERIFY_END_OF_VENTILATION_PERIOD)
+                result = self._results_queue.get(
+                    timeout=_VERIFY_END_OF_VENTILATION_PERIOD
+                )
                 if isinstance(result, VentilatedItemProcessedMessage):
                     self._ventilated_items_processed += 1
                     if self._ventilator:
