@@ -35,7 +35,7 @@ from petastorm.selectors import RowGroupSelectorBase
 from petastorm.transform import transform_schema
 from petastorm.workers_pool.dummy_pool import DummyPool
 from petastorm.workers_pool.process_pool import ProcessPool
-from petastorm.workers_pool.thread_pool import ThreadPool
+from petastorm.workers_pool.thread_pool import ThreadPool, OrderedThreadPool
 from petastorm.workers_pool.ventilator import ConcurrentVentilator
 
 logger = logging.getLogger(__name__)
@@ -88,8 +88,9 @@ def make_reader(dataset_url,
         or ``[file:///tmp/mydataset/00000.parquet, file:///tmp/mydataset/00001.parquet]``.
     :param schema_fields: Can be: a list of unischema fields and/or regex pattern strings; ``None`` to read all fields;
             an NGram object, then it will return an NGram of the specified fields.
-    :param reader_pool_type: A string denoting the reader pool type. Should be one of ['thread', 'process', 'dummy']
-        denoting a thread pool, process pool, or running everything in the master thread. Defaults to 'thread'
+    :param reader_pool_type: A string denoting the reader pool type. Should be one of ['thread', 'orderedthread',
+        'process', 'dummy'] denoting a thread pool, a thread pool with ordered dataset pieces, a process pool,
+        or running everything in the master thread. Defaults to 'thread'
     :param workers_count: An int for the number of workers to use in the reader pool. This only is used for the
         thread or process pool. Defaults to 10
     :param pyarrow_serialize: THE ARGUMENT IS DEPRECATED AND WILL BE REMOVED IN FUTURE VERSIONS.
@@ -160,6 +161,8 @@ def make_reader(dataset_url,
 
     if reader_pool_type == 'thread':
         reader_pool = ThreadPool(workers_count, results_queue_size)
+    elif reader_pool_type == 'orderedthread':
+        reader_pool = OrderedThreadPool(workers_count, results_queue_size)
     elif reader_pool_type == 'process':
         if pyarrow_serialize:
             warnings.warn("pyarrow_serializer was deprecated and will be removed in future versions. "
@@ -240,8 +243,9 @@ def make_batch_reader(dataset_url_or_urls,
         or ``[file:///tmp/mydataset/00000.parquet, file:///tmp/mydataset/00001.parquet]``.
     :param schema_fields: A list of regex pattern strings. Only columns matching at least one of the
         patterns in the list will be loaded.
-    :param reader_pool_type: A string denoting the reader pool type. Should be one of ['thread', 'process', 'dummy']
-        denoting a thread pool, process pool, or running everything in the master thread. Defaults to 'thread'
+    :param reader_pool_type: A string denoting the reader pool type. Should be one of ['thread', 'orderedthread',
+        'process', 'dummy'] denoting a thread pool, a thread pool with ordered dataset pieces, a process pool,
+        or running everything in the master thread. Defaults to 'thread'
     :param workers_count: An int for the number of workers to use in the reader pool. This only is used for the
         thread or process pool. Defaults to 10
     :param results_queue_size: Size of the results queue to store prefetched row-groups. Currently only applicable to
@@ -316,6 +320,8 @@ def make_batch_reader(dataset_url_or_urls,
 
     if reader_pool_type == 'thread':
         reader_pool = ThreadPool(workers_count, results_queue_size)
+    elif reader_pool_type == 'orderedthread':
+        reader_pool = OrderedThreadPool(workers_count, results_queue_size)
     elif reader_pool_type == 'process':
         serializer = ArrowTableSerializer()
         reader_pool = ProcessPool(workers_count, serializer, zmq_copy_buffers=zmq_copy_buffers)
