@@ -24,3 +24,8 @@ class TimeoutWaitingForResultError(RuntimeError):
 
 class VentilatedItemProcessedMessage(object):
     """Object to signal that a worker has completed processing an item from the ventilation queue"""
+
+class OrderedVentilatedItemProcessedMessage(VentilatedItemProcessedMessage):
+    """Ventilated signal object which contains ordering metadata."""
+    def __init__(self, idx):
+        self.idx = idx
