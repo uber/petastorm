@@ -27,6 +27,7 @@ from six.moves import cPickle as pickle
 from petastorm import utils
 from petastorm.etl.legacy import depickle_legacy_package_name_compatible
 from petastorm.fs_utils import FilesystemResolver, get_filesystem_and_path_or_paths, get_dataset_path
+from petastorm.pyarrow_helpers.dataset_wrapper import PetastormPyArrowDataset, PetastormPyArrowDatasetPiece
 from petastorm.unischema import Unischema
 
 logger = logging.getLogger(__name__)
@@ -104,7 +105,7 @@ def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_
         dataset_path = get_dataset_path(urlparse(dataset_url))
     filesystem = filesystem_factory()
 
-    dataset = pq.ParquetDataset(
+    dataset = PetastormPyArrowDataset(
         dataset_path,
         filesystem=filesystem,
         validate_schema=False)
@@ -114,7 +115,7 @@ def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_
         _generate_num_row_groups_per_file(dataset, spark.sparkContext, filesystem_factory)
 
     # Reload the dataset to take into account the new metadata
-    dataset = pq.ParquetDataset(
+    dataset = PetastormPyArrowDataset(
         dataset_path,
         filesystem=filesystem,
         validate_schema=False)
@@ -285,8 +286,8 @@ def load_row_groups(dataset):
         # This is not a real "piece" and we won't have row_groups_per_file recorded for it.
         if row_groups_key != ".":
             for row_group in range(row_groups_per_file[row_groups_key]):
-                rowgroups.append(pq.ParquetDatasetPiece(piece.path, open_file_func=dataset.fs.open, row_group=row_group,
-                                                        partition_keys=piece.partition_keys))
+                rowgroups.append(PetastormPyArrowDatasetPiece(piece.path, open_file_func=dataset.fs.open,
+                                                              row_group=row_group, partition_keys=piece.partition_keys))
     return rowgroups
 
 
@@ -322,8 +323,8 @@ def _split_row_groups(dataset):
             continue
 
         for row_group in range(row_groups_per_file[relative_path]):
-            split_piece = pq.ParquetDatasetPiece(piece.path, open_file_func=dataset.fs.open, row_group=row_group,
-                                                 partition_keys=piece.partition_keys)
+            split_piece = PetastormPyArrowDatasetPiece(piece.path, open_file_func=dataset.fs.open, row_group=row_group,
+                                                       partition_keys=piece.partition_keys)
             split_pieces.append(split_piece)
 
     return split_pieces
@@ -331,9 +332,8 @@ def _split_row_groups(dataset):
 
 def _split_piece(piece, fs_open):
     metadata = piece.get_metadata()
-    return [pq.ParquetDatasetPiece(piece.path, open_file_func=fs_open,
-                                   row_group=row_group,
-                                   partition_keys=piece.partition_keys)
+    return [PetastormPyArrowDatasetPiece(piece.path, open_file_func=fs_open, row_group=row_group,
+                                         partition_keys=piece.partition_keys)
             for row_group in range(metadata.num_row_groups)]
 
 
@@ -399,7 +399,7 @@ def get_schema_from_dataset_url(dataset_url_or_urls, hdfs_driver='libhdfs3', sto
                                                          storage_options=storage_options,
                                                          filesystem=filesystem)
 
-    dataset = pq.ParquetDataset(path_or_paths, filesystem=fs, validate_schema=False, metadata_nthreads=10)
+    dataset = PetastormPyArrowDataset(path_or_paths, filesystem=fs, validate_schema=False, metadata_nthreads=10)
 
     # Get a unischema stored in the dataset metadata.
     stored_schema = get_schema(dataset)

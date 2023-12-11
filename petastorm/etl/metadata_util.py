@@ -16,10 +16,10 @@
 from __future__ import print_function
 
 import argparse
-from pyarrow import parquet as pq
 
 from petastorm.etl import dataset_metadata, rowgroup_indexing
 from petastorm.fs_utils import FilesystemResolver
+from petastorm.pyarrow_helpers.dataset_wrapper import PetastormPyArrowDataset
 
 if __name__ == "__main__":
 
@@ -47,8 +47,8 @@ if __name__ == "__main__":
 
     # Create pyarrow file system
     resolver = FilesystemResolver(args.dataset_url, hdfs_driver=args.hdfs_driver)
-    dataset = pq.ParquetDataset(resolver.get_dataset_path(), filesystem=resolver.filesystem(),
-                                validate_schema=False)
+    dataset = PetastormPyArrowDataset(resolver.get_dataset_path(), filesystem=resolver.filesystem(),
+                                      validate_schema=False)
 
     print_all = not args.schema and not args.index
     if args.schema or print_all:
