@@ -13,9 +13,8 @@
 # limitations under the License.
 
 import numpy as np
-import pytest
 import pyarrow
-from pyspark.sql import SparkSession
+import pytest
 from pyspark.sql.types import IntegerType
 
 from petastorm.codecs import ScalarCodec
@@ -37,7 +36,7 @@ def test_get_schema_from_dataset_url_bogus_url():
         get_schema_from_dataset_url('/invalid_url')
 
 
-def test_serialize_filesystem_factory(tmpdir):
+def test_serialize_filesystem_factory(tmpdir, spark_test_ctx):
     SimpleSchema = Unischema('SimpleSchema', [
         UnischemaField('id', np.int32, (), ScalarCodec(IntegerType()), False),
         UnischemaField('foo', np.int32, (), ScalarCodec(IntegerType()), False),
@@ -50,11 +49,11 @@ def test_serialize_filesystem_factory(tmpdir):
     rows_count = 10
     output_url = "file://{0}/fs_factory_test".format(tmpdir)
     rowgroup_size_mb = 256
-    spark = SparkSession.builder.config('spark.driver.memory', '2g').master('local[2]').getOrCreate()
+    spark = spark_test_ctx.spark
     sc = spark.sparkContext
     with materialize_dataset(spark, output_url, SimpleSchema, rowgroup_size_mb, filesystem_factory=BogusFS):
-        rows_rdd = sc.parallelize(range(rows_count))\
-            .map(lambda x: {'id': x, 'foo': x})\
+        rows_rdd = sc.parallelize(range(rows_count)) \
+            .map(lambda x: {'id': x, 'foo': x}) \
             .map(lambda x: dict_to_spark_row(SimpleSchema, x))
 
         spark.createDataFrame(rows_rdd, SimpleSchema.as_spark_schema()) \
