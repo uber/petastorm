@@ -66,9 +66,7 @@ class ConcurrentVentilator(Ventilator):
                  items_to_ventilate,
                  iterations=1,
                  randomize_item_order=False,
-                 random_seed=None,
-                 max_ventilation_queue_size=None,
-                 ventilation_interval=_VENTILATION_INTERVAL):
+                 random_seed=None):
         """
         Constructor for a concurrent ventilator.
 
@@ -98,17 +96,11 @@ class ConcurrentVentilator(Ventilator):
         self._items_to_ventilate = items_to_ventilate
         self._iterations_remaining = iterations
         self._randomize_item_order = randomize_item_order
-        self._random_state = np.random.RandomState(seed=random_seed)
+        self._random_seed = random_seed
+        self._rng = np.random.default_rng(self._random_seed)
         self._iterations = iterations
 
-        # For the default max ventilation queue size we will use the size of the items to ventilate
-        self._max_ventilation_queue_size = max_ventilation_queue_size or len(items_to_ventilate)
-        self._ventilation_interval = ventilation_interval
-
-        self._current_item_to_ventilate = 0
         self._ventilation_thread = None
-        self._ventilated_items_count = 0
-        self._processed_items_count = 0
         self._stop_requested = False
 
     def start(self):
@@ -118,7 +110,7 @@ class ConcurrentVentilator(Ventilator):
         self._ventilation_thread.start()
 
     def processed_item(self):
-        self._processed_items_count += 1
+        pass
 
     def completed(self):
         assert self._iterations_remaining is None or self._iterations_remaining >= 0
@@ -141,25 +133,21 @@ class ConcurrentVentilator(Ventilator):
             if self.completed():
                 break
 
-            # If we are ventilating the first item, we check if we would like to randomize the item order
-            if self._current_item_to_ventilate == 0 and self._randomize_item_order:
-                self._random_state.shuffle(self._items_to_ventilate)
+            if self._randomize_item_order:
+                if self._random_seed is not None and self._random_seed != 0:
+                    # Deterministic randomization: use provided seed
+                    items_to_ventilate = self._rng.permutation(self._items_to_ventilate)
+                else:
+                    # Non-deterministic randomization: use np.random 
+                    items_to_ventilate = np.random.permutation(self._items_to_ventilate)
+            else:
+                # Deterministic natural order: randomize_item_order=False
+                items_to_ventilate = self._items_to_ventilate.copy()
+            
+            self._ventilate_fn(items_to_ventilate)
 
-            # Block until queue has room, but use continue to allow for checking if stop has been called
-            if self._ventilated_items_count - self._processed_items_count >= self._max_ventilation_queue_size:
-                sleep(self._ventilation_interval)
-                continue
-
-            item_to_ventilate = self._items_to_ventilate[self._current_item_to_ventilate]
-            self._ventilate_fn(**item_to_ventilate)
-            self._current_item_to_ventilate += 1
-            self._ventilated_items_count += 1
-
-            if self._current_item_to_ventilate >= len(self._items_to_ventilate):
-                self._current_item_to_ventilate = 0
-                # If iterations was set to None, that means we will iterate until stop is called
-                if self._iterations_remaining is not None:
-                    self._iterations_remaining -= 1
+            if self._iterations_remaining is not None:
+                self._iterations_remaining -= 1
 
     def stop(self):
         self._stop_requested = True

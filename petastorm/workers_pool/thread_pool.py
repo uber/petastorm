@@ -59,9 +59,15 @@ class WorkerThread(Thread):
             # If the message came from work_receiver channel
             try:
                 (args, kargs) = self._ventilator_queue.get(block=True, timeout=IO_TIMEOUT_INTERVAL_S)
+                # Mark worker as busy when processing
+                self._worker_impl.thread_pool._set_worker_busy(self._worker_impl.worker_id)
                 self._worker_impl.process(*args, **kargs)
                 self._worker_impl.publish_func(VentilatedItemProcessedMessage())
+                # Mark worker as idle after processing
+                self._worker_impl.thread_pool._set_worker_idle(self._worker_impl.worker_id)
             except queue.Empty:
+                # Mark worker as idle when waiting
+                self._worker_impl.thread_pool._set_worker_idle(self._worker_impl.worker_id)
                 pass
             except WorkerTerminationRequested:
                 pass
@@ -76,7 +82,7 @@ class WorkerThread(Thread):
 
 
 class ThreadPool(object):
-    def __init__(self, workers_count, results_queue_size=50, profiling_enabled=False):
+    def __init__(self, workers_count, results_queue_size=50, profiling_enabled=False, shuffle_rows=False, seed=None):
         """Initializes a thread pool.
 
         TODO: consider using a standard thread pool
@@ -86,20 +92,29 @@ class ThreadPool(object):
         implementation that would not use fork)
 
         :param workers_count: Number of threads
-        :param profile: Whether to run a profiler on the threads
+        :param profiling_enabled: Whether to run a profiler on the threads
+        :param shuffle_rows: Whether to shuffle rows (affects round-robin behavior)
+        :param seed: Random seed for deterministic behavior
         """
-        self._seed = random.randint(0, 100000)
         self._workers = []
-        self._ventilator_queue = None
+        self._ventilator_queues = None
         self.workers_count = workers_count
         self._results_queue_size = results_queue_size
         # Worker threads will watch this event and gracefully shutdown when the event is set
         self._stop_event = Event()
         self._profiling_enabled = profiling_enabled
+        self._shuffle_rows = shuffle_rows
+        self._seed = seed
 
         self._ventilated_items = 0
         self._ventilated_items_processed = 0
         self._ventilator = None
+        
+        # Round-robin consumer thread
+        self._round_robin_thread = None
+        
+        # Worker status tracking
+        self._worker_status = [False] * workers_count  # False = idle, True = busy
 
     def start(self, worker_class, worker_args=None, ventilator=None):
         """Starts worker threads.
@@ -116,13 +131,22 @@ class ThreadPool(object):
                                .format(len(self._workers), self._stop_event.is_set()))
 
         # Set up a channel to send work
-        self._ventilator_queue = queue.Queue()
-        self._results_queue = queue.Queue(self._results_queue_size)
+        self._ventilator_queues = [queue.Queue() for _ in range(self.workers_count)]
+        # Todo: Update the results queue size
+        self._results_queues = [queue.Queue(self._results_queue_size) for _ in range(self.workers_count)]
+        self._shared_results_queue = queue.Queue(self._results_queue_size)
         self._workers = []
         for worker_id in range(self.workers_count):
-            worker_impl = worker_class(worker_id, self._stop_aware_put, worker_args)
-            new_thread = WorkerThread(worker_impl, self._stop_event, self._ventilator_queue,
-                                      self._results_queue, self._profiling_enabled)
+            # Create a closure that captures the worker_id for this specific worker
+            def make_publish_func(worker_id):
+                return lambda data: self._stop_aware_put(data, worker_id)
+            
+            worker_impl = worker_class(worker_id, make_publish_func(worker_id), worker_args)
+            # Add thread_pool reference to worker for status tracking
+            worker_impl.thread_pool = self
+            
+            new_thread = WorkerThread(worker_impl, self._stop_event, self._ventilator_queues[worker_id],
+                                      self._results_queues[worker_id], self._profiling_enabled)
             # Make the thread daemonic. Since it only reads it's ok to abort while running - no resource corruption
             # will occur.
             new_thread.daemon = True
@@ -132,15 +156,32 @@ class ThreadPool(object):
         for w in self._workers:
             w.start()
 
+        # Start round-robin consumer thread
+        self._round_robin_thread = Thread(target=self._round_robin_consumer, daemon=True)
+        self._round_robin_thread.start()
+
         if ventilator:
             self._ventilator = ventilator
             self._ventilator.start()
 
-    def ventilate(self, *args, **kargs):
+    def _set_worker_busy(self, worker_id):
+        """Mark worker as busy (processing work)."""
+        self._worker_status[worker_id] = True
+
+    def _set_worker_idle(self, worker_id):
+        """Mark worker as idle (waiting for work)."""
+        self._worker_status[worker_id] = False
+
+    def _is_worker_idle(self, worker_id):
+        """Check if worker is idle."""
+        return not self._worker_status[worker_id]
+
+    def ventilate(self, items_to_ventilate):
         """Sends a work item to a worker process. Will result in ``worker.process(...)`` call with arbitrary arguments.
         """
-        self._ventilated_items += 1
-        self._ventilator_queue.put((args, kargs))
+        for i, item in enumerate(items_to_ventilate):
+            self._ventilator_queues[i % self.workers_count].put(item)
+            self._ventilated_items += 1
 
     def get_results(self):
         """Returns results from worker pool or re-raise worker's exception if any happen in worker thread.
@@ -153,14 +194,25 @@ class ThreadPool(object):
         """
 
         while True:
-            # If there is no more work to do, raise an EmptyResultError
-            if self._results_queue.empty() and self._ventilated_items == self._ventilated_items_processed:
-                # We also need to check if we are using a ventilator and if it is completed
+            # Check termination condition: all workers are truly done
+            all_workers_done = True
+            for worker_id in range(self.workers_count):
+                worker_done = (
+                    self._results_queues[worker_id].empty() and      # Worker result queue is empty
+                    self._is_worker_idle(worker_id) and              # Worker is idle
+                    self._ventilator_queues[worker_id].empty()       # Ventilator queue for worker is empty
+                )
+                if not worker_done:
+                    all_workers_done = False
+                    break
+            
+            # If all workers are done and shared queue is empty, raise EmptyResultError
+            if all_workers_done and self._shared_results_queue.empty():
                 if not self._ventilator or self._ventilator.completed():
                     raise EmptyResultError()
 
             try:
-                result = self._results_queue.get(timeout=_VERIFY_END_OF_VENTILATION_PERIOD)
+                result = self._shared_results_queue.get(timeout=_VERIFY_END_OF_VENTILATION_PERIOD)
                 if isinstance(result, VentilatedItemProcessedMessage):
                     self._ventilated_items_processed += 1
                     if self._ventilator:
@@ -197,7 +249,7 @@ class ThreadPool(object):
                     stats = pstats.Stats(w.prof)
             stats.sort_stats('cumulative').print_stats()
 
-    def _stop_aware_put(self, data):
+    def _stop_aware_put(self, data, worker_id):
         """This method is called to write the results to the results queue. We use ``put`` in a non-blocking way so we
         can gracefully terminate the worker thread without being stuck on :func:`Queue.put`.
 
@@ -205,7 +257,7 @@ class ThreadPool(object):
         :func:`WorkerThread.run` which will gracefully terminate main worker loop."""
         while True:
             try:
-                self._results_queue.put(data, block=True, timeout=IO_TIMEOUT_INTERVAL_S)
+                self._results_queues[worker_id].put(data, block=True, timeout=IO_TIMEOUT_INTERVAL_S)
                 return
             except queue.Full:
                 pass
@@ -213,8 +265,61 @@ class ThreadPool(object):
             if self._stop_event.is_set():
                 raise WorkerTerminationRequested()
 
+    def _round_robin_consumer(self):
+        """Round-robin consumer that takes items from each worker's queue in strict round-robin order
+        and puts them into the shared results queue."""
+        current_worker = 0
+        
+        # Determine if we should use non-blocking behavior
+        use_non_blocking = self._shuffle_rows and (self._seed is None or self._seed == 0)
+        
+        while not self._stop_event.is_set():
+            try:
+                # Check if current worker should be skipped
+                should_skip = (
+                    self._results_queues[current_worker].empty() and  # Worker result queue is empty
+                    self._is_worker_idle(current_worker) and          # Worker is idle
+                    self._ventilator_queues[current_worker].empty()   # Ventilator queue for worker is empty
+                )
+                
+                if should_skip:
+                    # Skip this worker and move to next
+                    current_worker = (current_worker + 1) % self.workers_count
+                    continue
+                
+                # Try to get an item from the current worker's queue
+                if use_non_blocking:
+                    # Non-blocking: try to get item without waiting
+                    try:
+                        item = self._results_queues[current_worker].get(block=False)
+                    except queue.Empty:
+                        # No item available, move to next worker immediately
+                        current_worker = (current_worker + 1) % self.workers_count
+                        continue
+                else:
+                    # Blocking: wait for item (strict round-robin)
+                    item = self._results_queues[current_worker].get(block=True, timeout=1.0)
+                
+                # Put the item into the shared results queue
+                self._shared_results_queue.put(item, block=True, timeout=1.0)
+                
+                # Move to next worker in round-robin fashion
+                current_worker = (current_worker + 1) % self.workers_count
+                
+            except queue.Empty:
+                # No item available from current worker, move to next
+                current_worker = (current_worker + 1) % self.workers_count
+                continue
+            except queue.Full:
+                # Shared queue is full, wait a bit and try again
+                continue
+            except Exception:
+                # Any other exception, continue to next worker
+                current_worker = (current_worker + 1) % self.workers_count
+                continue
+
     def results_qsize(self):
-        return self._results_queue.qsize()
+        return self._shared_results_queue.qsize()
 
     @property
     def diagnostics(self):

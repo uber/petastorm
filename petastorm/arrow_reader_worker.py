@@ -101,7 +101,10 @@ class ArrowReaderWorker(WorkerBase):
         self._transformed_schema = args[7]
         self._arrow_filters = args[8]
         self._shuffle_rows = args[9]
-        self._random_state = np.random.RandomState(seed=args[10])
+        self._random_seed = args[10]
+        
+        # Initialize random number generator
+        self._rng = np.random.default_rng(self._random_seed)
 
         if self._ngram:
             raise NotImplementedError('ngrams are not supported by ArrowReaderWorker')
@@ -164,6 +167,7 @@ class ArrowReaderWorker(WorkerBase):
                                              lambda: self._load_rows(parquet_file, piece, shuffle_row_drop_partition))
 
         if all_cols:
+            # 3. Also pass the Worker ID to the publish_function
             self.publish_func(all_cols)
 
     @staticmethod
@@ -289,9 +293,19 @@ class ArrowReaderWorker(WorkerBase):
 
         # pyarrow would fail if we request a column names that the dataset is partitioned by
         table = piece.read(columns=column_names - partition_names, partitions=self._dataset.partitions)
+        
+        # Handle row shuffling based on shuffle_rows setting
         if self._shuffle_rows:
-            indices = self._random_state.permutation(table.num_rows)
-            table = table.take(indices)
+            if self._random_seed is not None and self._random_seed != 0:
+                # Deterministic randomization: use provided seed
+                indices = self._rng.permutation(table.num_rows)
+            else:
+                # Non-deterministic randomization: use np.random directly
+                indices = np.random.permutation(table.num_rows)
+        else:
+            # Deterministic natural order: shuffle_rows=False
+            indices = np.arange(table.num_rows)
+        table = table.take(indices)
 
         # Drop columns we did not explicitly request. This may happen when a table is partitioned. Besides columns
         # requested, pyarrow will also return partition values. Having these unexpected fields will break some
