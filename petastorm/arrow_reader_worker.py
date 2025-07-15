@@ -167,7 +167,6 @@ class ArrowReaderWorker(WorkerBase):
                                              lambda: self._load_rows(parquet_file, piece, shuffle_row_drop_partition))
 
         if all_cols:
-            # 3. Also pass the Worker ID to the publish_function
             self.publish_func(all_cols)
 
     @staticmethod

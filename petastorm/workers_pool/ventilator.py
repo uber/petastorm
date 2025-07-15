@@ -16,6 +16,7 @@ import numpy as np
 import threading
 from abc import ABCMeta, abstractmethod
 from time import sleep
+import sys
 
 import six
 
@@ -128,26 +129,25 @@ class ConcurrentVentilator(Ventilator):
         self.start()
 
     def _ventilate(self):
+        if self._randomize_item_order:
+            if self._random_seed is not None and self._random_seed != 0:
+                # Deterministic randomization: use provided seed
+                self._items_to_ventilate = list(self._rng.permutation(self._items_to_ventilate))
+            else:
+                # Non-deterministic randomization: use np.random 
+                self._items_to_ventilate = list(np.random.permutation(self._items_to_ventilate))
+
         while True:
             # Stop condition is when no iterations are remaining or there are no items to ventilate
             if self.completed():
                 break
 
-            if self._randomize_item_order:
-                if self._random_seed is not None and self._random_seed != 0:
-                    # Deterministic randomization: use provided seed
-                    items_to_ventilate = self._rng.permutation(self._items_to_ventilate)
-                else:
-                    # Non-deterministic randomization: use np.random 
-                    items_to_ventilate = np.random.permutation(self._items_to_ventilate)
-            else:
-                # Deterministic natural order: randomize_item_order=False
-                items_to_ventilate = self._items_to_ventilate.copy()
-            
-            self._ventilate_fn(items_to_ventilate)
+            self._ventilate_fn(self._items_to_ventilate)
 
             if self._iterations_remaining is not None:
                 self._iterations_remaining -= 1
+            elif self._iterations_remaining is None:
+                self._iterations_remaining = 0
 
     def stop(self):
         self._stop_requested = True

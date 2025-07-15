@@ -14,18 +14,19 @@
 
 import collections.abc
 import logging
+import sys
 import warnings
 
 import six
 from pyarrow import parquet as pq
 
-from petastorm.arrow_reader_worker import ArrowReaderWorker
+# Import ArrowReaderWorker from local modified file instead of installed package
+from arrow_reader_worker import ArrowReaderWorker
 from petastorm.cache import NullCache
 from petastorm.errors import NoDataAvailableError
 from petastorm.etl import dataset_metadata, rowgroup_indexing
 from petastorm.etl.dataset_metadata import PetastormMetadataError, infer_or_load_unischema
 from petastorm.fs_utils import get_filesystem_and_path_or_paths, normalize_dir_url
-from petastorm.local_disk_arrow_table_cache import LocalDiskArrowTableCache
 from petastorm.local_disk_cache import LocalDiskCache
 from petastorm.ngram import NGram
 from petastorm.predicates import PredicateBase
@@ -36,8 +37,8 @@ from petastorm.selectors import RowGroupSelectorBase
 from petastorm.transform import transform_schema
 from petastorm.workers_pool.dummy_pool import DummyPool
 from petastorm.workers_pool.process_pool import ProcessPool
-from petastorm.workers_pool.thread_pool import ThreadPool
-from petastorm.workers_pool.ventilator import ConcurrentVentilator
+from thread_pool import ThreadPool
+from ventilator import ConcurrentVentilator
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,7 @@ def normalize_dataset_url_or_urls(dataset_url_or_urls):
 
 def make_reader(dataset_url,
                 schema_fields=None,
-                reader_pool_type='thread', workers_count=10, pyarrow_serialize=False, results_queue_size=50,
+                reader_pool_type='thread', workers_count=10, pyarrow_serialize=False, results_queue_size=25,
                 seed=None, shuffle_rows=False,
                 shuffle_row_groups=True, shuffle_row_drop_partitions=1,
                 predicate=None,
@@ -160,7 +161,7 @@ def make_reader(dataset_url,
                       'To read from a non-Petastorm Parquet store use make_batch_reader')
 
     if reader_pool_type == 'thread':
-        reader_pool = ThreadPool(workers_count, results_queue_size, shuffle_rows=shuffle_rows, seed=seed)
+        reader_pool = ThreadPool(workers_count, shuffle_rows=shuffle_rows, seed=seed)
     elif reader_pool_type == 'process':
         if pyarrow_serialize:
             warnings.warn("pyarrow_serializer was deprecated and will be removed in future versions. "
@@ -206,6 +207,7 @@ def make_reader(dataset_url,
 def make_batch_reader(dataset_url_or_urls,
                       schema_fields=None,
                       reader_pool_type='thread', workers_count=10,
+                      results_queue_size=25,
                       seed=None, shuffle_rows=False,
                       shuffle_row_groups=True, shuffle_row_drop_partitions=1,
                       predicate=None,
@@ -307,13 +309,13 @@ def make_batch_reader(dataset_url_or_urls,
     if cache_type is None or cache_type == NULL_CACHE:
         cache = NullCache()
     elif cache_type == LOCAL_DISK_CACHE:
-        cache = LocalDiskArrowTableCache(cache_location, cache_size_limit, cache_row_size_estimate,
-                                         **cache_extra_settings or {})
+        cache = LocalDiskCache(cache_location, cache_size_limit, cache_row_size_estimate,
+                               **cache_extra_settings or {})
     else:
         raise ValueError('Unknown cache_type: {}'.format(cache_type))
-
+    
     if reader_pool_type == 'thread':
-        reader_pool = ThreadPool(workers_count, results_queue_size, shuffle_rows=shuffle_rows, seed=seed)
+        reader_pool = ThreadPool(workers_count, shuffle_rows=shuffle_rows, seed=seed)
     elif reader_pool_type == 'process':
         serializer = ArrowTableSerializer()
         reader_pool = ProcessPool(workers_count, serializer, zmq_copy_buffers=zmq_copy_buffers)
@@ -475,13 +477,11 @@ class Reader(object):
                                                   self.num_epochs, worker_predicate,
                                                   self._workers_pool.workers_count + _VENTILATE_EXTRA_ROWGROUPS,
                                                   seed)
-
         # 5. Start workers pool
         self._workers_pool.start(worker_class, (pyarrow_filesystem, dataset_path, storage_schema,
                                                 self.ngram, row_groups, cache, transform_spec,
                                                 self.schema, filters, shuffle_rows, seed),
                                  ventilator=self.ventilator)
-        logger.debug('Workers pool started')
 
         self.last_row_consumed = False
         self.stopped = False
@@ -659,7 +659,6 @@ class Reader(object):
                      'worker_predicate': worker_predicate,
                      'shuffle_row_drop_partition': (shuffle_row_drop_partition,
                                                     shuffle_row_drop_partitions)})
-
         return ConcurrentVentilator(self._workers_pool.ventilate,
                                     items_to_ventilate,
                                     iterations=num_epochs,
