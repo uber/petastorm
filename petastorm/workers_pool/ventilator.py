@@ -100,7 +100,6 @@ class ConcurrentVentilator(Ventilator):
         self._randomize_item_order = randomize_item_order
         self._random_seed = random_seed
         self._rng = np.random.default_rng(self._random_seed)
-        # self._random_state = np.random.RandomState(seed=random_seed)
         self._iterations = iterations
 
         # For the default max ventilation queue size we will use the size of the items to ventilate
