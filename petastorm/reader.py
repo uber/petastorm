@@ -14,13 +14,11 @@
 
 import collections.abc
 import logging
-import sys
 import warnings
 
 import six
 from pyarrow import parquet as pq
 
-# Import ArrowReaderWorker from local modified file instead of installed package
 from arrow_reader_worker import ArrowReaderWorker
 from petastorm.cache import NullCache
 from petastorm.errors import NoDataAvailableError
@@ -61,7 +59,7 @@ def normalize_dataset_url_or_urls(dataset_url_or_urls):
 
 def make_reader(dataset_url,
                 schema_fields=None,
-                reader_pool_type='thread', workers_count=10, pyarrow_serialize=False, results_queue_size=25,
+                reader_pool_type='thread', workers_count=10, pyarrow_serialize=False, results_queue_size=50,
                 seed=None, shuffle_rows=False,
                 shuffle_row_groups=True, shuffle_row_drop_partitions=1,
                 predicate=None,
@@ -161,7 +159,7 @@ def make_reader(dataset_url,
                       'To read from a non-Petastorm Parquet store use make_batch_reader')
 
     if reader_pool_type == 'thread':
-        reader_pool = ThreadPool(workers_count, shuffle_rows=shuffle_rows, seed=seed)
+        reader_pool = ThreadPool(workers_count, results_queue_size, shuffle_rows, seed)
     elif reader_pool_type == 'process':
         if pyarrow_serialize:
             warnings.warn("pyarrow_serializer was deprecated and will be removed in future versions. "
@@ -207,7 +205,7 @@ def make_reader(dataset_url,
 def make_batch_reader(dataset_url_or_urls,
                       schema_fields=None,
                       reader_pool_type='thread', workers_count=10,
-                      results_queue_size=25,
+                      results_queue_size=50,
                       seed=None, shuffle_rows=False,
                       shuffle_row_groups=True, shuffle_row_drop_partitions=1,
                       predicate=None,
@@ -246,6 +244,8 @@ def make_batch_reader(dataset_url_or_urls,
         denoting a thread pool, process pool, or running everything in the master thread. Defaults to 'thread'
     :param workers_count: An int for the number of workers to use in the reader pool. This only is used for the
         thread or process pool. Defaults to 10
+    :param results_queue_size: Size of the results queue to store prefetched row-groups. Currently only applicable to
+        thread reader pool type.
     :param seed: Random seed specified for shuffle and sharding with reproducible outputs. Defaults to None
     :param shuffle_rows: Whether to shuffle inside a single row group. Defaults to False.
     :param shuffle_row_groups: Whether to shuffle row groups (the order in which full row groups are read)
@@ -313,9 +313,9 @@ def make_batch_reader(dataset_url_or_urls,
                                **cache_extra_settings or {})
     else:
         raise ValueError('Unknown cache_type: {}'.format(cache_type))
-    
+
     if reader_pool_type == 'thread':
-        reader_pool = ThreadPool(workers_count, shuffle_rows=shuffle_rows, seed=seed)
+        reader_pool = ThreadPool(workers_count, results_queue_size, shuffle_rows, seed)
     elif reader_pool_type == 'process':
         serializer = ArrowTableSerializer()
         reader_pool = ProcessPool(workers_count, serializer, zmq_copy_buffers=zmq_copy_buffers)
@@ -477,11 +477,13 @@ class Reader(object):
                                                   self.num_epochs, worker_predicate,
                                                   self._workers_pool.workers_count + _VENTILATE_EXTRA_ROWGROUPS,
                                                   seed)
+
         # 5. Start workers pool
         self._workers_pool.start(worker_class, (pyarrow_filesystem, dataset_path, storage_schema,
                                                 self.ngram, row_groups, cache, transform_spec,
                                                 self.schema, filters, shuffle_rows, seed),
                                  ventilator=self.ventilator)
+        logger.debug('Workers pool started')
 
         self.last_row_consumed = False
         self.stopped = False
@@ -659,9 +661,11 @@ class Reader(object):
                      'worker_predicate': worker_predicate,
                      'shuffle_row_drop_partition': (shuffle_row_drop_partition,
                                                     shuffle_row_drop_partitions)})
+
         return ConcurrentVentilator(self._workers_pool.ventilate,
                                     items_to_ventilate,
                                     iterations=num_epochs,
+                                    max_ventilation_queue_size=max_ventilation_queue_size,
                                     randomize_item_order=shuffle_row_groups,
                                     random_seed=seed)
 

@@ -292,7 +292,7 @@ class ArrowReaderWorker(WorkerBase):
 
         # pyarrow would fail if we request a column names that the dataset is partitioned by
         table = piece.read(columns=column_names - partition_names, partitions=self._dataset.partitions)
-        
+
         # Handle row shuffling based on shuffle_rows setting
         if self._shuffle_rows:
             if self._random_seed is not None and self._random_seed != 0:
