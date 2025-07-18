@@ -101,8 +101,9 @@ class ThreadPool(object):
         self._profiling_enabled = profiling_enabled
 
         self._ventilated_items = 0
+        # Count of items ventilated by each worker
         self._ventilated_items_by_worker = [0 for _ in range(self.workers_count)]
-        # self._ventilated_items_processed = 0
+        # Count of items processed by each worker
         self._ventilated_items_processed_by_worker = [0 for _ in range(self.workers_count)]
         self._ventilator = None
 
@@ -122,10 +123,11 @@ class ThreadPool(object):
             raise RuntimeError('ThreadPool({}) cannot be reused! stop_event set? {}'
                                .format(len(self._workers), self._stop_event.is_set()))
 
-        # Set up a channel to send work
+        # Set up a channel for each worker to send work
         self._ventilator_queues = [queue.Queue() for _ in range(self.workers_count)]
 
-        self._results_queues = [queue.Queue(self._results_queue_size / self.workers_count) for _ in range(self.workers_count)]
+        # Set up a channel for each worker to send results
+        self._results_queues = max(5, [queue.Queue(self._results_queue_size / self.workers_count) for _ in range(self.workers_count)])
         
         self._workers = []
         for worker_id in range(self.workers_count):
@@ -152,15 +154,18 @@ class ThreadPool(object):
     def ventilate(self, *args, **kargs):
         """Sends a work item to a worker process. Will result in ``worker.process(...)`` call with arbitrary arguments.
         """
+        # Distribute work items in a round-robin manner across each worker ventilator queue
         current_worker_id = self._ventilated_items % self.workers_count
         self._ventilated_items += 1
         self._ventilated_items_by_worker[current_worker_id] += 1
         self._ventilator_queues[current_worker_id].put((args, kargs))
 
     def current_worker_done(self, worker_id):
+        # Check if the current worker has processed all the items it was assigned and if the results queue is empty
         return self._ventilated_items_processed_by_worker[worker_id] == self._ventilated_items_by_worker[worker_id] and self._results_queues[worker_id].empty()
 
     def all_workers_done(self):
+        # Check if all workers have processed all the items they were assigned and if the results queues are empty
         for i in range(self.workers_count):
             if not self.current_worker_done(i):
                 return False
@@ -175,6 +180,7 @@ class ThreadPool(object):
         :return: arguments passed to ``publish_func(...)`` by a worker. If no more results are anticipated,
                  :class:`.EmptyResultError`.
         """
+        # If shuffle_rows is enabled and the seed is not set, we need to use a non-blocking as we don't care about the strict round robin order
         use_non_blocking_get = self._shuffle_rows and (self._seed is None or self._seed == 0)
         while True:            
             # If there is no more work to do, raise an EmptyResultError
@@ -189,11 +195,14 @@ class ThreadPool(object):
                 continue
 
             try:
+                # Get the result from the current worker's results queue. Use blocking/strict round robin if shuffle_rows is disabled or the seed is set
                 result = self._results_queues[self._get_results_worker_id].get(block=not use_non_blocking_get, timeout=_VERIFY_END_OF_VENTILATION_PERIOD)
+                # If the result is a VentilatedItemProcessedMessage, we need to increment the count of items processed by the current worker
                 if isinstance(result, VentilatedItemProcessedMessage):
                     self._ventilated_items_processed_by_worker[self._get_results_worker_id] += 1
                     if self._ventilator:
                         self._ventilator.processed_item()
+                    # Move to the next worker
                     self._get_results_worker_id = (self._get_results_worker_id + 1) % self.workers_count
                     continue
                 elif isinstance(result, Exception):
@@ -245,7 +254,7 @@ class ThreadPool(object):
                 raise WorkerTerminationRequested()
 
     def results_qsize(self):
-        return self._results_queues[0].qsize()
+        return sum(queue.qsize() for queue in self._results_queues)
 
     @property
     def diagnostics(self):

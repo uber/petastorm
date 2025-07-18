@@ -159,7 +159,7 @@ def make_reader(dataset_url,
                       'To read from a non-Petastorm Parquet store use make_batch_reader')
 
     if reader_pool_type == 'thread':
-        reader_pool = ThreadPool(workers_count, results_queue_size, shuffle_rows, seed)
+        reader_pool = ThreadPool(workers_count, results_queue_size, shuffle_rows=shuffle_rows, seed=seed)
     elif reader_pool_type == 'process':
         if pyarrow_serialize:
             warnings.warn("pyarrow_serializer was deprecated and will be removed in future versions. "
@@ -315,7 +315,7 @@ def make_batch_reader(dataset_url_or_urls,
         raise ValueError('Unknown cache_type: {}'.format(cache_type))
 
     if reader_pool_type == 'thread':
-        reader_pool = ThreadPool(workers_count, results_queue_size, shuffle_rows, seed)
+        reader_pool = ThreadPool(workers_count, results_queue_size, shuffle_rows=shuffle_rows, seed=seed)
     elif reader_pool_type == 'process':
         serializer = ArrowTableSerializer()
         reader_pool = ProcessPool(workers_count, serializer, zmq_copy_buffers=zmq_copy_buffers)

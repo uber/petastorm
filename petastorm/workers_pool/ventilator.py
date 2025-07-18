@@ -138,6 +138,7 @@ class ConcurrentVentilator(Ventilator):
         self.start()
 
     def _ventilate(self):
+        # Randomize the item order before starting the ventilation if randomize_item_order is set
         if self._randomize_item_order:
             if self._random_seed is not None and self._random_seed != 0:
                 # Deterministic randomization: use provided seed
@@ -150,10 +151,6 @@ class ConcurrentVentilator(Ventilator):
             # Stop condition is when no iterations are remaining or there are no items to ventilate
             if self.completed():
                 break
-
-            # If we are ventilating the first item, we check if we would like to randomize the item order
-            # if self._current_item_to_ventilate == 0:
-                # self._random_state.shuffle(self._items_to_ventilate)
 
             # Block until queue has room, but use continue to allow for checking if stop has been called
             if self._ventilated_items_count - self._processed_items_count >= self._max_ventilation_queue_size:
