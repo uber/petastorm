@@ -19,7 +19,7 @@ import warnings
 import six
 from pyarrow import parquet as pq
 
-from arrow_reader_worker import ArrowReaderWorker
+from petastorm.arrow_reader_worker import ArrowReaderWorker
 from petastorm.cache import NullCache
 from petastorm.errors import NoDataAvailableError
 from petastorm.etl import dataset_metadata, rowgroup_indexing
@@ -35,8 +35,8 @@ from petastorm.selectors import RowGroupSelectorBase
 from petastorm.transform import transform_schema
 from petastorm.workers_pool.dummy_pool import DummyPool
 from petastorm.workers_pool.process_pool import ProcessPool
-from thread_pool import ThreadPool
-from ventilator import ConcurrentVentilator
+from petastorm.workers_pool.thread_pool import ThreadPool
+from petastorm.workers_pool.ventilator import ConcurrentVentilator
 
 logger = logging.getLogger(__name__)
 
