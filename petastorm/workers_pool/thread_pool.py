@@ -127,7 +127,7 @@ class ThreadPool(object):
         self._ventilator_queues = [queue.Queue() for _ in range(self.workers_count)]
 
         # Set up a channel for each worker to send results
-        self._results_queues = max(5, [queue.Queue(self._results_queue_size / self.workers_count) for _ in range(self.workers_count)])
+        self._results_queues = [queue.Queue(max(5, self._results_queue_size // self.workers_count)) for _ in range(self.workers_count)]
         
         self._workers = []
         for worker_id in range(self.workers_count):
