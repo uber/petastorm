@@ -102,7 +102,7 @@ class ArrowReaderWorker(WorkerBase):
         self._arrow_filters = args[8]
         self._shuffle_rows = args[9]
         self._random_seed = args[10]
-        
+
         # Initialize random number generator
         self._rng = np.random.default_rng(self._random_seed)
 

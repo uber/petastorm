@@ -143,7 +143,7 @@ class ConcurrentVentilator(Ventilator):
                 # Deterministic randomization: use provided seed
                 self._items_to_ventilate = list(self._rng.permutation(self._items_to_ventilate))
             else:
-                # Non-deterministic randomization: use np.random 
+                # Non-deterministic randomization: use np.random
                 self._items_to_ventilate = list(np.random.permutation(self._items_to_ventilate))
 
         while True:
