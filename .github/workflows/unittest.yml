@@ -59,13 +59,13 @@ jobs:
           $RUN pylint --rcfile=.pylintrc petastorm examples -f parseable -r n
           $RUN ulimit -c unlimited -S
           $RUN bash -c "cd /petastorm/docs/autodoc && pwd && make html"
-          $RUN $PYTEST -m "forked" --forked -Y \
+          $RUN $PYTEST -m "forked" --forked \
           --ignore=examples/mnist/tests/test_pytorch_mnist.py \
           --ignore=petastorm/tests/test_pytorch_utils.py \
           --ignore=petastorm/tests/test_pytorch_dataloader.py \
           --ignore=petastorm/tests/test_tf_autograph.py \
           petastorm examples
-          $RUN $PYTEST -m "not forked" -Y  --cov-append \
+          $RUN $PYTEST -m "not forked" --cov-append \
           --ignore=examples/mnist/tests/test_pytorch_mnist.py \
           --ignore=petastorm/tests/test_pytorch_utils.py \
           --ignore=petastorm/tests/test_pytorch_dataloader.py \
@@ -75,7 +75,7 @@ jobs:
           examples/mnist/tests/test_pytorch_mnist.py \
           petastorm/tests/test_pytorch_dataloader.py \
           petastorm/tests/test_pytorch_utils.py
-          $RUN $PYTEST -Y --cov-append petastorm/tests/test_tf_autograph.py
+          $RUN $PYTEST --cov-append petastorm/tests/test_tf_autograph.py
 
   draft_release:
     needs: unittest
