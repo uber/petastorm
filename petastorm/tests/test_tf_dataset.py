@@ -138,12 +138,14 @@ def test_with_dataset_repeat_after_cache(synthetic_dataset, reader_factory):
         with tf.Session() as sess:
             with pytest.warns(None):
                 # Expect no warnings since cache() is called before repeat()
-                for _ in range(epochs):
+                for epoch in range(epochs):
                     actual_res = []
-                    for _, _ in enumerate(synthetic_dataset.data):
+                    for i, _ in enumerate(synthetic_dataset.data):
                         actual = sess.run(it_op)._asdict()
                         actual_res.append(actual["id"])
+                        print(f"iteration: {i} {actual['id']}")
                     expected_res = list(range(len(synthetic_dataset.data)))
+                    print(f"Epoch: {epoch} actual {sorted(actual_res)}, expected {expected_res}")
                     # sort dataset output since row_groups are shuffled from reader.
                     np.testing.assert_equal(sorted(actual_res), expected_res)
 
