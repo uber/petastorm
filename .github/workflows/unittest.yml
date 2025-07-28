@@ -88,7 +88,7 @@ jobs:
           export ARROW_PRE_0_15_IPC_FORMAT=${{matrix.ARROW_PRE_0_15_IPC_FORMAT}}
           export RUN="docker exec -e ARROW_PRE_0_15_IPC_FORMAT=$ARROW_PRE_0_15_IPC_FORMAT petastorm_ci bash /run_in_venv.sh ${PY}"
           export PYTEST="pytest --timeout=360 -v --color=yes --cov=./ --cov-report xml:coverage.xml"
-          $RUN pip install -U pip setuptools
+          $RUN pip install -U pip "setuptools<70"
           $RUN pip install -e /petastorm/[test,tf,torch,docs,opencv]
           $RUN pip install --upgrade numpy==$NUMPY_VERSION
           $RUN pip install -U pyarrow==${PYARROW_VERSION} tensorflow==${TF_VERSION} pyspark==${PYSPARK_VERSION}

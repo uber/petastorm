@@ -42,6 +42,7 @@ REQUIRED_PACKAGES = [
     'pyarrow>=0.17.1',
     'six>=1.5.0',
     'fsspec',
+    'setuptools<70',  # Prevent compatibility issues with newer setuptools
 ]
 
 EXTRA_REQUIRE = {
