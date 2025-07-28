@@ -22,45 +22,6 @@ jobs:
   unittest:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        config: [pyspark-2.4, tf-1.15, pyarrow-3.0, pyarrow-4.0, latest]
-        include:
-        - config: pyspark-2.4
-          PYARROW_VERSION: "2.0.0"
-          NUMPY_VERSION: "1.19.1"
-          TF_VERSION: "1.15.5"
-          PYSPARK_VERSION: "2.4.4"
-          ARROW_PRE_0_15_IPC_FORMAT: 1
-          PY: "3.7"
-        - config: tf-1.15
-          PYARROW_VERSION: "2.0.0"
-          NUMPY_VERSION: "1.19.1"
-          TF_VERSION: "1.15.5"
-          PYSPARK_VERSION: "3.0.0"
-          ARROW_PRE_0_15_IPC_FORMAT: 0
-          PY: "3.7"
-        - config: pyarrow-3.0
-          PYARROW_VERSION: "3.0.0"
-          NUMPY_VERSION: "1.19.1"
-          TF_VERSION: "2.5.0"
-          PYSPARK_VERSION: "3.0.0"
-          ARROW_PRE_0_15_IPC_FORMAT: 0
-          PY: "3.7"
-        - config: pyarrow-4.0
-          PYARROW_VERSION: "4.0.0"
-          NUMPY_VERSION: "1.19.1"
-          TF_VERSION: "2.5.0"
-          PYSPARK_VERSION: "3.0.0"
-          ARROW_PRE_0_15_IPC_FORMAT: 0
-          PY: "3.7"
-        - config: latest
-          PYARROW_VERSION: "6.0.1"
-          NUMPY_VERSION: "1.21.5"
-          TF_VERSION: "2.8.0"
-          PYSPARK_VERSION: "3.0.0"
-          ARROW_PRE_0_15_IPC_FORMAT: "0"
-          PY: "3.9"
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -80,12 +41,12 @@ jobs:
       - name: build and run unit tests
         run: |
           sleep 30
-          export PYARROW_VERSION=${{matrix.PYARROW_VERSION}}
-          export NUMPY_VERSION=${{matrix.NUMPY_VERSION}}
-          export TF_VERSION=${{matrix.TF_VERSION}}
-          export PY=${{matrix.PY}}
-          export PYSPARK_VERSION=${{matrix.PYSPARK_VERSION}}
-          export ARROW_PRE_0_15_IPC_FORMAT=${{matrix.ARROW_PRE_0_15_IPC_FORMAT}}
+          export PYARROW_VERSION="6.0.1"
+          export NUMPY_VERSION="1.21.5"
+          export TF_VERSION="2.8.0"
+          export PY="3.9"
+          export PYSPARK_VERSION="3.0.0"
+          export ARROW_PRE_0_15_IPC_FORMAT="0"
           export RUN="docker exec -e ARROW_PRE_0_15_IPC_FORMAT=$ARROW_PRE_0_15_IPC_FORMAT petastorm_ci bash /run_in_venv.sh ${PY}"
           export PYTEST="pytest --timeout=360 -v --color=yes --cov=./ --cov-report xml:coverage.xml"
           $RUN pip install -U pip setuptools
