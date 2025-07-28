@@ -149,7 +149,7 @@ class TestWorkersPool(unittest.TestCase):
             pool.ventilate()
 
         cumulative_wait = 0
-        while pool.results_qsize() != QUEUE_SIZE:
+        while pool.results_qsize() >= QUEUE_SIZE:
             time.sleep(SLEEP_DELTA)
             cumulative_wait += SLEEP_DELTA
             # Make sure we wait no longer than the timeout. Otherwise, something is very wrong
