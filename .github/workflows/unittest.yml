@@ -77,16 +77,6 @@ jobs:
           petastorm/tests/test_pytorch_utils.py
           $RUN $PYTEST -Y --cov-append petastorm/tests/test_tf_autograph.py
 
-      - name: Copy coverage.xml from container
-        run: docker cp petastorm_ci:/petastorm/coverage.xml ./coverage.xml
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage.xml
-          verbose: true
-
   draft_release:
     needs: unittest
     # Only come with a tag
