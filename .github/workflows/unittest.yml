@@ -34,7 +34,6 @@ jobs:
           export CI_IMAGE=selitvin/petastorm_ci_auto:ci-image-06-29-2021
           docker pull $CI_IMAGE
           docker images
-          pip install -U codecov
           docker run -v `pwd`:/petastorm --name petastorm_ci $CI_IMAGE /bin/sh -c "sleep 3600" &
 
       # Run unit tests
@@ -78,10 +77,15 @@ jobs:
           petastorm/tests/test_pytorch_utils.py
           $RUN $PYTEST -Y --cov-append petastorm/tests/test_tf_autograph.py
 
-      - name: codecov
-        run: codecov --required
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      - name: Copy coverage.xml from container
+        run: docker cp petastorm_ci:/petastorm/coverage.xml ./coverage.xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          verbose: true
 
   draft_release:
     needs: unittest
