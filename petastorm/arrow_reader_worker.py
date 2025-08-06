@@ -17,9 +17,6 @@ import hashlib
 import operator
 import logging
 
-# Initialize logger
-logger = logging.getLogger(__name__)
-
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -29,6 +26,9 @@ from pyarrow.parquet import ParquetFile
 from petastorm.cache import NullCache
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.worker_base import WorkerBase
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 
 class ArrowReaderWorkerResultsQueueReader(object):
