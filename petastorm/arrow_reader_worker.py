@@ -96,7 +96,7 @@ class ArrowReaderWorker(WorkerBase):
         super(ArrowReaderWorker, self).__init__(worker_id, publish_func, args)
 
         # Add debug log in the constructor
-        logger.debug('Initializing ArrowReaderWorker with worker_id: %s', worker_id)
+        logger.debug('DEBUG: Initializing ArrowReaderWorker with worker_id: %s', worker_id)
 
         self._filesystem = args[0]
         self._dataset_path_or_paths = args[1]
@@ -139,7 +139,7 @@ class ArrowReaderWorker(WorkerBase):
         """
 
         # Add debug log in the process method
-        logger.debug('Processing piece_index: %s', piece_index)
+        logger.debug('DEBUG: Processing piece_index: %s', piece_index)
 
         if not self._dataset:
             self._dataset = pq.ParquetDataset(
@@ -148,7 +148,7 @@ class ArrowReaderWorker(WorkerBase):
                 validate_schema=False, filters=self._arrow_filters)
 
             # Add debug log after dataset is initialized
-            logger.debug('ParquetDataset initialized with path: %s', self._dataset_path_or_paths)
+            logger.debug('DEBUG: ParquetDataset initialized with path: %s', self._dataset_path_or_paths)
 
         piece = self._split_pieces[piece_index]
 
@@ -178,14 +178,14 @@ class ArrowReaderWorker(WorkerBase):
                                           piece.path, piece_index)
 
             # Add debug log for cache key
-            logger.debug('Cache key generated: %s', cache_key)
+            logger.debug('DEBUG: Cache key generated: %s', cache_key)
 
             all_cols = self._local_cache.get(cache_key,
                                              lambda: self._load_rows(parquet_file, piece, shuffle_row_drop_partition))
 
         if all_cols:
             self.publish_func(all_cols)
-            logger.debug('Published columns for piece_index: %s', piece_index)
+            logger.debug('DEBUG: Published columns for piece_index: %s', piece_index)
 
     @staticmethod
     def _check_shape_and_ravel(x, field):
