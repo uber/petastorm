@@ -487,7 +487,7 @@ class Reader(object):
                                                 self.ngram, row_groups, cache, transform_spec,
                                                 self.schema, filters, shuffle_rows, seed),
                                  ventilator=self.ventilator)
-        logger.debug('Workers pool started')
+        logger.debug('DEBUG: Workers pool started')
 
         self.last_row_consumed = False
         self.stopped = False
@@ -675,12 +675,12 @@ class Reader(object):
                                     random_seed=seed)
 
     def stop(self):
-        logger.debug('Stopping Reader')
+        logger.debug('DEBUG: Stopping Reader')
         self._workers_pool.stop()
         self.stopped = True
 
     def join(self):
-        logger.debug('Joining Reader')
+        logger.debug('DEBUG: Joining Reader')
         self._workers_pool.join()
 
     @property
