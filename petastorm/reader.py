@@ -38,6 +38,7 @@ from petastorm.workers_pool.process_pool import ProcessPool
 from petastorm.workers_pool.thread_pool import ThreadPool
 from petastorm.workers_pool.ventilator import ConcurrentVentilator
 
+# Initialize logger
 logger = logging.getLogger(__name__)
 
 # Ventilator guarantees that no more than workers + _VENTILATE_EXTRA_ROWGROUPS are processed at a moment by a
@@ -400,6 +401,7 @@ class Reader(object):
             These will be applied when loading the parquet file with PyArrow. More information
             here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
         """
+        logger.debug('DEBUG: Initializing Reader with dataset_path: %s, num_epochs: %s', dataset_path, num_epochs)
         self.num_epochs = num_epochs
 
         # 1. Open the parquet storage (dataset)
@@ -436,6 +438,8 @@ class Reader(object):
         if self.ngram and not self.ngram.timestamp_overlap and shuffle_row_drop_partitions > 1:
             raise NotImplementedError('Using timestamp_overlap=False is not implemented with'
                                       ' shuffle_options.shuffle_row_drop_partitions > 1')
+
+        logger.debug('DEBUG: Reader initialized with schema_fields: %s', schema_fields)
 
         cache = cache or NullCache()
 
@@ -653,6 +657,7 @@ class Reader(object):
 
     def _create_ventilator(self, row_group_indexes, shuffle_row_groups, shuffle_row_drop_partitions,
                            num_epochs, worker_predicate, max_ventilation_queue_size, seed):
+        logger.debug('DEBUG: Creating ventilator with row_group_indexes: %s', row_group_indexes)
         items_to_ventilate = []
         for piece_index in row_group_indexes:
             for shuffle_row_drop_partition in range(shuffle_row_drop_partitions):
@@ -670,12 +675,12 @@ class Reader(object):
                                     random_seed=seed)
 
     def stop(self):
-        """Stops all worker threads/processes."""
+        logger.debug('Stopping Reader')
         self._workers_pool.stop()
         self.stopped = True
 
     def join(self):
-        """Joins all worker threads/processes. Will block until all worker workers have been fully terminated."""
+        logger.debug('Joining Reader')
         self._workers_pool.join()
 
     @property
