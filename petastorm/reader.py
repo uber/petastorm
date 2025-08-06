@@ -401,7 +401,7 @@ class Reader(object):
             These will be applied when loading the parquet file with PyArrow. More information
             here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
         """
-        logger.debug('DEBUG: Initializing Reader with dataset_path: %s, num_epochs: %s', dataset_path, num_epochs)
+        print('DEBUG: Initializing Reader with dataset_path: %s, num_epochs: %s', dataset_path, num_epochs)
         self.num_epochs = num_epochs
 
         # 1. Open the parquet storage (dataset)
@@ -439,7 +439,7 @@ class Reader(object):
             raise NotImplementedError('Using timestamp_overlap=False is not implemented with'
                                       ' shuffle_options.shuffle_row_drop_partitions > 1')
 
-        logger.debug('DEBUG: Reader initialized with schema_fields: %s', schema_fields)
+        print('DEBUG: Reader initialized with schema_fields: %s', schema_fields)
 
         cache = cache or NullCache()
 
@@ -487,7 +487,7 @@ class Reader(object):
                                                 self.ngram, row_groups, cache, transform_spec,
                                                 self.schema, filters, shuffle_rows, seed),
                                  ventilator=self.ventilator)
-        logger.debug('DEBUG: Workers pool started')
+        print('DEBUG: Workers pool started')
 
         self.last_row_consumed = False
         self.stopped = False
@@ -657,7 +657,7 @@ class Reader(object):
 
     def _create_ventilator(self, row_group_indexes, shuffle_row_groups, shuffle_row_drop_partitions,
                            num_epochs, worker_predicate, max_ventilation_queue_size, seed):
-        logger.debug('DEBUG: Creating ventilator with row_group_indexes: %s', row_group_indexes)
+        print('DEBUG: Creating ventilator with row_group_indexes: %s', row_group_indexes)
         items_to_ventilate = []
         for piece_index in row_group_indexes:
             for shuffle_row_drop_partition in range(shuffle_row_drop_partitions):
@@ -675,12 +675,12 @@ class Reader(object):
                                     random_seed=seed)
 
     def stop(self):
-        logger.debug('DEBUG: Stopping Reader')
+        print('DEBUG: Stopping Reader')
         self._workers_pool.stop()
         self.stopped = True
 
     def join(self):
-        logger.debug('DEBUG: Joining Reader')
+        print('DEBUG: Joining Reader')
         self._workers_pool.join()
 
     @property

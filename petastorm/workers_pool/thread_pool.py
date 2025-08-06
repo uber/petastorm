@@ -91,7 +91,7 @@ class ThreadPool(object):
         :param workers_count: Number of threads
         :param profile: Whether to run a profiler on the threads
         """
-        logger.debug('DEBUG: Initializing ThreadPool with workers_count: %s', workers_count)
+        print('DEBUG: Initializing ThreadPool with workers_count: %s', workers_count)
         self._seed = random.randint(0, 100000)
         self._shuffle_rows = shuffle_rows
         self._seed = seed
@@ -122,7 +122,7 @@ class ThreadPool(object):
           :class:`.WorkerBase`
         :return: ``None``
         """
-        logger.debug('DEBUG: Starting ThreadPool with worker_class: %s', worker_class)
+        print('DEBUG: Starting ThreadPool with worker_class: %s', worker_class)
         # Verify stop_event and raise exception if it's already set!
         if self._stop_event.is_set():
             raise RuntimeError('ThreadPool({}) cannot be reused! stop_event set? {}'
@@ -162,7 +162,7 @@ class ThreadPool(object):
     def ventilate(self, *args, **kargs):
         """Sends a work item to a worker process. Will result in ``worker.process(...)`` call with arbitrary arguments.
         """
-        logger.debug('DEBUG: Ventilating work item with args: %s, kargs: %s', args, kargs)
+        print('DEBUG: Ventilating work item with args: %s, kargs: %s', args, kargs)
         # Distribute work items in a round-robin manner across each worker ventilator queue
         current_worker_id = self._ventilated_items % self.workers_count
         self._ventilated_items += 1
