@@ -18,6 +18,10 @@ from abc import ABCMeta, abstractmethod
 from time import sleep
 
 import six
+import logging
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 _VENTILATION_INTERVAL = 0.01
 
@@ -98,7 +102,8 @@ class ConcurrentVentilator(Ventilator):
         self._items_to_ventilate = items_to_ventilate
         self._iterations_remaining = iterations
         self._randomize_item_order = randomize_item_order
-        self._random_state = np.random.RandomState(seed=random_seed)
+        self._random_seed = random_seed
+        self._rng = np.random.default_rng(self._random_seed)
         self._iterations = iterations
 
         # For the default max ventilation queue size we will use the size of the items to ventilate
@@ -136,14 +141,21 @@ class ConcurrentVentilator(Ventilator):
         self.start()
 
     def _ventilate(self):
+        # Randomize the item order before starting the ventilation if randomize_item_order is set
+        print(f'DEBUG: Items to ventilate before shuffle: {self._items_to_ventilate}')
+        if self._randomize_item_order:
+            if self._random_seed is not None and self._random_seed != 0:
+                # Deterministic randomization: use provided seed
+                self._items_to_ventilate = list(self._rng.permutation(self._items_to_ventilate))
+            else:
+                # Non-deterministic randomization: use np.random
+                self._items_to_ventilate = list(np.random.permutation(self._items_to_ventilate))
+        print(f'DEBUG: Items to ventilate after shuffle: {self._items_to_ventilate}')
+
         while True:
             # Stop condition is when no iterations are remaining or there are no items to ventilate
             if self.completed():
                 break
-
-            # If we are ventilating the first item, we check if we would like to randomize the item order
-            if self._current_item_to_ventilate == 0 and self._randomize_item_order:
-                self._random_state.shuffle(self._items_to_ventilate)
 
             # Block until queue has room, but use continue to allow for checking if stop has been called
             if self._ventilated_items_count - self._processed_items_count >= self._max_ventilation_queue_size:

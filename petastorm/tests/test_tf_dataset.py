@@ -128,6 +128,7 @@ def test_with_dataset_repeat(synthetic_dataset, reader_factory):
 def test_with_dataset_repeat_after_cache(synthetic_dataset, reader_factory):
     """ Check if ``tf.data.Dataset``'s ``repeat`` works after ``tf.data.Dataset``'s ``cache``."""
     epochs = 3
+    print(f"Starting test_with_dataset_repeat_after_cache with {epochs} epochs")
     with reader_factory(synthetic_dataset.url, schema_fields=[TestSchema.id]) as reader:
         dataset = make_petastorm_dataset(reader)
         dataset = dataset.cache()
@@ -138,18 +139,22 @@ def test_with_dataset_repeat_after_cache(synthetic_dataset, reader_factory):
         with tf.Session() as sess:
             with pytest.warns(None):
                 # Expect no warnings since cache() is called before repeat()
-                for _ in range(epochs):
+                for epoch in range(epochs):
+                    print(f"Starting epoch {epoch}")
                     actual_res = []
-                    for _, _ in enumerate(synthetic_dataset.data):
+                    for i, _ in enumerate(synthetic_dataset.data):
                         actual = sess.run(it_op)._asdict()
                         actual_res.append(actual["id"])
+                        print(f"iteration: {i} {actual['id']}")
                     expected_res = list(range(len(synthetic_dataset.data)))
+                    print(f"Epoch: {epoch} actual {sorted(actual_res)}, expected {expected_res}")
                     # sort dataset output since row_groups are shuffled from reader.
                     np.testing.assert_equal(sorted(actual_res), expected_res)
-
+                    print(f"Completed epoch {epoch}")
             # Exhausted all epochs. Fetching next value should trigger OutOfRangeError
             with pytest.raises(tf.errors.OutOfRangeError):
                 sess.run(it_op)
+    print("Completed test_with_dataset_repeat_after_cache")
 
 
 @pytest.mark.forked

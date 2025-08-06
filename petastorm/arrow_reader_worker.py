@@ -15,6 +15,7 @@ from __future__ import division
 
 import hashlib
 import operator
+import logging
 
 import numpy as np
 import pandas as pd
@@ -25,6 +26,9 @@ from pyarrow.parquet import ParquetFile
 from petastorm.cache import NullCache
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.worker_base import WorkerBase
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 
 class ArrowReaderWorkerResultsQueueReader(object):
@@ -91,6 +95,9 @@ class ArrowReaderWorker(WorkerBase):
     def __init__(self, worker_id, publish_func, args):
         super(ArrowReaderWorker, self).__init__(worker_id, publish_func, args)
 
+        # Add debug log in the constructor
+        print(f'DEBUG: Initializing ArrowReaderWorker with worker_id: {worker_id}')
+
         self._filesystem = args[0]
         self._dataset_path_or_paths = args[1]
         self._schema = args[2]
@@ -101,7 +108,10 @@ class ArrowReaderWorker(WorkerBase):
         self._transformed_schema = args[7]
         self._arrow_filters = args[8]
         self._shuffle_rows = args[9]
-        self._random_state = np.random.RandomState(seed=args[10])
+        self._random_seed = args[10]
+
+        # Initialize random number generator
+        self._rng = np.random.default_rng(self._random_seed)
 
         if self._ngram:
             raise NotImplementedError('ngrams are not supported by ArrowReaderWorker')
@@ -128,11 +138,17 @@ class ArrowReaderWorker(WorkerBase):
         :return:
         """
 
+        # Add debug log in the process method
+        print(f'DEBUG: Processing piece_index: {piece_index}')
+
         if not self._dataset:
             self._dataset = pq.ParquetDataset(
                 self._dataset_path_or_paths,
                 filesystem=self._filesystem,
                 validate_schema=False, filters=self._arrow_filters)
+
+            # Add debug log after dataset is initialized
+            print(f'DEBUG: ParquetDataset initialized with path: {self._dataset_path_or_paths}')
 
         piece = self._split_pieces[piece_index]
 
@@ -160,11 +176,16 @@ class ArrowReaderWorker(WorkerBase):
                 path_str = self._dataset_path_or_paths
             cache_key = '{}:{}:{}'.format(hashlib.md5(path_str.encode('utf-8')).hexdigest(),
                                           piece.path, piece_index)
+
+            # Add debug log for cache key
+            print(f'DEBUG: Cache key generated: {cache_key}')
+
             all_cols = self._local_cache.get(cache_key,
                                              lambda: self._load_rows(parquet_file, piece, shuffle_row_drop_partition))
 
         if all_cols:
             self.publish_func(all_cols)
+            print(f'DEBUG: Published columns for piece_index: {piece_index}')
 
     @staticmethod
     def _check_shape_and_ravel(x, field):
@@ -289,9 +310,19 @@ class ArrowReaderWorker(WorkerBase):
 
         # pyarrow would fail if we request a column names that the dataset is partitioned by
         table = piece.read(columns=column_names - partition_names, partitions=self._dataset.partitions)
+
+        # Handle row shuffling based on shuffle_rows setting
         if self._shuffle_rows:
-            indices = self._random_state.permutation(table.num_rows)
-            table = table.take(indices)
+            if self._random_seed is not None and self._random_seed != 0:
+                # Deterministic randomization: use provided seed
+                indices = self._rng.permutation(table.num_rows)
+            else:
+                # Non-deterministic randomization: use np.random directly
+                indices = np.random.permutation(table.num_rows)
+        else:
+            # Deterministic natural order: shuffle_rows=False
+            indices = np.arange(table.num_rows)
+        table = table.take(indices)
 
         # Drop columns we did not explicitly request. This may happen when a table is partitioned. Besides columns
         # requested, pyarrow will also return partition values. Having these unexpected fields will break some

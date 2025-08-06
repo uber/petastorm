@@ -141,15 +141,17 @@ class TestWorkersPool(unittest.TestCase):
         SLEEP_DELTA = 0.01
         TIMEOUT = 20
         QUEUE_SIZE = 2
+        WORKERS_COUNT = 10
 
-        pool = ThreadPool(10, results_queue_size=QUEUE_SIZE)
+        pool = ThreadPool(WORKERS_COUNT, results_queue_size=QUEUE_SIZE)
         pool.start(WorkerIdGeneratingWorker)
 
-        for _ in range(100):
+        for _ in range(1000):
             pool.ventilate()
 
+        expected_queue_size = WORKERS_COUNT * max(5, QUEUE_SIZE // WORKERS_COUNT)
         cumulative_wait = 0
-        while pool.results_qsize() != QUEUE_SIZE:
+        while pool.results_qsize() != expected_queue_size:
             time.sleep(SLEEP_DELTA)
             cumulative_wait += SLEEP_DELTA
             # Make sure we wait no longer than the timeout. Otherwise, something is very wrong

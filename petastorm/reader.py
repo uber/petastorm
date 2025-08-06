@@ -38,6 +38,7 @@ from petastorm.workers_pool.process_pool import ProcessPool
 from petastorm.workers_pool.thread_pool import ThreadPool
 from petastorm.workers_pool.ventilator import ConcurrentVentilator
 
+# Initialize logger
 logger = logging.getLogger(__name__)
 
 # Ventilator guarantees that no more than workers + _VENTILATE_EXTRA_ROWGROUPS are processed at a moment by a
@@ -159,7 +160,7 @@ def make_reader(dataset_url,
                       'To read from a non-Petastorm Parquet store use make_batch_reader')
 
     if reader_pool_type == 'thread':
-        reader_pool = ThreadPool(workers_count, results_queue_size)
+        reader_pool = ThreadPool(workers_count, results_queue_size, shuffle_rows=shuffle_rows, seed=seed)
     elif reader_pool_type == 'process':
         if pyarrow_serialize:
             warnings.warn("pyarrow_serializer was deprecated and will be removed in future versions. "
@@ -315,7 +316,7 @@ def make_batch_reader(dataset_url_or_urls,
         raise ValueError('Unknown cache_type: {}'.format(cache_type))
 
     if reader_pool_type == 'thread':
-        reader_pool = ThreadPool(workers_count, results_queue_size)
+        reader_pool = ThreadPool(workers_count, results_queue_size, shuffle_rows=shuffle_rows, seed=seed)
     elif reader_pool_type == 'process':
         serializer = ArrowTableSerializer()
         reader_pool = ProcessPool(workers_count, serializer, zmq_copy_buffers=zmq_copy_buffers)
@@ -400,6 +401,7 @@ class Reader(object):
             These will be applied when loading the parquet file with PyArrow. More information
             here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
         """
+        print(f'DEBUG: Initializing Reader with dataset_path: {dataset_path}, num_epochs: {num_epochs}')
         self.num_epochs = num_epochs
 
         # 1. Open the parquet storage (dataset)
@@ -437,9 +439,11 @@ class Reader(object):
             raise NotImplementedError('Using timestamp_overlap=False is not implemented with'
                                       ' shuffle_options.shuffle_row_drop_partitions > 1')
 
+        print(f'DEBUG: Reader initialized with schema_fields: {schema_fields}')
+
         cache = cache or NullCache()
 
-        self._workers_pool = reader_pool or ThreadPool(10)
+        self._workers_pool = reader_pool or ThreadPool(10, shuffle_rows=shuffle_rows, seed=seed)
 
         # Make a schema view (a view is a Unischema containing only a subset of fields
         # Will raise an exception if invalid schema fields are in schema_fields
@@ -483,7 +487,7 @@ class Reader(object):
                                                 self.ngram, row_groups, cache, transform_spec,
                                                 self.schema, filters, shuffle_rows, seed),
                                  ventilator=self.ventilator)
-        logger.debug('Workers pool started')
+        print('DEBUG: Workers pool started')
 
         self.last_row_consumed = False
         self.stopped = False
@@ -653,6 +657,7 @@ class Reader(object):
 
     def _create_ventilator(self, row_group_indexes, shuffle_row_groups, shuffle_row_drop_partitions,
                            num_epochs, worker_predicate, max_ventilation_queue_size, seed):
+        print(f'DEBUG: Creating ventilator with row_group_indexes: {row_group_indexes}')
         items_to_ventilate = []
         for piece_index in row_group_indexes:
             for shuffle_row_drop_partition in range(shuffle_row_drop_partitions):
@@ -670,12 +675,12 @@ class Reader(object):
                                     random_seed=seed)
 
     def stop(self):
-        """Stops all worker threads/processes."""
+        print('DEBUG: Stopping Reader')
         self._workers_pool.stop()
         self.stopped = True
 
     def join(self):
-        """Joins all worker threads/processes. Will block until all worker workers have been fully terminated."""
+        print('DEBUG: Joining Reader')
         self._workers_pool.join()
 
     @property
