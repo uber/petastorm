@@ -33,7 +33,9 @@ _TP = [
     lambda url, **kwargs: make_batch_reader(url, reader_pool_type='thread', **kwargs),
     lambda url, **kwargs: make_batch_reader(url, reader_pool_type='process', **kwargs),
 ]
-
+_OT = [
+    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='orderedthread', **kwargs),
+]
 
 def _check_simple_reader(reader, expected_data):
     # Read a bunch of entries from the dataset and compare the data to reference
@@ -54,6 +56,22 @@ def _check_simple_reader(reader, expected_data):
 
     assert count == len(expected_data)
 
+def _check_reader_order(reader, expected_data):
+    # Read a bunch of entries from the dataset and compare the data to reference
+    count = 0
+    idx = 0
+    for row in reader:
+        actual = row._asdict()
+
+        # Compare value of each entry in the batch
+        for id_value in actual['id']:
+            assert id_value == idx
+            idx += 1
+
+        count += len(actual['id'])
+
+    assert count == len(expected_data)
+
 
 def _get_bad_field_name(field_list):
     """ Grab first name from list of valid fields, append random characters to it to get an invalid
@@ -69,6 +87,13 @@ def test_simple_read(scalar_dataset, reader_factory):
     """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
     with reader_factory(scalar_dataset.url) as reader:
         _check_simple_reader(reader, scalar_dataset.data)
+
+
+@pytest.mark.parametrize('reader_factory', _OT)
+def test_simple_read_ordered(scalar_dataset, reader_factory):
+    """Just a bunch of read and compares of all values to the expected values using the ordered reader pools"""
+    with reader_factory(scalar_dataset.url, shuffle_row_groups=False) as reader:
+        _check_reader_order(reader, scalar_dataset.data)
 
 
 @pytest.mark.parametrize('reader_factory', _D)
