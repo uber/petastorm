@@ -142,7 +142,7 @@ class ConcurrentVentilator(Ventilator):
 
     def _ventilate(self):
         # Randomize the item order before starting the ventilation if randomize_item_order is set
-        print('DEBUG: Items to ventilate before shuffle: %s', self._items_to_ventilate)
+        print(f'DEBUG: Items to ventilate before shuffle: {self._items_to_ventilate}')
         if self._randomize_item_order:
             if self._random_seed is not None and self._random_seed != 0:
                 # Deterministic randomization: use provided seed
@@ -150,7 +150,7 @@ class ConcurrentVentilator(Ventilator):
             else:
                 # Non-deterministic randomization: use np.random
                 self._items_to_ventilate = list(np.random.permutation(self._items_to_ventilate))
-        print('DEBUG: Items to ventilate after shuffle: %s', self._items_to_ventilate)
+        print(f'DEBUG: Items to ventilate after shuffle: {self._items_to_ventilate}')
 
         while True:
             # Stop condition is when no iterations are remaining or there are no items to ventilate

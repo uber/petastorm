@@ -401,7 +401,7 @@ class Reader(object):
             These will be applied when loading the parquet file with PyArrow. More information
             here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
         """
-        print('DEBUG: Initializing Reader with dataset_path: %s, num_epochs: %s', dataset_path, num_epochs)
+        print(f'DEBUG: Initializing Reader with dataset_path: {dataset_path}, num_epochs: {num_epochs}')
         self.num_epochs = num_epochs
 
         # 1. Open the parquet storage (dataset)
@@ -439,7 +439,7 @@ class Reader(object):
             raise NotImplementedError('Using timestamp_overlap=False is not implemented with'
                                       ' shuffle_options.shuffle_row_drop_partitions > 1')
 
-        print('DEBUG: Reader initialized with schema_fields: %s', schema_fields)
+        print(f'DEBUG: Reader initialized with schema_fields: {schema_fields}')
 
         cache = cache or NullCache()
 
@@ -657,7 +657,7 @@ class Reader(object):
 
     def _create_ventilator(self, row_group_indexes, shuffle_row_groups, shuffle_row_drop_partitions,
                            num_epochs, worker_predicate, max_ventilation_queue_size, seed):
-        print('DEBUG: Creating ventilator with row_group_indexes: %s', row_group_indexes)
+        print(f'DEBUG: Creating ventilator with row_group_indexes: {row_group_indexes}')
         items_to_ventilate = []
         for piece_index in row_group_indexes:
             for shuffle_row_drop_partition in range(shuffle_row_drop_partitions):

@@ -91,7 +91,7 @@ class ThreadPool(object):
         :param workers_count: Number of threads
         :param profile: Whether to run a profiler on the threads
         """
-        print('DEBUG: Initializing ThreadPool with workers_count: %s', workers_count)
+        print(f'DEBUG: Initializing ThreadPool with workers_count: {workers_count}')
         self._seed = random.randint(0, 100000)
         self._shuffle_rows = shuffle_rows
         self._seed = seed
@@ -122,7 +122,7 @@ class ThreadPool(object):
           :class:`.WorkerBase`
         :return: ``None``
         """
-        print('DEBUG: Starting ThreadPool with worker_class: %s', worker_class)
+        print(f'DEBUG: Starting ThreadPool with worker_class: {worker_class}')
         # Verify stop_event and raise exception if it's already set!
         if self._stop_event.is_set():
             raise RuntimeError('ThreadPool({}) cannot be reused! stop_event set? {}'
@@ -162,7 +162,7 @@ class ThreadPool(object):
     def ventilate(self, *args, **kargs):
         """Sends a work item to a worker process. Will result in ``worker.process(...)`` call with arbitrary arguments.
         """
-        print('DEBUG: Ventilating work item with args: %s, kargs: %s', args, kargs)
+        print(f'DEBUG: Ventilating work item with args: {args}, kargs: {kargs}')
         # Distribute work items in a round-robin manner across each worker ventilator queue
         current_worker_id = self._ventilated_items % self.workers_count
         self._ventilated_items += 1
@@ -210,7 +210,7 @@ class ThreadPool(object):
                 # Use blocking/strict round robin if shuffle_rows is disabled or the seed is set
                 result = self._results_queues[self._get_results_worker_id].get(
                     block=not use_non_blocking_get, timeout=_VERIFY_END_OF_VENTILATION_PERIOD)
-                print('DEBUG: Result from worker %s: %s' % (self._get_results_worker_id, result))
+                print(f'DEBUG: Result from worker {self._get_results_worker_id}: {result}')
                 # If the result is a VentilatedItemProcessedMessage, we need to increment the count of items
                 # processed by the current worker
                 if isinstance(result, VentilatedItemProcessedMessage):
