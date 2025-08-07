@@ -90,7 +90,7 @@ class ThreadPool(object):
         """
         self._seed = random.randint(0, 100000)
         self._workers = []
-        self._ventilator_queue = None
+        self._ventilator_queues = []
         self.workers_count = workers_count
         self._results_queue_size = results_queue_size
         # Worker threads will watch this event and gracefully shutdown when the event is set
@@ -115,13 +115,13 @@ class ThreadPool(object):
             raise RuntimeError('ThreadPool({}) cannot be reused! stop_event set? {}'
                                .format(len(self._workers), self._stop_event.is_set()))
 
-        # Set up a channel to send work
-        self._ventilator_queue = queue.Queue()
+        # Set up a channel for each worker to send work
+        self._ventilator_queues = [queue.Queue() for _ in range(self.workers_count)]
         self._results_queue = queue.Queue(self._results_queue_size)
         self._workers = []
         for worker_id in range(self.workers_count):
             worker_impl = worker_class(worker_id, self._stop_aware_put, worker_args)
-            new_thread = WorkerThread(worker_impl, self._stop_event, self._ventilator_queue,
+            new_thread = WorkerThread(worker_impl, self._stop_event, self._ventilator_queues[worker_id],
                                       self._results_queue, self._profiling_enabled)
             # Make the thread daemonic. Since it only reads it's ok to abort while running - no resource corruption
             # will occur.
@@ -139,8 +139,9 @@ class ThreadPool(object):
     def ventilate(self, *args, **kargs):
         """Sends a work item to a worker process. Will result in ``worker.process(...)`` call with arbitrary arguments.
         """
+        current_worker_id = self._ventilated_items % self.workers_count
         self._ventilated_items += 1
-        self._ventilator_queue.put((args, kargs))
+        self._ventilator_queues[current_worker_id].put((args, kargs))
 
     def get_results(self):
         """Returns results from worker pool or re-raise worker's exception if any happen in worker thread.
