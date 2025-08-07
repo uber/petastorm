@@ -293,6 +293,7 @@ class ArrowReaderWorker(WorkerBase):
         # pyarrow would fail if we request a column names that the dataset is partitioned by
         table = piece.read(columns=column_names - partition_names, partitions=self._dataset.partitions)
 
+        # print(f"DEBUG: ArrowReaderWorker: table before shuffle: {table}")
         # Handle row shuffling based on shuffle_rows setting
         if self._shuffle_rows:
             if self._random_seed is not None and self._random_seed != 0:
@@ -305,6 +306,7 @@ class ArrowReaderWorker(WorkerBase):
             # Deterministic natural order: shuffle_rows=False
             indices = np.arange(table.num_rows)
         table = table.take(indices)
+        # print(f"DEBUG: ArrowReaderWorker: table after shuffle: {table}")
 
         # Drop columns we did not explicitly request. This may happen when a table is partitioned. Besides columns
         # requested, pyarrow will also return partition values. Having these unexpected fields will break some
