@@ -14,7 +14,6 @@
 
 import cProfile
 import pstats
-import random
 import sys
 from threading import Thread, Event
 from traceback import format_exc
@@ -76,7 +75,7 @@ class WorkerThread(Thread):
 
 
 class ThreadPool(object):
-    def __init__(self, workers_count, results_queue_size=50, profiling_enabled=False):
+    def __init__(self, workers_count, results_queue_size=50, profiling_enabled=False, shuffle_rows=False, seed=None):
         """Initializes a thread pool.
 
         TODO: consider using a standard thread pool
@@ -88,7 +87,8 @@ class ThreadPool(object):
         :param workers_count: Number of threads
         :param profile: Whether to run a profiler on the threads
         """
-        self._seed = random.randint(0, 100000)
+        self._seed = seed
+        self._shuffle_rows = shuffle_rows
         self._workers = []
         self._ventilator_queues = []
         self.workers_count = workers_count
@@ -175,6 +175,9 @@ class ThreadPool(object):
         :return: arguments passed to ``publish_func(...)`` by a worker. If no more results are anticipated,
                  :class:`.EmptyResultError`.
         """
+        # If shuffle_rows is enabled and the seed is not set, we need to use a non-blocking
+        #  as we don't care about the strict round robin order
+        use_non_blocking_get = self._shuffle_rows and (self._seed is None or self._seed == 0)
         while True:
             # If there is no more work to do, raise an EmptyResultError
             if self.all_workers_done():
@@ -188,9 +191,13 @@ class ThreadPool(object):
                 continue
 
             try:
+                # Get the result from the current worker's results queue.
+                # Use blocking/strict round robin if shuffle_rows is disabled or the seed is set
                 result = self._results_queues[self._get_results_worker_id].get(
-                    block=True, timeout=_VERIFY_END_OF_VENTILATION_PERIOD
+                    block=not use_non_blocking_get, timeout=_VERIFY_END_OF_VENTILATION_PERIOD
                 )
+                # If the result is a VentilatedItemProcessedMessage, we need to increment the count of items
+                # processed by the current worker
                 if isinstance(result, VentilatedItemProcessedMessage):
                     self._ventilated_items_processed_by_worker[self._get_results_worker_id] += 1
                     if self._ventilator:
