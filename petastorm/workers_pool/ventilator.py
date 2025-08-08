@@ -123,9 +123,6 @@ class ConcurrentVentilator(Ventilator):
 
     def completed(self):
         assert self._iterations_remaining is None or self._iterations_remaining >= 0
-        print(f"DEBUG: completed: {self._stop_requested}")
-        print(f"DEBUG: iterations_remaining: {self._iterations_remaining}")
-        print(f"DEBUG: items_to_ventilate: {self._items_to_ventilate}")
         return self._stop_requested or self._iterations_remaining == 0 or not self._items_to_ventilate
 
     def reset(self):

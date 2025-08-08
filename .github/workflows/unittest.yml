@@ -22,6 +22,17 @@ jobs:
   unittest:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        config: [latest]
+        include:
+        - config: latest
+          PYARROW_VERSION: "6.0.1"
+          NUMPY_VERSION: "1.21.5"
+          TF_VERSION: "2.8.0"
+          PYSPARK_VERSION: "3.0.0"
+          ARROW_PRE_0_15_IPC_FORMAT: "0"
+          PY: "3.9"
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -40,15 +51,15 @@ jobs:
       - name: build and run unit tests
         run: |
           sleep 30
-          export PYARROW_VERSION="6.0.1"
-          export NUMPY_VERSION="1.21.5"
-          export TF_VERSION="2.8.0"
-          export PY="3.9"
-          export PYSPARK_VERSION="3.0.0"
-          export ARROW_PRE_0_15_IPC_FORMAT="0"
+          export PYARROW_VERSION=${{matrix.PYARROW_VERSION}}
+          export NUMPY_VERSION=${{matrix.NUMPY_VERSION}}
+          export TF_VERSION=${{matrix.TF_VERSION}}
+          export PY=${{matrix.PY}}
+          export PYSPARK_VERSION=${{matrix.PYSPARK_VERSION}}
+          export ARROW_PRE_0_15_IPC_FORMAT=${{matrix.ARROW_PRE_0_15_IPC_FORMAT}}
           export RUN="docker exec -e ARROW_PRE_0_15_IPC_FORMAT=$ARROW_PRE_0_15_IPC_FORMAT petastorm_ci bash /run_in_venv.sh ${PY}"
           export PYTEST="pytest --timeout=360 -v --color=yes --cov=./ --cov-report xml:coverage.xml"
-          $RUN pip install -U pip "setuptools<70"
+          $RUN pip install -U pip "setuptools<70" 
           $RUN pip install -e /petastorm/[test,tf,torch,docs,opencv]
           $RUN pip install --upgrade numpy==$NUMPY_VERSION
           $RUN pip install -U pyarrow==${PYARROW_VERSION} tensorflow==${TF_VERSION} pyspark==${PYSPARK_VERSION}
@@ -56,6 +67,7 @@ jobs:
           $RUN mypy petastorm
           $RUN flake8 . --count --show-source --statistics
           $RUN flake8 . --count --exit-zero --max-complexity=20 --statistics
+          $RUN pylint --rcfile=.pylintrc petastorm examples -f parseable -r n
           $RUN ulimit -c unlimited -S
           $RUN bash -c "cd /petastorm/docs/autodoc && pwd && make html"
           $RUN $PYTEST -m "forked" --forked -Y \
@@ -75,6 +87,12 @@ jobs:
           petastorm/tests/test_pytorch_dataloader.py \
           petastorm/tests/test_pytorch_utils.py
           $RUN $PYTEST -Y --cov-append petastorm/tests/test_tf_autograph.py
+
+      - name: codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          required: true
 
   draft_release:
     needs: unittest

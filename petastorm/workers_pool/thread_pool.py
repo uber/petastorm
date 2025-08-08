@@ -151,9 +151,7 @@ class ThreadPool(object):
         """
         current_worker_id = self._ventilated_items % self.workers_count
         self._ventilated_items += 1
-        print(f"DEBUG: Inside ventilate, ventilated_items: {self._ventilated_items}")
         self._ventilated_items_by_worker[current_worker_id] += 1
-        print(f"DEBUG: Inside ventilate, ventilated_items_by_worker: {self._ventilated_items_by_worker}")
         self._ventilator_queues[current_worker_id].put((args, kargs))
 
     def current_worker_done(self, worker_id):
@@ -177,23 +175,11 @@ class ThreadPool(object):
         :return: arguments passed to ``publish_func(...)`` by a worker. If no more results are anticipated,
                  :class:`.EmptyResultError`.
         """
-        print(f"DEBUG: ventilated_items: {self._ventilated_items}")
-        print(f"DEBUG: ventilated_items_by_worker: {self._ventilated_items_by_worker}")
-        print(f"DEBUG: ventilated_items_processed_by_worker: {self._ventilated_items_processed_by_worker}")
-        print(f"DEBUG: get_results_worker_id: {self._get_results_worker_id}")
-        print(f"DEBUG: workers_count: {self.workers_count}")
-        for i, q in enumerate(self._results_queues):
-            print(f"DEBUG: results_queue[{i}] size: {q.qsize()}")
-        print(f"DEBUG: stop_event: {self._stop_event.is_set()}")
-        print(f"DEBUG: ventilator: {self._ventilator}")
-
         while True:
             # If there is no more work to do, raise an EmptyResultError
             if self.all_workers_done():
-                print("DEBUG: all_workers_done")
                 # We also need to check if we are using a ventilator and if it is completed
                 if not self._ventilator or self._ventilator.completed():
-                    print("DEBUG: all_workers_done and ventilator completed")
                     raise EmptyResultError()
 
             # If the current worker is done, we need to get the result from the next worker
@@ -207,8 +193,6 @@ class ThreadPool(object):
                 )
                 if isinstance(result, VentilatedItemProcessedMessage):
                     self._ventilated_items_processed_by_worker[self._get_results_worker_id] += 1
-                    print(f"DEBUG: Inside get_results, "
-                          f"ventilated_items_processed_by_worker: {self._ventilated_items_processed_by_worker}")
                     if self._ventilator:
                         self._ventilator.processed_item()
                     # Move to the next worker
@@ -219,7 +203,6 @@ class ThreadPool(object):
                     self.join()
                     raise result
                 else:
-                    print(f"DEBUG: get_results: result: {result}")
                     return result
             except queue.Empty:
                 continue

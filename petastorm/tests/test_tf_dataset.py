@@ -146,8 +146,7 @@ def test_with_dataset_repeat_after_cache(synthetic_dataset, reader_factory):
                     expected_res = list(range(len(synthetic_dataset.data)))
                     # sort dataset output since row_groups are shuffled from reader.
                     np.testing.assert_equal(sorted(actual_res), expected_res)
-                    print(f"DEBUG: actual_res: {sorted(actual_res)}")
-                    print(f"DEBUG: expected_res: {expected_res}")
+
             # Exhausted all epochs. Fetching next value should trigger OutOfRangeError
             with pytest.raises(tf.errors.OutOfRangeError):
                 sess.run(it_op)

@@ -291,7 +291,6 @@ def test_simple_read_with_disk_cache(synthetic_dataset, reader_factory, tmpdir):
                         cache_type='local-disk', cache_location=tmpdir.strpath,
                         cache_size_limit=CACHE_SIZE, cache_row_size_estimate=ROW_SIZE_BYTES) as reader:
         ids = _readout_all_ids(reader)
-        print(f"DEBUG: ids: {ids}")
         assert 200 == len(ids)  # We read 2 epochs
         assert set(ids) == set(range(100))
 
@@ -857,10 +856,7 @@ def test_make_batch_reader_with_url_list(scalar_dataset):
     url_list = _get_local_fs_url_list(scalar_dataset.url)
     url_list = list(filter(lambda x: x.endswith('.parquet'), url_list))
 
-    print(f"DEBUG: url_list: {url_list}")
-
     with make_batch_reader(url_list, workers_count=1) as reader:
-
         row_count = 0
         for batch in reader:
             row_count += len(batch.id)
