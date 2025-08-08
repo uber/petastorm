@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 # Ventilator guarantees that no more than workers + _VENTILATE_EXTRA_ROWGROUPS are processed at a moment by a
 # worker pool. This guarantees that we don't run out of memory if data consumer is slower than the Reader.
-_VENTILATE_EXTRA_ROWGROUPS = 2
+_VENTILATE_EXTRA_ROWGROUPS = 3
 
 LOCAL_DISK_CACHE = 'local-disk'
 NULL_CACHE = 'null'
@@ -475,7 +475,7 @@ class Reader(object):
         self.ventilator = self._create_ventilator(filtered_row_group_indexes, shuffle_row_groups,
                                                   normalized_shuffle_row_drop_partitions,
                                                   self.num_epochs, worker_predicate,
-                                                  self._workers_pool.workers_count + _VENTILATE_EXTRA_ROWGROUPS,
+                                                  self._workers_pool.workers_count * (1 + _VENTILATE_EXTRA_ROWGROUPS),
                                                   seed)
 
         # 5. Start workers pool
