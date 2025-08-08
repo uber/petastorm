@@ -380,6 +380,56 @@ def test_shuffle_drop_ratio(synthetic_dataset, reader_factory):
         prev_jumps_not_1 = jumps_not_1
 
 
+@pytest.mark.parametrize('reader_factory', [
+    lambda url, **kwargs: make_reader(url, reader_pool_type='thread', **kwargs),
+    lambda url, **kwargs: make_batch_reader(url, reader_pool_type='thread', **kwargs)])
+def test_shuffle_order_determinism(synthetic_dataset, reader_factory):
+    """
+    Test shuffle order behavior with different configurations:
+    1. Order of data = order of data from reader with shuffle disabled
+    2. Order of data = order of data from reader with shuffle enabled for same seed
+    3. Order of data is not equal to order of data from reader with shuffle enabled for different seed
+     """
+
+    # Test 1: Order of data equals order from reader with shuffle disabled
+    with reader_factory(synthetic_dataset.url, shuffle_rows=False, shuffle_row_groups=False) as reader_1:
+        no_shuffle_readout_1 = _readout_all_ids(reader_1)
+    with reader_factory(synthetic_dataset.url, shuffle_rows=False, shuffle_row_groups=False) as reader_2:
+        no_shuffle_readout_2 = _readout_all_ids(reader_2)
+
+    # Both no-shuffle reads should produce identical order
+    np.testing.assert_array_equal(no_shuffle_readout_1, no_shuffle_readout_2)
+
+    # Verify that no-shuffle order equals the natural order of data (0, 1, 2, ...)
+    expected_natural_order = [row['id'] for row in synthetic_dataset.data]
+    np.testing.assert_array_equal(no_shuffle_readout_1, expected_natural_order)
+
+    # Test 2: Order of data equals order from reader with shuffle enabled for same seed
+    seed = 42
+    with reader_factory(synthetic_dataset.url, shuffle_rows=True, shuffle_row_groups=True, seed=seed) as reader_3:
+        shuffle_same_seed_1 = _readout_all_ids(reader_3)
+    with reader_factory(synthetic_dataset.url, shuffle_rows=True, shuffle_row_groups=True, seed=seed) as reader_4:
+        shuffle_same_seed_2 = _readout_all_ids(reader_4)
+
+    # Same seed should produce identical shuffled order
+    np.testing.assert_array_equal(shuffle_same_seed_1, shuffle_same_seed_2)
+
+    # Test 3: Order of data is not equal to order from reader with shuffle enabled for different seed
+    different_seed = 123
+    with reader_factory(synthetic_dataset.url, shuffle_rows=True, shuffle_row_groups=True,
+                        seed=different_seed) as reader_5:
+        shuffle_different_seed = _readout_all_ids(reader_5)
+
+    # Different seeds should produce different shuffled orders
+    assert not np.array_equal(shuffle_same_seed_1, shuffle_different_seed)
+
+    # Shuffle should produce different order than no shuffle
+    assert not np.array_equal(no_shuffle_readout_1, shuffle_same_seed_1)
+
+    # All readouts should have the same elements (just different order)
+    assert sorted(no_shuffle_readout_1) == sorted(shuffle_same_seed_1) == sorted(shuffle_different_seed)
+
+
 @pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
 def test_predicate_on_partition(synthetic_dataset, reader_factory):
     for expected_partition_keys in [{'p_0', 'p_2'}, {'p_0'}, {'p_1', 'p_2'}]:
