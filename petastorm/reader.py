@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 # Ventilator guarantees that no more than workers + _VENTILATE_EXTRA_ROWGROUPS are processed at a moment by a
 # worker pool. This guarantees that we don't run out of memory if data consumer is slower than the Reader.
-_VENTILATE_EXTRA_ROWGROUPS = 2
+_VENTILATE_EXTRA_ROWGROUPS = 3
 
 LOCAL_DISK_CACHE = 'local-disk'
 NULL_CACHE = 'null'
@@ -159,7 +159,7 @@ def make_reader(dataset_url,
                       'To read from a non-Petastorm Parquet store use make_batch_reader')
 
     if reader_pool_type == 'thread':
-        reader_pool = ThreadPool(workers_count, results_queue_size)
+        reader_pool = ThreadPool(workers_count, results_queue_size, shuffle_rows=shuffle_rows, seed=seed)
     elif reader_pool_type == 'process':
         if pyarrow_serialize:
             warnings.warn("pyarrow_serializer was deprecated and will be removed in future versions. "
@@ -315,7 +315,7 @@ def make_batch_reader(dataset_url_or_urls,
         raise ValueError('Unknown cache_type: {}'.format(cache_type))
 
     if reader_pool_type == 'thread':
-        reader_pool = ThreadPool(workers_count, results_queue_size)
+        reader_pool = ThreadPool(workers_count, results_queue_size, shuffle_rows=shuffle_rows, seed=seed)
     elif reader_pool_type == 'process':
         serializer = ArrowTableSerializer()
         reader_pool = ProcessPool(workers_count, serializer, zmq_copy_buffers=zmq_copy_buffers)
@@ -439,7 +439,7 @@ class Reader(object):
 
         cache = cache or NullCache()
 
-        self._workers_pool = reader_pool or ThreadPool(10)
+        self._workers_pool = reader_pool or ThreadPool(10, shuffle_rows=shuffle_rows, seed=seed)
 
         # Make a schema view (a view is a Unischema containing only a subset of fields
         # Will raise an exception if invalid schema fields are in schema_fields
@@ -475,7 +475,7 @@ class Reader(object):
         self.ventilator = self._create_ventilator(filtered_row_group_indexes, shuffle_row_groups,
                                                   normalized_shuffle_row_drop_partitions,
                                                   self.num_epochs, worker_predicate,
-                                                  self._workers_pool.workers_count + _VENTILATE_EXTRA_ROWGROUPS,
+                                                  self._workers_pool.workers_count * (1 + _VENTILATE_EXTRA_ROWGROUPS),
                                                   seed)
 
         # 5. Start workers pool
