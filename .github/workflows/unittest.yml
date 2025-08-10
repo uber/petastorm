@@ -123,7 +123,7 @@ jobs:
   deploy:
     needs: draft_release
     # Only come with a tag
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+    if: github.event_name == 'push'
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
     # Steps represent a sequence of tasks that will be executed as part of the job
@@ -132,18 +132,12 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
-          python-version: 3.7
+          python-version: '3.9'
       - name: Display Python version
         run: python -c "import sys; print(sys.version)"
       - name: Before Deploy
         run: |
           pip install wheel
           python setup.py bdist_wheel
-
-      - name: Publish package
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          user: __token__
-          password: ${{ secrets.PYPI_API_TOKEN }}
