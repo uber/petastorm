@@ -4,9 +4,28 @@
 Release notes
 =============
 
-
-Release 0.12.3 (unreleased)
+Release 0.13.1 (unreleased)
 ===========================
+
+
+
+Release 0.13.0 
+===========================
+- `PR 810 <https://github.com/uber/petastorm/pull/810>`_: Support reproducible ordering in Petastorm.
+- `PR 809 <https://github.com/uber/petastorm/pull/809>`_: Remove CI tests for unsupported PyArrow versions (3.x and 4.x)
+
+New features
+--------------------------
+- **Deterministic Data Ordering**: Implemented reproducible data ordering for multiple workers using separate ventilator queues and round-robin result collection.
+
+  - ``shuffle_rows=False and shuffle_row_groups=False``: Natural order (deterministic)
+  - ``shuffle_rows=True or shuffle_row_groups=True`` with seed: Reproducible randomized order
+  - ``shuffle_rows=True or shuffle_row_groups=True`` without seed: Non-deterministic randomized order
+
+Breaking changes
+--------------------------
+- Dropped support for PyArrow versions 3.x and 4.x. Now requires PyArrow 6.0.1+.
+
 
 
 Release 0.12.2
