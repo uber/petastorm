@@ -62,8 +62,8 @@ class ArrowReaderWorkerResultsQueueReader(object):
                     column_as_numpy = column_as_pandas
 
                 if pa.types.is_string(column.type):
-                    result_dict[column_name] = column_as_numpy.astype(np.unicode_)
-                elif pa.types.is_list(column.type):
+                    result_dict[column_name] = column_as_numpy.astype(np.object)
+                elif pa.types.is_list(column.type) or pa.types.is_fixed_size_list(column.type):
                     # Assuming all lists are of the same length, hence we can collate them into a matrix
                     list_of_lists = column_as_numpy
                     try:
@@ -193,7 +193,7 @@ class ArrowReaderWorker(WorkerBase):
         result = self._read_with_shuffle_row_drop(piece, pq_file, column_names_in_schema, shuffle_row_drop_range)
 
         if self._transform_spec:
-            result_as_pandas = result.to_pandas()
+            result_as_pandas = result.to_pandas(date_as_object=False)
             # A user may omit `func` value if they intend just to delete some fields using the TransformSpec
             if self._transform_spec.func:
                 transformed_result = self._transform_spec.func(result_as_pandas)
@@ -222,7 +222,10 @@ class ArrowReaderWorker(WorkerBase):
                     transformed_result[field.name] = transformed_result[field.name] \
                         .map(lambda x, f=field: self._check_shape_and_ravel(x, f))
 
-            result = pa.Table.from_pandas(transformed_result, preserve_index=False)
+            # Explicitly specify schema since in a case when all column values are None, pyarrow
+            # would not be able to properly detect the type
+            result = pa.Table.from_pandas(transformed_result, preserve_index=False,
+                                          schema=self._transformed_schema.as_pyarrow_schema())
 
         return result
 

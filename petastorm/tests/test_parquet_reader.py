@@ -16,6 +16,7 @@ import itertools
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 from pyarrow import parquet as pq
 
@@ -207,6 +208,65 @@ def test_transform_spec_support_return_tensor(scalar_dataset, reader_factory):
         assert len(sample) == 2
         assert (2, 3) == sample['tensor_col_1'].shape[1:] and \
                (3, 4, 5) == sample['tensor_col_2'].shape[1:]
+
+
+@pytest.mark.parametrize('null_column_dtype', [np.float64, np.unicode_])
+@pytest.mark.parametrize('reader_factory', _D)
+def test_transform_spec_returns_all_none_values(scalar_dataset, null_column_dtype, reader_factory):
+    def fill_id_with_nones(x):
+        return pd.DataFrame({'id': [None] * len(x)})
+
+    edit_fields = [('id', null_column_dtype, (), True)]
+
+    with reader_factory(scalar_dataset.url, schema_fields=["id"],
+                        transform_spec=TransformSpec(fill_id_with_nones, edit_fields=edit_fields)) as reader:
+        sample = next(reader)
+        assert sample.id.dtype.type == null_column_dtype
+
+
+@pytest.mark.parametrize('np_dtype, pa_dtype, null_value',
+                         ((np.float32, pa.float32(), np.nan), (np.object_, pa.string(), None)))
+@pytest.mark.parametrize('reader_factory', _D)
+def test_entire_column_of_typed_nulls(reader_factory, np_dtype, pa_dtype, null_value, tmp_path):
+    path = tmp_path / "dataset"
+    schema = pa.schema([pa.field('all_nulls', pa_dtype)])
+    pq.write_table(pa.Table.from_pydict({"all_nulls": [null_value] * 10}, schema=schema), path)
+
+    with reader_factory("file:///" + str(path)) as reader:
+        sample = next(reader)
+        assert sample.all_nulls.dtype == np_dtype
+        if np_dtype == np.float32:
+            assert np.all(np.isnan(sample.all_nulls))
+        elif np_dtype == np.object_:
+            assert all(v is None for v in sample.all_nulls)
+        else:
+            assert False, "Unexpected np_dtype"
+
+
+@pytest.mark.parametrize('reader_factory', _D)
+def test_column_with_list_of_strings_some_are_null(reader_factory, tmp_path):
+    path = tmp_path / "dataset"
+    schema = pa.schema([pa.field('some_nulls', pa.list_(pa.string(), -1))])
+    pq.write_table(pa.Table.from_pydict({"some_nulls": [['a0', 'a1'], ['b0', None], [None, None]]}, schema=schema),
+                   path)
+
+    with reader_factory("file:///" + str(path)) as reader:
+        sample = next(reader)
+        assert sample.some_nulls.dtype == np.object
+        np.testing.assert_equal(sample.some_nulls, [['a0', 'a1'], ['b0', None], [None, None]])
+
+
+@pytest.mark.parametrize('reader_factory', _D)
+def test_transform_spec_returns_all_none_values_in_a_list_field(scalar_dataset, reader_factory):
+    def fill_id_with_nones(x):
+        return pd.DataFrame({'int_fixed_size_list': [[None for _ in range(3)]] * len(x)})
+
+    with reader_factory(scalar_dataset.url, schema_fields=["int_fixed_size_list"],
+                        transform_spec=TransformSpec(fill_id_with_nones)) as reader:
+        sample = next(reader)
+        # The type will be float as an numpy converts integer array that has null
+        # values into a float64 array with nan as nulls
+        assert sample.int_fixed_size_list.dtype.type == np.float64
 
 
 @pytest.mark.parametrize('reader_factory', _D)
