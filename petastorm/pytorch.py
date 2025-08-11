@@ -62,8 +62,9 @@ def _sanitize_pytorch_types(row_as_dict):
             elif value.dtype == np.bool_:
                 row_as_dict[name] = value.astype(np.uint8)
             elif re.search('[SaUO]', value.dtype.str):
-                raise TypeError('Pytorch does not support arrays of string or object classes. '
-                                'Found in field {}.'.format(name))
+                pass
+                # raise TypeError('Pytorch does not support arrays of string or object classes. '
+                #                 'Found in field {}.'.format(name))
         elif isinstance(value, np.bool_):
             row_as_dict[name] = np.uint8(value)
         elif value is None:
