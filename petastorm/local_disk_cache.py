@@ -37,10 +37,6 @@ class LocalDiskCache(CacheBase):
         :param settings: these parameters passed-through to the diskcache.Cache class.
                          For details, see: http://www.grantjenks.com/docs/diskcache/tutorial.html#settings
         """
-        if size_limit_bytes / shards < 5 * expected_row_size_bytes:
-            raise ValueError('Condition \'size_limit_bytes / shards < 5 * expected_row_size_bytes\' needs to hold, '
-                             'otherwise, newly added cached values might end up being immediately evicted.')
-
         default_settings = {
             'size_limit': size_limit_bytes,
             'eviction_policy': 'least-recently-stored',
@@ -48,18 +44,39 @@ class LocalDiskCache(CacheBase):
         }
         default_settings.update(settings)
 
+        if default_settings['eviction_policy'] != 'none' and size_limit_bytes / shards < 5 * expected_row_size_bytes:
+            raise ValueError('Condition \'size_limit_bytes / shards < 5 * expected_row_size_bytes\' needs to hold, '
+                             'otherwise, newly added cached values might end up being immediately evicted.')
+
         self._cleanup = cleanup
         self._path = path
+        self._size_limit_bytes = size_limit_bytes
+        self._default_settings = default_settings
         self._cache = FanoutCache(path, shards, **default_settings)
 
     def get(self, key, fill_cache_func):
         value = self._cache.get(key, default=None)
         if value is None:
             value = fill_cache_func()
-            self._cache.set(key, value)
-
+            # If eviction policy is set to 'none', we don't store the value if the cache is full
+            if self._default_settings['eviction_policy'] == 'none':
+                if self._cache.volume() < self._size_limit_bytes:
+                    self._cache.set(key, value)
+            else: # evict and store the value
+                self._cache.set(key, value)
         return value
 
     def cleanup(self):
         if self._cleanup:
-            shutil.rmtree(self._path)
+            try:
+                # Very important to stop background threads
+                self._cache.close()
+            except Exception as e:
+                print(f"Error closing cache: {e}", flush=True)
+            try:
+                shutil.rmtree(self._path, ignore_errors=False)
+            except FileNotFoundError:
+                # OK: it's already gone
+                pass
+            except Exception as e:
+                print(f"Error during rmtree: {e}", flush=True)
