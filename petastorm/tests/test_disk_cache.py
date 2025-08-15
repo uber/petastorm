@@ -53,6 +53,23 @@ def test_size_limit_constraint(tmpdir):
     # Check that we are more or less within the size limit
     assert _recursive_folder_size(tmpdir.strpath) < 3 * MB
 
+def test_eviction_policy_none_large_data(tmpdir):
+    """Test that the cache size limit is respected when the data is larger than the limit"""
+    # We will write total of 5MB to the cache (50KB items x 100)
+    RECORD_SIZE_BYTES = 100 * KB
+    RECORDS_COUNT = 1000
+    settings = {
+        'eviction_policy': 'none'
+    }
+
+    a_record = np.random.randint(0, 255, (RECORD_SIZE_BYTES,), np.uint8)
+    cache = LocalDiskCache(tmpdir.strpath, 3000 * KB, RECORD_SIZE_BYTES, shards=1, **settings)
+
+    for i in range(RECORDS_COUNT):
+        cache.get('some_key_{}'.format(i), lambda: a_record)
+
+    # Check that we are within the size limit + overhead and way less than 10MB data.
+    assert _recursive_folder_size(tmpdir.strpath) < 4000 * KB # Slightly more than the limit because _recursive_folder_size is actual disk space and not cache size volume
 
 def _should_never_be_called():
     assert False, 'Should not be called'
