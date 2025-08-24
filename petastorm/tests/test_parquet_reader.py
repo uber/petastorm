@@ -266,3 +266,22 @@ def test_results_queue_size_propagation_in_make_batch_reader(scalar_dataset):
                            results_queue_size=expected_results_queue_size) as batch_reader:
         actual_results_queue_size = batch_reader._workers_pool._results_queue_size
     assert actual_results_queue_size == expected_results_queue_size
+
+@pytest.mark.parametrize('reader_factory', _D)
+def test_convert_early_to_numpy(scalar_dataset, reader_factory):
+    """See if we can read data when a single parquet file is specified instead of a parquet directory"""
+    assert scalar_dataset.url.startswith('file://')
+    path = scalar_dataset.url[len('file://'):]
+    one_parquet_file = glob.glob(f'{path}/**.parquet')[0]
+
+    with reader_factory(f"file://{one_parquet_file}", convert_early_to_numpy=True) as reader:
+        all_data = list(reader)
+        assert len(all_data) > 0
+
+@pytest.mark.parametrize('reader_factory', _D)
+def test_convert_early_to_numpy_with_transform_spec(scalar_dataset, reader_factory):
+    """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
+    with reader_factory(scalar_dataset.url, schema_fields=['id', 'float.*$'], convert_early_to_numpy=True) as reader:
+        sample = next(reader)
+        assert set(sample._asdict().keys()) == {'id', 'float64'}
+        assert sample.float64.size > 0
