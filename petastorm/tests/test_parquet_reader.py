@@ -267,6 +267,7 @@ def test_results_queue_size_propagation_in_make_batch_reader(scalar_dataset):
         actual_results_queue_size = batch_reader._workers_pool._results_queue_size
     assert actual_results_queue_size == expected_results_queue_size
 
+
 @pytest.mark.parametrize('reader_factory', _D)
 def test_convert_early_to_numpy(scalar_dataset, reader_factory):
     """See if we can read data when a single parquet file is specified instead of a parquet directory"""
@@ -277,6 +278,7 @@ def test_convert_early_to_numpy(scalar_dataset, reader_factory):
     with reader_factory(f"file://{one_parquet_file}", convert_early_to_numpy=True) as reader:
         all_data = list(reader)
         assert len(all_data) > 0
+
 
 @pytest.mark.parametrize('reader_factory', _D)
 def test_convert_early_to_numpy_with_transform_spec(scalar_dataset, reader_factory):

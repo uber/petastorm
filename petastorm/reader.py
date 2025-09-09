@@ -134,8 +134,8 @@ def make_reader(dataset_url,
     :param zmq_copy_buffers: A bool indicating whether to use 0mq copy buffers with ProcessPool.
     :param filesystem: An instance of ``pyarrow.FileSystem`` to use. Will ignore storage_options and
         other filesystem configs if it's provided.
-    :param convert_early_to_numpy: A bool indicating whether to convert to numpy dict early in the reader at time of read.
-        Defaults to False.
+    :param convert_early_to_numpy: A bool indicating whether to convert to numpy dict early in the reader at time
+        of read. Defaults to False.
     :return: A :class:`Reader` object
     """
     dataset_url_or_urls = normalize_dataset_url_or_urls(dataset_url)
@@ -290,8 +290,8 @@ def make_batch_reader(dataset_url_or_urls,
     :param zmq_copy_buffers: A bool indicating whether to use 0mq copy buffers with ProcessPool.
     :param filesystem: An instance of ``pyarrow.FileSystem`` to use. Will ignore storage_options and
         other filesystem configs if it's provided.
-    :param convert_early_to_numpy: A bool indicating whether to convert to numpy dict early in the reader at time of read.
-        Defaults to False.
+    :param convert_early_to_numpy: A bool indicating whether to convert to numpy dict early in the reader at time
+        of read. Defaults to False.
     :return: A :class:`Reader` object
     """
     dataset_url_or_urls = normalize_dataset_url_or_urls(dataset_url_or_urls)
@@ -408,8 +408,8 @@ class Reader(object):
         :param filters: (List[Tuple] or List[List[Tuple]]): Standard PyArrow filters.
             These will be applied when loading the parquet file with PyArrow. More information
             here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
-        :param convert_early_to_numpy: A bool indicating whether to convert to numpy dict early in the reader at time of read.
-            Defaults to False.
+        :param convert_early_to_numpy: A bool indicating whether to convert to numpy dict early in the reader at time
+            of read. Defaults to False.
         """
         self.num_epochs = num_epochs
 
