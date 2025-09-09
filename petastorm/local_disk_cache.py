@@ -62,7 +62,7 @@ class LocalDiskCache(CacheBase):
             if self._default_settings['eviction_policy'] == 'none':
                 if self._cache.volume() < self._size_limit_bytes:
                     self._cache.set(key, value)
-            else: # evict and store the value
+            else:  # evict and store the value
                 self._cache.set(key, value)
         return value
 
