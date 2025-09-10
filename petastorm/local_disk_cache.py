@@ -71,12 +71,12 @@ class LocalDiskCache(CacheBase):
             try:
                 # Very important to stop background threads
                 self._cache.close()
-            except Exception as e:
+            except (OSError, AttributeError) as e:
                 print(f"Error closing cache: {e}", flush=True)
             try:
                 shutil.rmtree(self._path, ignore_errors=False)
             except FileNotFoundError:
                 # OK: it's already gone
                 pass
-            except Exception as e:
+            except OSError as e:
                 print(f"Error during rmtree: {e}", flush=True)
