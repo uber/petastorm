@@ -355,9 +355,9 @@ def test_transform_spec_support_return_tensor_with_convert_early_to_numpy(scalar
 
     # This ensures the transform_spec branch in _load_rows_with_predicate is tested
     with reader_factory(scalar_dataset.url,
-                       transform_spec=simple_spec,
-                       predicate=in_lambda(['id'], lambda x: x >= 0),  # Simple predicate that matches all rows
-                       convert_early_to_numpy=True) as reader:
+                        transform_spec=simple_spec,
+                        predicate=in_lambda(['id'], lambda x: x >= 0),  # Simple predicate that matches all rows
+                        convert_early_to_numpy=True) as reader:
         sample = next(reader)._asdict()
         assert len(sample) == 2
         assert 'transformed_id' in sample
