@@ -187,6 +187,7 @@ def test_predicate_on_partitioned_dataset(tmpdir):
             # Predicate should have selected none, so a StopIteration should be raised.
             next(reader)
 
+
 def test_predicate_on_single_column_with_convert_early_to_numpy(synthetic_dataset):
     reader = make_reader(synthetic_dataset.url,
                          schema_fields=[TestSchema.id2],
@@ -236,7 +237,8 @@ def test_predicate_on_partitioned_dataset_with_convert_early_to_numpy(tmpdir):
 
     with make_reader(dataset_url, predicate=in_lambda(['id'], lambda x: x == 3), convert_early_to_numpy=True) as reader:
         assert next(reader).id == 3
-    with make_reader(dataset_url, predicate=in_lambda(['id'], lambda x: x == '3'), convert_early_to_numpy=True) as reader:
+    with make_reader(dataset_url, predicate=in_lambda(['id'], lambda x: x == '3'),
+                     convert_early_to_numpy=True) as reader:
         with pytest.raises(StopIteration):
             # Predicate should have selected none, so a StopIteration should be raised.
             next(reader)
