@@ -186,3 +186,57 @@ def test_predicate_on_partitioned_dataset(tmpdir):
         with pytest.raises(StopIteration):
             # Predicate should have selected none, so a StopIteration should be raised.
             next(reader)
+
+def test_predicate_on_single_column_with_convert_early_to_numpy(synthetic_dataset):
+    reader = make_reader(synthetic_dataset.url,
+                         schema_fields=[TestSchema.id2],
+                         predicate=in_lambda(['id2'], lambda id2: True),
+                         convert_early_to_numpy=True,
+                         reader_pool_type='dummy')
+    counter = 0
+    for row in reader:
+        counter += 1
+        actual = dict(row._asdict())
+        assert actual['id2'] < 2
+    assert counter == len(synthetic_dataset.data)
+
+
+def test_predicate_on_partitioned_dataset_with_convert_early_to_numpy(tmpdir):
+    """
+    Generates a partitioned dataset and ensures that readers evaluate the type of the partition
+    column according to the type given in the Unischema.
+    """
+    TestSchema = Unischema('TestSchema', [
+        UnischemaField('id', np.int32, (), ScalarCodec(IntegerType()), False),
+        UnischemaField('test_field', np.int32, (), ScalarCodec(IntegerType()), False),
+    ])
+
+    def test_row_generator(x):
+        """Returns a single entry in the generated dataset."""
+        return {'id': x,
+                'test_field': x*x}
+
+    rowgroup_size_mb = 256
+    dataset_url = "file://{0}/partitioned_test_dataset".format(tmpdir)
+
+    spark = SparkSession.builder.config('spark.driver.memory', '2g').master('local[2]').getOrCreate()
+    sc = spark.sparkContext
+
+    rows_count = 10
+    with materialize_dataset(spark, dataset_url, TestSchema, rowgroup_size_mb):
+
+        rows_rdd = sc.parallelize(range(rows_count))\
+            .map(test_row_generator)\
+            .map(lambda x: dict_to_spark_row(TestSchema, x))
+
+        spark.createDataFrame(rows_rdd, TestSchema.as_spark_schema()) \
+            .write \
+            .partitionBy('id') \
+            .parquet(dataset_url)
+
+    with make_reader(dataset_url, predicate=in_lambda(['id'], lambda x: x == 3), convert_early_to_numpy=True) as reader:
+        assert next(reader).id == 3
+    with make_reader(dataset_url, predicate=in_lambda(['id'], lambda x: x == '3'), convert_early_to_numpy=True) as reader:
+        with pytest.raises(StopIteration):
+            # Predicate should have selected none, so a StopIteration should be raised.
+            next(reader)
