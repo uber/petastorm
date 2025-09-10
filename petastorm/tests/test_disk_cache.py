@@ -14,7 +14,7 @@
 
 import os
 import shutil
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -218,7 +218,9 @@ def test_size_limit_validation_error(tmpdir):
     shards = 1
 
     # This should violate the condition: 1000 / 1 = 1000 < 5 * 500 = 2500
-    with pytest.raises(ValueError, match="Condition 'size_limit_bytes / shards < 5 \\* expected_row_size_bytes' needs to hold"):
+    expected_error = ("Condition 'size_limit_bytes / shards < 5 \\* expected_row_size_bytes' "
+                      "needs to hold")
+    with pytest.raises(ValueError, match=expected_error):
         LocalDiskCache(cache_path, size_limit_bytes, expected_row_size_bytes, shards=shards)
 
 
@@ -244,7 +246,9 @@ def test_size_limit_validation_with_multiple_shards(tmpdir):
     shards = 10
 
     # This should violate the condition: 5000 / 10 = 500 < 5 * 200 = 1000
-    with pytest.raises(ValueError, match="Condition 'size_limit_bytes / shards < 5 \\* expected_row_size_bytes' needs to hold"):
+    expected_error = ("Condition 'size_limit_bytes / shards < 5 \\* expected_row_size_bytes' "
+                      "needs to hold")
+    with pytest.raises(ValueError, match=expected_error):
         LocalDiskCache(cache_path, size_limit_bytes, expected_row_size_bytes, shards=shards)
 
 
@@ -258,7 +262,7 @@ def test_size_limit_validation_bypassed_with_eviction_none(tmpdir):
 
     # This would normally violate the condition, but should pass with eviction_policy='none'
     cache = LocalDiskCache(cache_path, size_limit_bytes, expected_row_size_bytes,
-                          shards=shards, **settings)
+                           shards=shards, **settings)
 
     # Should be able to use the cache normally
     assert cache.get('test_key', lambda: 'test_value') == 'test_value'
