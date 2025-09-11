@@ -17,15 +17,17 @@ import itertools
 import numpy as np
 import pandas as pd
 import pytest
+import pyarrow as pa
 from pyarrow import parquet as pq
 
 from petastorm import make_batch_reader, make_reader
-from petastorm.arrow_reader_worker import ArrowReaderWorker
+from petastorm.arrow_reader_worker import ArrowReaderWorker, convert_arrow_table_to_numpy_dict
 # pylint: disable=unnecessary-lambda
 from petastorm.predicates import in_lambda
 from petastorm.tests.test_common import create_test_scalar_dataset
 from petastorm.transform import TransformSpec
-from petastorm.unischema import UnischemaField
+from petastorm.unischema import Unischema, UnischemaField
+from petastorm.codecs import ScalarCodec
 
 _D = [lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', **kwargs)]
 
@@ -363,3 +365,77 @@ def test_transform_spec_support_return_tensor_with_convert_early_to_numpy(scalar
         assert 'transformed_id' in sample
         assert 'string_field' in sample
         assert np.all(sample['transformed_id'] >= 0)  # Should be id * 2, so >= 0
+
+
+def test_convert_arrow_table_to_numpy_dict_inconsistent_list_lengths():
+    """Test that convert_arrow_table_to_numpy_dict raises RuntimeError for inconsistent list lengths.
+
+    This test covers the uncovered error handling code in lines 77-81 of arrow_reader_worker.py
+    where ValueError from np.vstack is caught and re-raised as RuntimeError with detailed message.
+    """
+
+    # Create a schema with a list field
+    test_schema = Unischema('TestSchema', [
+        UnischemaField('id', np.int32, (), ScalarCodec(pa.int32()), False),
+        UnischemaField('list_field', np.float32, (None,), ScalarCodec(pa.list_(pa.float32())), False),
+    ])
+
+    # Create test data with inconsistent list lengths
+    # This should trigger the ValueError -> RuntimeError path
+    inconsistent_data = {
+        'id': [1, 2, 3],
+        'list_field': [
+            [1.0, 2.0, 3.0],      # length 3
+            [4.0, 5.0],           # length 2  - inconsistent!
+            [6.0, 7.0, 8.0, 9.0]  # length 4  - inconsistent!
+        ]
+    }
+
+    # Convert to PyArrow table
+    arrow_table = pa.Table.from_pydict(inconsistent_data)
+
+    # This should raise a RuntimeError due to inconsistent list lengths
+    with pytest.raises(RuntimeError) as exc_info:
+        convert_arrow_table_to_numpy_dict(arrow_table, test_schema)
+
+    # Check the error message contains the expected information
+    error_msg = str(exc_info.value)
+    assert "Length of all values in column 'list_field' are expected to be the same length" in error_msg
+    assert "Got the following set of lengths:" in error_msg
+    # The error should mention the different lengths found
+    assert "3" in error_msg and "2" in error_msg and "4" in error_msg
+
+
+def test_convert_arrow_table_to_numpy_dict_consistent_list_lengths():
+    """Test that convert_arrow_table_to_numpy_dict works correctly with consistent list lengths."""
+
+    # Create a schema with a list field
+    test_schema = Unischema('TestSchema', [
+        UnischemaField('id', np.int32, (), ScalarCodec(pa.int32()), False),
+        UnischemaField('list_field', np.float32, (3,), ScalarCodec(pa.list_(pa.float32())), False),
+    ])
+
+    # Create test data with consistent list lengths
+    consistent_data = {
+        'id': [1, 2, 3],
+        'list_field': [
+            [1.0, 2.0, 3.0],  # length 3
+            [4.0, 5.0, 6.0],  # length 3 - consistent!
+            [7.0, 8.0, 9.0]   # length 3 - consistent!
+        ]
+    }
+
+    # Convert to PyArrow table
+    arrow_table = pa.Table.from_pydict(consistent_data)
+
+    # This should work without raising an error
+    result = convert_arrow_table_to_numpy_dict(arrow_table, test_schema)
+
+    # Verify the result
+    assert 'id' in result
+    assert 'list_field' in result
+    assert isinstance(result['id'], np.ndarray)
+    assert isinstance(result['list_field'], np.ndarray)
+    assert result['list_field'].shape == (3, 3)  # 3 rows, 3 elements each
+    np.testing.assert_array_equal(result['id'], [1, 2, 3])
+    np.testing.assert_array_equal(result['list_field'], [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]])
