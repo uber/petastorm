@@ -17,14 +17,17 @@ import itertools
 import numpy as np
 import pandas as pd
 import pytest
+import pyarrow as pa
 from pyarrow import parquet as pq
 
 from petastorm import make_batch_reader, make_reader
-from petastorm.arrow_reader_worker import ArrowReaderWorker
+from petastorm.arrow_reader_worker import ArrowReaderWorker, convert_arrow_table_to_numpy_dict
 # pylint: disable=unnecessary-lambda
+from petastorm.predicates import in_lambda
 from petastorm.tests.test_common import create_test_scalar_dataset
 from petastorm.transform import TransformSpec
-from petastorm.unischema import UnischemaField
+from petastorm.unischema import Unischema, UnischemaField
+from petastorm.codecs import ScalarCodec
 
 _D = [lambda url, **kwargs: make_batch_reader(url, reader_pool_type='dummy', **kwargs)]
 
@@ -266,3 +269,173 @@ def test_results_queue_size_propagation_in_make_batch_reader(scalar_dataset):
                            results_queue_size=expected_results_queue_size) as batch_reader:
         actual_results_queue_size = batch_reader._workers_pool._results_queue_size
     assert actual_results_queue_size == expected_results_queue_size
+
+
+@pytest.mark.parametrize('reader_factory', _D)
+def test_convert_early_to_numpy(scalar_dataset, reader_factory):
+    """See if we can read data when a single parquet file is specified instead of a parquet directory"""
+    assert scalar_dataset.url.startswith('file://')
+    path = scalar_dataset.url[len('file://'):]
+    one_parquet_file = glob.glob(f'{path}/**.parquet')[0]
+
+    with reader_factory(f"file://{one_parquet_file}", convert_early_to_numpy=True) as reader:
+        all_data = list(reader)
+        assert len(all_data) > 0
+
+
+@pytest.mark.parametrize('reader_factory', _D)
+def test_convert_early_to_numpy_with_transform_spec(scalar_dataset, reader_factory):
+    """Just a bunch of read and compares of all values to the expected values using the different reader pools"""
+    with reader_factory(scalar_dataset.url, schema_fields=['id', 'float.*$'], convert_early_to_numpy=True) as reader:
+        sample = next(reader)
+        assert set(sample._asdict().keys()) == {'id', 'float64'}
+        assert sample.float64.size > 0
+
+
+@pytest.mark.parametrize('reader_factory', _D)
+def test_transform_spec_support_return_tensor_with_convert_early_to_numpy(scalar_dataset, reader_factory):
+    field1 = UnischemaField(name='abc', shape=(2, 3), numpy_dtype=np.float32)
+
+    with pytest.raises(ValueError, match='field abc must be numpy array type'):
+        ArrowReaderWorker._check_shape_and_ravel('xyz', field1)
+
+    with pytest.raises(ValueError, match='field abc must be the shape'):
+        ArrowReaderWorker._check_shape_and_ravel(np.zeros((2, 5)), field1)
+
+    with pytest.raises(ValueError, match='field abc error: only support row major multi-dimensional array'):
+        ArrowReaderWorker._check_shape_and_ravel(np.zeros((2, 3), order='F'), field1)
+
+    assert (6,) == ArrowReaderWorker._check_shape_and_ravel(np.zeros((2, 3)), field1).shape
+
+    for partial_shape in [(2, None), (None,), (None, None)]:
+        field_with_unknown_dim = UnischemaField(name='abc', shape=partial_shape, numpy_dtype=np.float32)
+        with pytest.raises(ValueError, match='All dimensions of a shape.*must be constant'):
+            ArrowReaderWorker._check_shape_and_ravel(np.zeros((2, 3), order='F'), field_with_unknown_dim)
+
+    def preproc_fn1(x):
+        return pd.DataFrame({
+            'tensor_col_1': x['id'].map(lambda _: np.random.rand(2, 3)),
+            'tensor_col_2': x['id'].map(lambda _: np.random.rand(3, 4, 5)),
+        })
+
+    edit_fields = [
+        ('tensor_col_1', np.float32, (2, 3), False),
+        ('tensor_col_2', np.float32, (3, 4, 5), False),
+    ]
+
+    # This spec will remove all input columns and return one new column 'tensor_col_1' with shape (2, 3)
+    spec1 = TransformSpec(
+        preproc_fn1,
+        edit_fields=edit_fields,
+        removed_fields=list(scalar_dataset.data[0].keys())
+    )
+
+    # Test without predicate (covers _load_rows method)
+    with reader_factory(scalar_dataset.url, transform_spec=spec1, convert_early_to_numpy=True) as reader:
+        sample = next(reader)._asdict()
+        assert len(sample) == 2
+        assert (2, 3) == sample['tensor_col_1'].shape[1:] and \
+               (3, 4, 5) == sample['tensor_col_2'].shape[1:]
+
+    # Test with predicate (covers _load_rows_with_predicate method - lines 324-328)
+    # Use a simpler transform that works with the predicate path
+    def simple_transform_fn(x):
+        # Return a simple transformed dataframe that PyArrow can handle
+        return pd.DataFrame({
+            'transformed_id': x['id'] * 2,
+            'string_field': x['string']
+        })
+
+    simple_spec = TransformSpec(
+        simple_transform_fn,
+        edit_fields=[
+            ('transformed_id', np.int32, (), False),
+            ('string_field', np.unicode_, (), False),
+        ],
+        removed_fields=list(scalar_dataset.data[0].keys())
+    )
+
+    # This ensures the transform_spec branch in _load_rows_with_predicate is tested
+    with reader_factory(scalar_dataset.url,
+                        transform_spec=simple_spec,
+                        predicate=in_lambda(['id'], lambda x: x >= 0),  # Simple predicate that matches all rows
+                        convert_early_to_numpy=True) as reader:
+        sample = next(reader)._asdict()
+        assert len(sample) == 2
+        assert 'transformed_id' in sample
+        assert 'string_field' in sample
+        assert np.all(sample['transformed_id'] >= 0)  # Should be id * 2, so >= 0
+
+
+def test_convert_arrow_table_to_numpy_dict_inconsistent_list_lengths():
+    """Test that convert_arrow_table_to_numpy_dict raises RuntimeError for inconsistent list lengths.
+
+    This test covers the uncovered error handling code in lines 77-81 of arrow_reader_worker.py
+    where ValueError from np.vstack is caught and re-raised as RuntimeError with detailed message.
+    """
+
+    # Create a schema with a list field
+    test_schema = Unischema('TestSchema', [
+        UnischemaField('id', np.int32, (), ScalarCodec(pa.int32()), False),
+        UnischemaField('list_field', np.float32, (None,), ScalarCodec(pa.list_(pa.float32())), False),
+    ])
+
+    # Create test data with inconsistent list lengths
+    # This should trigger the ValueError -> RuntimeError path
+    inconsistent_data = {
+        'id': [1, 2, 3],
+        'list_field': [
+            [1.0, 2.0, 3.0],      # length 3
+            [4.0, 5.0],           # length 2  - inconsistent!
+            [6.0, 7.0, 8.0, 9.0]  # length 4  - inconsistent!
+        ]
+    }
+
+    # Convert to PyArrow table
+    arrow_table = pa.Table.from_pydict(inconsistent_data)
+
+    # This should raise a RuntimeError due to inconsistent list lengths
+    with pytest.raises(RuntimeError) as exc_info:
+        convert_arrow_table_to_numpy_dict(arrow_table, test_schema)
+
+    # Check the error message contains the expected information
+    error_msg = str(exc_info.value)
+    assert "Length of all values in column 'list_field' are expected to be the same length" in error_msg
+    assert "Got the following set of lengths:" in error_msg
+    # The error should mention the different lengths found
+    assert "3" in error_msg and "2" in error_msg and "4" in error_msg
+
+
+def test_convert_arrow_table_to_numpy_dict_consistent_list_lengths():
+    """Test that convert_arrow_table_to_numpy_dict works correctly with consistent list lengths."""
+
+    # Create a schema with a list field
+    test_schema = Unischema('TestSchema', [
+        UnischemaField('id', np.int32, (), ScalarCodec(pa.int32()), False),
+        UnischemaField('list_field', np.float32, (3,), ScalarCodec(pa.list_(pa.float32())), False),
+    ])
+
+    # Create test data with consistent list lengths
+    consistent_data = {
+        'id': [1, 2, 3],
+        'list_field': [
+            [1.0, 2.0, 3.0],  # length 3
+            [4.0, 5.0, 6.0],  # length 3 - consistent!
+            [7.0, 8.0, 9.0]   # length 3 - consistent!
+        ]
+    }
+
+    # Convert to PyArrow table
+    arrow_table = pa.Table.from_pydict(consistent_data)
+
+    # This should work without raising an error
+    result = convert_arrow_table_to_numpy_dict(arrow_table, test_schema)
+
+    # Verify the result
+    assert 'id' in result
+    assert 'list_field' in result
+    assert isinstance(result['id'], np.ndarray)
+    assert isinstance(result['list_field'], np.ndarray)
+    assert result['list_field'].shape == (3, 3)  # 3 rows, 3 elements each
+    np.testing.assert_array_equal(result['id'], [1, 2, 3])
+    np.testing.assert_array_equal(result['list_field'], [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]])
