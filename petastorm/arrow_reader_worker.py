@@ -27,6 +27,64 @@ from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.worker_base import WorkerBase
 
 
+def convert_arrow_table_to_numpy_dict(result_table, schema):
+    """Convert PyArrow table columns to NumPy arrays.
+
+    Converts PyArrow table columns into a dictionary of NumPy arrays, handling
+    different data types appropriately. Strings are converted to unicode arrays,
+    lists are converted to matrices, and other types are converted directly.
+
+    Args:
+        result_table: PyArrow Table to convert
+        schema: Petastorm schema containing field information
+
+    Returns:
+        dict: Dictionary mapping column names to NumPy arrays
+
+    Raises:
+        RuntimeError: If list columns have inconsistent lengths
+    """
+    result_dict = dict()
+    for column_name in result_table.column_names:
+        column = result_table.column(column_name)
+        # Assume we get only one chunk since reader worker reads one rowgroup at a time
+
+        # `to_pandas` works slower when called on the entire `data` rather directly on a chunk.
+        if result_table.column(0).num_chunks == 1:
+            column_as_pandas = column.chunks[0].to_pandas()
+        else:
+            column_as_pandas = column.to_pandas()
+
+        # pyarrow < 0.15.0 would always return a numpy array. Starting 0.15 we get pandas series, hence we
+        # convert it into numpy array
+        if isinstance(column_as_pandas, pd.Series):
+            column_as_numpy = column_as_pandas.values
+        else:
+            column_as_numpy = column_as_pandas
+
+        if pa.types.is_string(column.type):
+            result_dict[column_name] = column_as_numpy.astype(np.unicode_)
+        elif pa.types.is_list(column.type):
+            # Assuming all lists are of the same length, hence we can collate them into a matrix
+            list_of_lists = column_as_numpy
+            try:
+                col_data = np.vstack(list_of_lists.tolist())
+                shape = schema.fields[column_name].shape
+                if len(shape) > 1:
+                    col_data = col_data.reshape((len(list_of_lists),) + shape)
+                result_dict[column_name] = col_data
+
+            except ValueError:
+                raise RuntimeError('Length of all values in column \'{}\' are expected to be the same length. '
+                                   'Got the following set of lengths: \'{}\''
+                                   .format(column_name,
+                                           ', '.join(str(value.shape[0]) for value in list_of_lists)))
+        else:
+            result_dict[column_name] = column_as_numpy
+
+    return result_dict
+
+
 class ArrowReaderWorkerResultsQueueReader(object):
     def __init__(self):
         pass
@@ -39,47 +97,15 @@ class ArrowReaderWorkerResultsQueueReader(object):
         try:
             assert not ngram, 'ArrowReader does not support ngrams for now'
 
-            result_table = workers_pool.get_results()
+            result = workers_pool.get_results()
 
-            # Convert arrow table columns into numpy. Strings are handled differently since to_pandas() returns
-            # numpy array of dtype=object.
-            result_dict = dict()
-            for column_name in result_table.column_names:
-                column = result_table.column(column_name)
-                # Assume we get only one chunk since reader worker reads one rowgroup at a time
-
-                # `to_pandas` works slower when called on the entire `data` rather directly on a chunk.
-                if result_table.column(0).num_chunks == 1:
-                    column_as_pandas = column.chunks[0].to_pandas()
-                else:
-                    column_as_pandas = column.to_pandas()
-
-                # pyarrow < 0.15.0 would always return a numpy array. Starting 0.15 we get pandas series, hence we
-                # convert it into numpy array
-                if isinstance(column_as_pandas, pd.Series):
-                    column_as_numpy = column_as_pandas.values
-                else:
-                    column_as_numpy = column_as_pandas
-
-                if pa.types.is_string(column.type):
-                    result_dict[column_name] = column_as_numpy.astype(np.unicode_)
-                elif pa.types.is_list(column.type):
-                    # Assuming all lists are of the same length, hence we can collate them into a matrix
-                    list_of_lists = column_as_numpy
-                    try:
-                        col_data = np.vstack(list_of_lists.tolist())
-                        shape = schema.fields[column_name].shape
-                        if len(shape) > 1:
-                            col_data = col_data.reshape((len(list_of_lists),) + shape)
-                        result_dict[column_name] = col_data
-
-                    except ValueError:
-                        raise RuntimeError('Length of all values in column \'{}\' are expected to be the same length. '
-                                           'Got the following set of lengths: \'{}\''
-                                           .format(column_name,
-                                                   ', '.join(str(value.shape[0]) for value in list_of_lists)))
-                else:
-                    result_dict[column_name] = column_as_numpy
+            # Auto-detect if result is already converted to numpy dict or still an arrow table
+            # If it's a dict, it was already converted in _load_rows
+            # If it's a PyArrow table, we need to convert it here
+            if isinstance(result, dict):
+                result_dict = result  # Already converted to numpy dict
+            else:
+                result_dict = convert_arrow_table_to_numpy_dict(result, schema)
 
             return schema.make_namedtuple(**result_dict)
 
@@ -105,6 +131,8 @@ class ArrowReaderWorker(WorkerBase):
 
         # Initialize random number generator
         self._rng = np.random.default_rng(self._random_seed)
+        # New argument to control where PyArrow to NumPy conversion happens
+        self._convert_early_to_numpy = args[11] if len(args) > 11 else False
 
         if self._ngram:
             raise NotImplementedError('ngrams are not supported by ArrowReaderWorker')
@@ -224,7 +252,12 @@ class ArrowReaderWorker(WorkerBase):
 
             result = pa.Table.from_pandas(transformed_result, preserve_index=False)
 
-        return result
+        # If convert_early_to_numpy is enabled, convert to numpy dict here
+        if self._convert_early_to_numpy:
+            schema_to_use = self._transformed_schema if self._transform_spec else self._schema
+            return convert_arrow_table_to_numpy_dict(result, schema_to_use)
+        else:
+            return result
 
     def _load_rows_with_predicate(self, pq_file, piece, worker_predicate, shuffle_row_drop_partition):
         """Loads all rows that match a predicate from a piece"""
@@ -285,7 +318,14 @@ class ArrowReaderWorker(WorkerBase):
         if self._transform_spec:
             result = self._transform_spec.func(result)
 
-        return pa.Table.from_pandas(result, preserve_index=False)
+        arrow_result = pa.Table.from_pandas(result, preserve_index=False)
+
+        # If convert_early_to_numpy is enabled, convert to numpy dict here
+        if self._convert_early_to_numpy:
+            schema_to_use = self._transformed_schema if self._transform_spec else self._schema
+            return convert_arrow_table_to_numpy_dict(arrow_result, schema_to_use)
+        else:
+            return arrow_result
 
     def _read_with_shuffle_row_drop(self, piece, pq_file, column_names, shuffle_row_drop_partition):
         partition_names = self._dataset.partitions.partition_names if self._dataset.partitions else set()

@@ -73,7 +73,8 @@ def make_reader(dataset_url,
                 filters=None,
                 storage_options=None,
                 zmq_copy_buffers=True,
-                filesystem=None):
+                filesystem=None,
+                convert_early_to_numpy=False):
     """
     Creates an instance of Reader for reading Petastorm datasets. A Petastorm dataset is a dataset generated using
     :func:`~petastorm.etl.dataset_metadata.materialize_dataset` context manager as explained
@@ -133,6 +134,8 @@ def make_reader(dataset_url,
     :param zmq_copy_buffers: A bool indicating whether to use 0mq copy buffers with ProcessPool.
     :param filesystem: An instance of ``pyarrow.FileSystem`` to use. Will ignore storage_options and
         other filesystem configs if it's provided.
+    :param convert_early_to_numpy: A bool indicating whether to convert to numpy dict early in the reader at time
+        of read. Defaults to False.
     :return: A :class:`Reader` object
     """
     dataset_url_or_urls = normalize_dataset_url_or_urls(dataset_url)
@@ -186,7 +189,8 @@ def make_reader(dataset_url,
         'shard_seed': shard_seed,
         'cache': cache,
         'transform_spec': transform_spec,
-        'filters': filters
+        'filters': filters,
+        'convert_early_to_numpy': convert_early_to_numpy
     }
 
     try:
@@ -219,7 +223,8 @@ def make_batch_reader(dataset_url_or_urls,
                       filters=None,
                       storage_options=None,
                       zmq_copy_buffers=True,
-                      filesystem=None):
+                      filesystem=None,
+                      convert_early_to_numpy=False):
     """
     Creates an instance of Reader for reading batches out of a non-Petastorm Parquet store.
 
@@ -285,6 +290,8 @@ def make_batch_reader(dataset_url_or_urls,
     :param zmq_copy_buffers: A bool indicating whether to use 0mq copy buffers with ProcessPool.
     :param filesystem: An instance of ``pyarrow.FileSystem`` to use. Will ignore storage_options and
         other filesystem configs if it's provided.
+    :param convert_early_to_numpy: A bool indicating whether to convert to numpy dict early in the reader at time
+        of read. Defaults to False.
     :return: A :class:`Reader` object
     """
     dataset_url_or_urls = normalize_dataset_url_or_urls(dataset_url_or_urls)
@@ -341,7 +348,8 @@ def make_batch_reader(dataset_url_or_urls,
                   cache=cache,
                   transform_spec=transform_spec,
                   is_batched_reader=True,
-                  filters=filters)
+                  filters=filters,
+                  convert_early_to_numpy=convert_early_to_numpy)
 
 
 class Reader(object):
@@ -355,7 +363,8 @@ class Reader(object):
                  shuffle_row_drop_partitions=1,
                  predicate=None, rowgroup_selector=None, reader_pool=None, num_epochs=1,
                  cur_shard=None, shard_count=None, cache=None, worker_class=None,
-                 transform_spec=None, is_batched_reader=False, filters=None, shard_seed=None):
+                 transform_spec=None, is_batched_reader=False, filters=None, shard_seed=None,
+                 convert_early_to_numpy=False):
         """Initializes a reader object.
 
         :param pyarrow_filesystem: An instance of ``pyarrow.FileSystem`` that will be used. If not specified,
@@ -399,6 +408,8 @@ class Reader(object):
         :param filters: (List[Tuple] or List[List[Tuple]]): Standard PyArrow filters.
             These will be applied when loading the parquet file with PyArrow. More information
             here: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetDataset.html
+        :param convert_early_to_numpy: A bool indicating whether to convert to numpy dict early in the reader at time
+            of read. Defaults to False.
         """
         self.num_epochs = num_epochs
 
@@ -481,7 +492,8 @@ class Reader(object):
         # 5. Start workers pool
         self._workers_pool.start(worker_class, (pyarrow_filesystem, dataset_path, storage_schema,
                                                 self.ngram, row_groups, cache, transform_spec,
-                                                self.schema, filters, shuffle_rows, seed),
+                                                self.schema, filters, shuffle_rows, seed,
+                                                convert_early_to_numpy),
                                  ventilator=self.ventilator)
         logger.debug('Workers pool started')
 
