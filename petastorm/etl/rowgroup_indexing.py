@@ -16,7 +16,6 @@ import logging
 import time
 from collections import namedtuple
 
-from pyarrow import parquet as pq
 from six.moves import cPickle as pickle
 from six.moves import range
 
@@ -24,6 +23,7 @@ from petastorm import utils
 from petastorm.etl import dataset_metadata
 from petastorm.etl.legacy import depickle_legacy_package_name_compatible
 from petastorm.fs_utils import FilesystemResolver
+from petastorm.pyarrow_helpers.dataset_wrapper import PetastormPyArrowDataset, PetastormPyArrowDatasetPiece
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +51,8 @@ def build_rowgroup_index(dataset_url, spark_context, indexers, hdfs_driver='libh
     # Create pyarrow file system
     resolver = FilesystemResolver(dataset_url, spark_context._jsc.hadoopConfiguration(),
                                   hdfs_driver=hdfs_driver, user=spark_context.sparkUser())
-    dataset = pq.ParquetDataset(resolver.get_dataset_path(), filesystem=resolver.filesystem(),
-                                validate_schema=False)
+    dataset = PetastormPyArrowDataset(resolver.get_dataset_path(), filesystem=resolver.filesystem(),
+                                      validate_schema=False)
 
     split_pieces = dataset_metadata.load_row_groups(dataset)
     schema = dataset_metadata.get_schema(dataset)
@@ -97,8 +97,8 @@ def _index_columns(piece_info, dataset_url, partitions, indexers, schema, hdfs_d
     fs = resolver.filesystem()
 
     # Create pyarrow piece
-    piece = pq.ParquetDatasetPiece(piece_info.path, open_file_func=fs.open, row_group=piece_info.row_group,
-                                   partition_keys=piece_info.partition_keys)
+    piece = PetastormPyArrowDatasetPiece(piece_info.path, open_file_func=fs.open, row_group=piece_info.row_group,
+                                         partition_keys=piece_info.partition_keys)
 
     # Collect column names needed for indexing
     column_names = set()

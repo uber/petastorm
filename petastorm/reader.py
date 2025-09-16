@@ -17,7 +17,6 @@ import logging
 import warnings
 
 import six
-from pyarrow import parquet as pq
 
 from petastorm.arrow_reader_worker import ArrowReaderWorker
 from petastorm.cache import NullCache
@@ -29,6 +28,7 @@ from petastorm.local_disk_cache import LocalDiskCache
 from petastorm.ngram import NGram
 from petastorm.predicates import PredicateBase
 from petastorm.py_dict_reader_worker import PyDictReaderWorker
+from petastorm.pyarrow_helpers.dataset_wrapper import PetastormPyArrowDataset
 from petastorm.reader_impl.arrow_table_serializer import ArrowTableSerializer
 from petastorm.reader_impl.pickle_serializer import PickleSerializer
 from petastorm.selectors import RowGroupSelectorBase
@@ -428,9 +428,9 @@ class Reader(object):
 
         self.is_batched_reader = is_batched_reader
         # 1. Resolve dataset path (hdfs://, file://) and open the parquet storage (dataset)
-        self.dataset = pq.ParquetDataset(dataset_path, filesystem=pyarrow_filesystem,
-                                         validate_schema=False, metadata_nthreads=10,
-                                         filters=filters)
+        self.dataset = PetastormPyArrowDataset(dataset_path, filesystem=pyarrow_filesystem,
+                                               validate_schema=False, metadata_nthreads=10,
+                                               filters=filters)
 
         stored_schema = infer_or_load_unischema(self.dataset)
 
