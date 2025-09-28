@@ -21,7 +21,7 @@ from petastorm.cache import CacheBase
 
 
 class LocalDiskCache(CacheBase):
-    def __init__(self, path, size_limit_bytes, expected_row_size_bytes, shards=6, cleanup=False, **settings):
+    def __init__(self, path, size_limit_bytes, expected_row_size_bytes, shards=6, cleanup=True, **settings):
         """LocalDiskCache is an adapter to a diskcache implementation.
 
         LocalDiskCache can be used by a petastorm Reader class to temporarily keep parts of the dataset on a local
