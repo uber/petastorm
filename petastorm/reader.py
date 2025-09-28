@@ -448,7 +448,7 @@ class Reader(object):
             raise NotImplementedError('Using timestamp_overlap=False is not implemented with'
                                       ' shuffle_options.shuffle_row_drop_partitions > 1')
 
-        cache = cache or NullCache()
+        self.cache = cache or NullCache()
 
         self._workers_pool = reader_pool or ThreadPool(10, shuffle_rows=shuffle_rows, seed=seed)
 
@@ -491,7 +491,7 @@ class Reader(object):
 
         # 5. Start workers pool
         self._workers_pool.start(worker_class, (pyarrow_filesystem, dataset_path, storage_schema,
-                                                self.ngram, row_groups, cache, transform_spec,
+                                                self.ngram, row_groups, self.cache, transform_spec,
                                                 self.schema, filters, shuffle_rows, seed,
                                                 convert_early_to_numpy),
                                  ventilator=self.ventilator)
@@ -690,6 +690,14 @@ class Reader(object):
         """Joins all worker threads/processes. Will block until all worker workers have been fully terminated."""
         self._workers_pool.join()
 
+    def cleanup_cache(self):
+        if isinstance(self.cache, LocalDiskCache):
+            try:
+                self.cache.cleanup()
+            except Exception as e:
+                print(f"Error cleaning cache: {e}")
+        print("Cache cleanup complete.")
+
     @property
     def diagnostics(self):
         return self._workers_pool.diagnostics
@@ -719,3 +727,4 @@ class Reader(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
         self.join()
+        self.cleanup_cache()
