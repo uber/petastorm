@@ -133,10 +133,10 @@ def test_cleanup_cache_manual_call(synthetic_dataset, tmpdir):
     cache_location = tmpdir.strpath
 
     reader = make_reader(synthetic_dataset.url,
-                        cache_type='local-disk',
-                        cache_location=cache_location,
-                        cache_size_limit=1000000,
-                        cache_row_size_estimate=100)
+                         cache_type='local-disk',
+                         cache_location=cache_location,
+                         cache_size_limit=1000000,
+                         cache_row_size_estimate=100)
 
     try:
         next(reader)
@@ -152,9 +152,6 @@ def test_cleanup_cache_manual_call(synthetic_dataset, tmpdir):
 
 def test_cleanup_cache_exception_handling(synthetic_dataset, tmpdir, capsys, monkeypatch):
     """Test that cleanup_cache handles exceptions gracefully"""
-    import os
-    from petastorm.local_disk_cache import LocalDiskCache
-
     cache_location = tmpdir.strpath
 
     with make_reader(synthetic_dataset.url,
