@@ -694,7 +694,7 @@ class Reader(object):
         if isinstance(self.cache, LocalDiskCache):
             try:
                 self.cache.cleanup()
-            except Exception as e:
+            except (OSError, IOError, AttributeError) as e:
                 print(f"Error cleaning cache: {e}")
         print("Cache cleanup complete.")
 

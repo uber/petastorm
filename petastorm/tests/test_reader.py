@@ -163,7 +163,7 @@ def test_cleanup_cache_exception_handling(synthetic_dataset, tmpdir, capsys, mon
 
         # Mock the cleanup method to raise an exception
         def mock_cleanup():
-            raise RuntimeError("Simulated cleanup error")
+            raise OSError("Simulated cleanup error")
 
         monkeypatch.setattr(reader.cache, 'cleanup', mock_cleanup)
 
