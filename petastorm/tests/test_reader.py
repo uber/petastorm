@@ -94,3 +94,83 @@ def test_deprecated_shard_seed(synthetic_dataset, reader_factory):
     match_str = 'shard_seed was deprecated and will be removed in future versions.'
     with pytest.warns(UserWarning, match=match_str):
         reader_factory(synthetic_dataset.url, shard_seed=123)
+
+
+def test_cleanup_cache_with_local_disk_cache(synthetic_dataset, tmpdir):
+    """Test that cleanup_cache properly removes local disk cache directory"""
+    import os
+    cache_location = tmpdir.strpath
+
+    with make_reader(synthetic_dataset.url,
+                     cache_type='local-disk',
+                     cache_location=cache_location,
+                     cache_size_limit=1000000,
+                     cache_row_size_estimate=100) as reader:
+        # Read some data to populate cache
+        next(reader)
+        # Cache directory should exist
+        assert os.path.exists(cache_location)
+
+    # After context manager exit, cache should be cleaned up
+    assert not os.path.exists(cache_location)
+
+
+def test_cleanup_cache_with_null_cache(synthetic_dataset, capsys):
+    """Test that cleanup_cache works properly with null cache"""
+    with make_reader(synthetic_dataset.url, cache_type='null') as reader:
+        next(reader)
+        # Manually call cleanup_cache to test it
+        reader.cleanup_cache()
+
+    # Check that cleanup message was printed
+    captured = capsys.readouterr()
+    assert "Cache cleanup complete." in captured.out
+
+
+def test_cleanup_cache_manual_call(synthetic_dataset, tmpdir):
+    """Test manually calling cleanup_cache method"""
+    import os
+    cache_location = tmpdir.strpath
+
+    reader = make_reader(synthetic_dataset.url,
+                         cache_type='local-disk',
+                         cache_location=cache_location,
+                         cache_size_limit=1000000,
+                         cache_row_size_estimate=100)
+
+    try:
+        next(reader)
+        assert os.path.exists(cache_location)
+
+        # Manually call cleanup_cache
+        reader.cleanup_cache()
+        assert not os.path.exists(cache_location)
+    finally:
+        reader.stop()
+        reader.join()
+
+
+def test_cleanup_cache_exception_handling(synthetic_dataset, tmpdir, capsys, monkeypatch):
+    """Test that cleanup_cache handles exceptions gracefully"""
+    cache_location = tmpdir.strpath
+
+    with make_reader(synthetic_dataset.url,
+                     cache_type='local-disk',
+                     cache_location=cache_location,
+                     cache_size_limit=1000000,
+                     cache_row_size_estimate=100) as reader:
+        next(reader)
+
+        # Mock the cleanup method to raise an exception
+        def mock_cleanup():
+            raise OSError("Simulated cleanup error")
+
+        monkeypatch.setattr(reader.cache, 'cleanup', mock_cleanup)
+
+        # Call cleanup_cache - should handle exception gracefully
+        reader.cleanup_cache()
+
+        # Check that error message was printed
+        captured = capsys.readouterr()
+        assert "Error cleaning cache: Simulated cleanup error" in captured.out
+        assert "Cache cleanup complete." in captured.out
