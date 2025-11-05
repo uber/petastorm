@@ -19,10 +19,10 @@ import operator
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from pyarrow import parquet as pq
 from pyarrow.parquet import ParquetFile
 
 from petastorm.cache import NullCache
+from petastorm.pyarrow_helpers.dataset_wrapper import PetastormPyArrowDataset
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.worker_base import WorkerBase
 
@@ -160,7 +160,7 @@ class ArrowReaderWorker(WorkerBase):
         """
 
         if not self._dataset:
-            self._dataset = pq.ParquetDataset(
+            self._dataset = PetastormPyArrowDataset(
                 self._dataset_path_or_paths,
                 filesystem=self._filesystem,
                 validate_schema=False, filters=self._arrow_filters)
