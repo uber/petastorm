@@ -364,6 +364,63 @@ def test_shuffle_with_cache_epoch_variation(scalar_dataset, tmpdir, convert_earl
     assert not np.array_equal(no_shuffle_all_ids, epoch1_all_ids), "No-shuffle should differ from shuffled data"
 
 
+@pytest.mark.parametrize('convert_early_to_numpy', [False, True])
+def test_shuffle_cache_empty_data(tmpdir, convert_early_to_numpy):
+    """Test shuffle-after-cache logic with empty data to cover num_rows == 0 branches.
+
+    This test ensures we cover the edge case where cached data has zero rows,
+    testing both the numpy dict and PyArrow Table code paths.
+    """
+    import os
+    from petastorm.tests.test_common import create_test_scalar_dataset
+
+    # Create an empty dataset (0 rows) to test the num_rows == 0 condition
+    empty_dataset_path = tmpdir.join('empty_dataset').strpath
+    empty_dataset_url = 'file://' + empty_dataset_path
+
+    # Create dataset with 0 rows
+    create_test_scalar_dataset(empty_dataset_url, 0)  # 0 rows = empty dataset
+
+    cache_location = tmpdir.join('cache').strpath
+    seed = 42
+
+    # First read - should cache empty data
+    with make_batch_reader(empty_dataset_url,
+                           reader_pool_type='dummy',
+                           cache_type='local-disk',
+                           cache_location=cache_location,
+                           cache_size_limit=1000000,
+                           cache_row_size_estimate=100,
+                           shuffle_rows=True,
+                           seed=seed,
+                           convert_early_to_numpy=convert_early_to_numpy) as reader:
+
+        # Try to read from the empty dataset
+        batches = list(reader)
+
+        # Should have no batches due to empty dataset
+        assert len(batches) == 0, "Should have no data from empty dataset"
+
+        # Verify cache was created
+        assert os.path.exists(cache_location)
+
+    # Second read - should use cached empty data and exercise num_rows == 0 path
+    with make_batch_reader(empty_dataset_url,
+                           reader_pool_type='dummy',
+                           cache_type='local-disk',
+                           cache_location=cache_location,
+                           cache_size_limit=1000000,
+                           cache_row_size_estimate=100,
+                           shuffle_rows=True,
+                           seed=seed,
+                           convert_early_to_numpy=convert_early_to_numpy) as reader:
+
+        # This read should use cached empty data and trigger the num_rows == 0 condition
+        # in both the numpy dict and PyArrow Table shuffle logic branches
+        batches = list(reader)
+        assert len(batches) == 0, "Should still have no data from cached empty dataset"
+
+
 @pytest.mark.parametrize('reader_factory', _D)
 def test_convert_early_to_numpy(scalar_dataset, reader_factory):
     """See if we can read data when a single parquet file is specified instead of a parquet directory"""
