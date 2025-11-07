@@ -296,19 +296,18 @@ def test_shuffle_with_cache_epoch_variation(scalar_dataset, tmpdir, convert_earl
     epoch3_all_ids = []
 
     with make_batch_reader(scalar_dataset.url,
-                          reader_pool_type='dummy',
-                          cache_type='local-disk',
-                          cache_location=cache_location,
-                          cache_size_limit=1000000,
-                          cache_row_size_estimate=100,
-                          shuffle_rows=True,
-                          seed=seed,
-                          num_epochs=3,  # Read through dataset 3 times
-                          convert_early_to_numpy=convert_early_to_numpy) as reader:
+                           reader_pool_type='dummy',
+                           cache_type='local-disk',
+                           cache_location=cache_location,
+                           cache_size_limit=1000000,
+                           cache_row_size_estimate=100,
+                           shuffle_rows=True,
+                           seed=seed,
+                           num_epochs=3,  # Read through dataset 3 times
+                           convert_early_to_numpy=convert_early_to_numpy) as reader:
 
         # Read all batches and separate them into epochs based on position
         all_batches = list(reader)
-        total_batches = len(all_batches)
 
         # Verify cache was created after reading data
         assert os.path.exists(cache_location)
@@ -324,7 +323,6 @@ def test_shuffle_with_cache_epoch_variation(scalar_dataset, tmpdir, convert_earl
         epoch1_all_ids = np.array(all_ids[0:epoch_size])
         epoch2_all_ids = np.array(all_ids[epoch_size:2*epoch_size])
         epoch3_all_ids = np.array(all_ids[2*epoch_size:3*epoch_size])
-
 
     # All epochs should contain the same set of IDs (same dataset)
     np.testing.assert_array_equal(sorted(epoch1_all_ids), sorted(epoch2_all_ids))
@@ -347,13 +345,13 @@ def test_shuffle_with_cache_epoch_variation(scalar_dataset, tmpdir, convert_earl
     # Test with shuffle_rows=False for comparison
     cache_location_no_shuffle = cache_location + '_no_shuffle'
     with make_batch_reader(scalar_dataset.url,
-                          reader_pool_type='dummy',
-                          cache_type='local-disk',
-                          cache_location=cache_location_no_shuffle,
-                          cache_size_limit=1000000,
-                          cache_row_size_estimate=100,
-                          shuffle_rows=False,
-                          convert_early_to_numpy=convert_early_to_numpy) as reader_no_shuffle:
+                           reader_pool_type='dummy',
+                           cache_type='local-disk',
+                           cache_location=cache_location_no_shuffle,
+                           cache_size_limit=1000000,
+                           cache_row_size_estimate=100,
+                           shuffle_rows=False,
+                           convert_early_to_numpy=convert_early_to_numpy) as reader_no_shuffle:
         # Read all batches and collect IDs
         no_shuffle_ids = []
         for batch in reader_no_shuffle:
@@ -364,7 +362,6 @@ def test_shuffle_with_cache_epoch_variation(scalar_dataset, tmpdir, convert_earl
     # The order depends on how row groups are read, but should be deterministic
     # The key test is that no-shuffle is different from shuffled data
     assert not np.array_equal(no_shuffle_all_ids, epoch1_all_ids), "No-shuffle should differ from shuffled data"
-
 
 
 @pytest.mark.parametrize('reader_factory', _D)
