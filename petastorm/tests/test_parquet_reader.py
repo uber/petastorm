@@ -372,7 +372,6 @@ def test_shuffle_cache_empty_data(tmpdir, convert_early_to_numpy):
     testing both the numpy dict and PyArrow Table code paths.
     """
     import os
-    from petastorm.tests.test_common import create_test_scalar_dataset
 
     # Create an empty dataset (0 rows) to test the num_rows == 0 condition
     empty_dataset_path = tmpdir.join('empty_dataset').strpath
