@@ -370,7 +370,6 @@ def test_shuffle_cache_num_rows_zero(tmpdir):
     This test uses mocking to ensure we hit both the numpy dict and PyArrow table
     paths with empty data, exercising lines 205 and 216 with num_rows == 0.
     """
-    import os
     from unittest.mock import patch
     import numpy as np
     import pyarrow as pa
