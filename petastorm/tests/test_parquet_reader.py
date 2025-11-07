@@ -271,6 +271,102 @@ def test_results_queue_size_propagation_in_make_batch_reader(scalar_dataset):
     assert actual_results_queue_size == expected_results_queue_size
 
 
+@pytest.mark.parametrize('convert_early_to_numpy', [False, True])
+def test_shuffle_with_cache_epoch_variation(scalar_dataset, tmpdir, convert_early_to_numpy):
+    """Test that shuffle functionality provides different patterns across epochs with cached data.
+
+    This test verifies that when using cached data with shuffle_rows=True:
+    1. Same reader instance produces different shuffle patterns on successive reads
+    2. This simulates the behavior across different epochs in training
+    3. Each read should get different shuffle patterns even with cached data
+
+    Tests both convert_early_to_numpy=False (PyArrow Table) and
+    convert_early_to_numpy=True (numpy dict) cases.
+    """
+    import os
+    cache_location = tmpdir.strpath
+
+    # Test with shuffle_rows=True and a fixed seed for reproducibility
+    seed = 42
+
+    # Use single reader with num_epochs=3 to read through dataset 3 times
+    # This will properly test cache reuse with the same RNG state progression
+    epoch1_all_ids = []
+    epoch2_all_ids = []
+    epoch3_all_ids = []
+
+    with make_batch_reader(scalar_dataset.url,
+                          reader_pool_type='dummy',
+                          cache_type='local-disk',
+                          cache_location=cache_location,
+                          cache_size_limit=1000000,
+                          cache_row_size_estimate=100,
+                          shuffle_rows=True,
+                          seed=seed,
+                          num_epochs=3,  # Read through dataset 3 times
+                          convert_early_to_numpy=convert_early_to_numpy) as reader:
+
+        # Read all batches and separate them into epochs based on position
+        all_batches = list(reader)
+        total_batches = len(all_batches)
+
+        # Verify cache was created after reading data
+        assert os.path.exists(cache_location)
+
+        # The dataset has 100 rows, and with num_epochs=3, we should get 300 total rows
+        # Split them into 3 epochs of 100 rows each
+        all_ids = []
+        for batch in all_batches:
+            all_ids.extend(batch.id)
+
+        # Split into epochs (each epoch should have 100 IDs)
+        epoch_size = len(scalar_dataset.data)  # 100 rows
+        epoch1_all_ids = np.array(all_ids[0:epoch_size])
+        epoch2_all_ids = np.array(all_ids[epoch_size:2*epoch_size])
+        epoch3_all_ids = np.array(all_ids[2*epoch_size:3*epoch_size])
+
+
+    # All epochs should contain the same set of IDs (same dataset)
+    np.testing.assert_array_equal(sorted(epoch1_all_ids), sorted(epoch2_all_ids))
+    np.testing.assert_array_equal(sorted(epoch2_all_ids), sorted(epoch3_all_ids))
+
+    # But the order should be different (different shuffle patterns)
+    epoch1_vs_2_different = not np.array_equal(epoch1_all_ids, epoch2_all_ids)
+    epoch2_vs_3_different = not np.array_equal(epoch2_all_ids, epoch3_all_ids)
+    epoch1_vs_3_different = not np.array_equal(epoch1_all_ids, epoch3_all_ids)
+
+    # This is the key test: Do we get different shuffle patterns across epochs?
+    # If shuffle-after-cache works, these should be True
+    # If not, they'll be False (same shuffle pattern from cache)
+
+    # Verify that we get different shuffle patterns across epochs (critical for ML training)
+    assert epoch1_vs_2_different, "Epoch 1 and 2 should have different shuffle patterns"
+    assert epoch2_vs_3_different, "Epoch 2 and 3 should have different shuffle patterns"
+    assert epoch1_vs_3_different, "Epoch 1 and 3 should have different shuffle patterns"
+
+    # Test with shuffle_rows=False for comparison
+    cache_location_no_shuffle = cache_location + '_no_shuffle'
+    with make_batch_reader(scalar_dataset.url,
+                          reader_pool_type='dummy',
+                          cache_type='local-disk',
+                          cache_location=cache_location_no_shuffle,
+                          cache_size_limit=1000000,
+                          cache_row_size_estimate=100,
+                          shuffle_rows=False,
+                          convert_early_to_numpy=convert_early_to_numpy) as reader_no_shuffle:
+        # Read all batches and collect IDs
+        no_shuffle_ids = []
+        for batch in reader_no_shuffle:
+            no_shuffle_ids.extend(batch.id)
+        no_shuffle_all_ids = np.array(no_shuffle_ids)
+
+    # No shuffle should produce consistent order (same every time, but not necessarily 0,1,2...)
+    # The order depends on how row groups are read, but should be deterministic
+    # The key test is that no-shuffle is different from shuffled data
+    assert not np.array_equal(no_shuffle_all_ids, epoch1_all_ids), "No-shuffle should differ from shuffled data"
+
+
+
 @pytest.mark.parametrize('reader_factory', _D)
 def test_convert_early_to_numpy(scalar_dataset, reader_factory):
     """See if we can read data when a single parquet file is specified instead of a parquet directory"""

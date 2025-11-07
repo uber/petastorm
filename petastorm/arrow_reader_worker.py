@@ -23,6 +23,7 @@ from pyarrow import parquet as pq
 from pyarrow.parquet import ParquetFile
 
 from petastorm.cache import NullCache
+from petastorm.local_disk_cache import LocalDiskCache
 from petastorm.workers_pool import EmptyResultError
 from petastorm.workers_pool.worker_base import WorkerBase
 
@@ -194,6 +195,29 @@ class ArrowReaderWorker(WorkerBase):
             all_cols = self._local_cache.get(cache_key,
                                              lambda: self._load_rows(parquet_file, piece, shuffle_row_drop_partition))
 
+            # Apply shuffling to cached data if shuffle_rows is enabled and data is cached
+            # This ensures consistent behavior whether data comes from cache or not
+            if all_cols and self._shuffle_rows and isinstance(self._local_cache, LocalDiskCache):
+                if isinstance(all_cols, dict):
+                    # Handle numpy dict case (when convert_early_to_numpy=True)
+                    # Get the number of rows from any column (they should all have the same length)
+                    num_rows = len(next(iter(all_cols.values())))
+                    if num_rows > 0:
+                        # Generate shuffled indices
+                        indices = self._rng.permutation(num_rows)
+                        # Apply the same shuffling to all columns
+                        shuffled_cols = {}
+                        for col_name, col_data in all_cols.items():
+                            shuffled_cols[col_name] = col_data[indices]
+                        all_cols = shuffled_cols
+                else:
+                    # Handle PyArrow Table case (when convert_early_to_numpy=False)
+                    num_rows = all_cols.num_rows
+                    if num_rows > 0:
+                        # Generate shuffled indices
+                        indices = self._rng.permutation(num_rows)
+                        # Apply shuffling using PyArrow's take method
+                        all_cols = all_cols.take(indices)
         if all_cols:
             self.publish_func(all_cols)
 
