@@ -461,9 +461,6 @@ def test_shuffle_cache_pyarrow_num_rows_zero(tmpdir):
             def __bool__(self):
                 return True  # Ensure it's truthy
 
-            def __nonzero__(self):  # Python 2 compatibility
-                return True
-
             def take(self, indices):
                 # Return self for shuffle logic
                 return self
