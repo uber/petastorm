@@ -371,8 +371,6 @@ def test_shuffle_cache_num_rows_zero(tmpdir):
     paths with empty data, exercising lines 205 and 216 with num_rows == 0.
     """
     from unittest.mock import patch
-    import numpy as np
-    import pyarrow as pa
 
     # Create a small dataset for initial cache population
     small_dataset_path = tmpdir.join('small_dataset').strpath
@@ -456,9 +454,9 @@ def test_shuffle_cache_num_rows_zero(tmpdir):
                     for batch in batches:
                         assert len(batch.id) == 0, "Each batch should have empty arrays"
                 # Success - we exercised the PyArrow num_rows == 0 path without errors
-            except Exception:
-                # Even if there's an exception, the important thing is that we
-                # exercised the shuffle logic with num_rows == 0 without a shuffle error
+            except (ValueError, TypeError, AttributeError):
+                # Even if there's an exception related to empty data handling,
+                # the important thing is that we exercised the shuffle logic with num_rows == 0
                 pass
 
 
