@@ -450,20 +450,25 @@ def test_shuffle_cache_pyarrow_num_rows_zero(tmpdir):
         total_rows = sum(len(batch.id) for batch in batches)
         assert total_rows > 0, "Should have some rows"
 
-    # Test with a mock table-like object that has num_rows == 0
+    # Test with a simple pickleable table-like object that has num_rows == 0
     cache_location_2 = tmpdir.strpath + '_cache_pyarrow2'
     with patch('petastorm.arrow_reader_worker.ArrowReaderWorker._load_rows') as mock_load_rows:
-        # Create a mock object that behaves like a PyArrow table but with num_rows == 0
-        from unittest.mock import MagicMock
+        # Create a simple pickleable class that behaves like a PyArrow table
+        class MockTable:
+            def __init__(self):
+                self.num_rows = 0  # This is the key - num_rows == 0
 
-        mock_table = MagicMock()
-        mock_table.num_rows = 0  # This is the key - num_rows == 0
-        mock_table.__bool__ = lambda: True  # Ensure it's truthy
-        mock_table.__nonzero__ = lambda: True  # Python 2 compatibility
+            def __bool__(self):
+                return True  # Ensure it's truthy
 
-        # Mock the take method (used in shuffle logic)
-        mock_table.take.return_value = mock_table
+            def __nonzero__(self):  # Python 2 compatibility
+                return True
 
+            def take(self, indices):
+                # Return self for shuffle logic
+                return self
+
+        mock_table = MockTable()
         mock_load_rows.return_value = mock_table
 
         with make_batch_reader(small_dataset_url,
