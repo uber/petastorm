@@ -4,12 +4,26 @@
 Release notes
 =============
 
-Release 0.13.1 (unreleased)
+Release 0.13.2 (unreleased)
 ===========================
 
+Release 0.13.1
+===========================
+- `PR 814 <https://github.com/uber/petastorm/pull/814>`_: Support multiple incremental improvements to local disk cache to prepare for Michelangelo + Ray + disk cache changes:
+  - Close threads in teardown before removing underlying files or closing cache.
+  - Use cache volume and size to detect whether to insert data in cache or not if eviction policy is none
+  - Eviction policy can be set to none by the client. The reason for this is, if we warm the cache in first epoch for ~40% of data, we can just keep it cached for subsequent epoch as evicting it with newer data would basically reduce our cache hit to 0
+- `PR 815 <https://github.com/uber/petastorm/pull/815>`_: Add support for pre-converting from pyarrow to numpy at the time of reading. When this is enabled; it will allow us to save time when we use disk cache. This way whatever is being read from the cache is ready to be consumed by downstream petastorm libraries.
+- `PR 816 <https://github.com/uber/petastorm/pull/816>`_: Support to cleanup disk cache when enabled. This change will also enable the cleanup=True for local disk cache as that will be the right thing to do most of the times.
+- `PR 817 <https://github.com/uber/petastorm/pull/817>`_: Reshuffle the data after reading from cache if shuffle_rows is true.
 
+New features
+--------------------------
+- **Cache training data to local disk to improve GPU utilization**: The local disk cache can be used to cache training data to local disk to improve GPU utilization. This is useful when training data is large and can be cached to local disk to improve GPU utilization.
 
-Release 0.13.0 
+  - ``enable_local_disk_cache: True``: Enable all the relevant configurations to use local disk cache.
+
+Release 0.13.0
 ===========================
 - `PR 810 <https://github.com/uber/petastorm/pull/810>`_: Support reproducible ordering in Petastorm.
 - `PR 809 <https://github.com/uber/petastorm/pull/809>`_: Remove CI tests for unsupported PyArrow versions (3.x and 4.x)
