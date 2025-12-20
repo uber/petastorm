@@ -356,7 +356,7 @@ class Unischema(object):
         return super().__getattribute__(item)
 
 
-def dict_to_spark_row(unischema, row_dict):
+def dict_to_spark_row(unischema, row_dict, pool_executor=None):
     """Converts a single row into a spark Row object.
 
     Verifies that the data confirms with unischema definition types and encodes the data using the codec specified
@@ -366,35 +366,14 @@ def dict_to_spark_row(unischema, row_dict):
 
     :param unischema: an instance of Unischema object
     :param row_dict: a dictionary where the keys match name of fields in the unischema.
+    :param pool_executor: if not None, encoding of row fields will be performed using the pool_executor
     :return: a single pyspark.Row object
     """
 
     # Lazy loading pyspark to avoid creating pyspark dependency on data reading code path
     # (currently works only with make_batch_reader)
     import pyspark
-
-    assert isinstance(unischema, Unischema)
-    # Add null fields. Be careful not to mutate the input dictionary - that would be an unexpected side effect
-    copy_row_dict = copy.copy(row_dict)
-    insert_explicit_nulls(unischema, copy_row_dict)
-
-    if set(copy_row_dict.keys()) != set(unischema.fields.keys()):
-        raise ValueError('Dictionary fields \n{}\n do not match schema fields \n{}'.format(
-            '\n'.join(sorted(copy_row_dict.keys())), '\n'.join(unischema.fields.keys())))
-
-    encoded_dict = {}
-    for field_name, value in copy_row_dict.items():
-        schema_field = unischema.fields[field_name]
-        if value is None:
-            if not schema_field.nullable:
-                raise ValueError('Field {} is not "nullable", but got passes a None value')
-        if schema_field.codec:
-            encoded_dict[field_name] = schema_field.codec.encode(schema_field, value) if value is not None else None
-        else:
-            if isinstance(value, (np.generic,)):
-                encoded_dict[field_name] = value.tolist()
-            else:
-                encoded_dict[field_name] = value
+    encoded_dict = encode_row(unischema, row_dict, pool_executor)
 
     field_list = list(unischema.fields.keys())
     # generate a value list which match the schema column order.
@@ -403,7 +382,62 @@ def dict_to_spark_row(unischema, row_dict):
     row = pyspark.Row(*value_list)
     # set row fields
     row.__fields__ = field_list
+
     return row
+
+
+def encode_row(unischema, row_dict, pool_executor=None):
+    """Verifies that the data confirms with unischema definition types and encodes the data using the codec specified
+    by the unischema.
+
+    :param unischema: an instance of Unischema object
+    :param row_dict: a dictionary where the keys match name of fields in the unischema.
+    :param pool_executor: if not None, encoding of row fields will be performed using the pool_executor
+    :return: a dictionary of encoded fields
+    """
+
+    # Lazy loading pyspark to avoid creating pyspark dependency on data reading code path
+    # (currently works only with make_batch_reader)
+
+    assert isinstance(unischema, Unischema)
+    # Add null fields. Be careful not to mutate the input dictionary - that would be an unexpected side effect
+    copy_row_dict = copy.copy(row_dict)
+    insert_explicit_nulls(unischema, copy_row_dict)
+
+    input_field_names = set(copy_row_dict.keys())
+    unischema_field_names = set(unischema.fields.keys())
+
+    unknown_field_names = input_field_names - unischema_field_names
+
+    if unknown_field_names:
+        raise ValueError('Following fields of row_dict are not found in '
+                         'unischema: {}'.format(', '.join(sorted(unknown_field_names))))
+
+    encoded_dict = dict()
+    futures_dict = dict()
+    for field_name, value in copy_row_dict.items():
+        schema_field = unischema.fields[field_name]
+        if value is None:
+            if not schema_field.nullable:
+                raise ValueError('Field {} is not "nullable", but got passes a None value')
+        if schema_field.codec:
+            if value is None:
+                encoded_dict[field_name] = None
+            else:
+                if pool_executor:
+                    futures_dict[field_name] = pool_executor.submit(schema_field.codec.encode, schema_field, value)
+                else:
+                    encoded_dict[field_name] = schema_field.codec.encode(schema_field, value)
+        else:
+            if isinstance(value, (np.generic,)):
+                encoded_dict[field_name] = value.tolist()
+            else:
+                encoded_dict[field_name] = value
+
+    for k, v in futures_dict.items():
+        encoded_dict[k] = v.result()
+
+    return encoded_dict
 
 
 def insert_explicit_nulls(unischema, row_dict):
