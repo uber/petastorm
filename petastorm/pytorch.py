@@ -16,7 +16,9 @@ import collections.abc
 import decimal
 # Must import pyarrow before torch. See: https://github.com/uber/petastorm/blob/master/docs/troubleshoot.rst
 import re
+import threading
 import logging
+from queue import Queue
 import numpy as np
 from six import PY2
 from torch.utils.data.dataloader import default_collate
@@ -100,11 +102,42 @@ beginning.If you do need to terminate early and restart from beginning, please r
 loader."
 
 
+class BackgroundIterator(threading.Thread):
+    """Prefetch iterator results. A thread iterates the original iterator and
+    populates a queue. Iterating over this background iterator just consumes the underlying
+    queue until no other result is available."""
+    def __init__(self, iterator, queue_size=1000):
+        threading.Thread.__init__(self)
+        self.name = "background_iterator"
+        self.queue = Queue(queue_size)
+        self.iterator = iterator
+        self.stop = threading.Event()
+        self.start()
+
+    def run(self):
+        while not self.stop.isSet():
+            for item in self.iterator:
+                self.queue.put(item)
+            self.queue.put(None)
+            self.stop.set()
+        return
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        next_item = self.queue.get()
+        if next_item is None:
+            raise StopIteration
+        return next_item
+
+
 class LoaderBase(object):
 
     def __init__(self):
         self._in_iter = None
         self._error = None
+        self._queue_size = 1
 
     def __iter__(self):
         if self._error is not None:
@@ -117,8 +150,11 @@ class LoaderBase(object):
             logger.warning('Start a new pass of Petastorm DataLoader, reset underlying Petastorm reader to position 0.')
         self._in_iter = True
 
+        iterator = self._iter_impl()
         try:
-            for batch in self._iter_impl():
+            if self._queue_size > 1:
+                iterator = BackgroundIterator(iterator, queue_size=self._queue_size)
+            for batch in iterator:
                 yield batch
         except Exception as e:
             self._error = e
@@ -126,6 +162,8 @@ class LoaderBase(object):
             raise
         finally:
             self._in_iter = False
+            if isinstance(iterator, BackgroundIterator):
+                iterator.stop.set()
 
 
 class DataLoader(LoaderBase):
@@ -264,7 +302,8 @@ class BatchedDataLoader(LoaderBase):
 
     def __init__(self, reader, batch_size=1,
                  transform_fn=None,
-                 shuffling_queue_capacity=0):
+                 shuffling_queue_capacity=0,
+                 batch_queue_size=None):
         """
         Initializes a data loader object.
 
@@ -287,6 +326,8 @@ class BatchedDataLoader(LoaderBase):
         :param transform_fn: an optional callable to convert batches from the reader to PyTorch tensors
         :param shuffling_queue_capacity: Queue capacity is passed to the underlying :class:`tf.RandomShuffleQueue`
           instance. If set to 0, no shuffling will be done.
+        :param batch_queue_size: an optional int indicating maximum number of batches to fetch in
+        parallel. This might be useful when training models in order to improve model data throughput.
         """
         super(BatchedDataLoader, self).__init__()
         self.reader = reader
@@ -297,6 +338,11 @@ class BatchedDataLoader(LoaderBase):
         self._batch_acc = []
         self.shuffling_queue_capacity = shuffling_queue_capacity
         self._in_iter = None
+
+        # fetch batches in parallel?
+        if batch_queue_size is not None:
+            assert batch_queue_size > 0, "if set, batch_queue_size must be greater or equal to 1"
+            self._queue_size = batch_queue_size
 
     def _iter_impl(self):
         """
