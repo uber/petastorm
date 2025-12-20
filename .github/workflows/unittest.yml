@@ -30,7 +30,7 @@ jobs:
           PYARROW_VERSION: "6.0.1"
           NUMPY_VERSION: "1.21.5"
           TF_VERSION: "2.8.0"
-          PYSPARK_VERSION: "3.0.0"
+          PYSPARK_VERSION: "3.4.0"
           ARROW_PRE_0_15_IPC_FORMAT: "0"
           PY: "3.9"
 
@@ -62,7 +62,8 @@ jobs:
           $RUN pip install -U pip "setuptools<70" 
           $RUN pip install -e /petastorm/[test,tf,torch,docs,opencv]
           $RUN pip install --upgrade numpy==$NUMPY_VERSION
-          $RUN pip install -U pyarrow==${PYARROW_VERSION} tensorflow==${TF_VERSION} pyspark==${PYSPARK_VERSION}
+          $RUN pip install -U pyarrow==${PYARROW_VERSION} tensorflow==${TF_VERSION}
+          $RUN pip install https://dist.apache.org/repos/dist/dev/spark/v3.4.0-rc1-bin/pyspark-3.4.0.tar.gz
           $RUN pip list
           $RUN mypy petastorm
           $RUN flake8 . --count --show-source --statistics
