@@ -8,7 +8,7 @@ RUN apt-get install -qq -y software-properties-common
 RUN add-apt-repository -y ppa:deadsnakes/ppa
 RUN apt-get update -qq
 
-RUN apt-get -qq install -y \
+RUN apt-get update && apt-get -qq install -y \
   build-essential \
   cmake \
   openjdk-8-jre-headless \
@@ -21,8 +21,12 @@ RUN apt-get -qq install -y \
   python3.9 \
   python3.9-dev \
   python3.9-venv \
+  python3.10 \
+  python3.10-dev \
+  python3.10-venv \
   virtualenv \
   wget \
+  curl \
   && rm -rf /var/lib/apt/lists/*
 
 
@@ -35,8 +39,22 @@ ADD setup.py /petastorm/
 ADD README.rst /petastorm/
 ADD petastorm /petastorm/petastorm
 
+# Set up Python3.10 environment
+RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.10
+RUN python3.10 -m pip install wheel
+RUN python3.10 -m venv /petastorm_venv3.10
+RUN /petastorm_venv3.10/bin/pip3.10 install --no-cache scikit-build
+RUN /petastorm_venv3.10/bin/pip3.10 install --no-cache -e /petastorm/[test,tf,torch,docs,opencv] --only-binary pyarrow --only-binary opencv-python
+RUN /petastorm_venv3.10/bin/pip3.10 uninstall -y petastorm
+# To avoid some version incompatibilities, we pin these libraries to versions that known to work together
+RUN /petastorm_venv3.10/bin/pip3.10 install -U pyarrow==6.0.1 numpy==1.21.5 tensorflow==2.8.0 pyspark==3.0.0
+
+# Otherwise we might have trouble with loading of libGL.so.1
+RUN /petastorm_venv3.10/bin/pip3.10 install opencv-python-headless
+
+
 # Set up Python3 environment
-RUN python3.7 -m pip install pip --upgrade
+RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.7
 RUN python3.7 -m pip install wheel
 RUN python3.7 -m venv /petastorm_venv3.7
 RUN /petastorm_venv3.7/bin/pip3.7 install --no-cache scikit-build
@@ -49,9 +67,8 @@ RUN /petastorm_venv3.7/bin/pip3.7 install -U pyarrow==3.0.0 numpy==1.19.1 tensor
 RUN /petastorm_venv3.7/bin/pip3.7 install opencv-python-headless
 
 
-
-# Set up Python3 environment
-RUN python3.9 -m pip install pip --upgrade
+# Set up Python3.9 environment
+RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.9
 RUN python3.9 -m pip install wheel
 RUN python3.9 -m venv /petastorm_venv3.9
 RUN /petastorm_venv3.9/bin/pip3.9 install --no-cache scikit-build
