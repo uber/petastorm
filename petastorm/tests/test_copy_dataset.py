@@ -18,16 +18,10 @@ import os
 
 import numpy as np
 import pytest
-from pyspark.sql import SparkSession
 from pyspark.sql.utils import AnalysisException
 
 from petastorm.reader import make_reader
 from petastorm.tools.copy_dataset import _main, copy_dataset
-
-
-@pytest.fixture()
-def spark_session():
-    return SparkSession.builder.appName('petastorm-copy').getOrCreate()
 
 
 def test_copy_and_overwrite_cli(tmpdir, synthetic_dataset):
