@@ -1,5 +1,7 @@
 from decimal import Decimal
 from packaging import version
+import time
+import threading
 
 import numpy as np
 import pyarrow as pa
@@ -10,7 +12,8 @@ import torch
 from petastorm import make_reader, TransformSpec, make_batch_reader
 from petastorm.pytorch import (_sanitize_pytorch_types, DataLoader,
                                BatchedDataLoader, decimal_friendly_collate,
-                               InMemBatchedDataLoader, _load_rows_into_mem)
+                               InMemBatchedDataLoader, _load_rows_into_mem, 
+                               BackgroundIterator)
 from petastorm.tests.test_common import TestSchema
 
 BASIC_DATA_LOADERS = [DataLoader, BatchedDataLoader]
@@ -331,3 +334,39 @@ def test_inmem_batched_dataloader_shuffle_per_epoch(synthetic_dataset, reader_fa
 
         with pytest.raises(StopIteration):
             next(it)
+
+
+def test_background_iterator():
+    # number of iterator elements
+    N = int(1e6)
+
+    # wait some time for the queue to be filled
+    bit = BackgroundIterator(range(N), queue_size=1000)
+    time.sleep(1)
+
+    assert not bit.queue.empty()
+    # ensure the thread exists and is populating the queue
+    assert "background_iterator" in [t.name for t in threading.enumerate()]
+    # ensure we process the same number of elements present in original iterator
+    n = 0
+    for _ in bit:
+        n += 1
+    assert n == N
+    # ensure the thread stopped when original iterator was completed
+    time.sleep(1)
+    assert "background_iterator" not in [t.name for t in threading.enumerate()]
+
+
+@pytest.mark.parametrize('reader_factory', ALL_READER_FLAVOR_FACTORIES)
+def test_batched_dataloader_background_iterator_handle_exception(synthetic_dataset, reader_factory):
+    with BatchedDataLoader(reader_factory(synthetic_dataset.url, schema_fields=TORCH_BATCHABLE_FIELDS,
+                                          transform_spec=TransformSpec(_sensor_name_to_int)),
+                                          batch_queue_size=100) as loader:
+        try:
+            for _ in loader:
+                assert "background_iterator" in [t.name for t in threading.enumerate()]
+                raise RuntimeError()
+        except RuntimeError:
+            # ensure we wait enough for the thread to be stopped
+            time.sleep(1)
+            assert "background_iterator" not in [t.name for t in threading.enumerate()]
