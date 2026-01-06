@@ -22,7 +22,7 @@ from six.moves import range
 
 from petastorm import utils
 from petastorm.etl import dataset_metadata
-from petastorm.etl.legacy import depickle_legacy_package_name_compatible
+from petastorm.etl.safe_pickle import safe_loads
 from petastorm.fs_utils import FilesystemResolver
 
 logger = logging.getLogger(__name__)
@@ -154,5 +154,5 @@ def get_row_group_indexes(dataset):
 
     serialized_indexes = dataset_metadata_dict[ROWGROUPS_INDEX_KEY]
 
-    index_dict = depickle_legacy_package_name_compatible(serialized_indexes)
+    index_dict = safe_loads(serialized_indexes)
     return index_dict

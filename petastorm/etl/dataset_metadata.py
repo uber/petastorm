@@ -25,7 +25,7 @@ from pyarrow import parquet as pq
 from six.moves import cPickle as pickle
 
 from petastorm import utils
-from petastorm.etl.legacy import depickle_legacy_package_name_compatible
+from petastorm.etl.safe_pickle import safe_loads
 from petastorm.fs_utils import FilesystemResolver, get_filesystem_and_path_or_paths, get_dataset_path
 from petastorm.unischema import Unischema
 
@@ -380,7 +380,7 @@ def get_schema(dataset):
     # Since we have moved the unischema class around few times, unpickling old schemas will not work. In this case we
     # override the old import path to get backwards compatibility
 
-    schema = depickle_legacy_package_name_compatible(ser_schema)
+    schema = safe_loads(ser_schema)
 
     return schema
 
