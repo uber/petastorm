@@ -37,7 +37,7 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v6
 
       # Prepare
       - name: prepare
@@ -109,7 +109,7 @@ jobs:
           echo "Version link appendix: ${VERSION_NUMBER}"
           echo "https://github.com/uber/petastorm/blob/master/docs/release-notes.rst#release-${VERSION_NUMBER}" > /tmp/release.md
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v6
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -131,10 +131,10 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: 3.9
       - name: Display Python version
