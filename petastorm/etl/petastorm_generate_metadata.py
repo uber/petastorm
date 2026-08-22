@@ -15,6 +15,7 @@
 """Script to add petastorm metadata to an existing parquet dataset"""
 
 import argparse
+import os
 import sys
 from pydoc import locate
 
@@ -26,6 +27,19 @@ from petastorm.etl.rowgroup_indexing import ROWGROUPS_INDEX_KEY
 from petastorm.fs_utils import FilesystemResolver
 from petastorm.unischema import Unischema
 from petastorm.utils import add_to_dataset_metadata
+
+
+def _ensure_cwd_on_sys_path():
+    """Put the caller's working directory first on ``sys.path``.
+
+    Console-script installs run from the environment's ``bin`` directory, so
+    ``pydoc.locate`` cannot find a unischema module that lives on the user's
+    current python path / project tree unless cwd is searched first.
+    """
+    cwd = os.getcwd()
+    if sys.path[:1] != [cwd]:
+        sys.path.insert(0, cwd)
+
 
 example_text = '''Example (some replacement required):
 
@@ -112,6 +126,10 @@ def generate_petastorm_metadata(spark, dataset_url, unischema_class=None, use_su
 
 
 def _main(args):
+    # Console scripts may start with the venv bin dir as the process context;
+    # prefer the caller's cwd so --unischema_class can resolve project modules.
+    _ensure_cwd_on_sys_path()
+
     parser = argparse.ArgumentParser(prog='petastorm_generate_metadata',
                                      description='Add necessary petastorm metadata to an existing dataset',
                                      epilog=example_text,
