@@ -29,6 +29,19 @@ def _check_reader(path, rowgroup_selector=None):
         [next(reader) for _ in range(10)]
 
 
+def test_ensure_cwd_on_sys_path_puts_cwd_first(monkeypatch, tmpdir):
+    # Simulate a console-script style path where the install dir is first and
+    # the caller's project cwd is missing from sys.path.
+    project_cwd = tmpdir.mkdir('project').strpath
+    install_bin = tmpdir.mkdir('bin').strpath
+    monkeypatch.chdir(project_cwd)
+    monkeypatch.setattr(petastorm_generate_metadata.sys, 'path', [install_bin])
+
+    petastorm_generate_metadata._ensure_cwd_on_sys_path()
+
+    assert petastorm_generate_metadata.sys.path[0] == os.path.abspath(project_cwd)
+
+
 def test_regenerate_metadata(synthetic_dataset, tmpdir):
     a_moved_path = tmpdir.join('moved').strpath
     copytree(synthetic_dataset.path, a_moved_path)
