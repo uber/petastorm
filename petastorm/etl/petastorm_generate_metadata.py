@@ -21,6 +21,7 @@ from pydoc import locate
 from pyarrow import parquet as pq
 from pyspark.sql import SparkSession
 
+from petastorm import utils
 from petastorm.etl.dataset_metadata import materialize_dataset, get_schema, ROW_GROUPS_PER_FILE_KEY
 from petastorm.etl.rowgroup_indexing import ROWGROUPS_INDEX_KEY
 from petastorm.fs_utils import FilesystemResolver
@@ -63,10 +64,9 @@ def generate_petastorm_metadata(spark, dataset_url, unischema_class=None, use_su
     resolver = FilesystemResolver(dataset_url, sc._jsc.hadoopConfiguration(), hdfs_driver=hdfs_driver,
                                   user=spark.sparkContext.sparkUser())
     fs = resolver.filesystem()
-    dataset = pq.ParquetDataset(
+    dataset = utils.make_parquet_dataset(
         resolver.get_dataset_path(),
-        filesystem=fs,
-        validate_schema=False)
+        filesystem=fs)
 
     if unischema_class:
         schema = locate(unischema_class)

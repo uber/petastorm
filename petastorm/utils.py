@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import inspect
 import logging
 import os
 from decimal import Decimal
@@ -20,9 +21,23 @@ from multiprocessing import Pool
 import numpy as np
 import pyarrow
 from future.utils import raise_with_traceback
+from pyarrow import parquet as pq
 from pyarrow.filesystem import LocalFileSystem
 
 logger = logging.getLogger(__name__)
+
+_PARQUET_DATASET_SUPPORTS_VALIDATE_SCHEMA = (
+    'validate_schema' in inspect.signature(pq.ParquetDataset.__init__).parameters
+)
+
+
+def make_parquet_dataset(*args, **kwargs):
+    """Construct a pyarrow ParquetDataset, omitting validate_schema when unsupported."""
+    if not _PARQUET_DATASET_SUPPORTS_VALIDATE_SCHEMA:
+        kwargs.pop('validate_schema', None)
+    elif 'validate_schema' not in kwargs:
+        kwargs['validate_schema'] = False
+    return pq.ParquetDataset(*args, **kwargs)
 
 
 def run_in_subprocess(func, *args, **kwargs):

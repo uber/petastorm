@@ -135,10 +135,10 @@ class PyDictReaderWorker(WorkerBase):
         """
 
         if not self._dataset:
-            self._dataset = pq.ParquetDataset(
+            self._dataset = utils.make_parquet_dataset(
                 self._dataset_path,
                 filesystem=self._filesystem,
-                validate_schema=False, filters=self._arrow_filters)
+                filters=self._arrow_filters)
 
         piece = self._split_pieces[piece_index]
 
