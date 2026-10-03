@@ -22,6 +22,7 @@ import pyarrow as pa
 from pyarrow import parquet as pq
 from pyarrow.parquet import ParquetFile
 
+from petastorm import utils
 from petastorm.cache import NullCache
 from petastorm.local_disk_cache import LocalDiskCache
 from petastorm.workers_pool import EmptyResultError
@@ -161,10 +162,10 @@ class ArrowReaderWorker(WorkerBase):
         """
 
         if not self._dataset:
-            self._dataset = pq.ParquetDataset(
+            self._dataset = utils.make_parquet_dataset(
                 self._dataset_path_or_paths,
                 filesystem=self._filesystem,
-                validate_schema=False, filters=self._arrow_filters)
+                filters=self._arrow_filters)
 
         piece = self._split_pieces[piece_index]
 

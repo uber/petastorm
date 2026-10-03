@@ -104,20 +104,18 @@ def materialize_dataset(spark, dataset_url, schema, row_group_size_mb=None, use_
         dataset_path = get_dataset_path(urlparse(dataset_url))
     filesystem = filesystem_factory()
 
-    dataset = pq.ParquetDataset(
+    dataset = utils.make_parquet_dataset(
         dataset_path,
-        filesystem=filesystem,
-        validate_schema=False)
+        filesystem=filesystem)
 
     _generate_unischema_metadata(dataset, schema)
     if not use_summary_metadata:
         _generate_num_row_groups_per_file(dataset, spark.sparkContext, filesystem_factory)
 
     # Reload the dataset to take into account the new metadata
-    dataset = pq.ParquetDataset(
+    dataset = utils.make_parquet_dataset(
         dataset_path,
-        filesystem=filesystem,
-        validate_schema=False)
+        filesystem=filesystem)
     try:
         # Try to load the row groups, if it fails that means the metadata was not generated properly
         load_row_groups(dataset)
@@ -399,7 +397,7 @@ def get_schema_from_dataset_url(dataset_url_or_urls, hdfs_driver='libhdfs3', sto
                                                          storage_options=storage_options,
                                                          filesystem=filesystem)
 
-    dataset = pq.ParquetDataset(path_or_paths, filesystem=fs, validate_schema=False, metadata_nthreads=10)
+    dataset = utils.make_parquet_dataset(path_or_paths, filesystem=fs, metadata_nthreads=10)
 
     # Get a unischema stored in the dataset metadata.
     stored_schema = get_schema(dataset)
